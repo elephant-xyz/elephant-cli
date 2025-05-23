@@ -1,0 +1,25 @@
+{
+  "name": "@oracle-network/cli",
+  "version": "1.0.0",
+  "description": "CLI tool for Oracle Network on Polygon",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["oracle", "polygon", "blockchain", "cli"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "ethers": "^6.7.0",
+    "axios": "^1.5.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
