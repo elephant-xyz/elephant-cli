@@ -1,13 +1,13 @@
-# Oracle Network CLI Tool Architecture
+# Elephant Network CLI Tool Architecture
 
 ## Overview
 
-A TypeScript-based CLI tool for interacting with an oracle network built on Polygon blockchain. The tool enables oracle operators to list and download their assignments from IPFS based on blockchain events.
+A TypeScript-based CLI tool for interacting with an elephant network built on Polygon blockchain. The tool enables elephant operators to list and download their assignments from IPFS based on blockchain events.
 
 ## Project Structure
 
 ```
-oracle-network-cli/
+elephant-network-cli/
 ├── src/
 │   ├── commands/
 │   │   └── list-assignments.ts     # Main command implementation
@@ -39,7 +39,7 @@ oracle-network-cli/
 ├── README.md
 ├── LICENSE
 └── bin/
-    └── oracle-cli                  # Executable script
+    └── elephant-cli                  # Executable script
 
 ```
 
@@ -57,14 +57,14 @@ import { listAssignments } from "./commands/list-assignments";
 const program = new Command();
 
 program
-  .name("oracle-cli")
-  .description("CLI tool for Oracle Network on Polygon")
+  .name("elephant-cli")
+  .description("CLI tool for Elephant Network on Polygon")
   .version("1.0.0");
 
 program
   .command("list-assignments")
-  .description("List and download oracle assignments from the blockchain")
-  .requiredOption("-o, --oracle <address>", "Oracle address")
+  .description("List and download elephant assignments from the blockchain")
+  .requiredOption("-o, --elephant <address>", "Elephant address")
   .option(
     "-c, --contract <address>",
     "Smart contract address",
@@ -109,8 +109,8 @@ class BlockchainService {
   private provider: ethers.JsonRpcProvider;
   private contract: ethers.Contract;
 
-  async getOracleAssignedEvents(
-    oracleAddress: string,
+  async getElephantAssignedEvents(
+    elephantAddress: string,
     fromBlock: number,
     toBlock?: number,
   ): Promise<OracleAssignedEvent[]>;
@@ -145,7 +145,7 @@ class IPFSService {
 ```typescript
 class EventDecoderService {
   decodePropertCid(bytes: string): string;
-  parseOracleAssignedEvent(event: ethers.Log): Assignment;
+  parseElephantAssignedEvent(event: ethers.Log): Assignment;
 }
 ```
 
@@ -164,7 +164,7 @@ export const BLOCKS_PER_QUERY = 10000;
 **`abi.ts`**
 
 ```typescript
-export const ORACLE_CONTRACT_ABI = [
+export const ELEPHANT_CONTRACT_ABI = [
   {
     anonymous: false,
     inputs: [
@@ -177,11 +177,11 @@ export const ORACLE_CONTRACT_ABI = [
       {
         indexed: true,
         internalType: "address",
-        name: "oracle",
+        name: "elephant",
         type: "address",
       },
     ],
-    name: "OracleAssigned",
+    name: "ElephantAssigned",
     type: "event",
   },
 ];
@@ -192,14 +192,14 @@ export const ORACLE_CONTRACT_ABI = [
 ```typescript
 export interface Assignment {
   cid: string;
-  oracle: string;
+  elephant: string;
   blockNumber: number;
   transactionHash: string;
   timestamp?: number;
 }
 
 export interface CommandOptions {
-  oracle: string;
+  elephant: string;
   contract?: string;
   rpc?: string;
   gateway?: string;
@@ -323,12 +323,12 @@ export class EventDecodingError extends Error {}
 
 ```json
 {
-  "name": "@oracle-network/cli",
+  "name": "@elephant-network/cli",
   "version": "1.0.0",
-  "description": "CLI tool for Oracle Network on Polygon",
+  "description": "CLI tool for Elephant Network on Polygon",
   "main": "dist/index.js",
   "bin": {
-    "oracle-cli": "./bin/oracle-cli"
+    "elephant-cli": "./bin/elephant-cli"
   },
   "scripts": {
     "build": "tsc",
@@ -341,7 +341,7 @@ export class EventDecodingError extends Error {}
 
 ### Binary Executable
 
-**`bin/oracle-cli`**
+**`bin/elephant-cli`**
 
 ```bash
 #!/usr/bin/env node
@@ -370,4 +370,4 @@ The architecture supports future additions:
 - Multiple blockchain support
 - Different storage backends (not just IPFS)
 - Plugin system for custom handlers
-- Configuration file support (.oracle-cli.json)
+- Configuration file support (.elephant-cli.json)

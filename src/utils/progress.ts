@@ -1,4 +1,4 @@
-import ora from "ora";
+import ora from 'ora';
 
 export function createSpinner(text: string) {
   return ora(text).start();

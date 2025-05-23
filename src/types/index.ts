@@ -1,13 +1,13 @@
-export interface Assignment {
+export interface ElephantAssignment {
   cid: string;
-  oracle: string;
+  elephant: string;
   blockNumber: number;
   transactionHash: string;
   timestamp?: number;
 }
 
 export interface CommandOptions {
-  oracle: string;
+  elephant: string;
   contract?: string;
   rpc?: string;
   gateway?: string;

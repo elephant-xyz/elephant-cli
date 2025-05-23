@@ -1,6 +1,6 @@
-# Contributing to Oracle Network CLI
+# Contributing to Elephant Network CLI
 
-Thank you for your interest in contributing to the Oracle Network CLI! This guide will help you get the project up and running locally and make your first contribution.
+Thank you for your interest in contributing to the Elephant Network CLI! This guide will help you get the project up and running locally and make your first contribution.
 
 ## 🚀 Getting Started
 
@@ -17,8 +17,8 @@ Thank you for your interest in contributing to the Oracle Network CLI! This guid
 
 ```bash
 # Fork the repository on GitHub first, then:
-git clone https://github.com/YOUR-USERNAME/oracle-network-cli.git
-cd oracle-network-cli
+git clone https://github.com/YOUR-USERNAME/elephant-network-cli.git
+cd elephant-network-cli
 ```
 
 2. **Install Dependencies**
@@ -40,13 +40,13 @@ npm run build
 node dist/index.js --help
 
 # Or test the binary
-./bin/oracle-cli --help
+./bin/elephant-cli --help
 ```
 
 ## 🏗️ Project Structure
 
 ```
-oracle-network-cli/
+elephant-network-cli/
 ├── src/
 │   ├── commands/          # CLI command implementations
 │   ├── services/          # Business logic (blockchain, IPFS, etc.)
@@ -85,9 +85,9 @@ The most common areas for contributions:
 # Build the project
 npm run build
 
-# Test with a real oracle address (has an event at block 71875870)
+# Test with a real elephant address (has an event at block 71875870)
 node dist/index.js list-assignments \
-  --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 \
+  --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 \
   --from-block 71875850
 ```
 
@@ -102,7 +102,7 @@ npm run dev
 
 ### Manual Testing Checklist
 
-- [ ] Test with valid oracle address
+- [ ] Test with valid elephant address
 - [ ] Test with invalid inputs (bad addresses, URLs)
 - [ ] Test error scenarios (no internet, bad RPC)
 - [ ] Test file downloads work correctly
@@ -110,7 +110,7 @@ npm run dev
 
 ### Test Data
 
-- **Oracle address with assignments**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
+- **Elephant address with assignments**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
 - **Block with event**: `71875870`
 - **Expected CID**: `QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU`
 
@@ -175,7 +175,7 @@ async downloadFile(cid: string, outputPath: string): Promise<DownloadResult> {
    - Make chain configurable
 
 2. **Batch operations**
-   - Process multiple oracle addresses
+   - Process multiple elephant addresses
    - Parallel blockchain queries
 
 3. **Resume capability**

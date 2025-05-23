@@ -1,21 +1,21 @@
-export const ORACLE_CONTRACT_ABI = [
+export const ELEPHANT_CONTRACT_ABI = [
   {
     anonymous: false,
     inputs: [
       {
         indexed: false,
-        internalType: "bytes",
-        name: "propertyCid",
-        type: "bytes"
+        internalType: 'bytes',
+        name: 'propertyCid',
+        type: 'bytes',
       },
       {
         indexed: true,
-        internalType: "address",
-        name: "oracle",
-        type: "address"
-      }
+        internalType: 'address',
+        name: 'elephant',
+        type: 'address',
+      },
     ],
-    name: "OracleAssigned",
-    type: "event"
-  }
+    name: 'ElephantAssigned',
+    type: 'event',
+  },
 ];

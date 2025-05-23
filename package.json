@@ -1,34 +1,58 @@
 {
-  "name": "@oracle-network/cli",
+  "name": "@elephant/cli",
   "version": "1.0.0",
-  "description": "CLI tool for Oracle Network on Polygon",
+  "description": "CLI tool for Elephant Network on Polygon",
   "main": "dist/index.js",
   "bin": {
-    "oracle-cli": "./bin/oracle-cli"
+    "elephant-cli": "./bin/elephant-cli"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "files": [
     "dist",
     "bin",
     "README.md"
   ],
-  "keywords": ["oracle", "polygon", "blockchain", "cli", "ipfs"],
+  "preferGlobal": false,
+  "keywords": [
+    "elephant",
+    "polygon",
+    "blockchain",
+    "cli",
+    "ipfs"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "commander": "^11.0.0",
-    "ethers": "^6.7.0",
     "axios": "^1.5.0",
     "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "ethers": "^6.7.0",
     "ora": "^5.4.1"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.17.50",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-jest": "^29.3.4",
     "typescript": "^5.0.0"
   }
 }

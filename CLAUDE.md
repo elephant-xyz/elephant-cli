@@ -1,11 +1,11 @@
 # CLAUDE.md - AI Assistant Context
 
-This document provides context for AI assistants (like Claude) to understand and work with the Oracle Network CLI project effectively.
+This document provides context for AI assistants (like Claude) to understand and work with the Elephant Network CLI project effectively.
 
 ## Project Overview
 
-The Oracle Network CLI is a TypeScript-based command-line tool that:
-- Queries the Polygon blockchain for OracleAssigned events
+The Elephant Network CLI is a TypeScript-based command-line tool that:
+- Queries the Polygon blockchain for ElephantAssigned events
 - Decodes IPFS CIDs from blockchain event data
 - Downloads assigned files from IPFS gateways
 - Provides progress tracking and error handling
@@ -15,7 +15,7 @@ The Oracle Network CLI is a TypeScript-based command-line tool that:
 ### Smart Contract Integration
 
 - **Contract Address**: `0x79D5046e34D4A56D357E12636A18da6eaEfe0586` (Polygon mainnet)
-- **Event**: `OracleAssigned(bytes propertyCid, address indexed oracle)`
+- **Event**: `ElephantAssigned(bytes propertyCid, address indexed elephant)`
 - **CID Format**: The contract stores CIDs with a leading dot (e.g., `.QmXXX...`), which must be stripped
 
 ### Important Code Patterns
@@ -32,7 +32,7 @@ const cid = decoded.startsWith(".") ? decoded.substring(1) : decoded;
 
 ### Testing Information
 
-- **Test Oracle Address**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
+- **Test Elephant Address**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
 - **Test Block with Event**: `71875870`
 - **Test CID**: `QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU`
 
@@ -72,7 +72,7 @@ Common issues to check:
 
 1. Add caching for blockchain queries
 2. Implement retry logic for blockchain queries
-3. Add support for multiple oracle addresses
+3. Add support for multiple elephant addresses
 4. Create a config file option
 5. Add automated tests
 
@@ -97,7 +97,7 @@ npm run build
 npm run dev
 
 # Test the CLI
-./bin/oracle-cli list-assignments --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
+./bin/elephant-cli list-assignments --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
 
 # Clean build artifacts
 npm run clean
@@ -116,7 +116,7 @@ npm run clean
 
 1. No resume capability for interrupted downloads
 2. No caching of blockchain queries
-3. Single oracle address at a time
+3. Single elephant address at a time
 4. No export formats (only console output)
 
 ## Security Considerations
