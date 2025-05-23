@@ -3,12 +3,21 @@
   "version": "1.0.0",
   "description": "CLI tool for Oracle Network on Polygon",
   "main": "dist/index.js",
+  "bin": {
+    "oracle-cli": "./bin/oracle-cli"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepare": "npm run build"
   },
-  "keywords": ["oracle", "polygon", "blockchain", "cli"],
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "keywords": ["oracle", "polygon", "blockchain", "cli", "ipfs"],
   "author": "",
   "license": "MIT",
   "dependencies": {

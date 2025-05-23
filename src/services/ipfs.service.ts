@@ -17,40 +17,49 @@ export class IPFSService {
     this.maxConcurrent = maxConcurrent;
   }
 
-  async downloadFile(cid: string, outputPath: string): Promise<DownloadResult> {
-    try {
-      // Create directory if it doesn't exist
-      const dir = path.dirname(outputPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+  async downloadFile(cid: string, outputPath: string, retries: number = 1): Promise<DownloadResult> {
+    let lastError: Error | undefined;
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        // Create directory if it doesn't exist
+        const dir = path.dirname(outputPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const url = `${this.gateway}${cid}`;
+        const response = await axios.get(url, {
+          responseType: "stream",
+          timeout: 30000 // 30 second timeout
+        });
+
+        const writer = fs.createWriteStream(outputPath);
+        response.data.pipe(writer);
+
+        await new Promise<void>((resolve, reject) => {
+          writer.on("finish", resolve);
+          writer.on("error", reject);
+        });
+
+        return {
+          cid,
+          success: true,
+          path: outputPath
+        };
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        }
       }
-
-      const url = `${this.gateway}${cid}`;
-      const response = await axios.get(url, {
-        responseType: "stream",
-        timeout: 30000 // 30 second timeout
-      });
-
-      const writer = fs.createWriteStream(outputPath);
-      response.data.pipe(writer);
-
-      await new Promise<void>((resolve, reject) => {
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
-
-      return {
-        cid,
-        success: true,
-        path: outputPath
-      };
-    } catch (error) {
-      return {
-        cid,
-        success: false,
-        error: error as Error
-      };
     }
+    
+    return {
+      cid,
+      success: false,
+      error: lastError
+    };
   }
 
   private async processQueue(): Promise<void> {

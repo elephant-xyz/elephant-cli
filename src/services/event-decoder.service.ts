@@ -5,14 +5,19 @@ export class EventDecoderService {
   constructor() {}
 
   decodePropertyCid(bytes: string): string {
-    const decoded = ethers.toUtf8String(bytes);
+    // Decode the dynamic string from event data
+    const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+    const decoded = abiCoder.decode(["string"], bytes)[0];
+    
+    // Remove the leading dot if present
+    const cid = decoded.startsWith(".") ? decoded.substring(1) : decoded;
     
     // Basic CID validation - check if it starts with Qm (CIDv0) or ba (CIDv1)
-    if (!decoded.startsWith("Qm") && !decoded.startsWith("ba")) {
-      throw new Error(`Invalid CID format: ${decoded}`);
+    if (!cid.startsWith("Qm") && !cid.startsWith("ba")) {
+      throw new Error(`Invalid CID format: ${cid}`);
     }
     
-    return decoded;
+    return cid;
   }
 
   parseOracleAssignedEvent(event: ethers.Log): Assignment {

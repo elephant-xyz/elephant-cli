@@ -7,6 +7,7 @@ import { logger } from "../utils/logger";
 import { createSpinner } from "../utils/progress";
 
 export async function listAssignments(options: CommandOptions): Promise<void> {
+  const startTime = Date.now();
   if (!isValidAddress(options.oracle)) {
     logger.error("Invalid oracle address");
     process.exit(1);
@@ -51,6 +52,16 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     );
     querySpinner.succeed(`Found ${assignments.length} assignments`);
     
+    let results: any[] = [];
+    
+    if (assignments.length === 0) {
+      logger.info("No assignments found for this oracle address in the specified block range.");
+      const endTime = Date.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(1);
+      logger.info(`Completed in ${duration} seconds`);
+      return;
+    }
+    
     if (assignments.length > 0) {
       assignments.forEach((assignment, index) => {
         console.log(`\nAssignment ${index + 1}:`);
@@ -63,7 +74,7 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
       logger.info("Starting downloads...");
       const downloadDir = options.downloadDir || "./downloads";
       
-      const results = await ipfsService.downloadBatch(
+      results = await ipfsService.downloadBatch(
         assignments, 
         downloadDir,
         (completed, total) => {
@@ -88,8 +99,29 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
       
       logger.success(`Downloads complete! ${successful} succeeded, ${failed} failed.`);
     }
-  } catch (error) {
-    logger.error(`Error: ${error}`);
+    
+    const endTime = Date.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(1);
+    
+    // Summary statistics
+    console.log("\n" + "=".repeat(50));
+    logger.info("Summary:");
+    logger.info(`  Total assignments found: ${assignments.length}`);
+    if (assignments.length > 0) {
+      logger.info(`  Files downloaded: ${results.filter(r => r.success).length}`);
+      logger.info(`  Download failures: ${results.filter(r => !r.success).length}`);
+    }
+    logger.info(`  Blocks scanned: ${currentBlock - fromBlock + 1}`);
+    logger.info(`  Execution time: ${duration} seconds`);
+    console.log("=".repeat(50));
+  } catch (error: any) {
+    if (error.code === 'NETWORK_ERROR' || error.code === 'SERVER_ERROR') {
+      logger.error("Failed to connect to RPC endpoint. Please check your RPC URL and internet connection.");
+    } else if (error.message?.includes('invalid address')) {
+      logger.error("Invalid contract or oracle address format.");
+    } else {
+      logger.error(`Error: ${error.message || error}`);
+    }
     process.exit(1);
   }
 }
