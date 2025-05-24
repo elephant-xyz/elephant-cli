@@ -2,7 +2,6 @@ import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Readable } from 'stream';
 import { IPFSService } from '../../../src/services/ipfs.service';
 import { ElephantAssignment } from '../../../src/types';
 
@@ -66,18 +65,13 @@ describe('IPFSService', () => {
 
   describe('downloadFile', () => {
     beforeEach(() => {
-      // Mock fetch to return a response with a readable stream
+      // Mock fetch to return a response with arrayBuffer
+      const testContent = new TextEncoder().encode('test file content');
       const mockResponse = {
         ok: true,
         status: 200,
-        body: new ReadableStream({
-          start(controller) {
-            // Simulate streaming data
-            controller.enqueue(new TextEncoder().encode('test file content'));
-            controller.close();
-          }
-        })
-      } as Response;
+        arrayBuffer: () => Promise.resolve(testContent.buffer.slice(0))
+      } as unknown as Response;
       
       mockFetchImplementation.mockResolvedValue(mockResponse);
     });
@@ -126,16 +120,12 @@ describe('IPFSService', () => {
 
     it('should retry on failure if retries > 0', async () => {
       const error = new Error('Temporary failure');
+      const retryContent = new TextEncoder().encode('retry success content');
       const successResponse = {
         ok: true,
         status: 200,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode('retry success content'));
-            controller.close();
-          }
-        })
-      } as Response;
+        arrayBuffer: () => Promise.resolve(retryContent.buffer.slice(0))
+      } as unknown as Response;
       
       mockFetchImplementation
         .mockRejectedValueOnce(error) // First call fails
@@ -152,8 +142,7 @@ describe('IPFSService', () => {
       // Mock a response with HTTP error status
       const errorResponse = {
         ok: false,
-        status: 404,
-        body: null
+        status: 404
       } as Response;
       
       mockFetchImplementation.mockResolvedValue(errorResponse);
@@ -162,22 +151,6 @@ describe('IPFSService', () => {
       
       expect(result.success).toBe(false);
       expect(result.error?.message).toBe('HTTP error! status: 404');
-    });
-
-    it('should handle missing response body', async () => {
-      // Mock a response with null body
-      const responseWithoutBody = {
-        ok: true,
-        status: 200,
-        body: null
-      } as Response;
-      
-      mockFetchImplementation.mockResolvedValue(responseWithoutBody);
-
-      const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
-      
-      expect(result.success).toBe(false);
-      expect(result.error?.message).toBe('Response body is null');
     });
   });
 
@@ -206,16 +179,12 @@ describe('IPFSService', () => {
     beforeEach(() => {
       // For batch downloads, each fetch call should resolve to a successful response
       mockFetchImplementation.mockImplementation(() => {
+        const batchContent = new TextEncoder().encode('batch test content');
         const mockResponse = {
           ok: true,
           status: 200,
-          body: new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('batch test content'));
-              controller.close();
-            }
-          })
-        } as Response;
+          arrayBuffer: () => Promise.resolve(batchContent.buffer.slice(0))
+        } as unknown as Response;
         return Promise.resolve(mockResponse);
       });
     });
@@ -254,16 +223,12 @@ describe('IPFSService', () => {
         maxObservedActive = Math.max(maxObservedActive, activeDownloads);
         await new Promise((resolve) => setTimeout(resolve, 20)); // Simulate download time
         activeDownloads--;
+        const concurrentContent = new TextEncoder().encode('concurrent test content');
         const mockResponse = {
           ok: true,
           status: 200,
-          body: new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('concurrent test content'));
-              controller.close();
-            }
-          })
-        } as Response;
+          arrayBuffer: () => Promise.resolve(concurrentContent.buffer.slice(0))
+        } as unknown as Response;
         return mockResponse;
       });
 
@@ -275,16 +240,12 @@ describe('IPFSService', () => {
       // Clear the beforeEach mock and set up a specific mock for this test
       mockFetchImplementation.mockClear();
       
+      const successContent = new TextEncoder().encode('success content');
       const successResponse = {
         ok: true,
         status: 200,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode('success content'));
-            controller.close();
-          }
-        })
-      } as Response;
+        arrayBuffer: () => Promise.resolve(successContent.buffer.slice(0))
+      } as unknown as Response;
       
       // Create a mock that responds differently based on the CID in the URL
       mockFetchImplementation.mockImplementation((input: RequestInfo | URL) => {

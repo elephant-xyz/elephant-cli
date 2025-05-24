@@ -1,15 +1,11 @@
+import { readFileSync } from 'fs';
 import { BlockchainService } from '../services/blockchain.service';
 import { IPFSService } from '../services/ipfs.service';
-import { logger } from '../utils/logger';
-import { isValidAddress, isValidBlock, isValidUrl } from '../utils/validation';
-import {
-  CommandOptions,
-  ElephantAssignment,
-  ABI,
-  DownloadResult,
-} from '../types';
+import { CommandOptions, DownloadResult, ElephantAssignment } from '../types';
 import { DEFAULT_CONTRACT_ABI } from '../utils/constants';
-import { createSpinner } from '../utils/progress'; // Named import
+import { logger } from '../utils/logger';
+import { createSpinner } from '../utils/progress';
+import { isValidAddress, isValidBlock, isValidUrl } from '../utils/validation';
 
 export async function listAssignments(options: CommandOptions): Promise<void> {
   // Validate inputs
@@ -52,7 +48,7 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
   const downloadDir = options.downloadDir || './downloads';
   const contractAbi =
     options.abiPath && typeof options.abiPath === 'string'
-      ? require(options.abiPath)
+      ? JSON.parse(readFileSync(options.abiPath, 'utf-8'))
       : DEFAULT_CONTRACT_ABI;
 
   const spinner = createSpinner('Initializing...'); // Provide initial text
@@ -62,7 +58,7 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     const blockchainService = new BlockchainService(
       rpcUrl,
       contractAddress,
-      contractAbi as ABI
+      contractAbi
     );
     const ipfsService = new IPFSService(
       gatewayUrl,
@@ -147,12 +143,17 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     logger.log(`Files downloaded: ${downloadedCount}`);
     logger.log(`Files failed: ${failedCount}`);
     logger.log(`Blocks scanned: ${parsedToBlock - parsedFromBlock + 1}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     spinner.fail('An error occurred:');
-    logger.error(error.message);
-    if (error.stack) {
-      logger.error(error.stack);
+    if (error instanceof Error) {
+      logger.error(error.message);
+      if (error.stack) {
+        logger.error(error.stack);
+      }
+    } else {
+      logger.error(String(error));
     }
+
     process.exit(1);
   }
 }

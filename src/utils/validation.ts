@@ -12,7 +12,7 @@ export const isValidUrl = (url: string | undefined | null): boolean => {
   try {
     const parsedUrl = new URL(url);
     return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -30,7 +30,7 @@ export const isValidCID = (cid: string | undefined | null): boolean => {
   try {
     CID.parse(cid);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };

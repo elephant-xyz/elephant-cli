@@ -1,5 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { BytesLike, Result, InterfaceAbi } from 'ethers';
+import {
+  BytesLike,
+  Result,
+  InterfaceAbi,
+  Log,
+  LogParams,
+  JsonRpcProvider,
+} from 'ethers';
 
 // Define mock implementations for ethers utilities
 const mockDecodeImplementation =
@@ -27,7 +34,7 @@ jest.mock('ethers', () => ({
   },
   dataSlice: (...args: [BytesLike, number, (number | undefined)?]) =>
     mockDataSliceImplementation(...args),
-  Interface: MockInterfaceConstructor, // Mock the Interface class
+  Interface: MockInterfaceConstructor,
 }));
 
 // Import SUT after mocks
@@ -77,15 +84,23 @@ describe('EventDecoderService', () => {
   });
 
   describe('parseElephantAssignedEvent', () => {
-    const mockRawEvent = {
-      data: '0xSomeData',
-      topics: [
-        '0xTopic0Sig_ElephantAssigned',
-        '0x0000000000000000000000001234567890123456789012345678901234567890',
-      ], // Padded address
-      blockNumber: 12345,
-      transactionHash: '0xTxHash123',
-    };
+    const mockRawEvent = new Log(
+      {
+        address: '0x1234567890123456789012345678901234567890',
+        blockHash: '0xBlockHash123',
+        data: '0xSomeData',
+        topics: [
+          '0xTopic0Sig_ElephantAssigned',
+          '0x0000000000000000000000001234567890123456789012345678901234567890',
+        ],
+        blockNumber: 12345,
+        transactionHash: '0xTxHash123',
+        index: 0,
+        transactionIndex: 0,
+        removed: false,
+      } as LogParams,
+      new JsonRpcProvider('http://localhost:8545')
+    );
     const mockElephantAddressFromTopic =
       '0x1234567890123456789012345678901234567890';
 
@@ -96,16 +111,7 @@ describe('EventDecoderService', () => {
 
       mockDecodeImplementation.mockReturnValueOnce([
         decodedCidString,
-      ] as unknown as Result);
-
-      // Ensure getEvent is configured for the 'ElephantAssigned' event if logic relies on it by name
-      // (already done in beforeEach with a default, but can be more specific)
-      // mockInterfaceGetEventImplementation.mockImplementation((nameOrSignature: string) => {
-      //   if (nameOrSignature === 'ElephantAssigned') {
-      //     return { name: 'ElephantAssigned', inputs: [/*...inputs as above...*/] };
-      //   }
-      //   return null;
-      // });
+      ] as Result);
 
       const parsedEvent =
         eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
@@ -143,10 +149,10 @@ describe('EventDecoderService', () => {
     });
 
     it('should throw an error if event topics are missing for indexed parameters', () => {
-      const incompleteRawEvent = {
-        ...mockRawEvent,
-        topics: ['0xTopic0Sig_ElephantAssigned'],
-      };
+      const logParams: LogParams = mockRawEvent.toJSON() as LogParams;
+      logParams.topics = [];
+      const incompleteRawEvent = new Log(logParams, mockRawEvent.provider);
+      mockRawEvent;
       expect(() =>
         eventDecoderService.parseElephantAssignedEvent(incompleteRawEvent)
       ).toThrow(
@@ -164,4 +170,3 @@ describe('EventDecoderService', () => {
     });
   });
 });
-

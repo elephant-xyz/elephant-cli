@@ -47,37 +47,10 @@ export class IPFSService {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        if (!response.body) {
-          throw new Error('Response body is null');
-        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
 
-        // Convert ReadableStream to Node.js Readable stream
-        const reader = response.body.getReader();
-        const writer = fs.createWriteStream(outputPath);
-
-        // Stream the data
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            await new Promise<void>((resolve, reject) => {
-              writer.write(value, (error) => {
-                if (error) reject(error);
-                else resolve();
-              });
-            });
-          }
-
-          await new Promise<void>((resolve, reject) => {
-            writer.end((error?: Error | null) => {
-              if (error) reject(error);
-              else resolve();
-            });
-          });
-        } finally {
-          reader.releaseLock();
-        }
+        fs.writeFileSync(outputPath, buffer);
 
         return {
           cid,

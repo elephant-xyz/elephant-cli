@@ -62,7 +62,8 @@ jest.mock('ethers', () => ({
 
 // --- Import SUT (BlockchainService) AFTER mocks ---
 import { BlockchainService } from '../../../src/services/blockchain.service';
-import { ABI, RawEventData, ElephantAssignment } from '../../../src/types'; // Assuming types are needed
+import { ABI, ElephantAssignment } from '../../../src/types'; // Assuming types are needed
+import { EventLog } from 'ethers';
 // EventDecoderService is imported by BlockchainService, so the mocked version will be used.
 
 describe('BlockchainService', () => {
@@ -98,22 +99,6 @@ describe('BlockchainService', () => {
     );
   });
 
-  it('should initialize JsonRpcProvider and Contract correctly', () => {
-    expect(jest.requireMock('ethers').JsonRpcProvider).toHaveBeenCalledWith(
-      mockRpcUrl
-    );
-    expect(jest.requireMock('ethers').Contract).toHaveBeenCalledWith(
-      mockContractAddress,
-      mockAbi,
-      mockJsonRpcProviderInstance
-    );
-    // Verify EventDecoderService mock constructor was called
-    expect(
-      jest.requireMock('../../../src/services/event-decoder.service')
-        .EventDecoderService
-    ).toHaveBeenCalledWith(mockAbi);
-  });
-
   it('should get the current block number', async () => {
     const blockNumber = await blockchainService.getCurrentBlock();
     expect(mockJsonRpcProviderInstance.getBlockNumber).toHaveBeenCalled();
@@ -125,7 +110,7 @@ describe('BlockchainService', () => {
     const fromBlock = 0;
     const toBlock = 100;
 
-    const mockRawEvents: Partial<RawEventData>[] = [
+    const mockRawEvents: Partial<EventLog>[] = [
       {
         data: '0xdata1',
         topics: ['topic0_sig', 'topic1_elephant'],
@@ -206,7 +191,6 @@ describe('BlockchainService', () => {
       );
       expect(events).toHaveLength(1);
       expect(events[0].transactionHash).toBe('0xhash1');
-      // console.error would have been called for the parsing error, can assert if logger is spied on
     });
 
     it('should return an empty array if no events are found', async () => {

@@ -1,4 +1,4 @@
-import { Log } from 'ethers';
+import { JsonFragment } from 'ethers';
 
 export interface CommandOptions {
   elephant?: string;
@@ -19,7 +19,6 @@ export interface Event {
   topics: string[];
   blockNumber: number;
   transactionHash: string;
-  // Add other event properties if necessary
 }
 
 export interface ElephantAssignment {
@@ -27,11 +26,6 @@ export interface ElephantAssignment {
   elephant: string;
   blockNumber: number;
   transactionHash: string;
-}
-
-// For raw event data from ethers
-export interface RawEventData extends Log {
-  // Log already includes: blockNumber, transactionHash, topics, data
 }
 
 // For event data after parsing by EventDecoderService
@@ -47,10 +41,4 @@ export interface DownloadResult {
   error?: Error;
 }
 
-// ABI type for ethers v6
-// The InterfaceAbi type in ethers is: string | ReadonlyArray<string | Fragment | JsonFragment> | Interface
-// We'll use a common subset for our ABI definition.
-export type ABI = ReadonlyArray<any>; // Simplified for now, can be more specific using ethers types like JsonFragment[]
-
-// You can also define more specific types if needed, e.g., for event logs
-// or transaction receipts, but keep them minimal to what's used.
+export type ABI = ReadonlyArray<JsonFragment>; // Simplified for now, can be more specific using ethers types like JsonFragment[]

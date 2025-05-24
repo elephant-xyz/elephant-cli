@@ -3,22 +3,22 @@
 // A more complete ABI might be loaded from a file if specified by the user.
 export const DEFAULT_CONTRACT_ABI = [
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "bytes",
-        "name": "propertyCid",
-        "type": "bytes"
+        indexed: false,
+        internalType: 'bytes',
+        name: 'propertyCid',
+        type: 'bytes',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "elephant",
-        "type": "address"
-      }
+        indexed: true,
+        internalType: 'address',
+        name: 'elephant',
+        type: 'address',
+      },
     ],
-    "name": "ElephantAssigned",
-    "type": "event"
-  }
+    name: 'ElephantAssigned',
+    type: 'event',
+  },
 ];
