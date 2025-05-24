@@ -136,6 +136,7 @@ describe('listAssignments integration', () => {
       start: jest.fn().mockReturnThis(),
       succeed: jest.fn().mockReturnThis(),
       fail: jest.fn().mockReturnThis(),
+      warn: jest.fn().mockReturnThis(),
       stop: jest.fn().mockReturnThis(),
       text: '',
       isSpinning: false,
@@ -222,14 +223,16 @@ describe('listAssignments integration', () => {
   it('should exit on invalid elephant address', async () => {
     const invalidOptions = {
       ...defaultOptions,
-      address: 'invalid-address',
+      elephant: 'invalid-address',
     };
+    
+    // Set the validation to return false for the invalid address
+    mockIsValidAddress.mockImplementation((addr) => addr !== 'invalid-address');
 
-    await expect(listAssignments(invalidOptions)).rejects.toThrow(
-      'process.exit called'
-    );
+    await listAssignments(invalidOptions);
+    
     expect(mockedLogger.error).toHaveBeenCalledWith(
-      'Invalid elephant address: ' + defaultOptions.elephant
+      'Invalid elephant address: invalid-address'
     );
     expect(processExitSpy).toHaveBeenCalledWith(1);
   });

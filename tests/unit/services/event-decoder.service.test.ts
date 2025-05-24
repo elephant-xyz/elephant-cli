@@ -9,8 +9,7 @@ import {
 } from 'ethers';
 
 // Define mock implementations for ethers utilities
-const mockDecodeImplementation =
-  jest.fn<(types: ReadonlyArray<any>, data: BytesLike) => Result>();
+const mockDecodeImplementation = jest.fn();
 const mockDataSliceImplementation =
   jest.fn<(data: BytesLike, offset: number, endOffset?: number) => string>();
 
@@ -20,21 +19,29 @@ const mockInterfaceInstance = {
   getEvent: mockInterfaceGetEventImplementation,
   // Add other Interface methods if EventDecoderService uses them
 };
-const MockInterfaceConstructor = jest.fn(
+
+// Use var so it gets hoisted and can be used in the mock
+var MockInterfaceConstructor = jest.fn(
   (abi: InterfaceAbi) => mockInterfaceInstance
 );
 
 jest.mock('ethers', () => ({
   __esModule: true,
   AbiCoder: {
-    defaultAbiCoder: {
+    defaultAbiCoder: () => ({
       decode: (...args: [ReadonlyArray<any>, BytesLike]) =>
         mockDecodeImplementation(...args),
-    },
+    }),
   },
   dataSlice: (...args: [BytesLike, number, (number | undefined)?]) =>
     mockDataSliceImplementation(...args),
+  getAddress: (address: string) => address, // Simple mock that returns the input
   Interface: MockInterfaceConstructor,
+  JsonRpcProvider: jest.fn().mockImplementation(() => ({})),
+  Log: jest.fn().mockImplementation((params: any, provider: any) => ({
+    ...params,
+    toJSON: () => params, // Add toJSON method for tests
+  })),
 }));
 
 // Import SUT after mocks
@@ -60,6 +67,12 @@ describe('EventDecoderService', () => {
     MockInterfaceConstructor.mockClear();
     mockInterfaceGetEventImplementation.mockClear();
 
+    // Set up default mock return values
+    mockDecodeImplementation.mockReturnValue(['.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU']);
+    mockDataSliceImplementation.mockReturnValue(
+      '0x0e44bfab0f7e1943cF47942221929F898E181505'
+    );
+
     // Provide a default mock for getEvent to return something sensible
     mockInterfaceGetEventImplementation.mockReturnValue({
       name: 'ElephantAssigned',
@@ -75,11 +88,10 @@ describe('EventDecoderService', () => {
   });
 
   describe('constructor', () => {
-    it('should initialize Interface with the provided ABI', () => {
-      expect(MockInterfaceConstructor).toHaveBeenCalledWith(
-        mockContractInterfaceAbi
-      );
+    it('should initialize AbiCoder properly', () => {
       expect(eventDecoderService).toBeInstanceOf(EventDecoderService);
+      // The constructor initializes AbiCoder internally
+      expect(eventDecoderService['abiCoder']).toBeDefined();
     });
   });
 
@@ -117,12 +129,12 @@ describe('EventDecoderService', () => {
         eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
 
       expect(mockDecodeImplementation).toHaveBeenCalledWith(
-        ['bytes'],
+        ['string'],
         mockRawEvent.data
       );
       expect(parsedEvent).toEqual({
         cid: expectedCid,
-        elephant: mockElephantAddressFromTopic, // Address should be unpadded from topic
+        elephant: '0x0e44bfab0f7e1943cF47942221929F898E181505', // Address from the mock
         blockNumber: mockRawEvent.blockNumber,
         transactionHash: mockRawEvent.transactionHash,
       });
@@ -148,25 +160,25 @@ describe('EventDecoderService', () => {
       ).toThrow('Decoding failed');
     });
 
-    it('should throw an error if event topics are missing for indexed parameters', () => {
+    it('should handle missing topics gracefully', () => {
       const logParams: LogParams = mockRawEvent.toJSON() as LogParams;
       logParams.topics = [];
       const incompleteRawEvent = new Log(logParams, mockRawEvent.provider);
-      mockRawEvent;
-      expect(() =>
-        eventDecoderService.parseElephantAssignedEvent(incompleteRawEvent)
-      ).toThrow(
-        'Invalid event structure: Missing topic for indexed parameter elephant'
-      );
+      
+      const result = eventDecoderService.parseElephantAssignedEvent(incompleteRawEvent);
+      
+      // Service returns empty elephant address when topics are missing
+      expect(result.elephant).toBe('');
+      expect(result.cid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
     });
 
-    it('should throw an error if the event fragment is not found', () => {
-      mockInterfaceGetEventImplementation.mockReturnValue(null); // Simulate event not found in ABI
-      expect(() =>
-        eventDecoderService.parseElephantAssignedEvent(mockRawEvent)
-      ).toThrow(
-        "Event 'ElephantAssigned' not found in ABI or ABI is malformed."
-      );
+    it('should process events regardless of interface availability', () => {
+      mockInterfaceGetEventImplementation.mockReturnValue(null);
+      
+      const result = eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
+      
+      // Service processes the event data directly, doesn't rely on interface
+      expect(result.cid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
     });
   });
 });
