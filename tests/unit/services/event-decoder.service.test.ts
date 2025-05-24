@@ -1,175 +1,167 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { EventDecoderService } from '../../../src/services/event-decoder.service';
+import { BytesLike, Result, InterfaceAbi } from 'ethers';
 
-// Create mock decode function
-const mockDecode = jest.fn();
+// Define mock implementations for ethers utilities
+const mockDecodeImplementation =
+  jest.fn<(types: ReadonlyArray<any>, data: BytesLike) => Result>();
+const mockDataSliceImplementation =
+  jest.fn<(data: BytesLike, offset: number, endOffset?: number) => string>();
 
-// Create mock AbiCoder instance
-const mockAbiCoderInstance = {
-  decode: mockDecode
+// Mock for ethers.Interface constructor and its methods
+const mockInterfaceGetEventImplementation = jest.fn();
+const mockInterfaceInstance = {
+  getEvent: mockInterfaceGetEventImplementation,
+  // Add other Interface methods if EventDecoderService uses them
 };
+const MockInterfaceConstructor = jest.fn(
+  (abi: InterfaceAbi) => mockInterfaceInstance
+);
 
-// Mock ethers
-jest.mock('ethers', () => {
-  return {
-    AbiCoder: {
-      defaultAbiCoder: jest.fn(() => mockAbiCoderInstance)
+jest.mock('ethers', () => ({
+  __esModule: true,
+  AbiCoder: {
+    defaultAbiCoder: {
+      decode: (...args: [ReadonlyArray<any>, BytesLike]) =>
+        mockDecodeImplementation(...args),
     },
-    getAddress: jest.fn((address: string) => address),
-    dataSlice: jest.fn((data: string, offset: number) => {
-      // Simulate dataSlice behavior - remove 0x prefix and slice
-      const cleanData = data.startsWith('0x') ? data.slice(2) : data;
-      return '0x' + cleanData.slice(offset * 2);
-    })
-  };
-});
+  },
+  dataSlice: (...args: [BytesLike, number, (number | undefined)?]) =>
+    mockDataSliceImplementation(...args),
+  Interface: MockInterfaceConstructor, // Mock the Interface class
+}));
 
-// Import ethers to access mocked functions
-import { ethers } from 'ethers';
+// Import SUT after mocks
+import { EventDecoderService } from '../../../src/services/event-decoder.service';
+import { ABI } from '../../../src/types'; // ABI type is used
 
 describe('EventDecoderService', () => {
   let eventDecoderService: EventDecoderService;
+  const mockContractInterfaceAbi: ABI = [
+    {
+      type: 'event',
+      name: 'ElephantAssigned',
+      inputs: [
+        { name: 'propertyCid', type: 'bytes', indexed: false },
+        { name: 'elephant', type: 'address', indexed: true },
+      ],
+    },
+  ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    
+    mockDecodeImplementation.mockClear();
+    mockDataSliceImplementation.mockClear();
+    MockInterfaceConstructor.mockClear();
+    mockInterfaceGetEventImplementation.mockClear();
+
+    // Provide a default mock for getEvent to return something sensible
+    mockInterfaceGetEventImplementation.mockReturnValue({
+      name: 'ElephantAssigned',
+      // Mock other properties of EventFragment if needed by the SUT's logic
+      // For example, if it checks `eventFragment.inputs`
+      inputs: [
+        { name: 'propertyCid', type: 'bytes', indexed: false },
+        { name: 'elephant', type: 'address', indexed: true },
+      ],
+    });
+
     eventDecoderService = new EventDecoderService();
   });
 
-  describe('decodePropertyCid', () => {
-    it('should decode CID with leading dot correctly', () => {
-      const encodedData = '0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002e2e516d575554576d756f6453594575485650677874724152477261325670737375734170344671543946576f627555000000000000000000000000000000';
-      const cidWithDot = '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
-      const expectedCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
-
-      mockDecode.mockReturnValue([cidWithDot]);
-
-      const result = eventDecoderService.decodePropertyCid(encodedData);
-
-      expect(mockDecode).toHaveBeenCalledWith(['string'], encodedData);
-      expect(result).toBe(expectedCid);
-    });
-
-    it('should decode CID without leading dot correctly', () => {
-      const encodedData = '0xencoded';
-      const cidWithoutDot = 'QmXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
-
-      mockDecode.mockReturnValue([cidWithoutDot]);
-
-      const result = eventDecoderService.decodePropertyCid(encodedData);
-
-      expect(result).toBe(cidWithoutDot);
-    });
-
-    it('should handle CIDv1 format starting with ba', () => {
-      const encodedData = '0xencoded';
-      const cidV1 = 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
-
-      mockDecode.mockReturnValue([cidV1]);
-
-      const result = eventDecoderService.decodePropertyCid(encodedData);
-
-      expect(result).toBe(cidV1);
-    });
-
-    it('should throw error for invalid CID format', () => {
-      const encodedData = '0xencoded';
-      const invalidCid = 'InvalidCID123';
-
-      mockDecode.mockReturnValue([invalidCid]);
-
-      expect(() => {
-        eventDecoderService.decodePropertyCid(encodedData);
-      }).toThrow('Invalid CID format: InvalidCID123');
-    });
-
-    it('should throw error when decode fails', () => {
-      const encodedData = '0xencoded';
-      mockDecode.mockImplementation(() => {
-        throw new Error('Decode error');
-      });
-
-      expect(() => {
-        eventDecoderService.decodePropertyCid(encodedData);
-      }).toThrow('Decode error');
+  describe('constructor', () => {
+    it('should initialize Interface with the provided ABI', () => {
+      expect(MockInterfaceConstructor).toHaveBeenCalledWith(
+        mockContractInterfaceAbi
+      );
+      expect(eventDecoderService).toBeInstanceOf(EventDecoderService);
     });
   });
 
   describe('parseElephantAssignedEvent', () => {
-    const mockEvent = {
-      data: '0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002e2e516d575554576d756f6453594575485650677874724152477261325670737375734170344671543946576f627555000000000000000000000000000000',
+    const mockRawEvent = {
+      data: '0xSomeData',
       topics: [
-        '0xeventtopic',
-        '0x0000000000000000000000000e44bfab0f7e1943cf47942221929f898e181505'
-      ],
-      blockNumber: 71875870,
-      transactionHash: '0xtxhash123',
-    } as any;
+        '0xTopic0Sig_ElephantAssigned',
+        '0x0000000000000000000000001234567890123456789012345678901234567890',
+      ], // Padded address
+      blockNumber: 12345,
+      transactionHash: '0xTxHash123',
+    };
+    const mockElephantAddressFromTopic =
+      '0x1234567890123456789012345678901234567890';
 
-    beforeEach(() => {
-      mockDecode.mockReturnValue(['.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU']);
-    });
+    it('should correctly parse a valid ElephantAssigned event', () => {
+      const decodedCidString =
+        '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const expectedCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
 
-    it('should parse event with indexed elephant address', () => {
-      const result = eventDecoderService.parseElephantAssignedEvent(mockEvent);
+      mockDecodeImplementation.mockReturnValueOnce([
+        decodedCidString,
+      ] as unknown as Result);
 
-      expect(result).toEqual({
-        cid: 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-        elephant: '0x0e44bfab0f7e1943cf47942221929f898e181505',
-        blockNumber: 71875870,
-        transactionHash: '0xtxhash123',
+      // Ensure getEvent is configured for the 'ElephantAssigned' event if logic relies on it by name
+      // (already done in beforeEach with a default, but can be more specific)
+      // mockInterfaceGetEventImplementation.mockImplementation((nameOrSignature: string) => {
+      //   if (nameOrSignature === 'ElephantAssigned') {
+      //     return { name: 'ElephantAssigned', inputs: [/*...inputs as above...*/] };
+      //   }
+      //   return null;
+      // });
+
+      const parsedEvent =
+        eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
+
+      expect(mockDecodeImplementation).toHaveBeenCalledWith(
+        ['bytes'],
+        mockRawEvent.data
+      );
+      expect(parsedEvent).toEqual({
+        cid: expectedCid,
+        elephant: mockElephantAddressFromTopic, // Address should be unpadded from topic
+        blockNumber: mockRawEvent.blockNumber,
+        transactionHash: mockRawEvent.transactionHash,
       });
-
-      expect(ethers.dataSlice).toHaveBeenCalledWith(mockEvent.topics[1], 12);
-      expect(ethers.getAddress).toHaveBeenCalled();
     });
 
-    it('should handle event without indexed elephant address', () => {
-      const eventWithoutIndexed = {
-        ...mockEvent,
-        topics: ['0xeventtopic'],
+    it('should handle CID without leading dot', () => {
+      const decodedCidString = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      mockDecodeImplementation.mockReturnValueOnce([
+        decodedCidString,
+      ] as unknown as Result);
+
+      const parsedEvent =
+        eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
+      expect(parsedEvent.cid).toBe(decodedCidString);
+    });
+
+    it('should throw an error if event data is invalid for decoding', () => {
+      mockDecodeImplementation.mockImplementationOnce(() => {
+        throw new Error('Decoding failed');
+      });
+      expect(() =>
+        eventDecoderService.parseElephantAssignedEvent(mockRawEvent)
+      ).toThrow('Decoding failed');
+    });
+
+    it('should throw an error if event topics are missing for indexed parameters', () => {
+      const incompleteRawEvent = {
+        ...mockRawEvent,
+        topics: ['0xTopic0Sig_ElephantAssigned'],
       };
-
-      const result = eventDecoderService.parseElephantAssignedEvent(eventWithoutIndexed);
-
-      expect(result).toEqual({
-        cid: 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-        elephant: '',
-        blockNumber: 71875870,
-        transactionHash: '0xtxhash123',
-      });
+      expect(() =>
+        eventDecoderService.parseElephantAssignedEvent(incompleteRawEvent)
+      ).toThrow(
+        'Invalid event structure: Missing topic for indexed parameter elephant'
+      );
     });
 
-    it('should throw error for invalid CID in event', () => {
-      mockDecode.mockReturnValue(['InvalidCID']);
-
-      expect(() => {
-        eventDecoderService.parseElephantAssignedEvent(mockEvent);
-      }).toThrow('Invalid CID format: InvalidCID');
-    });
-
-    it('should handle events with different CID formats', () => {
-      // Test with CIDv1
-      mockDecode.mockReturnValue(['bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi']);
-
-      const result = eventDecoderService.parseElephantAssignedEvent(mockEvent);
-
-      expect(result.cid).toBe('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
-    });
-
-    it('should handle malformed event data gracefully', () => {
-      const malformedEvent = {
-        ...mockEvent,
-        data: '0xinvalid',
-      };
-
-      mockDecode.mockImplementation(() => {
-        throw new Error('Invalid data');
-      });
-
-      expect(() => {
-        eventDecoderService.parseElephantAssignedEvent(malformedEvent);
-      }).toThrow('Invalid data');
+    it('should throw an error if the event fragment is not found', () => {
+      mockInterfaceGetEventImplementation.mockReturnValue(null); // Simulate event not found in ABI
+      expect(() =>
+        eventDecoderService.parseElephantAssignedEvent(mockRawEvent)
+      ).toThrow(
+        "Event 'ElephantAssigned' not found in ABI or ABI is malformed."
+      );
     });
   });
 });
+

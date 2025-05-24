@@ -1,19 +1,9 @@
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 export const logger = {
-  info: (message: string) => {
-    console.log(chalk.blue('ℹ'), message);
-  },
-
-  success: (message: string) => {
-    console.log(chalk.green('✓'), message);
-  },
-
-  error: (message: string) => {
-    console.log(chalk.red('✗'), message);
-  },
-
-  warn: (message: string) => {
-    console.log(chalk.yellow('⚠'), message);
-  },
+  info: (message: string) => console.info(chalk.blue(message)),
+  success: (message: string) => console.log(chalk.green(message)),
+  error: (message: string) => console.error(chalk.red(message)),
+  warn: (message: string) => console.warn(chalk.yellow(message)),
+  log: (message: string) => console.log(message), // Ensure this method is present
 };

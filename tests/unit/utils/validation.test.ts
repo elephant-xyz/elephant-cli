@@ -1,17 +1,20 @@
 import { describe, it, expect } from '@jest/globals';
-import { isValidAddress, isValidUrl } from '../../../src/utils/validation';
+
+// Ensure we are testing against the actual ethers library for validation logic
+jest.unmock('ethers'); 
+
+// Import functions directly from the module being tested
+import { isValidAddress, isValidUrl, isValidBlock, isValidCID } from '../../../src/utils/validation';
 
 describe('validation utils', () => {
   describe('isValidAddress', () => {
     it('should validate correct Ethereum addresses', () => {
       const validAddresses = [
         '0x0e44bfab0f7e1943cF47942221929F898E181505',
-        '0x1234567890123456789012345678901234567890',
-        '0xAbCdEf1234567890123456789012345678901234',
-        '0x0000000000000000000000000000000000000000',
-        '0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',
+        '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
+        '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B', // Checksummed
+        '0xab5801a7d398351b8be11c439e05c5b3259aec9b', // Lowercase
       ];
-
       validAddresses.forEach(address => {
         expect(isValidAddress(address)).toBe(true);
       });
@@ -19,186 +22,87 @@ describe('validation utils', () => {
 
     it('should reject invalid Ethereum addresses', () => {
       const invalidAddresses = [
-        // Wrong length
-        '0x123',
-        '0x12345678901234567890123456789012345678901', // 41 hex chars
-        '0x123456789012345678901234567890123456789', // 39 hex chars
-        
-        // Missing 0x prefix
-        '1234567890123456789012345678901234567890',
-        
-        // Invalid characters
-        '0xGHIJKL1234567890123456789012345678901234',
-        '0x123456789012345678901234567890123456789G',
-        '0x12345678901234567890123456789012345678 0', // space
-        '0x12345678901234567890123456789012345678-0', // dash
-        
-        // Empty or null-like values
-        '',
-        '0x',
-        '0x0',
-        
-        // Case variations of prefix (should be lowercase)
-        '0X1234567890123456789012345678901234567890',
-        '0x1234567890123456789012345678901234567890 ', // trailing space
-        ' 0x1234567890123456789012345678901234567890', // leading space
+        '0x0e44bfab0f7e1943cF47942221929F898E18150', // Too short
+        '0x0e44bfab0f7e1943cF47942221929F898E1815055', // Too long
+        '0xG0e44bfab0f7e1943cF47942221929F898E181505', // Invalid char
+        '0e44bfab0f7e1943cF47942221929F898E181505', // Missing 0x
+        'not_an_address', '', null, undefined,
       ];
-
       invalidAddresses.forEach(address => {
-        expect(isValidAddress(address)).toBe(false);
+        expect(isValidAddress(address as string)).toBe(false);
       });
     });
 
-    it('should handle edge cases', () => {
-      // Undefined/null should be handled by TypeScript, but test string edge cases
-      expect(isValidAddress('undefined')).toBe(false);
-      expect(isValidAddress('null')).toBe(false);
-      expect(isValidAddress('0xundefined')).toBe(false);
-    });
-
-    it('should be case insensitive for hex characters', () => {
-      expect(isValidAddress('0xabcdef1234567890123456789012345678901234')).toBe(true);
-      expect(isValidAddress('0xABCDEF1234567890123456789012345678901234')).toBe(true);
-      expect(isValidAddress('0xAbCdEf1234567890123456789012345678901234')).toBe(true);
+    it('should handle mixed case addresses (checksum validation)', () => {
+      // Valid checksum
+      expect(isValidAddress('0x0e44bFaB0f7E1943cf47942221929f898e181505')).toBe(true);
+      // Invalid checksum but valid format (ethers.getAddress throws, so isValidAddress returns false)
+      expect(isValidAddress('0x0e44bfab0f7e1943cF47942221929F898E181505'.toLowerCase().replace('a','A'))).toBe(false);
     });
   });
 
   describe('isValidUrl', () => {
-    it('should validate correct URLs', () => {
+    it('should validate correct URLs (http/https)', () => {
       const validUrls = [
-        'http://example.com',
-        'https://example.com',
-        'https://example.com:8080',
-        'https://example.com/path',
-        'https://example.com/path/to/resource',
-        'https://example.com/path?query=value',
-        'https://example.com/path?query=value&another=test',
-        'https://example.com/path#fragment',
-        'https://subdomain.example.com',
-        'https://sub.sub.example.com',
-        'https://example.com:3000/path?q=1#hash',
-        'ftp://example.com',
-        'ws://example.com',
-        'wss://example.com',
-        'https://192.168.1.1',
-        'https://192.168.1.1:8080',
-        'https://localhost',
-        'https://localhost:3000',
-        'https://user:pass@example.com',
-        'https://gateway.pinata.cloud/ipfs/',
-        'https://rpc.therpc.io/polygon',
+        'http://example.com', 'https://example.com', 'http://localhost:3000',
+        'https://sub.example.co.uk/path?query=value#hash',
       ];
-
       validUrls.forEach(url => {
         expect(isValidUrl(url)).toBe(true);
       });
     });
 
-    it('should reject invalid URLs', () => {
+    it('should reject invalid URLs or non-http/https protocols', () => {
       const invalidUrls = [
-        // Missing protocol
-        'example.com',
-        'www.example.com',
-        '192.168.1.1',
-        
-        // Invalid protocol
-        'htp://example.com',
-        'htps://example.com',
-        'http//example.com',
-        'http:example.com',
-        
-        // Malformed URLs
-        'http://',
-        'https://',
-        'http://.',
-        'http://..',
-        'http://../',
-        'http://?',
-        'http://??',
-        'http://??/',
-        'http://#',
-        'http://##',
-        'http://##/',
-        'http:///a',
-        '///',
-        '//a',
-        '///a',
-        'foo.com',
-        
-        // Empty or whitespace
-        '',
-        ' ',
-        '\t',
-        '\n',
-        
-        // Just protocol
-        'http',
-        'https',
-        
-        // Invalid characters
-        'http://example com', // space
-        'http://example.com/path with spaces',
-        'http://exa mple.com',
-        
-        // Incomplete URLs
-        'http://192.168.1.',
-        'http://192.168.1',
-        'http://example.',
-        'http://.com',
+        'example.com', 'htp://example.com', 'ftp://example.com', 
+        'http//example.com', '://example.com',
+        '', null, undefined,
       ];
-
       invalidUrls.forEach(url => {
-        expect(isValidUrl(url)).toBe(false);
+        expect(isValidUrl(url as string)).toBe(false);
+      });
+    });
+  });
+
+  describe('isValidBlock', () => {
+    it('should validate correct block numbers or "latest"', () => {
+      const validBlocks = ['0', '123', '1234567890', 'latest'];
+      validBlocks.forEach(block => {
+        expect(isValidBlock(block)).toBe(true);
       });
     });
 
-    it('should handle special protocols', () => {
-      const specialProtocols = [
-        'file:///home/user/file.txt',
-        'mailto:test@example.com',
-        'tel:+1234567890',
-        'data:text/plain;base64,SGVsbG8sIFdvcmxkIQ==',
-        'blob:https://example.com/uuid',
+    it('should reject invalid block numbers', () => {
+      const invalidBlocks = ['-1', 'abc', '1.23', 'latest ', ' latest', '', null, undefined];
+      invalidBlocks.forEach(block => {
+        expect(isValidBlock(block as string)).toBe(false);
+      });
+    });
+  });
+
+  describe('isValidCID', () => {
+    it('should validate correct CIDs (v0 and v1)', () => {
+      const validCIDs = [
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU', // v0
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi', // v1
+        'QmRAQB6YaSyaxG6xhL7hEYM23r291g1s28V8vtv2vYZY7i', // another v0
       ];
-
-      specialProtocols.forEach(url => {
-        expect(isValidUrl(url)).toBe(true);
+      validCIDs.forEach(cid => {
+        expect(isValidCID(cid)).toBe(true);
       });
     });
 
-    it('should handle URLs with special characters', () => {
-      expect(isValidUrl('https://example.com/path-with-dash')).toBe(true);
-      expect(isValidUrl('https://example.com/path_with_underscore')).toBe(true);
-      expect(isValidUrl('https://example.com/path.with.dots')).toBe(true);
-      expect(isValidUrl('https://example.com/~user')).toBe(true);
-      expect(isValidUrl('https://example.com/path%20with%20encoded%20spaces')).toBe(true);
-    });
-
-    it('should handle international domain names', () => {
-      expect(isValidUrl('https://münchen.de')).toBe(true);
-      expect(isValidUrl('https://例え.jp')).toBe(true);
-      expect(isValidUrl('https://xn--fsq.com')).toBe(true); // Punycode
-    });
-
-    it('should handle very long URLs', () => {
-      const longPath = 'a'.repeat(2000);
-      const longUrl = `https://example.com/${longPath}`;
-      expect(isValidUrl(longUrl)).toBe(true);
-    });
-
-    it('should handle URLs with authentication', () => {
-      expect(isValidUrl('https://user@example.com')).toBe(true);
-      expect(isValidUrl('https://user:password@example.com')).toBe(true);
-      expect(isValidUrl('https://user:pass:word@example.com')).toBe(true);
-    });
-
-    it('should handle edge cases', () => {
-      // These should all return false
-      expect(isValidUrl('undefined')).toBe(false);
-      expect(isValidUrl('null')).toBe(false);
-      expect(isValidUrl('[object Object]')).toBe(false);
-      expect(isValidUrl('NaN')).toBe(false);
-      expect(isValidUrl('Infinity')).toBe(false);
+    it('should reject invalid CIDs', () => {
+      const invalidCIDs = [
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobu', // Too short v0
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzd', // Too short v1
+        'QmInvalidLength!', // Invalid char
+        'bafyInvalidChars!', // Invalid char v1
+        '', null, undefined,
+      ];
+      invalidCIDs.forEach(cid => {
+        expect(isValidCID(cid as string)).toBe(false);
+      });
     });
   });
 });

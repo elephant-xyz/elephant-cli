@@ -1,42 +1,36 @@
-export function isValidAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
+import { isAddress } from 'ethers'; // ethers v6
+import { CID } from 'multiformats/cid';
 
-export function isValidUrl(url: string): boolean {
+// Allow potentially undefined/null inputs, as they are checked.
+export const isValidAddress = (address: string | undefined | null): boolean => {
+  if (!address) return false;
+  return isAddress(address);
+};
+
+export const isValidUrl = (url: string | undefined | null): boolean => {
+  if (!url) return false;
   try {
-    const parsed = new URL(url);
-    // Check for valid protocols
-    const validProtocols = [
-      'http:',
-      'https:',
-      'ipfs:',
-      'file:',
-      'mailto:',
-      'tel:',
-    ];
-    if (!validProtocols.includes(parsed.protocol)) {
-      return false;
-    }
-    // For http/https, validate hostname
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      // Check for valid hostname
-      if (parsed.hostname === '' || parsed.hostname.includes(' ')) {
-        return false;
-      }
-      // Check for incomplete IP addresses
-      if (
-        /^\d+\.\d+\.\d+\.?$/.test(parsed.hostname) ||
-        /^\d+\.\d+\.?$/.test(parsed.hostname)
-      ) {
-        return false;
-      }
-      // Check for incomplete domains
-      if (parsed.hostname.endsWith('.')) {
-        return false;
-      }
-    }
-    return true;
-  } catch {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+  } catch (e) {
     return false;
   }
-}
+};
+
+export const isValidBlock = (block: string | undefined | null): boolean => {
+  if (!block) return false;
+  if (block === 'latest') {
+    return true;
+  }
+  return /^\d+$/.test(block) && parseInt(block, 10) >= 0;
+};
+
+export const isValidCID = (cid: string | undefined | null): boolean => {
+  if (!cid) return false;
+  try {
+    CID.parse(cid);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};

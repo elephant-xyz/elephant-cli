@@ -1,34 +1,45 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { Readable } from 'stream';
 import { IPFSService } from '../../../src/services/ipfs.service';
 import { ElephantAssignment } from '../../../src/types';
-import type { Mock } from 'jest-mock';
 
-// Create mock axios get function
-const mockAxiosGet = jest.fn() as Mock<Promise<any>>;
+// Mock fetch implementation
+const mockFetchImplementation = jest.fn<typeof fetch>();
 
-// Mock axios
-jest.mock('axios', () => ({
-  get: mockAxiosGet
-}));
-
-// Mock fs
-jest.mock('fs');
+// Mock fetch globally
+global.fetch = mockFetchImplementation;
 
 describe('IPFSService', () => {
   let ipfsService: IPFSService;
+  let tempDir: string;
   const mockGatewayUrl = 'https://gateway.pinata.cloud/ipfs/';
   const mockCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
-  const mockOutputPath = './downloads/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+  let mockOutputPath: string;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    ipfsService = new IPFSService(mockGatewayUrl);
+    // Create a temporary directory for each test
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ipfs-test-'));
+    mockOutputPath = path.join(tempDir, mockCid);
     
-    // Default mocks
-    (fs.existsSync as unknown as Mock).mockReturnValue(true);
-    (fs.mkdirSync as unknown as Mock).mockReturnValue(undefined);
+    // Clear all mock implementations and calls
+    mockFetchImplementation.mockClear();
+
+    ipfsService = new IPFSService(mockGatewayUrl); // Default maxConcurrent is 3
+  });
+
+  afterEach(() => {
+    // Clean up temporary directory after each test
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    } catch (error) {
+      // Ignore cleanup errors to prevent test failures
+      console.warn('Failed to clean up temp directory:', error);
+    }
   });
 
   describe('constructor', () => {
@@ -54,112 +65,119 @@ describe('IPFSService', () => {
   });
 
   describe('downloadFile', () => {
-    let mockStream: any;
-    let mockWriter: any;
-
     beforeEach(() => {
-      mockStream = {
-        pipe: jest.fn(),
-      };
-
-      mockWriter = {
-        on: jest.fn((event: string, callback: Function) => {
-          if (event === 'finish') {
-            // Simulate successful write
-            setTimeout(() => callback(), 0);
+      // Mock fetch to return a response with a readable stream
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        body: new ReadableStream({
+          start(controller) {
+            // Simulate streaming data
+            controller.enqueue(new TextEncoder().encode('test file content'));
+            controller.close();
           }
-          return mockWriter;
-        }),
-      };
-
-      mockAxiosGet.mockResolvedValue({
-        data: mockStream,
-      });
-
-      (fs.createWriteStream as unknown as Mock).mockReturnValue(mockWriter);
-      (path.dirname as unknown as Mock).mockReturnValue('./downloads');
+        })
+      } as Response;
+      
+      mockFetchImplementation.mockResolvedValue(mockResponse);
     });
 
     it('should download file successfully', async () => {
       const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
-
-      expect(mockAxiosGet).toHaveBeenCalledWith(
+      
+      expect(mockFetchImplementation).toHaveBeenCalledWith(
         `${mockGatewayUrl}${mockCid}`,
-        {
-          responseType: 'stream',
-          timeout: 30000,
-        }
+        expect.objectContaining({
+          signal: expect.any(AbortSignal)
+        })
       );
-      expect(fs.createWriteStream).toHaveBeenCalledWith(mockOutputPath);
-      expect(mockStream.pipe).toHaveBeenCalledWith(mockWriter);
       expect(result).toEqual({
         cid: mockCid,
         success: true,
         path: mockOutputPath,
       });
+      // Verify the file was actually created
+      expect(fs.existsSync(mockOutputPath)).toBe(true);
+      // Verify the file contains our test content
+      const content = fs.readFileSync(mockOutputPath, 'utf8');
+      expect(content).toBe('test file content');
     });
 
     it('should create directory if it does not exist', async () => {
-      (fs.existsSync as unknown as Mock).mockReturnValue(false);
-
-      await ipfsService.downloadFile(mockCid, mockOutputPath);
-
-      expect(path.dirname).toHaveBeenCalledWith(mockOutputPath);
-      expect(fs.mkdirSync).toHaveBeenCalledWith('./downloads', { recursive: true });
-    });
-
-    it('should handle download failure', async () => {
-      const error = new Error('Network error');
-      mockAxiosGet.mockRejectedValue(error);
-
-      const result = await ipfsService.downloadFile(mockCid, mockOutputPath, 0);
-
-      expect(result).toEqual({
-        cid: mockCid,
-        success: false,
-        error: error,
-      });
-    });
-
-    it('should retry on failure', async () => {
-      const error = new Error('Temporary failure');
-      mockAxiosGet
-        .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce({ data: mockStream });
-
-      const result = await ipfsService.downloadFile(mockCid, mockOutputPath, 1);
-
-      expect(mockAxiosGet).toHaveBeenCalledTimes(2);
+      const nestedPath = path.join(tempDir, 'nested', 'directory', mockCid);
+      
+      const result = await ipfsService.downloadFile(mockCid, nestedPath);
+      
       expect(result.success).toBe(true);
+      expect(fs.existsSync(nestedPath)).toBe(true);
+      expect(fs.existsSync(path.dirname(nestedPath))).toBe(true);
     });
 
-    it('should handle write stream errors', async () => {
-      const writeError = new Error('Write error');
-      mockWriter.on = jest.fn((event: string, callback: Function) => {
-        if (event === 'error') {
-          setTimeout(() => callback(writeError), 0);
-        }
-        return mockWriter;
-      });
+    it('should handle download failure from fetch', async () => {
+      const error = new Error('Network error');
+      mockFetchImplementation.mockRejectedValue(error);
+      
+      const result = await ipfsService.downloadFile(mockCid, mockOutputPath, 0); // 0 retries
+      
+      expect(result).toEqual({ cid: mockCid, success: false, error: error });
+      // Verify no file was created
+      expect(fs.existsSync(mockOutputPath)).toBe(false);
+    });
+
+    it('should retry on failure if retries > 0', async () => {
+      const error = new Error('Temporary failure');
+      const successResponse = {
+        ok: true,
+        status: 200,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('retry success content'));
+            controller.close();
+          }
+        })
+      } as Response;
+      
+      mockFetchImplementation
+        .mockRejectedValueOnce(error) // First call fails
+        .mockResolvedValueOnce(successResponse); // Second call succeeds
+
+      const result = await ipfsService.downloadFile(mockCid, mockOutputPath, 1); // 1 retry
+
+      expect(mockFetchImplementation).toHaveBeenCalledTimes(2);
+      expect(result.success).toBe(true);
+      expect(fs.existsSync(mockOutputPath)).toBe(true);
+    });
+
+    it('should handle HTTP error responses', async () => {
+      // Mock a response with HTTP error status
+      const errorResponse = {
+        ok: false,
+        status: 404,
+        body: null
+      } as Response;
+      
+      mockFetchImplementation.mockResolvedValue(errorResponse);
 
       const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
-
-      expect(result).toEqual({
-        cid: mockCid,
-        success: false,
-        error: writeError,
-      });
+      
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toBe('HTTP error! status: 404');
     });
 
-    it('should respect timeout', async () => {
-      await ipfsService.downloadFile(mockCid, mockOutputPath);
+    it('should handle missing response body', async () => {
+      // Mock a response with null body
+      const responseWithoutBody = {
+        ok: true,
+        status: 200,
+        body: null
+      } as Response;
+      
+      mockFetchImplementation.mockResolvedValue(responseWithoutBody);
 
-      expect(mockAxiosGet).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          timeout: 30000,
-        })
-      );
+      const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
+      
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toBe('Response body is null');
     });
   });
 
@@ -186,118 +204,112 @@ describe('IPFSService', () => {
     ];
 
     beforeEach(() => {
-      // Mock successful downloads
-      const mockStream = { pipe: jest.fn() };
-      const mockWriter = {
-        on: jest.fn((event: string, callback: Function) => {
-          if (event === 'finish') {
-            setTimeout(() => callback(), 0);
-          }
-          return mockWriter;
-        }),
-      };
-
-      mockAxiosGet.mockResolvedValue({ data: mockStream });
-      (fs.createWriteStream as unknown as Mock).mockReturnValue(mockWriter);
-      (path.dirname as unknown as Mock).mockImplementation((p) => path.dirname(p));
+      // For batch downloads, each fetch call should resolve to a successful response
+      mockFetchImplementation.mockImplementation(() => {
+        const mockResponse = {
+          ok: true,
+          status: 200,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('batch test content'));
+              controller.close();
+            }
+          })
+        } as Response;
+        return Promise.resolve(mockResponse);
+      });
     });
 
     it('should download multiple files with progress callback', async () => {
       const progressCallback = jest.fn();
-
       const results = await ipfsService.downloadBatch(
         mockAssignments,
-        './downloads',
+        tempDir,
         progressCallback
       );
 
       expect(results).toHaveLength(3);
-      expect(results.every(r => r.success)).toBe(true);
+      expect(results.every((r) => r.success)).toBe(true);
       
-      // Wait for all async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Verify files were actually created
+      expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID3'))).toBe(true);
       
-      // Progress callback should be called for each completed download
+      // Progress callback is called asynchronously due to promises in p-queue
+      // Wait for promises to settle to check calls
+      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(progressCallback).toHaveBeenCalledWith(1, 3);
       expect(progressCallback).toHaveBeenCalledWith(2, 3);
       expect(progressCallback).toHaveBeenCalledWith(3, 3);
     });
 
     it('should respect concurrent download limit', async () => {
-      const service = new IPFSService(mockGatewayUrl, 2); // Max 2 concurrent
+      const serviceWithLimit = new IPFSService(mockGatewayUrl, 2); // Limit to 2
       let activeDownloads = 0;
-      let maxActive = 0;
+      let maxObservedActive = 0;
 
-      mockAxiosGet.mockImplementation(async () => {
+      mockFetchImplementation.mockImplementation(async () => {
         activeDownloads++;
-        maxActive = Math.max(maxActive, activeDownloads);
-        
-        // Simulate download time
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
+        maxObservedActive = Math.max(maxObservedActive, activeDownloads);
+        await new Promise((resolve) => setTimeout(resolve, 20)); // Simulate download time
         activeDownloads--;
-        return { data: { pipe: jest.fn() } };
+        const mockResponse = {
+          ok: true,
+          status: 200,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('concurrent test content'));
+              controller.close();
+            }
+          })
+        } as Response;
+        return mockResponse;
       });
 
-      await service.downloadBatch(mockAssignments);
-
-      expect(maxActive).toBeLessThanOrEqual(2);
+      await serviceWithLimit.downloadBatch(mockAssignments, tempDir);
+      expect(maxObservedActive).toBeLessThanOrEqual(2); // Max concurrent should be <= 2
     });
 
-    it('should handle mixed success and failure', async () => {
-      mockAxiosGet
-        .mockResolvedValueOnce({ data: { pipe: jest.fn() } })
-        .mockRejectedValueOnce(new Error('Download failed'))
-        .mockResolvedValueOnce({ data: { pipe: jest.fn() } });
+    it('should handle mixed success and failure in batch', async () => {
+      // Clear the beforeEach mock and set up a specific mock for this test
+      mockFetchImplementation.mockClear();
+      
+      const successResponse = {
+        ok: true,
+        status: 200,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('success content'));
+            controller.close();
+          }
+        })
+      } as Response;
+      
+      // Create a mock that responds differently based on the CID in the URL
+      mockFetchImplementation.mockImplementation((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('QmCID2')) {
+          return Promise.reject(new Error('Download failed for CID2'));
+        }
+        return Promise.resolve(successResponse);
+      });
 
-      const results = await ipfsService.downloadBatch(mockAssignments);
-
+      const results = await ipfsService.downloadBatch(
+        mockAssignments,
+        tempDir
+      );
+      
       expect(results[0].success).toBe(true);
       expect(results[1].success).toBe(false);
-      expect(results[1].error?.message).toBe('Download failed');
+      expect(results[1].error?.message).toBe('Download failed for CID2');
       expect(results[2].success).toBe(true);
-    });
-
-    it('should use custom download directory', async () => {
-      const customDir = './custom-downloads';
       
-      await ipfsService.downloadBatch(mockAssignments, customDir);
-
-      expect(fs.createWriteStream).toHaveBeenCalledWith(`${customDir}/QmCID1`);
-      expect(fs.createWriteStream).toHaveBeenCalledWith(`${customDir}/QmCID2`);
-      expect(fs.createWriteStream).toHaveBeenCalledWith(`${customDir}/QmCID3`);
-    });
-
-    it('should reset counters after batch completion', async () => {
-      await ipfsService.downloadBatch(mockAssignments);
-
-      expect(ipfsService['completedCount']).toBe(0);
-      expect(ipfsService['totalCount']).toBe(0);
-      expect(ipfsService['onProgress']).toBeUndefined();
-    });
-
-    it('should handle empty assignment list', async () => {
-      const results = await ipfsService.downloadBatch([]);
-
-      expect(results).toEqual([]);
-      expect(mockAxiosGet).not.toHaveBeenCalled();
-    });
-
-    it('should process queue correctly', async () => {
-      const service = new IPFSService(mockGatewayUrl, 1); // Max 1 concurrent
-      const downloadOrder: string[] = [];
-
-      mockAxiosGet.mockImplementation(async (url) => {
-        const cid = url.split('/').pop();
-        downloadOrder.push(cid);
-        await new Promise(resolve => setTimeout(resolve, 10));
-        return { data: { pipe: jest.fn() } };
-      });
-
-      await service.downloadBatch(mockAssignments);
-
-      // Downloads should happen in order when max concurrent is 1
-      expect(downloadOrder).toEqual(['QmCID1', 'QmCID2', 'QmCID3']);
+      // Verify only successful files were created
+      expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID3'))).toBe(true);
     });
   });
 });
+

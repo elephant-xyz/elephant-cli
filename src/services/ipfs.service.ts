@@ -1,4 +1,3 @@
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DownloadResult, ElephantAssignment } from '../types';
@@ -33,18 +32,52 @@ export class IPFSService {
         }
 
         const url = `${this.gateway}${cid}`;
-        const response = await axios.get(url, {
-          responseType: 'stream',
-          timeout: 30000, // 30 second timeout
+
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        const response = await fetch(url, {
+          signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        if (!response.body) {
+          throw new Error('Response body is null');
+        }
+
+        // Convert ReadableStream to Node.js Readable stream
+        const reader = response.body.getReader();
         const writer = fs.createWriteStream(outputPath);
-        response.data.pipe(writer);
 
-        await new Promise<void>((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-        });
+        // Stream the data
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            await new Promise<void>((resolve, reject) => {
+              writer.write(value, (error) => {
+                if (error) reject(error);
+                else resolve();
+              });
+            });
+          }
+
+          await new Promise<void>((resolve, reject) => {
+            writer.end((error?: Error | null) => {
+              if (error) reject(error);
+              else resolve();
+            });
+          });
+        } finally {
+          reader.releaseLock();
+        }
 
         return {
           cid,
