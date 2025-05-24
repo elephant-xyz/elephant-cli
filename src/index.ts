@@ -17,7 +17,7 @@ program
 program
   .command('list-assignments')
   .description('List and download elephant assignments from the blockchain')
-  .requiredOption('-e, --elephant <address>', 'Elephant address')
+  .requiredOption('-o, --oracle <address>', 'Oracle address')
   .option(
     '-c, --contract <address>',
     'Smart contract address',

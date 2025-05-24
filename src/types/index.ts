@@ -1,7 +1,7 @@
 import { JsonFragment } from 'ethers';
 
 export interface CommandOptions {
-  elephant?: string;
+  oracle: string;
   contract?: string;
   rpc?: string;
   gateway?: string;

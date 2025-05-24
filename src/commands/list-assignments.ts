@@ -9,11 +9,11 @@ import { isValidAddress, isValidBlock, isValidUrl } from '../utils/validation';
 
 export async function listAssignments(options: CommandOptions): Promise<void> {
   // Validate inputs
-  if (!options.elephant || !isValidAddress(options.elephant)) {
-    logger.error(`Invalid elephant address: ${options.elephant}`);
+  if (!options.oracle || !isValidAddress(options.oracle)) {
+    logger.error(`Invalid elephant address: ${options.oracle}`);
     process.exit(1);
   }
-  const elephantAddress: string = options.elephant;
+  const oracleAddress: string = options.oracle;
 
   if (!options.contract || !isValidAddress(options.contract)) {
     logger.error(`Invalid contract address: ${options.contract}`);
@@ -83,12 +83,12 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     }
 
     spinner.start(
-      `Fetching ElephantAssigned events for ${elephantAddress} from block ${parsedFromBlock} to ${parsedToBlock}...`
+      `Fetching ElephantAssigned events for ${oracleAddress} from block ${parsedFromBlock} to ${parsedToBlock}...`
     );
 
     const events: ElephantAssignment[] =
       await blockchainService.getElephantAssignedEvents(
-        elephantAddress,
+        oracleAddress,
         parsedFromBlock,
         parsedToBlock
       );

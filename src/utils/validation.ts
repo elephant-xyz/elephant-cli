@@ -1,5 +1,4 @@
 import { isAddress } from 'ethers'; // ethers v6
-import { CID } from 'multiformats/cid';
 
 // Allow potentially undefined/null inputs, as they are checked.
 export const isValidAddress = (address: string | undefined | null): boolean => {
@@ -25,9 +24,12 @@ export const isValidBlock = (block: string | undefined | null): boolean => {
   return /^\d+$/.test(block) && parseInt(block, 10) >= 0;
 };
 
-export const isValidCID = (cid: string | undefined | null): boolean => {
+export const isValidCID = async (
+  cid: string | undefined | null
+): Promise<boolean> => {
   if (!cid) return false;
   try {
+    const { CID } = await import('multiformats/cid');
     CID.parse(cid);
     return true;
   } catch {

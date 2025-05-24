@@ -9,21 +9,23 @@ export class EventDecoderService {
     this.abiCoder = AbiCoder.defaultAbiCoder();
   }
 
-  public decodePropertyCid(bytes: string): string {
+  public async decodePropertyCid(bytes: string): Promise<string> {
     // Decode the dynamic string from event data
     const decoded = this.abiCoder.decode(['string'], bytes)[0];
 
     // Remove the leading dot if present
     const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
 
-    if (!isValidCID(cid)) {
+    if (!(await isValidCID(cid))) {
       throw new Error(`Invalid CID format: ${cid}`);
     }
     return cid;
   }
 
-  public parseElephantAssignedEvent(event: Log): ElephantAssignment {
-    const propertyCid = this.decodePropertyCid(event.data);
+  public async parseElephantAssignedEvent(
+    event: Log
+  ): Promise<ElephantAssignment> {
+    const propertyCid = await this.decodePropertyCid(event.data);
     let elephantAddress = '';
 
     // Assuming elephant address is always the second topic (index 1) if present
