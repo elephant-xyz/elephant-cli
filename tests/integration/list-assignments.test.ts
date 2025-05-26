@@ -1,23 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// --- Define mock functions and instances FIRST ---
-const mockEthersAbiCoderInstance = { decode: vi.fn() };
-const mockEthersGetAddress = vi.fn((address: string) => address);
-const mockEthersDataSlice = vi.fn(
-  (data: string, offset: number) => '0x' + data.slice(2 + offset * 2)
-);
-
-const mockIsValidAddress =
-  vi.fn<(address: string | undefined | null) => boolean>();
-const mockIsValidUrl = vi.fn<(url: string | undefined | null) => boolean>();
-const mockIsValidBlock = vi.fn<(block: string | undefined | null) => boolean>();
-const mockIsValidCID = vi.fn<(cid: string | undefined | null) => boolean>();
-
+// Mock modules using factory functions to avoid hoisting issues
 vi.mock('ethers', () => ({
   __esModule: true,
-  AbiCoder: { defaultAbiCoder: vi.fn(() => mockEthersAbiCoderInstance) },
-  getAddress: mockEthersGetAddress,
-  dataSlice: mockEthersDataSlice,
+  AbiCoder: { defaultAbiCoder: vi.fn(() => ({ decode: vi.fn() })) },
+  getAddress: vi.fn((address: string) => address),
+  dataSlice: vi.fn((data: string, offset: number) => '0x' + data.slice(2 + offset * 2)),
   JsonRpcProvider: vi.fn().mockImplementation(() => ({
     getBlockNumber: vi.fn<() => Promise<number>>().mockResolvedValue(71875900),
   })),
@@ -47,10 +35,10 @@ vi.mock('ethers', () => ({
 
 vi.mock('../../src/utils/validation.ts', () => ({
   __esModule: true,
-  isValidAddress: mockIsValidAddress,
-  isValidUrl: mockIsValidUrl,
-  isValidBlock: mockIsValidBlock,
-  isValidCID: mockIsValidCID,
+  isValidAddress: vi.fn<(address: string | undefined | null) => boolean>(),
+  isValidUrl: vi.fn<(url: string | undefined | null) => boolean>(),
+  isValidBlock: vi.fn<(block: string | undefined | null) => boolean>(),
+  isValidCID: vi.fn<(cid: string | undefined | null) => boolean>(),
 }));
 
 vi.mock('../../src/services/blockchain.service.ts');
@@ -63,6 +51,7 @@ import { BlockchainService } from '../../src/services/blockchain.service.ts';
 import { IPFSService } from '../../src/services/ipfs.service.ts';
 import { logger } from '../../src/utils/logger.ts';
 import * as progress from '../../src/utils/progress.ts';
+import * as validation from '../../src/utils/validation.ts';
 import {
   CommandOptions,
   OracleAssignment,
@@ -81,7 +70,7 @@ describe('listAssignments integration', () => {
   let processExitSpy: any;
 
   const defaultOptions: CommandOptions = {
-    elephant: '0x0e44bfab0f7e1943cF47942221929F898E181505',
+    oracle: '0x0e44bfab0f7e1943cF47942221929F898E181505',
     contract: '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
     rpc: 'https://rpc.therpc.io/polygon',
     gateway: 'https://gateway.pinata.cloud/ipfs/',
@@ -92,13 +81,13 @@ describe('listAssignments integration', () => {
   const mockAssignmentsArray: OracleAssignment[] = [
     {
       cid: 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-      elephant: defaultOptions.elephant!,
+      elephant: defaultOptions.oracle!,
       blockNumber: 71875870,
       transactionHash: '0xhash1',
     },
     {
       cid: 'QmSecondCID',
-      elephant: defaultOptions.elephant!,
+      elephant: defaultOptions.oracle!,
       blockNumber: 71875871,
       transactionHash: '0xhash2',
     },
@@ -107,9 +96,9 @@ describe('listAssignments integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockIsValidAddress.mockReturnValue(true);
-    mockIsValidUrl.mockReturnValue(true);
-    mockIsValidBlock.mockReturnValue(true);
+    vi.mocked(validation.isValidAddress).mockReturnValue(true);
+    vi.mocked(validation.isValidUrl).mockReturnValue(true);
+    vi.mocked(validation.isValidBlock).mockReturnValue(true);
 
     // Modify processExitSpy to not throw, just record calls
     processExitSpy = vi
@@ -159,11 +148,11 @@ describe('listAssignments integration', () => {
   it('should complete full flow successfully', async () => {
     await listAssignments(defaultOptions);
 
-    expect(mockIsValidAddress).toHaveBeenCalledWith(defaultOptions.elephant);
-    expect(mockIsValidAddress).toHaveBeenCalledWith(defaultOptions.contract);
-    expect(mockIsValidUrl).toHaveBeenCalledWith(defaultOptions.rpc);
-    expect(mockIsValidUrl).toHaveBeenCalledWith(defaultOptions.gateway);
-    expect(mockIsValidBlock).toHaveBeenCalledWith(defaultOptions.fromBlock);
+    expect(validation.isValidAddress).toHaveBeenCalledWith(defaultOptions.oracle);
+    expect(validation.isValidAddress).toHaveBeenCalledWith(defaultOptions.contract);
+    expect(validation.isValidUrl).toHaveBeenCalledWith(defaultOptions.rpc);
+    expect(validation.isValidUrl).toHaveBeenCalledWith(defaultOptions.gateway);
+    expect(validation.isValidBlock).toHaveBeenCalledWith(defaultOptions.fromBlock);
 
     expect(MockedBlockchainService).toHaveBeenCalledWith(
       defaultOptions.rpc,
@@ -180,7 +169,7 @@ describe('listAssignments integration', () => {
     );
     expect(
       mockBlockchainServiceInstance.getOracleAssignedEvents
-    ).toHaveBeenCalledWith(defaultOptions.elephant, 71875850, 71875900);
+    ).toHaveBeenCalledWith(defaultOptions.oracle, 71875850, 71875900);
     expect(mockIPFSServiceInstance.downloadBatch).toHaveBeenCalledWith(
       mockAssignmentsArray,
       defaultOptions.downloadDir,
@@ -205,11 +194,11 @@ describe('listAssignments integration', () => {
   it('should exit on invalid elephant address', async () => {
     const invalidOptions = {
       ...defaultOptions,
-      elephant: 'invalid-address',
+      oracle: 'invalid-address',
     };
 
     // Set the validation to return false for the invalid address
-    mockIsValidAddress.mockImplementation((addr) => addr !== 'invalid-address');
+    vi.mocked(validation.isValidAddress).mockImplementation((addr) => addr !== 'invalid-address');
 
     await listAssignments(invalidOptions);
 

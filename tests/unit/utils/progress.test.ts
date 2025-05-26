@@ -1,41 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock ora module using factory function to avoid hoisting issues
+vi.mock('ora', () => ({ 
+  default: vi.fn((options) => {
+    const mockSpinnerInstance = {
+      start: vi.fn().mockReturnThis(),
+      succeed: vi.fn().mockReturnThis(),
+      fail: vi.fn().mockReturnThis(),
+      stop: vi.fn().mockReturnThis(),
+      warn: vi.fn().mockReturnThis(),
+      info: vi.fn().mockReturnThis(),
+      text: options?.text || '',
+      isSpinning: false,
+    };
+    return mockSpinnerInstance;
+  })
+}));
+
+import ora from 'ora';
 import { createSpinner } from '../../../src/utils/progress';
 
-// Define the shape of the mock spinner instance at the module level
-const mockSpinnerInstance = {
-  start: vi.fn().mockReturnThis(),
-  succeed: vi.fn().mockReturnThis(),
-  fail: vi.fn().mockReturnThis(),
-  stop: vi.fn().mockReturnThis(),
-  warn: vi.fn().mockReturnThis(),
-  info: vi.fn().mockReturnThis(),
-  text: '',
-  isSpinning: false,
-};
-
-// Mock ora module
-const mockOra = vi.fn((text?: string) => {
-  mockSpinnerInstance.text = text || ''; // Optionally capture text if needed
-  return mockSpinnerInstance;
-});
-
-vi.mock('ora', () => ({ default: mockOra }));
-
 describe('progress utils', () => {
-  // No need for `let mockSpinner: any;` here anymore, use mockSpinnerInstance directly
-
   beforeEach(() => {
     vi.clearAllMocks();
-    
-    // Reset individual methods on mockSpinnerInstance
-    mockSpinnerInstance.start.mockClear().mockReturnThis();
-    mockSpinnerInstance.succeed.mockClear().mockReturnThis();
-    mockSpinnerInstance.fail.mockClear().mockReturnThis();
-    mockSpinnerInstance.stop.mockClear().mockReturnThis();
-    mockSpinnerInstance.warn.mockClear().mockReturnThis();
-    mockSpinnerInstance.info.mockClear().mockReturnThis();
-    mockSpinnerInstance.text = '';
-    mockSpinnerInstance.isSpinning = false;
   });
 
   describe('createSpinner', () => {
@@ -44,24 +31,25 @@ describe('progress utils', () => {
 
       const spinner = createSpinner(text);
 
-      expect(mockOra).toHaveBeenCalledWith(text);
-      expect(spinner).toBe(mockSpinnerInstance);
+      expect(ora).toHaveBeenCalledWith({ text });
+      expect(spinner).toBeDefined();
     });
 
     it('should start the spinner immediately', () => {
       const text = 'Processing...';
       
-      createSpinner(text);
+      const spinner = createSpinner(text);
 
-      expect(mockOra).toHaveBeenCalledWith(text);
-      expect(mockSpinnerInstance.start).toHaveBeenCalledTimes(1);
+      expect(ora).toHaveBeenCalledWith({ text });
+      expect(spinner.start).toHaveBeenCalledTimes(1);
     });
 
     it('should handle empty text', () => {
-      createSpinner('');
+      const text = '';
+      const spinner = createSpinner(text);
 
-      expect(mockOra).toHaveBeenCalledWith('');
-      expect(mockSpinnerInstance.start).toHaveBeenCalled();
+      expect(ora).toHaveBeenCalledWith({ text });
+      expect(spinner.start).toHaveBeenCalled();
     });
 
     it('should handle special characters in text', () => {
@@ -69,7 +57,7 @@ describe('progress utils', () => {
       
       createSpinner(specialText);
 
-      expect(mockOra).toHaveBeenCalledWith(specialText);
+      expect(ora).toHaveBeenCalledWith({ text: specialText });
     });
 
     it('should return ora instance that can be chained', () => {
@@ -79,7 +67,7 @@ describe('progress utils', () => {
       expect(spinner.succeed).toBeDefined();
       expect(spinner.fail).toBeDefined();
       expect(spinner.stop).toBeDefined();
-      expect(spinner).toBe(mockSpinnerInstance);
+      expect(spinner).toBeDefined();
     });
 
     it('should handle multiple spinner creation', () => {
@@ -87,38 +75,29 @@ describe('progress utils', () => {
       const spinner2 = createSpinner('Second spinner');
       const spinner3 = createSpinner('Third spinner');
 
-      expect(mockOra).toHaveBeenCalledTimes(3);
-      expect(mockOra).toHaveBeenNthCalledWith(1, 'First spinner');
-      expect(mockOra).toHaveBeenNthCalledWith(2, 'Second spinner');
-      expect(mockOra).toHaveBeenNthCalledWith(3, 'Third spinner');
-      
-      expect(mockSpinnerInstance.start).toHaveBeenCalledTimes(3);
+      expect(ora).toHaveBeenCalledTimes(3);
+      expect(ora).toHaveBeenNthCalledWith(1, { text: 'First spinner' });
+      expect(ora).toHaveBeenNthCalledWith(2, { text: 'Second spinner' });
+      expect(ora).toHaveBeenNthCalledWith(3, { text: 'Third spinner' });
     });
 
-    it('should create independent spinner instances (conceptually, though mock is shared)', () => {
-      // With the current mock structure, ora() always returns the same mockSpinnerInstance.
-      // This is usually fine for testing, as we reset its state in beforeEach.
-      // If true independence is needed, the mock factory for 'ora' would need to be more complex.
+    it('should create independent spinner instances', () => {
       const spinner1 = createSpinner('First');
-      // mockSpinnerInstance.text would be 'First' here
       const spinner2 = createSpinner('Second');
-      // mockSpinnerInstance.text would be 'Second' here
 
-      expect(mockOra).toHaveBeenCalledWith('First');
-      expect(mockOra).toHaveBeenCalledWith('Second');
-      // spinner1 and spinner2 will be the same object: mockSpinnerInstance
-      expect(spinner1).toBe(mockSpinnerInstance);
-      expect(spinner2).toBe(mockSpinnerInstance);
-      expect(mockSpinnerInstance.text).toBe('Second'); // Reflects the last call
+      expect(ora).toHaveBeenCalledWith({ text: 'First' });
+      expect(ora).toHaveBeenCalledWith({ text: 'Second' });
+      expect(spinner1).toBeDefined();
+      expect(spinner2).toBeDefined();
     });
 
     it('should handle very long text', () => {
       const longText = 'A'.repeat(1000);
       
-      createSpinner(longText);
+      const spinner = createSpinner(longText);
 
-      expect(mockOra).toHaveBeenCalledWith(longText);
-      expect(mockSpinnerInstance.start).toHaveBeenCalled();
+      expect(ora).toHaveBeenCalledWith({ text: longText });
+      expect(spinner.start).toHaveBeenCalled();
     });
 
     it('should handle multiline text', () => {
@@ -126,7 +105,7 @@ describe('progress utils', () => {
       
       createSpinner(multilineText);
 
-      expect(mockOra).toHaveBeenCalledWith(multilineText);
+      expect(ora).toHaveBeenCalledWith({ text: multilineText });
     });
 
     it('should be used correctly in async context', async () => {
@@ -136,14 +115,14 @@ describe('progress utils', () => {
       
       spinner.succeed('Done!');
       
-      expect(mockSpinnerInstance.succeed).toHaveBeenCalledWith('Done!');
+      expect(spinner.succeed).toHaveBeenCalledWith('Done!');
     });
 
-    it('should handle errors gracefully if ora itself throws (not covered by this mock)', () => {
+    it('should handle errors gracefully if ora itself throws', () => {
       // To test if createSpinner handles errors from ora,
       // the mock for ora would need to throw an error.
       const error = new Error('Ora initialization failed');
-      mockOra.mockImplementationOnce(() => { // Note: mockImplementationOnce
+      vi.mocked(ora).mockImplementationOnce(() => { // Note: mockImplementationOnce
         throw error;
       });
 

@@ -201,9 +201,9 @@ describe('IPFSService', () => {
       expect(results.every((r) => r.success)).toBe(true);
 
       // Verify files were actually created
-      expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, 'QmCID3'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID1.json'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID2.json'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID3.json'))).toBe(true);
 
       // Progress callback is called asynchronously due to promises in p-queue
       // Wait for promises to settle to check calls
@@ -266,9 +266,9 @@ describe('IPFSService', () => {
       expect(results[2].success).toBe(true);
 
       // Verify only successful files were created
-      expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
-      expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(false);
-      expect(fs.existsSync(path.join(tempDir, 'QmCID3'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID1.json'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID2.json'))).toBe(false);
+      expect(fs.existsSync(path.join(tempDir, 'QmCID3.json'))).toBe(true);
     });
   });
 });

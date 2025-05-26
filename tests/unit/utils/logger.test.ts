@@ -1,25 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Define mock functions for chalk methods FIRST
-const mockChalkBlue = vi.fn((text: string) => `blue(${text})`);
-const mockChalkGreen = vi.fn((text: string) => `green(${text})`);
-const mockChalkRed = vi.fn((text: string) => `red(${text})`);
-const mockChalkYellow = vi.fn((text: string) => `yellow(${text})`);
-
-// Mock chalk using the functions defined above.
-// This mock factory will be hoisted, and the functions above will be in its closure.
+// Mock chalk using factory functions to avoid hoisting issues
 vi.mock('chalk', () => ({
   __esModule: true, 
   default: { 
-    blue: mockChalkBlue,
-    green: mockChalkGreen,
-    red: mockChalkRed,
-    yellow: mockChalkYellow,
+    blue: vi.fn((text: string) => `blue(${text})`),
+    green: vi.fn((text: string) => `green(${text})`),
+    red: vi.fn((text: string) => `red(${text})`),
+    yellow: vi.fn((text: string) => `yellow(${text})`),
   }
 }));
 
 // Import SUT (logger) AFTER the mocks
 import { logger } from '../../../src/utils/logger';
+import chalk from 'chalk';
 
 describe('logger', () => {
   let consoleLogSpy: any;
@@ -46,38 +40,38 @@ describe('logger', () => {
   it('should log an info message with blue color', () => {
     const message = 'This is an info message.';
     logger.info(message);
-    expect(mockChalkBlue).toHaveBeenCalledWith(message);
+    expect(chalk.blue).toHaveBeenCalledWith(message);
     expect(consoleInfoSpy).toHaveBeenCalledWith(`blue(${message})`);
   });
 
   it('should log a success message with green color', () => {
     const message = 'Operation successful.';
     logger.success(message);
-    expect(mockChalkGreen).toHaveBeenCalledWith(message);
+    expect(chalk.green).toHaveBeenCalledWith(message);
     expect(consoleLogSpy).toHaveBeenCalledWith(`green(${message})`);
   });
 
   it('should log an error message with red color', () => {
     const message = 'An error occurred.';
     logger.error(message);
-    expect(mockChalkRed).toHaveBeenCalledWith(message);
+    expect(chalk.red).toHaveBeenCalledWith(message);
     expect(consoleErrorSpy).toHaveBeenCalledWith(`red(${message})`);
   });
 
   it('should log a warning message with yellow color', () => {
     const message = 'This is a warning.';
     logger.warn(message);
-    expect(mockChalkYellow).toHaveBeenCalledWith(message);
+    expect(chalk.yellow).toHaveBeenCalledWith(message);
     expect(consoleWarnSpy).toHaveBeenCalledWith(`yellow(${message})`);
   });
 
   it('should log a plain message without color', () => {
     const message = 'Plain log message.';
     logger.log(message); // Assuming logger.log is intended to be console.log without chalk
-    expect(mockChalkBlue).not.toHaveBeenCalled();
-    expect(mockChalkGreen).not.toHaveBeenCalled();
-    expect(mockChalkRed).not.toHaveBeenCalled();
-    expect(mockChalkYellow).not.toHaveBeenCalled();
+    expect(chalk.blue).not.toHaveBeenCalled();
+    expect(chalk.green).not.toHaveBeenCalled();
+    expect(chalk.red).not.toHaveBeenCalled();
+    expect(chalk.yellow).not.toHaveBeenCalled();
     expect(consoleLogSpy).toHaveBeenCalledWith(message);
   });
 });
