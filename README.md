@@ -53,6 +53,79 @@ npx @elephant/cli list-assignments --oracle 0xYourElephantAddress
 - Node.js 18.0 or higher
 - Internet connection for blockchain and IPFS access
 
+## Building from Source
+
+If you want to build and run the CLI from source code:
+
+### Prerequisites
+
+- Node.js 18.0 or higher
+- npm (comes with Node.js)
+- Git
+
+### Step-by-step Build Instructions
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/your-org/elephant-cli-v2.git
+   cd elephant-cli-v2
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Build the project:**
+
+   ```bash
+   npm run build
+   ```
+
+4. **Run the CLI locally:**
+
+   ```bash
+   # Using the built executable
+   ./bin/elephant-cli list-assignments --oracle 0xYourElephantAddress
+
+   # Or using npm/node directly
+   node dist/index.js list-assignments --oracle 0xYourElephantAddress
+   ```
+
+5. **Link for global usage (optional):**
+   ```bash
+   npm link
+   # Now you can use 'elephant-cli' globally
+   elephant-cli list-assignments --oracle 0xYourElephantAddress
+   ```
+
+### Development Commands
+
+- **Build in watch mode:** `npm run dev` - Automatically rebuilds on file changes
+- **Run tests:** `npm test`
+- **Run tests with coverage:** `npm run test:coverage`
+- **Lint code:** `npm run lint`
+- **Format code:** `npm run format`
+- **Clean build artifacts:** `npm run clean`
+
+### Project Structure
+
+```
+elephant-cli/
+├── src/
+│   ├── commands/          # CLI command implementations
+│   ├── services/          # Blockchain and IPFS services
+│   ├── utils/             # Utility functions
+│   ├── types/             # TypeScript type definitions
+│   └── index.ts           # Main CLI entry point
+├── tests/                 # Test files
+├── bin/                   # Executable scripts
+├── dist/                  # Built JavaScript files
+└── package.json
+```
+
 ## Examples
 
 ### Example 1: Query Recent Blocks
@@ -152,4 +225,3 @@ Downloaded 1 of 1 files...
 ## License
 
 MIT
-
