@@ -1,3 +1,4 @@
+import { CID } from 'multiformats/cid';
 import { isAddress } from 'ethers'; // ethers v6
 import { logger } from './logger';
 
@@ -30,7 +31,6 @@ export const isValidCID = async (
 ): Promise<boolean> => {
   if (!cid) return false;
   try {
-    const { CID } = await import('multiformats/cid');
     CID.parse(cid);
     return true;
   } catch (e: unknown) {
