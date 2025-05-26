@@ -1,4 +1,5 @@
 import { isAddress } from 'ethers'; // ethers v6
+import { logger } from './logger';
 
 // Allow potentially undefined/null inputs, as they are checked.
 export const isValidAddress = (address: string | undefined | null): boolean => {
@@ -32,7 +33,8 @@ export const isValidCID = async (
     const { CID } = await import('multiformats/cid');
     CID.parse(cid);
     return true;
-  } catch {
+  } catch (e: unknown) {
+    logger.error(String(e));
     return false;
   }
 };

@@ -19,7 +19,7 @@ export class BlockchainService {
   }
 
   public async getElephantAssignedEvents(
-    elephantAddress: string,
+    oracleAddress: string,
     fromBlock: number,
     toBlock?: number
   ): Promise<ElephantAssignment[]> {
@@ -28,10 +28,7 @@ export class BlockchainService {
     // In ethers.js v6, contract.filters.EventName(arg1, arg2, ...) is used.
     // For an indexed address, you pass the address directly.
     // If an argument is not indexed or you don't want to filter by it, use null.
-    const filter = this.contract.filters.ElephantAssigned(
-      null,
-      elephantAddress
-    );
+    const filter = this.contract.filters.OracleAssigned(null, oracleAddress);
 
     const eventsRaw = await this.contract.queryFilter(
       filter,

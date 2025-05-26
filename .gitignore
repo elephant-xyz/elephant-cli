@@ -54,3 +54,4 @@ pids
 
 # Yarn Integrity file
 .yarn-integrity
+test.sh
