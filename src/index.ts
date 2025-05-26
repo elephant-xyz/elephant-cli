@@ -4,8 +4,8 @@ import {
   DEFAULT_CONTRACT_ADDRESS,
   DEFAULT_RPC_URL,
   DEFAULT_IPFS_GATEWAY,
-} from './config/constants';
-import { listAssignments } from './commands/list-assignments';
+} from './config/constants.js';
+import { listAssignments } from './commands/list-assignments.js';
 
 const program = new Command();
 

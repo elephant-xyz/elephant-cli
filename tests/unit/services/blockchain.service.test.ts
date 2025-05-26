@@ -1,13 +1,13 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // --- Mock dependencies FIRST ---
 
 // 1. Mock EventDecoderService
 // This mock will be used when BlockchainService instantiates EventDecoderService
-const mockParseElephantAssignedEvent = jest.fn();
-jest.mock('../../../src/services/event-decoder.service', () => {
+const mockParseElephantAssignedEvent = vi.fn();
+vi.mock('../../../src/services/event-decoder.service', () => {
   return {
-    EventDecoderService: jest.fn().mockImplementation(() => {
+    EventDecoderService: vi.fn().mockImplementation(() => {
       return {
         parseElephantAssignedEvent: mockParseElephantAssignedEvent,
       };
@@ -17,19 +17,19 @@ jest.mock('../../../src/services/event-decoder.service', () => {
 
 // 2. Mock ethers (used directly by BlockchainService for JsonRpcProvider and Contract)
 const mockJsonRpcProviderInstance = {
-  getBlockNumber: jest.fn<() => Promise<number>>(),
+  getBlockNumber: vi.fn<() => Promise<number>>(),
 };
 const mockContractInstance = {
   filters: {
-    ElephantAssigned: jest.fn<(...args: any[]) => object>(),
+    ElephantAssigned: vi.fn<(...args: any[]) => object>(),
   },
-  queryFilter: jest.fn<(...args: any[]) => Promise<any[]>>(),
-  getAddress: jest.fn<() => Promise<string>>(), // Added to satisfy Contract type if needed
-  resolveName: jest.fn<() => Promise<string | null>>(), // Added
+  queryFilter: vi.fn<(...args: any[]) => Promise<any[]>>(),
+  getAddress: vi.fn<() => Promise<string>>(), // Added to satisfy Contract type if needed
+  resolveName: vi.fn<() => Promise<string | null>>(), // Added
   runner: mockJsonRpcProviderInstance, // Added
   interface: {
     // Added basic interface mock
-    getEvent: jest.fn(() => ({
+    getEvent: vi.fn(() => ({
       topicHash: 'mockTopicHashForElephantAssigned',
     })),
   },
@@ -38,24 +38,24 @@ const mockContractInstance = {
 // Define mockDefaultAbiCoder here if it's part of the ethers mock needed by other parts
 // For this test, it's primarily EventDecoderService that uses it, which is fully mocked.
 // However, if any other part of 'ethers' mock relies on it, define it.
-// const mockDefaultAbiCoder = { decode: jest.fn() };
+// const mockDefaultAbiCoder = { decode: vi.fn() };
 
-jest.mock('ethers', () => ({
+vi.mock('ethers', () => ({
   __esModule: true,
-  JsonRpcProvider: jest
+  JsonRpcProvider: vi
     .fn()
     .mockImplementation(() => mockJsonRpcProviderInstance),
-  Contract: jest.fn().mockImplementation(() => mockContractInstance),
+  Contract: vi.fn().mockImplementation(() => mockContractInstance),
   // Interface and AbiCoder are not directly used by BlockchainService,
   // but by EventDecoderService, which is now fully mocked above.
   // So, we might not need to mock Interface and AbiCoder here anymore
   // unless BlockchainService starts using them directly.
   // For safety, keeping minimal mocks if other parts of 'ethers' are accessed.
-  Interface: jest.fn().mockImplementation(() => ({
-    getEvent: jest.fn(() => ({ name: 'SomeEvent', inputs: [] })),
+  Interface: vi.fn().mockImplementation(() => ({
+    getEvent: vi.fn(() => ({ name: 'SomeEvent', inputs: [] })),
   })),
   AbiCoder: {
-    defaultAbiCoder: { decode: jest.fn() }, // Minimal mock for AbiCoder
+    defaultAbiCoder: { decode: vi.fn() }, // Minimal mock for AbiCoder
   },
   EventLog: class MockEventLog {}, // if EventLog is used
 }));
@@ -76,12 +76,12 @@ describe('BlockchainService', () => {
   let blockchainService: BlockchainService;
 
   beforeEach(() => {
-    jest.clearAllMocks(); // Clear all mocks including those for constructors
+    vi.clearAllMocks(); // Clear all mocks including those for constructors
 
     // Reset mock implementations for each test
     mockJsonRpcProviderInstance.getBlockNumber.mockResolvedValue(100);
     (
-      mockContractInstance.filters.ElephantAssigned as jest.Mock
+      mockContractInstance.filters.ElephantAssigned as any
     ).mockReturnValue({});
     mockContractInstance.queryFilter.mockResolvedValue([]);
     mockParseElephantAssignedEvent.mockImplementation((rawEvent: any) => ({
@@ -127,7 +127,7 @@ describe('BlockchainService', () => {
 
     it('should fetch, parse, and return ElephantAssigned events', async () => {
       (
-        mockContractInstance.filters.ElephantAssigned as jest.Mock
+        mockContractInstance.filters.ElephantAssigned as any
       ).mockReturnValue('eventFilterObject');
       mockContractInstance.queryFilter.mockResolvedValue(mockRawEvents as any); // Cast as any if type is complex
 

@@ -2,64 +2,64 @@ import {
   describe,
   it,
   expect,
-  jest,
+  vi,
   beforeEach,
   afterEach,
-} from '@jest/globals';
+} from 'vitest';
 
 // --- Define mock functions and instances FIRST ---
-const mockEthersAbiCoderInstance = { decode: jest.fn() };
-const mockEthersGetAddress = jest.fn((address: string) => address);
-const mockEthersDataSlice = jest.fn(
+const mockEthersAbiCoderInstance = { decode: vi.fn() };
+const mockEthersGetAddress = vi.fn((address: string) => address);
+const mockEthersDataSlice = vi.fn(
   (data: string, offset: number) => '0x' + data.slice(2 + offset * 2)
 );
 
 const mockIsValidAddress =
-  jest.fn<(address: string | undefined | null) => boolean>();
-const mockIsValidUrl = jest.fn<(url: string | undefined | null) => boolean>();
+  vi.fn<(address: string | undefined | null) => boolean>();
+const mockIsValidUrl = vi.fn<(url: string | undefined | null) => boolean>();
 const mockIsValidBlock =
-  jest.fn<(block: string | undefined | null) => boolean>();
-const mockIsValidCID = jest.fn<(cid: string | undefined | null) => boolean>();
+  vi.fn<(block: string | undefined | null) => boolean>();
+const mockIsValidCID = vi.fn<(cid: string | undefined | null) => boolean>();
 
-jest.mock('ethers', () => ({
+vi.mock('ethers', () => ({
   __esModule: true,
-  AbiCoder: { defaultAbiCoder: jest.fn(() => mockEthersAbiCoderInstance) },
+  AbiCoder: { defaultAbiCoder: vi.fn(() => mockEthersAbiCoderInstance) },
   getAddress: mockEthersGetAddress,
   dataSlice: mockEthersDataSlice,
-  JsonRpcProvider: jest.fn().mockImplementation(() => ({
-    getBlockNumber: jest
+  JsonRpcProvider: vi.fn().mockImplementation(() => ({
+    getBlockNumber: vi
       .fn<() => Promise<number>>()
       .mockResolvedValue(71875900),
   })),
-  Contract: jest.fn().mockImplementation((address, abi, provider) => ({
+  Contract: vi.fn().mockImplementation((address, abi, provider) => ({
     filters: {
-      ElephantAssigned: jest
+      ElephantAssigned: vi
         .fn<(...args: any[]) => object>()
         .mockReturnValue({}),
     },
-    queryFilter: jest
+    queryFilter: vi
       .fn<(...args: any[]) => Promise<any[]>>()
       .mockResolvedValue([]),
-    getAddress: jest
+    getAddress: vi
       .fn<() => Promise<string>>()
       .mockResolvedValue(address as string),
-    resolveName: jest
+    resolveName: vi
       .fn<() => Promise<string | null>>()
       .mockResolvedValue(null),
     runner: provider,
     interface: {
-      getEvent: jest
+      getEvent: vi
         .fn<() => { topicHash: string }>()
         .mockReturnValue({ topicHash: 'mockTopicHash' }),
     },
   })),
   EventLog: class MockEventLog {},
-  Interface: jest.fn().mockImplementation(() => ({
-    getEvent: jest.fn(() => ({ name: 'ElephantAssigned', inputs: [] })),
+  Interface: vi.fn().mockImplementation(() => ({
+    getEvent: vi.fn(() => ({ name: 'ElephantAssigned', inputs: [] })),
   })),
 }));
 
-jest.mock('../../src/utils/validation', () => ({
+vi.mock('../../src/utils/validation.ts', () => ({
   __esModule: true,
   isValidAddress: mockIsValidAddress,
   isValidUrl: mockIsValidUrl,
@@ -67,34 +67,32 @@ jest.mock('../../src/utils/validation', () => ({
   isValidCID: mockIsValidCID,
 }));
 
-jest.mock('../../src/services/blockchain.service');
-jest.mock('../../src/services/ipfs.service');
-jest.mock('../../src/utils/logger');
-jest.mock('../../src/utils/progress');
+vi.mock('../../src/services/blockchain.service.ts');
+vi.mock('../../src/services/ipfs.service.ts');
+vi.mock('../../src/utils/logger.ts');
+vi.mock('../../src/utils/progress.ts');
 
-import { listAssignments } from '../../src/commands/list-assignments';
-import { BlockchainService } from '../../src/services/blockchain.service';
-import { IPFSService } from '../../src/services/ipfs.service';
-import { logger } from '../../src/utils/logger';
-import * as progress from '../../src/utils/progress';
+import { listAssignments } from '../../src/commands/list-assignments.ts';
+import { BlockchainService } from '../../src/services/blockchain.service.ts';
+import { IPFSService } from '../../src/services/ipfs.service.ts';
+import { logger } from '../../src/utils/logger.ts';
+import * as progress from '../../src/utils/progress.ts';
 import {
   CommandOptions,
   ElephantAssignment,
   DownloadResult,
-} from '../../src/types';
+} from '../../src/types/index.ts';
 
-const MockedBlockchainService = BlockchainService as jest.MockedClass<
-  typeof BlockchainService
->;
-const MockedIPFSService = IPFSService as jest.MockedClass<typeof IPFSService>;
-const mockedLogger = logger as jest.Mocked<typeof logger>;
-const mockedProgress = progress as jest.Mocked<typeof progress>;
+const MockedBlockchainService = BlockchainService as any;
+const MockedIPFSService = IPFSService as any;
+const mockedLogger = logger as any;
+const mockedProgress = progress as any;
 
 describe('listAssignments integration', () => {
-  let mockBlockchainServiceInstance: jest.MockedObject<BlockchainService>;
-  let mockIPFSServiceInstance: jest.MockedObject<IPFSService>;
-  let mockSpinner: jest.Mocked<ReturnType<typeof progress.createSpinner>>;
-  let processExitSpy: jest.SpiedFunction<typeof process.exit>;
+  let mockBlockchainServiceInstance: any;
+  let mockIPFSServiceInstance: any;
+  let mockSpinner: any;
+  let processExitSpy: any;
 
   const defaultOptions: CommandOptions = {
     elephant: '0x0e44bfab0f7e1943cF47942221929F898E181505',
@@ -121,39 +119,39 @@ describe('listAssignments integration', () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockIsValidAddress.mockReturnValue(true);
     mockIsValidUrl.mockReturnValue(true);
     mockIsValidBlock.mockReturnValue(true);
 
     // Modify processExitSpy to not throw, just record calls
-    processExitSpy = jest
+    processExitSpy = vi
       .spyOn(process, 'exit')
       .mockImplementation((() => {}) as any);
 
     mockSpinner = {
-      start: jest.fn().mockReturnThis(),
-      succeed: jest.fn().mockReturnThis(),
-      fail: jest.fn().mockReturnThis(),
-      warn: jest.fn().mockReturnThis(),
-      stop: jest.fn().mockReturnThis(),
+      start: vi.fn().mockReturnThis(),
+      succeed: vi.fn().mockReturnThis(),
+      fail: vi.fn().mockReturnThis(),
+      warn: vi.fn().mockReturnThis(),
+      stop: vi.fn().mockReturnThis(),
       text: '',
       isSpinning: false,
-    } as unknown as jest.Mocked<ReturnType<typeof progress.createSpinner>>;
+    } as unknown as any;
     mockedProgress.createSpinner.mockReturnValue(mockSpinner);
 
     mockBlockchainServiceInstance = {
-      getCurrentBlock: jest
+      getCurrentBlock: vi
         .fn<() => Promise<number>>()
         .mockResolvedValue(71875900),
-      getElephantAssignedEvents: jest
+      getElephantAssignedEvents: vi
         .fn<() => Promise<ElephantAssignment[]>>()
         .mockResolvedValue(mockAssignmentsArray),
-    } as unknown as jest.MockedObject<BlockchainService>;
+    } as unknown as any;
 
     mockIPFSServiceInstance = {
-      downloadBatch: jest
+      downloadBatch: vi
         .fn<() => Promise<DownloadResult[]>>()
         .mockResolvedValue(
           mockAssignmentsArray.map((a) => ({
@@ -162,7 +160,7 @@ describe('listAssignments integration', () => {
             path: `${defaultOptions.downloadDir}/${a.cid}`,
           }))
         ),
-    } as unknown as jest.MockedObject<IPFSService>;
+    } as unknown as any;
 
     MockedBlockchainService.mockImplementation(
       () => mockBlockchainServiceInstance

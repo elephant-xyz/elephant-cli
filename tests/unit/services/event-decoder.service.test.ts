@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   BytesLike,
   Result,
@@ -9,23 +9,23 @@ import {
 } from 'ethers';
 
 // Define mock implementations for ethers utilities
-const mockDecodeImplementation = jest.fn();
+const mockDecodeImplementation = vi.fn();
 const mockDataSliceImplementation =
-  jest.fn<(data: BytesLike, offset: number, endOffset?: number) => string>();
+  vi.fn<(data: BytesLike, offset: number, endOffset?: number) => string>();
 
 // Mock for ethers.Interface constructor and its methods
-const mockInterfaceGetEventImplementation = jest.fn();
+const mockInterfaceGetEventImplementation = vi.fn();
 const mockInterfaceInstance = {
   getEvent: mockInterfaceGetEventImplementation,
   // Add other Interface methods if EventDecoderService uses them
 };
 
 // Use var so it gets hoisted and can be used in the mock
-var MockInterfaceConstructor = jest.fn(
+var MockInterfaceConstructor = vi.fn(
   (abi: InterfaceAbi) => mockInterfaceInstance
 );
 
-jest.mock('ethers', () => ({
+vi.mock('ethers', () => ({
   __esModule: true,
   AbiCoder: {
     defaultAbiCoder: () => ({
@@ -37,16 +37,16 @@ jest.mock('ethers', () => ({
     mockDataSliceImplementation(...args),
   getAddress: (address: string) => address, // Simple mock that returns the input
   Interface: MockInterfaceConstructor,
-  JsonRpcProvider: jest.fn().mockImplementation(() => ({})),
-  Log: jest.fn().mockImplementation((params: any, provider: any) => ({
+  JsonRpcProvider: vi.fn().mockImplementation(() => ({})),
+  Log: vi.fn().mockImplementation((params: any, provider: any) => ({
     ...params,
     toJSON: () => params, // Add toJSON method for tests
   })),
 }));
 
 // Import SUT after mocks
-import { EventDecoderService } from '../../../src/services/event-decoder.service';
-import { ABI } from '../../../src/types'; // ABI type is used
+import { EventDecoderService } from '../../../src/services/event-decoder.service.ts';
+import { ABI } from '../../../src/types/index.ts'; // ABI type is used
 
 describe('EventDecoderService', () => {
   let eventDecoderService: EventDecoderService;

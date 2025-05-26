@@ -1,13 +1,25 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 
-// Mock multiformats/cid using the __mocks__ directory
-jest.mock('multiformats/cid');
-
-// Ensure we are testing against the actual ethers library for validation logic
-jest.unmock('ethers'); 
+// Mock multiformats using Vitest
+vi.mock('multiformats', () => ({
+  CID: {
+    parse: (cid: string) => {
+      if (!cid || typeof cid !== 'string') {
+        throw new Error('Invalid CID');
+      }
+      if (cid.startsWith('Qm') && cid.length === 46 && /^[A-Za-z0-9]+$/.test(cid)) {
+        return { valid: true };
+      }
+      if (cid.startsWith('bafy') && cid.length >= 59 && /^[a-z2-7]+$/.test(cid)) {
+        return { valid: true };
+      }
+      throw new Error('Invalid CID');
+    }
+  }
+}));
 
 // Import functions directly from the module being tested
-import { isValidAddress, isValidUrl, isValidBlock, isValidCID } from '../../../src/utils/validation';
+import { isValidAddress, isValidUrl, isValidBlock, isValidCID } from '../../../src/utils/validation.ts';
 
 describe('validation utils', () => {
   describe('isValidAddress', () => {
@@ -85,18 +97,18 @@ describe('validation utils', () => {
   });
 
   describe('isValidCID', () => {
-    it('should validate correct CIDs (v0 and v1)', () => {
+    it('should validate correct CIDs (v0 and v1)', async () => {
       const validCIDs = [
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU', // v0
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi', // v1
         'QmRAQB6YaSyaxG6xhL7hEYM23r291g1s28V8vtv2vYZY7i', // another v0
       ];
-      validCIDs.forEach(cid => {
-        expect(isValidCID(cid)).toBe(true);
-      });
+      for (const cid of validCIDs) {
+        expect(await isValidCID(cid)).toBe(true);
+      }
     });
 
-    it('should reject invalid CIDs', () => {
+    it('should reject invalid CIDs', async () => {
       const invalidCIDs = [
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobu', // Too short v0
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzd', // Too short v1
@@ -104,9 +116,9 @@ describe('validation utils', () => {
         'bafyInvalidChars!', // Invalid char v1
         '', null, undefined,
       ];
-      invalidCIDs.forEach(cid => {
-        expect(isValidCID(cid as string)).toBe(false);
-      });
+      for (const cid of invalidCIDs) {
+        expect(await isValidCID(cid as string)).toBe(false);
+      }
     });
   });
 });

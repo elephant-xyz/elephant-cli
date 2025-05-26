@@ -1,6 +1,6 @@
 import { AbiCoder, getAddress, dataSlice, Log } from 'ethers';
-import { ElephantAssignment } from '../types';
-import { isValidCID } from '../utils/validation';
+import { ElephantAssignment } from '../types/index.js';
+import { isValidCID } from '../utils/validation.js';
 
 export class EventDecoderService {
   private abiCoder: AbiCoder;
@@ -17,7 +17,7 @@ export class EventDecoderService {
     const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
 
     if (!(await isValidCID(cid))) {
-      throw new Error(`Invalid CID format: ${cid}`);
+      throw new Error(`Invalid CID format: ${cid}, ${await isValidCID(cid)}`);
     }
     return cid;
   }

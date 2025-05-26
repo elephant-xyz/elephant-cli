@@ -1,20 +1,17 @@
-// Jest setup file for test configuration
-import '@jest/globals';
+// Vitest setup file for test configuration
+import { vi, afterEach } from 'vitest';
 
 // Mock console methods to avoid cluttering test output
 global.console = {
   ...console,
-  log: jest.fn(),
-  error: jest.fn(),
-  warn: jest.fn(),
-  info: jest.fn(),
-  debug: jest.fn(),
+  log: vi.fn(),
+  error: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
 };
 
 // Reset mocks after each test
 afterEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
-
-// Set test timeout
-jest.setTimeout(10000);

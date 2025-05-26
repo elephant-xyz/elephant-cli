@@ -1,14 +1,14 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Define mock functions for chalk methods FIRST
-const mockChalkBlue = jest.fn((text: string) => `blue(${text})`);
-const mockChalkGreen = jest.fn((text: string) => `green(${text})`);
-const mockChalkRed = jest.fn((text: string) => `red(${text})`);
-const mockChalkYellow = jest.fn((text: string) => `yellow(${text})`);
+const mockChalkBlue = vi.fn((text: string) => `blue(${text})`);
+const mockChalkGreen = vi.fn((text: string) => `green(${text})`);
+const mockChalkRed = vi.fn((text: string) => `red(${text})`);
+const mockChalkYellow = vi.fn((text: string) => `yellow(${text})`);
 
 // Mock chalk using the functions defined above.
 // This mock factory will be hoisted, and the functions above will be in its closure.
-jest.mock('chalk', () => ({
+vi.mock('chalk', () => ({
   __esModule: true, 
   default: { 
     blue: mockChalkBlue,
@@ -22,18 +22,18 @@ jest.mock('chalk', () => ({
 import { logger } from '../../../src/utils/logger';
 
 describe('logger', () => {
-  let consoleLogSpy: jest.SpiedFunction<typeof console.log>;
-  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
-  let consoleWarnSpy: jest.SpiedFunction<typeof console.warn>;
-  let consoleInfoSpy: jest.SpiedFunction<typeof console.info>;
+  let consoleLogSpy: any;
+  let consoleErrorSpy: any;
+  let consoleWarnSpy: any;
+  let consoleInfoSpy: any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
   });
 
   afterEach(() => {

@@ -2,6 +2,7 @@
   "name": "@elephant/cli",
   "version": "1.0.0",
   "description": "CLI tool for Elephant Network on Polygon",
+  "type": "module",
   "main": "dist/index.js",
   "bin": {
     "elephant-cli": "./bin/elephant-cli"
@@ -15,9 +16,10 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write src/**/*.ts",
     "format:check": "prettier --check src/**/*.ts",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "files": [
     "dist",
@@ -42,18 +44,16 @@
     "ora": "^5.4.1"
   },
   "devDependencies": {
-    "@jest/globals": "^29.7.0",
     "@tsconfig/node22": "^22.0.2",
-    "@types/jest": "^29.5.14",
     "@types/node": "^20.17.50",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
+    "@vitest/ui": "^3.1.4",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.0",
-    "jest": "^29.7.0",
     "prettier": "^3.5.3",
-    "ts-jest": "^29.3.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
   }
 }

@@ -1,7 +1,7 @@
 import { JsonRpcProvider, Contract } from 'ethers';
-import { EventDecoderService } from './event-decoder.service';
-import { ElephantAssignment, ABI } from '../types';
-import { logger } from '../utils/logger';
+import { EventDecoderService } from './event-decoder.service.js';
+import { ElephantAssignment, ABI } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 export class BlockchainService {
   private provider: JsonRpcProvider;

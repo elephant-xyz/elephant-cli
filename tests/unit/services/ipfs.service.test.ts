@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -6,7 +6,7 @@ import { IPFSService } from '../../../src/services/ipfs.service';
 import { ElephantAssignment } from '../../../src/types';
 
 // Mock fetch implementation
-const mockFetchImplementation = jest.fn<typeof fetch>();
+const mockFetchImplementation = vi.fn<typeof fetch>();
 
 // Mock fetch globally
 global.fetch = mockFetchImplementation;
@@ -190,7 +190,7 @@ describe('IPFSService', () => {
     });
 
     it('should download multiple files with progress callback', async () => {
-      const progressCallback = jest.fn();
+      const progressCallback = vi.fn();
       const results = await ipfsService.downloadBatch(
         mockAssignments,
         tempDir,
@@ -273,4 +273,3 @@ describe('IPFSService', () => {
     });
   });
 });
-

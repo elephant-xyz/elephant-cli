@@ -1,6 +1,6 @@
 import { CID } from 'multiformats/cid';
 import { isAddress } from 'ethers'; // ethers v6
-import { logger } from './logger';
+import { logger } from './logger.js';
 
 // Allow potentially undefined/null inputs, as they are checked.
 export const isValidAddress = (address: string | undefined | null): boolean => {

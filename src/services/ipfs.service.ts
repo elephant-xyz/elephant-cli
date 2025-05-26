@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { DownloadResult, ElephantAssignment } from '../types';
+import { DownloadResult, ElephantAssignment } from '../types/index.js';
 
 export class IPFSService {
   private gateway: string;
@@ -116,7 +116,7 @@ export class IPFSService {
     this.onProgress = onProgress;
 
     const downloadPromises = assignments.map((assignment) => {
-      const outputPath = `${downloadDir}/${assignment.cid}`;
+      const outputPath = `${downloadDir}/${assignment.cid}.json`;
       return this.enqueueDownload(assignment.cid, outputPath);
     });
 
