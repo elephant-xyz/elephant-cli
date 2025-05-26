@@ -36,16 +36,14 @@ export class BlockchainService {
       toBlock
     );
 
-    const parsedEvents = await Promise.all(
-      eventsRaw.map(async (event) => {
-        try {
-          return await this.eventDecoder.parseElephantAssignedEvent(event);
-        } catch (error) {
-          logger.error(`Failed to parse event: ${error}, ${event}`);
-          return null;
-        }
-      })
-    );
+    const parsedEvents = eventsRaw.map((event) => {
+      try {
+        return this.eventDecoder.parseElephantAssignedEvent(event);
+      } catch (error) {
+        logger.error(`Failed to parse event: ${error}, ${event}`);
+        return null;
+      }
+    });
 
     return parsedEvents.filter(
       (parsedEvent): parsedEvent is NonNullable<typeof parsedEvent> =>

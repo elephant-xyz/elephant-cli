@@ -97,18 +97,18 @@ describe('validation utils', () => {
   });
 
   describe('isValidCID', () => {
-    it('should validate correct CIDs (v0 and v1)', async () => {
+    it('should validate correct CIDs (v0 and v1)', () => {
       const validCIDs = [
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU', // v0
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi', // v1
         'QmRAQB6YaSyaxG6xhL7hEYM23r291g1s28V8vtv2vYZY7i', // another v0
       ];
-      for (const cid of validCIDs) {
-        expect(await isValidCID(cid)).toBe(true);
-      }
+      validCIDs.forEach(cid => {
+        expect(isValidCID(cid)).toBe(true);
+      });
     });
 
-    it('should reject invalid CIDs', async () => {
+    it('should reject invalid CIDs', () => {
       const invalidCIDs = [
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobu', // Too short v0
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzd', // Too short v1
@@ -116,9 +116,9 @@ describe('validation utils', () => {
         'bafyInvalidChars!', // Invalid char v1
         '', null, undefined,
       ];
-      for (const cid of invalidCIDs) {
-        expect(await isValidCID(cid as string)).toBe(false);
-      }
+      invalidCIDs.forEach(cid => {
+        expect(isValidCID(cid as string)).toBe(false);
+      });
     });
   });
 });
