@@ -13,7 +13,7 @@ npm install -g @elephant/cli
 ### Using NPX (No Installation Required)
 
 ```bash
-npx @elephant/cli list-assignments --elephant 0xYourElephantAddress
+npx @elephant/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
 ## Usage
@@ -24,15 +24,15 @@ List all assignments for an elephant address:
 
 ```bash
 # If installed globally
-elephant-cli list-assignments --elephant 0xYourElephantAddress
+elephant-cli list-assignments --oracle 0xYourElephantAddress
 
 # Using npx (recommended)
-npx @elephant/cli list-assignments --elephant 0xYourElephantAddress
+npx @elephant/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
 ### Command Options
 
-- `-e, --elephant <address>` - Elephant address (required)
+- `-o, --oracle <address>` - Elephant address (required)
 - `-c, --contract <address>` - Smart contract address (default: 0x79D5046e34D4A56D357E12636A18da6eaEfe0586)
 - `-r, --rpc <url>` - RPC URL (default: https://rpc.therpc.io/polygon)
 - `-g, --gateway <url>` - IPFS gateway URL (default: https://gateway.pinata.cloud/ipfs/)
@@ -53,6 +53,79 @@ npx @elephant/cli list-assignments --elephant 0xYourElephantAddress
 - Node.js 18.0 or higher
 - Internet connection for blockchain and IPFS access
 
+## Building from Source
+
+If you want to build and run the CLI from source code:
+
+### Prerequisites
+
+- Node.js 18.0 or higher
+- npm (comes with Node.js)
+- Git
+
+### Step-by-step Build Instructions
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/your-org/elephant-cli-v2.git
+   cd elephant-cli-v2
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Build the project:**
+
+   ```bash
+   npm run build
+   ```
+
+4. **Run the CLI locally:**
+
+   ```bash
+   # Using the built executable
+   ./bin/elephant-cli list-assignments --oracle 0xYourElephantAddress
+
+   # Or using npm/node directly
+   node dist/index.js list-assignments --oracle 0xYourElephantAddress
+   ```
+
+5. **Link for global usage (optional):**
+   ```bash
+   npm link
+   # Now you can use 'elephant-cli' globally
+   elephant-cli list-assignments --oracle 0xYourElephantAddress
+   ```
+
+### Development Commands
+
+- **Build in watch mode:** `npm run dev` - Automatically rebuilds on file changes
+- **Run tests:** `npm test`
+- **Run tests with coverage:** `npm run test:coverage`
+- **Lint code:** `npm run lint`
+- **Format code:** `npm run format`
+- **Clean build artifacts:** `npm run clean`
+
+### Project Structure
+
+```
+elephant-cli/
+├── src/
+│   ├── commands/          # CLI command implementations
+│   ├── services/          # Blockchain and IPFS services
+│   ├── utils/             # Utility functions
+│   ├── types/             # TypeScript type definitions
+│   └── index.ts           # Main CLI entry point
+├── tests/                 # Test files
+├── bin/                   # Executable scripts
+├── dist/                  # Built JavaScript files
+└── package.json
+```
+
 ## Examples
 
 ### Example 1: Query Recent Blocks
@@ -61,7 +134,7 @@ Check for assignments in the last 1000 blocks:
 
 ```bash
 elephant-cli list-assignments \
-  --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 \
+  --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 \
   --from-block 71875000
 ```
 
@@ -69,7 +142,7 @@ elephant-cli list-assignments \
 
 ```bash
 elephant-cli list-assignments \
-  --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 \
+  --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 \
   --rpc https://polygon-mainnet.infura.io/v3/YOUR_KEY \
   --download-dir ./my-assignments
 ```
@@ -78,7 +151,7 @@ elephant-cli list-assignments \
 
 ```bash
 elephant-cli list-assignments \
-  --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 \
+  --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 \
   --gateway https://ipfs.io/ipfs/ \
   --from-block 71800000
 ```
@@ -113,19 +186,23 @@ Downloaded 1 of 1 files...
 ### Common Issues
 
 #### "Invalid elephant address"
+
 - Ensure your elephant address is a valid Ethereum address (starts with 0x and is 42 characters long)
 - Example: `0x0e44bfab0f7e1943cF47942221929F898E181505`
 
 #### "Failed to connect to RPC endpoint"
+
 - Check your internet connection
 - Verify the RPC URL is correct
 - Try using a different RPC provider
 
 #### "Invalid CID format"
+
 - The smart contract may have returned malformed data
 - Try querying a different block range
 
 #### IPFS Download Failures
+
 - The IPFS gateway may be temporarily unavailable
 - Try using a different gateway with the `--gateway` option
 - Common gateways:
@@ -134,6 +211,7 @@ Downloaded 1 of 1 files...
   - `https://cloudflare-ipfs.com/ipfs/`
 
 #### No Events Found
+
 - Verify the elephant address has assignments in the specified block range
 - Try using a wider block range or starting from an earlier block
 - Use `--from-block 0` to search from the beginning (may take longer)
