@@ -5,7 +5,8 @@ This document provides context for AI assistants (like Claude) to understand and
 ## Project Overview
 
 The Elephant Network CLI is a TypeScript-based command-line tool that:
-- Queries the Polygon blockchain for ElephantAssigned events
+
+- Queries the Polygon blockchain for OracleAssigned events
 - Decodes IPFS CIDs from blockchain event data
 - Downloads assigned files from IPFS gateways
 - Provides progress tracking and error handling
@@ -15,16 +16,17 @@ The Elephant Network CLI is a TypeScript-based command-line tool that:
 ### Smart Contract Integration
 
 - **Contract Address**: `0x79D5046e34D4A56D357E12636A18da6eaEfe0586` (Polygon mainnet)
-- **Event**: `ElephantAssigned(bytes propertyCid, address indexed elephant)`
+- **Event**: `OracleAssigned(bytes propertyCid, address indexed elephant)`
 - **CID Format**: The contract stores CIDs with a leading dot (e.g., `.QmXXX...`), which must be stripped
 
 ### Important Code Patterns
 
 1. **Event Decoding**: The CID is ABI-encoded as a dynamic string in the event data:
+
 ```typescript
 const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-const decoded = abiCoder.decode(["string"], bytes)[0];
-const cid = decoded.startsWith(".") ? decoded.substring(1) : decoded;
+const decoded = abiCoder.decode(['string'], bytes)[0];
+const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
 ```
 
 2. **Concurrent Downloads**: Uses a queue system with max 3 concurrent downloads
@@ -41,6 +43,7 @@ const cid = decoded.startsWith(".") ? decoded.substring(1) : decoded;
 ### Adding New Features
 
 When adding features, follow these patterns:
+
 1. Add types to `src/types/index.ts`
 2. Create services in `src/services/`
 3. Add command options in `src/index.ts`
@@ -49,6 +52,7 @@ When adding features, follow these patterns:
 ### Debugging Issues
 
 Common issues to check:
+
 1. **CID Decoding**: Ensure the leading dot is removed
 2. **Block Ranges**: Recent blocks work; very old blocks may be pruned
 3. **IPFS Gateways**: Some gateways may be slow or unavailable
@@ -125,3 +129,4 @@ npm run clean
 - No private keys or sensitive data handled
 - Downloads files only from IPFS (content-addressed)
 - Uses HTTPS for all external connections
+

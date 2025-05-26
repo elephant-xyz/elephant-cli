@@ -1,11 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // --- Define mock functions and instances FIRST ---
 const mockEthersAbiCoderInstance = { decode: vi.fn() };
@@ -17,8 +10,7 @@ const mockEthersDataSlice = vi.fn(
 const mockIsValidAddress =
   vi.fn<(address: string | undefined | null) => boolean>();
 const mockIsValidUrl = vi.fn<(url: string | undefined | null) => boolean>();
-const mockIsValidBlock =
-  vi.fn<(block: string | undefined | null) => boolean>();
+const mockIsValidBlock = vi.fn<(block: string | undefined | null) => boolean>();
 const mockIsValidCID = vi.fn<(cid: string | undefined | null) => boolean>();
 
 vi.mock('ethers', () => ({
@@ -27,15 +19,11 @@ vi.mock('ethers', () => ({
   getAddress: mockEthersGetAddress,
   dataSlice: mockEthersDataSlice,
   JsonRpcProvider: vi.fn().mockImplementation(() => ({
-    getBlockNumber: vi
-      .fn<() => Promise<number>>()
-      .mockResolvedValue(71875900),
+    getBlockNumber: vi.fn<() => Promise<number>>().mockResolvedValue(71875900),
   })),
   Contract: vi.fn().mockImplementation((address, abi, provider) => ({
     filters: {
-      ElephantAssigned: vi
-        .fn<(...args: any[]) => object>()
-        .mockReturnValue({}),
+      OracleAssigned: vi.fn<(...args: any[]) => object>().mockReturnValue({}),
     },
     queryFilter: vi
       .fn<(...args: any[]) => Promise<any[]>>()
@@ -43,9 +31,7 @@ vi.mock('ethers', () => ({
     getAddress: vi
       .fn<() => Promise<string>>()
       .mockResolvedValue(address as string),
-    resolveName: vi
-      .fn<() => Promise<string | null>>()
-      .mockResolvedValue(null),
+    resolveName: vi.fn<() => Promise<string | null>>().mockResolvedValue(null),
     runner: provider,
     interface: {
       getEvent: vi
@@ -55,7 +41,7 @@ vi.mock('ethers', () => ({
   })),
   EventLog: class MockEventLog {},
   Interface: vi.fn().mockImplementation(() => ({
-    getEvent: vi.fn(() => ({ name: 'ElephantAssigned', inputs: [] })),
+    getEvent: vi.fn(() => ({ name: 'OracleAssigned', inputs: [] })),
   })),
 }));
 
@@ -79,7 +65,7 @@ import { logger } from '../../src/utils/logger.ts';
 import * as progress from '../../src/utils/progress.ts';
 import {
   CommandOptions,
-  ElephantAssignment,
+  OracleAssignment,
   DownloadResult,
 } from '../../src/types/index.ts';
 
@@ -103,7 +89,7 @@ describe('listAssignments integration', () => {
     downloadDir: './downloads',
   };
 
-  const mockAssignmentsArray: ElephantAssignment[] = [
+  const mockAssignmentsArray: OracleAssignment[] = [
     {
       cid: 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
       elephant: defaultOptions.elephant!,
@@ -145,21 +131,19 @@ describe('listAssignments integration', () => {
       getCurrentBlock: vi
         .fn<() => Promise<number>>()
         .mockResolvedValue(71875900),
-      getElephantAssignedEvents: vi
-        .fn<() => Promise<ElephantAssignment[]>>()
+      getOracleAssignedEvents: vi
+        .fn<() => Promise<OracleAssignment[]>>()
         .mockResolvedValue(mockAssignmentsArray),
     } as unknown as any;
 
     mockIPFSServiceInstance = {
-      downloadBatch: vi
-        .fn<() => Promise<DownloadResult[]>>()
-        .mockResolvedValue(
-          mockAssignmentsArray.map((a) => ({
-            cid: a.cid,
-            success: true,
-            path: `${defaultOptions.downloadDir}/${a.cid}`,
-          }))
-        ),
+      downloadBatch: vi.fn<() => Promise<DownloadResult[]>>().mockResolvedValue(
+        mockAssignmentsArray.map((a) => ({
+          cid: a.cid,
+          success: true,
+          path: `${defaultOptions.downloadDir}/${a.cid}`,
+        }))
+      ),
     } as unknown as any;
 
     MockedBlockchainService.mockImplementation(
@@ -195,7 +179,7 @@ describe('listAssignments integration', () => {
       1
     );
     expect(
-      mockBlockchainServiceInstance.getElephantAssignedEvents
+      mockBlockchainServiceInstance.getOracleAssignedEvents
     ).toHaveBeenCalledWith(defaultOptions.elephant, 71875850, 71875900);
     expect(mockIPFSServiceInstance.downloadBatch).toHaveBeenCalledWith(
       mockAssignmentsArray,
@@ -223,12 +207,12 @@ describe('listAssignments integration', () => {
       ...defaultOptions,
       elephant: 'invalid-address',
     };
-    
+
     // Set the validation to return false for the invalid address
     mockIsValidAddress.mockImplementation((addr) => addr !== 'invalid-address');
 
     await listAssignments(invalidOptions);
-    
+
     expect(mockedLogger.error).toHaveBeenCalledWith(
       'Invalid elephant address: invalid-address'
     );
@@ -236,9 +220,7 @@ describe('listAssignments integration', () => {
   });
 
   it('should handle no assignments found', async () => {
-    mockBlockchainServiceInstance.getElephantAssignedEvents.mockResolvedValue(
-      []
-    );
+    mockBlockchainServiceInstance.getOracleAssignedEvents.mockResolvedValue([]);
     await listAssignments(defaultOptions);
     expect(mockedLogger.info).toHaveBeenCalledWith(
       'No assignments found for this elephant address in the specified block range.'

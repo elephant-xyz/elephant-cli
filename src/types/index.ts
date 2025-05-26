@@ -21,7 +21,7 @@ export interface Event {
   transactionHash: string;
 }
 
-export interface ElephantAssignment {
+export interface OracleAssignment {
   cid: string;
   elephant: string;
   blockNumber: number;
@@ -29,7 +29,7 @@ export interface ElephantAssignment {
 }
 
 // For event data after parsing by EventDecoderService
-export interface ElephantAssignedEventData {
+export interface OracleAssignedEventData {
   propertyCid: string; // This is the raw 'bytes' value from the event
   elephant: string; // The indexed address
 }

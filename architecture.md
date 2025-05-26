@@ -51,29 +51,29 @@ The main entry point that sets up the CLI using Commander.js:
 
 ```typescript
 #!/usr/bin/env node
-import { Command } from "commander";
-import { listAssignments } from "./commands/list-assignments";
+import { Command } from 'commander';
+import { listAssignments } from './commands/list-assignments';
 
 const program = new Command();
 
 program
-  .name("elephant-cli")
-  .description("CLI tool for Elephant Network on Polygon")
-  .version("1.0.0");
+  .name('elephant-cli')
+  .description('CLI tool for Elephant Network on Polygon')
+  .version('1.0.0');
 
 program
-  .command("list-assignments")
-  .description("List and download elephant assignments from the blockchain")
-  .requiredOption("-o, --elephant <address>", "Elephant address")
+  .command('list-assignments')
+  .description('List and download elephant assignments from the blockchain')
+  .requiredOption('-o, --elephant <address>', 'Elephant address')
   .option(
-    "-c, --contract <address>",
-    "Smart contract address",
-    DEFAULT_CONTRACT_ADDRESS,
+    '-c, --contract <address>',
+    'Smart contract address',
+    DEFAULT_CONTRACT_ADDRESS
   )
-  .option("-r, --rpc <url>", "RPC URL", DEFAULT_RPC_URL)
-  .option("-g, --gateway <url>", "IPFS gateway URL", DEFAULT_IPFS_GATEWAY)
-  .option("-f, --from-block <number>", "Starting block number", "0")
-  .option("-d, --download-dir <path>", "Download directory", "./downloads")
+  .option('-r, --rpc <url>', 'RPC URL', DEFAULT_RPC_URL)
+  .option('-g, --gateway <url>', 'IPFS gateway URL', DEFAULT_IPFS_GATEWAY)
+  .option('-f, --from-block <number>', 'Starting block number', '0')
+  .option('-d, --download-dir <path>', 'Download directory', './downloads')
   .action(listAssignments);
 
 program.parse();
@@ -109,10 +109,10 @@ class BlockchainService {
   private provider: ethers.JsonRpcProvider;
   private contract: ethers.Contract;
 
-  async getElephantAssignedEvents(
+  async getOracleAssignedEvents(
     elephantAddress: string,
     fromBlock: number,
-    toBlock?: number,
+    toBlock?: number
   ): Promise<OracleAssignedEvent[]>;
 
   async getCurrentBlock(): Promise<number>;
@@ -145,7 +145,7 @@ class IPFSService {
 ```typescript
 class EventDecoderService {
   decodePropertCid(bytes: string): string;
-  parseElephantAssignedEvent(event: ethers.Log): Assignment;
+  parseOracleAssignedEvent(event: ethers.Log): Assignment;
 }
 ```
 
@@ -154,9 +154,9 @@ class EventDecoderService {
 **`constants.ts`**
 
 ```typescript
-export const DEFAULT_CONTRACT_ADDRESS = "0x...";
-export const DEFAULT_RPC_URL = "https://polygon-rpc.com";
-export const DEFAULT_IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
+export const DEFAULT_CONTRACT_ADDRESS = '0x...';
+export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
+export const DEFAULT_IPFS_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
 export const MAX_CONCURRENT_DOWNLOADS = 5;
 export const BLOCKS_PER_QUERY = 10000;
 ```
@@ -170,19 +170,19 @@ export const ELEPHANT_CONTRACT_ABI = [
     inputs: [
       {
         indexed: false,
-        internalType: "bytes",
-        name: "propertyCid",
-        type: "bytes",
+        internalType: 'bytes',
+        name: 'propertyCid',
+        type: 'bytes',
       },
       {
         indexed: true,
-        internalType: "address",
-        name: "elephant",
-        type: "address",
+        internalType: 'address',
+        name: 'elephant',
+        type: 'address',
       },
     ],
-    name: "ElephantAssigned",
-    type: "event",
+    name: 'OracleAssigned',
+    type: 'event',
   },
 ];
 ```

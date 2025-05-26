@@ -53,7 +53,7 @@ describe('EventDecoderService', () => {
   const mockContractInterfaceAbi: ABI = [
     {
       type: 'event',
-      name: 'ElephantAssigned',
+      name: 'OracleAssigned',
       inputs: [
         { name: 'propertyCid', type: 'bytes', indexed: false },
         { name: 'elephant', type: 'address', indexed: true },
@@ -68,14 +68,16 @@ describe('EventDecoderService', () => {
     mockInterfaceGetEventImplementation.mockClear();
 
     // Set up default mock return values
-    mockDecodeImplementation.mockReturnValue(['.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU']);
+    mockDecodeImplementation.mockReturnValue([
+      '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
+    ]);
     mockDataSliceImplementation.mockReturnValue(
       '0x0e44bfab0f7e1943cF47942221929F898E181505'
     );
 
     // Provide a default mock for getEvent to return something sensible
     mockInterfaceGetEventImplementation.mockReturnValue({
-      name: 'ElephantAssigned',
+      name: 'OracleAssigned',
       // Mock other properties of EventFragment if needed by the SUT's logic
       // For example, if it checks `eventFragment.inputs`
       inputs: [
@@ -95,14 +97,14 @@ describe('EventDecoderService', () => {
     });
   });
 
-  describe('parseElephantAssignedEvent', () => {
+  describe('parseOracleAssignedEvent', () => {
     const mockRawEvent = new Log(
       {
         address: '0x1234567890123456789012345678901234567890',
         blockHash: '0xBlockHash123',
         data: '0xSomeData',
         topics: [
-          '0xTopic0Sig_ElephantAssigned',
+          '0xTopic0Sig_OracleAssigned',
           '0x0000000000000000000000001234567890123456789012345678901234567890',
         ],
         blockNumber: 12345,
@@ -116,7 +118,7 @@ describe('EventDecoderService', () => {
     const mockElephantAddressFromTopic =
       '0x1234567890123456789012345678901234567890';
 
-    it('should correctly parse a valid ElephantAssigned event', () => {
+    it('should correctly parse a valid OracleAssigned event', () => {
       const decodedCidString =
         '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
       const expectedCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
@@ -126,7 +128,7 @@ describe('EventDecoderService', () => {
       ] as Result);
 
       const parsedEvent =
-        eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
+        eventDecoderService.parseOracleAssignedEvent(mockRawEvent);
 
       expect(mockDecodeImplementation).toHaveBeenCalledWith(
         ['string'],
@@ -147,7 +149,7 @@ describe('EventDecoderService', () => {
       ] as unknown as Result);
 
       const parsedEvent =
-        eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
+        eventDecoderService.parseOracleAssignedEvent(mockRawEvent);
       expect(parsedEvent.cid).toBe(decodedCidString);
     });
 
@@ -156,7 +158,7 @@ describe('EventDecoderService', () => {
         throw new Error('Decoding failed');
       });
       expect(() =>
-        eventDecoderService.parseElephantAssignedEvent(mockRawEvent)
+        eventDecoderService.parseOracleAssignedEvent(mockRawEvent)
       ).toThrow('Decoding failed');
     });
 
@@ -164,9 +166,10 @@ describe('EventDecoderService', () => {
       const logParams: LogParams = mockRawEvent.toJSON() as LogParams;
       logParams.topics = [];
       const incompleteRawEvent = new Log(logParams, mockRawEvent.provider);
-      
-      const result = eventDecoderService.parseElephantAssignedEvent(incompleteRawEvent);
-      
+
+      const result =
+        eventDecoderService.parseOracleAssignedEvent(incompleteRawEvent);
+
       // Service returns empty elephant address when topics are missing
       expect(result.elephant).toBe('');
       expect(result.cid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
@@ -174,9 +177,9 @@ describe('EventDecoderService', () => {
 
     it('should process events regardless of interface availability', () => {
       mockInterfaceGetEventImplementation.mockReturnValue(null);
-      
-      const result = eventDecoderService.parseElephantAssignedEvent(mockRawEvent);
-      
+
+      const result = eventDecoderService.parseOracleAssignedEvent(mockRawEvent);
+
       // Service processes the event data directly, doesn't rely on interface
       expect(result.cid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
     });

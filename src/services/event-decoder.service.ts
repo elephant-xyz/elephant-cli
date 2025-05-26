@@ -1,5 +1,5 @@
 import { AbiCoder, getAddress, dataSlice, Log } from 'ethers';
-import { ElephantAssignment } from '../types/index.js';
+import { OracleAssignment } from '../types/index.js';
 import { isValidCID } from '../utils/validation.js';
 
 export class EventDecoderService {
@@ -22,9 +22,7 @@ export class EventDecoderService {
     return cid;
   }
 
-  public parseElephantAssignedEvent(
-    event: Log
-  ): ElephantAssignment {
+  public parseOracleAssignedEvent(event: Log): OracleAssignment {
     const propertyCid = this.decodePropertyCid(event.data);
     let elephantAddress = '';
 

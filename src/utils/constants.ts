@@ -1,4 +1,4 @@
-// Default ABI for the ElephantAssigned event
+// Default ABI for the OracleAssigned event
 // This is a minimal ABI just for the event we are interested in.
 // A more complete ABI might be loaded from a file if specified by the user.
 export const DEFAULT_CONTRACT_ABI = [

@@ -19,8 +19,8 @@
 - [ ] Update src/index.ts - replace "oracle-cli" command name with "elephant-cli"
 - [ ] Update src/index.ts - replace "Oracle Network CLI" with "Elephant Network CLI"
 - [ ] Update src/commands/list-assignments.ts - replace all "oracle" references with "elephant"
-- [ ] Update src/types/index.ts - rename OracleAssignment to ElephantAssignment
-- [ ] Update src/types/index.ts - rename OracleAssignedEvent to ElephantAssignedEvent
+- [ ] Update src/types/index.ts - rename OracleAssignment to OracleAssignment
+- [ ] Update src/types/index.ts - rename OracleAssignedEvent to OracleAssignedEvent
 - [ ] Update src/services/blockchain.service.ts - update event name references
 - [ ] Update src/services/event-decoder.service.ts - update function names and comments
 - [ ] Update src/config/abi.ts - rename ORACLE_ASSIGNED_ABI to ELEPHANT_ASSIGNED_ABI
@@ -144,9 +144,9 @@
 ### 3.8 Write Blockchain Service Tests
 
 - [ ] Mock ethers provider
-- [ ] Test getElephantAssignedEvents with valid inputs
-- [ ] Test getElephantAssignedEvents with no events
-- [ ] Test getElephantAssignedEvents with RPC errors
+- [ ] Test getOracleAssignedEvents with valid inputs
+- [ ] Test getOracleAssignedEvents with no events
+- [ ] Test getOracleAssignedEvents with RPC errors
 - [ ] Test block range validation
 
 ### 3.9 Write IPFS Service Tests
@@ -294,4 +294,3 @@
 - [ ] Documentation complete
 - [ ] CHANGELOG.md created
 - [ ] NPM account ready for publishing
-

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-01-23
 
 ### Added
+
 - Initial release of Elephant Network CLI
 - Command to list and download elephant assignments from blockchain
 - Support for custom RPC URLs and IPFS gateways
@@ -21,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NPX support for running without installation
 
 ### Features
-- Query Polygon blockchain for ElephantAssigned events
+
+- Query Polygon blockchain for OracleAssigned events
 - Decode IPFS CIDs from event data
 - Download files from IPFS with retry logic
 - Progress indicators and colored console output
@@ -29,9 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Block range filtering capabilities
 
 ### Technical
+
 - Built with TypeScript 5.0+
 - Uses ethers.js v6 for blockchain interaction
 - Axios for HTTP requests with timeout handling
 - Commander.js for CLI argument parsing
 - Chalk for colored terminal output
 - Ora for spinner animations
+

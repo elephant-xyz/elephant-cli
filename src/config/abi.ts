@@ -15,7 +15,7 @@ export const ELEPHANT_CONTRACT_ABI = [
         type: 'address',
       },
     ],
-    name: 'ElephantAssigned',
+    name: 'OracleAssigned',
     type: 'event',
   },
 ];

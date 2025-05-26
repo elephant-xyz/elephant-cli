@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { DownloadResult, ElephantAssignment } from '../types/index.js';
+import { DownloadResult, OracleAssignment } from '../types/index.js';
 
 export class IPFSService {
   private gateway: string;
@@ -107,7 +107,7 @@ export class IPFSService {
   }
 
   async downloadBatch(
-    assignments: ElephantAssignment[],
+    assignments: OracleAssignment[],
     downloadDir: string = './downloads',
     onProgress?: (completed: number, total: number) => void
   ): Promise<DownloadResult[]> {

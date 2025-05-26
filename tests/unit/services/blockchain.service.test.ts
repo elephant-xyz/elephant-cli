@@ -4,12 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // 1. Mock EventDecoderService
 // This mock will be used when BlockchainService instantiates EventDecoderService
-const mockParseElephantAssignedEvent = vi.fn();
+const mockParseOracleAssignedEvent = vi.fn();
 vi.mock('../../../src/services/event-decoder.service', () => {
   return {
     EventDecoderService: vi.fn().mockImplementation(() => {
       return {
-        parseElephantAssignedEvent: mockParseElephantAssignedEvent,
+        parseOracleAssignedEvent: mockParseOracleAssignedEvent,
       };
     }),
   };
@@ -21,7 +21,7 @@ const mockJsonRpcProviderInstance = {
 };
 const mockContractInstance = {
   filters: {
-    ElephantAssigned: vi.fn<(...args: any[]) => object>(),
+    OracleAssigned: vi.fn<(...args: any[]) => object>(),
   },
   queryFilter: vi.fn<(...args: any[]) => Promise<any[]>>(),
   getAddress: vi.fn<() => Promise<string>>(), // Added to satisfy Contract type if needed
@@ -30,7 +30,7 @@ const mockContractInstance = {
   interface: {
     // Added basic interface mock
     getEvent: vi.fn(() => ({
-      topicHash: 'mockTopicHashForElephantAssigned',
+      topicHash: 'mockTopicHashForOracleAssigned',
     })),
   },
 };
@@ -62,16 +62,14 @@ vi.mock('ethers', () => ({
 
 // --- Import SUT (BlockchainService) AFTER mocks ---
 import { BlockchainService } from '../../../src/services/blockchain.service';
-import { ABI, ElephantAssignment } from '../../../src/types'; // Assuming types are needed
+import { ABI, OracleAssignment } from '../../../src/types'; // Assuming types are needed
 import { EventLog } from 'ethers';
 // EventDecoderService is imported by BlockchainService, so the mocked version will be used.
 
 describe('BlockchainService', () => {
   const mockRpcUrl = 'http://localhost:8545';
   const mockContractAddress = '0x1234567890123456789012345678901234567890';
-  const mockAbi: ABI = [
-    { type: 'event', name: 'ElephantAssigned', inputs: [] },
-  ]; // Minimal ABI
+  const mockAbi: ABI = [{ type: 'event', name: 'OracleAssigned', inputs: [] }]; // Minimal ABI
 
   let blockchainService: BlockchainService;
 
@@ -80,11 +78,9 @@ describe('BlockchainService', () => {
 
     // Reset mock implementations for each test
     mockJsonRpcProviderInstance.getBlockNumber.mockResolvedValue(100);
-    (
-      mockContractInstance.filters.ElephantAssigned as any
-    ).mockReturnValue({});
+    (mockContractInstance.filters.OracleAssigned as any).mockReturnValue({});
     mockContractInstance.queryFilter.mockResolvedValue([]);
-    mockParseElephantAssignedEvent.mockImplementation((rawEvent: any) => ({
+    mockParseOracleAssignedEvent.mockImplementation((rawEvent: any) => ({
       cid: `parsed-cid-${rawEvent.transactionHash}`,
       elephant: `parsed-elephant-${rawEvent.transactionHash}`,
       blockNumber: rawEvent.blockNumber,
@@ -105,7 +101,7 @@ describe('BlockchainService', () => {
     expect(blockNumber).toBe(100);
   });
 
-  describe('getElephantAssignedEvents', () => {
+  describe('getOracleAssignedEvents', () => {
     const elephantAddress = '0xElephantAddress';
     const fromBlock = 0;
     const toBlock = 100;
@@ -125,27 +121,28 @@ describe('BlockchainService', () => {
       },
     ];
 
-    it('should fetch, parse, and return ElephantAssigned events', async () => {
-      (
-        mockContractInstance.filters.ElephantAssigned as any
-      ).mockReturnValue('eventFilterObject');
+    it('should fetch, parse, and return OracleAssigned events', async () => {
+      (mockContractInstance.filters.OracleAssigned as any).mockReturnValue(
+        'eventFilterObject'
+      );
       mockContractInstance.queryFilter.mockResolvedValue(mockRawEvents as any); // Cast as any if type is complex
 
-      const events = await blockchainService.getElephantAssignedEvents(
+      const events = await blockchainService.getOracleAssignedEvents(
         elephantAddress,
         fromBlock,
         toBlock
       );
 
-      expect(
-        mockContractInstance.filters.ElephantAssigned
-      ).toHaveBeenCalledWith(null, elephantAddress);
+      expect(mockContractInstance.filters.OracleAssigned).toHaveBeenCalledWith(
+        null,
+        elephantAddress
+      );
       expect(mockContractInstance.queryFilter).toHaveBeenCalledWith(
         'eventFilterObject',
         fromBlock,
         toBlock
       );
-      expect(mockParseElephantAssignedEvent).toHaveBeenCalledTimes(
+      expect(mockParseOracleAssignedEvent).toHaveBeenCalledTimes(
         mockRawEvents.length
       );
 
@@ -170,7 +167,7 @@ describe('BlockchainService', () => {
 
     it('should handle parsing errors and filter out null results', async () => {
       mockContractInstance.queryFilter.mockResolvedValue(mockRawEvents as any);
-      mockParseElephantAssignedEvent
+      mockParseOracleAssignedEvent
         .mockImplementationOnce(
           (rawEvent: any) =>
             ({
@@ -178,13 +175,13 @@ describe('BlockchainService', () => {
               elephant: `parsed-elephant-${rawEvent.transactionHash}`,
               blockNumber: rawEvent.blockNumber,
               transactionHash: rawEvent.transactionHash,
-            }) as ElephantAssignment
+            }) as OracleAssignment
         )
         .mockImplementationOnce(() => {
           throw new Error('Parsing failed');
         }); // Second event fails
 
-      const events = await blockchainService.getElephantAssignedEvents(
+      const events = await blockchainService.getOracleAssignedEvents(
         elephantAddress,
         fromBlock,
         toBlock
@@ -195,13 +192,13 @@ describe('BlockchainService', () => {
 
     it('should return an empty array if no events are found', async () => {
       mockContractInstance.queryFilter.mockResolvedValue([]);
-      const events = await blockchainService.getElephantAssignedEvents(
+      const events = await blockchainService.getOracleAssignedEvents(
         elephantAddress,
         fromBlock,
         toBlock
       );
       expect(events).toEqual([]);
-      expect(mockParseElephantAssignedEvent).not.toHaveBeenCalled();
+      expect(mockParseOracleAssignedEvent).not.toHaveBeenCalled();
     });
   });
 });

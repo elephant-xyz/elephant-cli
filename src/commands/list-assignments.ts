@@ -1,11 +1,19 @@
 import { readFileSync } from 'fs';
 import { BlockchainService } from '../services/blockchain.service.js';
 import { IPFSService } from '../services/ipfs.service.js';
-import { CommandOptions, DownloadResult, ElephantAssignment } from '../types/index.js';
+import {
+  CommandOptions,
+  DownloadResult,
+  OracleAssignment,
+} from '../types/index.js';
 import { DEFAULT_CONTRACT_ABI } from '../utils/constants.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
-import { isValidAddress, isValidBlock, isValidUrl } from '../utils/validation.js';
+import {
+  isValidAddress,
+  isValidBlock,
+  isValidUrl,
+} from '../utils/validation.js';
 
 export async function listAssignments(options: CommandOptions): Promise<void> {
   // Validate inputs
@@ -83,11 +91,11 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     }
 
     spinner.start(
-      `Fetching ElephantAssigned events for ${oracleAddress} from block ${parsedFromBlock} to ${parsedToBlock}...`
+      `Fetching OracleAssigned events for ${oracleAddress} from block ${parsedFromBlock} to ${parsedToBlock}...`
     );
 
-    const events: ElephantAssignment[] =
-      await blockchainService.getElephantAssignedEvents(
+    const events: OracleAssignment[] =
+      await blockchainService.getOracleAssignedEvents(
         oracleAddress,
         parsedFromBlock,
         parsedToBlock

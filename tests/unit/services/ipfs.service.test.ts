@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { IPFSService } from '../../../src/services/ipfs.service';
-import { ElephantAssignment } from '../../../src/types';
+import { OracleAssignment } from '../../../src/types';
 
 // Mock fetch implementation
 const mockFetchImplementation = vi.fn<typeof fetch>();
@@ -22,7 +22,7 @@ describe('IPFSService', () => {
     // Create a temporary directory for each test
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ipfs-test-'));
     mockOutputPath = path.join(tempDir, mockCid);
-    
+
     // Clear all mock implementations and calls
     mockFetchImplementation.mockClear();
 
@@ -70,19 +70,19 @@ describe('IPFSService', () => {
       const mockResponse = {
         ok: true,
         status: 200,
-        arrayBuffer: () => Promise.resolve(testContent.buffer.slice(0))
+        arrayBuffer: () => Promise.resolve(testContent.buffer.slice(0)),
       } as unknown as Response;
-      
+
       mockFetchImplementation.mockResolvedValue(mockResponse);
     });
 
     it('should download file successfully', async () => {
       const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
-      
+
       expect(mockFetchImplementation).toHaveBeenCalledWith(
         `${mockGatewayUrl}${mockCid}`,
         expect.objectContaining({
-          signal: expect.any(AbortSignal)
+          signal: expect.any(AbortSignal),
         })
       );
       expect(result).toEqual({
@@ -99,9 +99,9 @@ describe('IPFSService', () => {
 
     it('should create directory if it does not exist', async () => {
       const nestedPath = path.join(tempDir, 'nested', 'directory', mockCid);
-      
+
       const result = await ipfsService.downloadFile(mockCid, nestedPath);
-      
+
       expect(result.success).toBe(true);
       expect(fs.existsSync(nestedPath)).toBe(true);
       expect(fs.existsSync(path.dirname(nestedPath))).toBe(true);
@@ -110,9 +110,9 @@ describe('IPFSService', () => {
     it('should handle download failure from fetch', async () => {
       const error = new Error('Network error');
       mockFetchImplementation.mockRejectedValue(error);
-      
+
       const result = await ipfsService.downloadFile(mockCid, mockOutputPath, 0); // 0 retries
-      
+
       expect(result).toEqual({ cid: mockCid, success: false, error: error });
       // Verify no file was created
       expect(fs.existsSync(mockOutputPath)).toBe(false);
@@ -124,9 +124,9 @@ describe('IPFSService', () => {
       const successResponse = {
         ok: true,
         status: 200,
-        arrayBuffer: () => Promise.resolve(retryContent.buffer.slice(0))
+        arrayBuffer: () => Promise.resolve(retryContent.buffer.slice(0)),
       } as unknown as Response;
-      
+
       mockFetchImplementation
         .mockRejectedValueOnce(error) // First call fails
         .mockResolvedValueOnce(successResponse); // Second call succeeds
@@ -142,20 +142,20 @@ describe('IPFSService', () => {
       // Mock a response with HTTP error status
       const errorResponse = {
         ok: false,
-        status: 404
+        status: 404,
       } as Response;
-      
+
       mockFetchImplementation.mockResolvedValue(errorResponse);
 
       const result = await ipfsService.downloadFile(mockCid, mockOutputPath);
-      
+
       expect(result.success).toBe(false);
       expect(result.error?.message).toBe('HTTP error! status: 404');
     });
   });
 
   describe('downloadBatch', () => {
-    const mockAssignments: ElephantAssignment[] = [
+    const mockAssignments: OracleAssignment[] = [
       {
         cid: 'QmCID1',
         elephant: '0x123',
@@ -183,7 +183,7 @@ describe('IPFSService', () => {
         const mockResponse = {
           ok: true,
           status: 200,
-          arrayBuffer: () => Promise.resolve(batchContent.buffer.slice(0))
+          arrayBuffer: () => Promise.resolve(batchContent.buffer.slice(0)),
         } as unknown as Response;
         return Promise.resolve(mockResponse);
       });
@@ -199,12 +199,12 @@ describe('IPFSService', () => {
 
       expect(results).toHaveLength(3);
       expect(results.every((r) => r.success)).toBe(true);
-      
+
       // Verify files were actually created
       expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'QmCID3'))).toBe(true);
-      
+
       // Progress callback is called asynchronously due to promises in p-queue
       // Wait for promises to settle to check calls
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -223,11 +223,13 @@ describe('IPFSService', () => {
         maxObservedActive = Math.max(maxObservedActive, activeDownloads);
         await new Promise((resolve) => setTimeout(resolve, 20)); // Simulate download time
         activeDownloads--;
-        const concurrentContent = new TextEncoder().encode('concurrent test content');
+        const concurrentContent = new TextEncoder().encode(
+          'concurrent test content'
+        );
         const mockResponse = {
           ok: true,
           status: 200,
-          arrayBuffer: () => Promise.resolve(concurrentContent.buffer.slice(0))
+          arrayBuffer: () => Promise.resolve(concurrentContent.buffer.slice(0)),
         } as unknown as Response;
         return mockResponse;
       });
@@ -239,14 +241,14 @@ describe('IPFSService', () => {
     it('should handle mixed success and failure in batch', async () => {
       // Clear the beforeEach mock and set up a specific mock for this test
       mockFetchImplementation.mockClear();
-      
+
       const successContent = new TextEncoder().encode('success content');
       const successResponse = {
         ok: true,
         status: 200,
-        arrayBuffer: () => Promise.resolve(successContent.buffer.slice(0))
+        arrayBuffer: () => Promise.resolve(successContent.buffer.slice(0)),
       } as unknown as Response;
-      
+
       // Create a mock that responds differently based on the CID in the URL
       mockFetchImplementation.mockImplementation((input: RequestInfo | URL) => {
         const url = typeof input === 'string' ? input : input.toString();
@@ -256,16 +258,13 @@ describe('IPFSService', () => {
         return Promise.resolve(successResponse);
       });
 
-      const results = await ipfsService.downloadBatch(
-        mockAssignments,
-        tempDir
-      );
-      
+      const results = await ipfsService.downloadBatch(mockAssignments, tempDir);
+
       expect(results[0].success).toBe(true);
       expect(results[1].success).toBe(false);
       expect(results[1].error?.message).toBe('Download failed for CID2');
       expect(results[2].success).toBe(true);
-      
+
       // Verify only successful files were created
       expect(fs.existsSync(path.join(tempDir, 'QmCID1'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'QmCID2'))).toBe(false);
@@ -273,3 +272,4 @@ describe('IPFSService', () => {
     });
   });
 });
+
