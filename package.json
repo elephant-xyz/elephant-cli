@@ -1,6 +1,6 @@
 {
   "name": "@elephant-xyz/cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI tool for Elephant Network on Polygon",
   "type": "module",
   "main": "dist/index.js",

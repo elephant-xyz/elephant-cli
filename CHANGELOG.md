@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.0.0...v1.1.0) (2025-05-27)
+
+
+### Features
+
+* trigger release ([80a86ea](https://github.com/elephant-xyz/elephant-cli/commit/80a86ea8086474277d5cc3d09184e2d4a5afc4f3))
+
 # 1.0.0 (2025-05-27)
 
 
