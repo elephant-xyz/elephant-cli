@@ -11,10 +11,6 @@ export interface SubmitConfig {
   fileScanBatchSize: number;
   chainQueryBatchSize: number;
 
-  // Worker pool configuration
-  validationWorkers: number;
-  serializationWorkers: number;
-
   // Caching configuration
   schemaCacheSize: number;
   enableDiskCache: boolean;
@@ -51,13 +47,6 @@ export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
   transactionBatchSize: 200,
   fileScanBatchSize: 1000,
   chainQueryBatchSize: 50,
-
-  // Worker pool configuration
-  validationWorkers: Math.max(1, require('os').cpus().length - 1),
-  serializationWorkers: Math.max(
-    1,
-    Math.floor(require('os').cpus().length / 2)
-  ),
 
   // Caching configuration
   schemaCacheSize: 1000,
