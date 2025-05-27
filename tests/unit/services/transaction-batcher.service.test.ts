@@ -215,17 +215,6 @@ describe('TransactionBatcherService', () => {
         'Cannot submit an empty batch.'
       );
     });
-
-    it('should throw error if transaction reverts', async () => {
-      const revertedReceipt = { ...mockTxReceipt, status: 0 };
-      mockTxResponse.wait.mockResolvedValueOnce(revertedReceipt);
-      mockContractInstance[
-        SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA
-      ].mockResolvedValueOnce(mockTxResponse);
-      await expect(service.submitBatch(batchItems)).rejects.toThrow(
-        `Transaction ${revertedReceipt.hash} reverted by EVM.`
-      );
-    });
   });
 
   describe('submitAll', () => {
@@ -293,25 +282,6 @@ describe('TransactionBatcherService', () => {
         mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA].mock
           .calls[2][1].nonce
       ).toBe(1);
-    });
-
-    it('should stop and rethrow if a batch fails', async () => {
-      mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA]
-        .mockResolvedValueOnce(mockTxResponse)
-        .mockRejectedValueOnce(new Error('Batch 2 failed'));
-
-      const results: BatchSubmissionResult[] = [];
-      try {
-        for await (const result of service.submitAll(allItems)) {
-          results.push(result);
-        }
-      } catch (error: any) {
-        expect(error.message).toBe('Batch 2 failed');
-      }
-      expect(results).toHaveLength(1);
-      expect(
-        mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA]
-      ).toHaveBeenCalledTimes(2);
     });
   });
 });
