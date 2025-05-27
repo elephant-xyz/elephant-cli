@@ -41,7 +41,7 @@
     "cli",
     "ipfs"
   ],
-  "author": "",
+  "author": "elepant-xyz",
   "license": "MIT",
   "dependencies": {
     "chalk": "^4.1.2",
