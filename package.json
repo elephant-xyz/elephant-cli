@@ -44,9 +44,13 @@
   "author": "elepant-xyz",
   "license": "MIT",
   "dependencies": {
+    "@ipld/dag-pb": "^4.1.5",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
     "ethers": "^6.7.0",
+    "json-canonicalize": "^1.0.6",
     "multiformats": "^13.3.6",
     "ora": "^5.4.1"
   },
