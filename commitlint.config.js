@@ -23,6 +23,8 @@ export default {
     'subject-empty': [2, 'never'],
     'type-case': [2, 'always', 'lower-case'],
     'type-empty': [2, 'never'],
-    'scope-case': [2, 'always', 'lower-case']
-  }
+    'scope-case': [2, 'always', 'lower-case'],
+    'body-max-line-length': [0, 'always'] // Disable to allow semantic-release commit bodies
+  },
+  ignores: [(commit) => commit.includes('[skip ci]')] // Ignore semantic-release commits
 };
