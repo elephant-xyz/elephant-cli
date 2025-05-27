@@ -37,13 +37,13 @@ export class SchemaCacheService {
   private addToHead(node: LRUCacheNode): void {
     node.prev = null;
     node.next = this.head;
-    
+
     if (this.head) {
       this.head.prev = node;
     }
-    
+
     this.head = node;
-    
+
     if (!this.tail) {
       this.tail = node;
     }
@@ -55,7 +55,7 @@ export class SchemaCacheService {
     } else {
       this.head = node.next;
     }
-    
+
     if (node.next) {
       node.next.prev = node.prev;
     } else {
@@ -72,7 +72,7 @@ export class SchemaCacheService {
     if (!this.tail) {
       return null;
     }
-    
+
     const lastNode = this.tail;
     this.removeNode(lastNode);
     return lastNode;
@@ -80,20 +80,20 @@ export class SchemaCacheService {
 
   get(cid: string): JSONSchema | undefined {
     const node = this.cache.get(cid);
-    
+
     if (!node) {
       return undefined;
     }
-    
+
     // Move to head (most recently used)
     this.moveToHead(node);
-    
+
     return node.value;
   }
 
   private put(cid: string, schema: JSONSchema): void {
     const existingNode = this.cache.get(cid);
-    
+
     if (existingNode) {
       // Update existing
       existingNode.value = schema;
@@ -106,7 +106,7 @@ export class SchemaCacheService {
         prev: null,
         next: null,
       };
-      
+
       if (this.cache.size >= this.maxSize) {
         // Remove least recently used
         const tail = this.removeTail();
@@ -114,7 +114,7 @@ export class SchemaCacheService {
           this.cache.delete(tail.key);
         }
       }
-      
+
       this.cache.set(cid, newNode);
       this.addToHead(newNode);
     }
@@ -132,25 +132,27 @@ export class SchemaCacheService {
       const schemaBuffer = await this.ipfsService.downloadFile(dataGroupCid);
       const schemaText = schemaBuffer.toString('utf-8');
       const schema: JSONSchema = JSON.parse(schemaText);
-      
+
       // Validate it's a JSON schema
       if (typeof schema !== 'object' || schema === null) {
         throw new Error(`Invalid JSON schema: not an object`);
       }
-      
+
       // Store in cache
       this.put(dataGroupCid, schema);
-      
+
       return schema;
     } catch (error) {
-      throw new Error(`Failed to download or parse schema ${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to download or parse schema ${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
   async preloadSchemas(cids: string[]): Promise<void> {
     const uniqueCids = [...new Set(cids)];
-    const missingCids = uniqueCids.filter(cid => !this.has(cid));
-    
+    const missingCids = uniqueCids.filter((cid) => !this.has(cid));
+
     if (missingCids.length === 0) {
       return;
     }
@@ -158,7 +160,7 @@ export class SchemaCacheService {
     // Download schemas in parallel (max 10 concurrent)
     const batchSize = 10;
     const batches: string[][] = [];
-    
+
     for (let i = 0; i < missingCids.length; i += batchSize) {
       batches.push(missingCids.slice(i, i + batchSize));
     }

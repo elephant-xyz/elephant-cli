@@ -9,13 +9,13 @@ export interface ContractMethods {
     propertyCid: string,
     dataGroupCID: string
   ): Promise<string>;
-  
+
   getParticipantsForConsensusDataCID(
     propertyCid: string,
     dataGroupCID: string,
     dataCID: string
   ): Promise<string[]>;
-  
+
   submitBatchData(items: DataItem[]): Promise<void>;
 }
 

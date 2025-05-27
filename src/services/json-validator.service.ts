@@ -21,10 +21,10 @@ export class JsonValidatorService {
   constructor() {
     // Initialize AJV with draft-07 support
     this.ajv = new Ajv({
-      strict: false,  // Allow draft-07 schemas
+      strict: false, // Allow draft-07 schemas
       allErrors: true, // Report all errors, not just the first one
-      verbose: true,   // Include data in errors
-      validateFormats: true
+      verbose: true, // Include data in errors
+      validateFormats: true,
     });
 
     // Add format validators (date, time, email, etc.)
@@ -41,7 +41,7 @@ export class JsonValidatorService {
     try {
       // Get or compile validator
       const validator = this.getValidator(schema);
-      
+
       // Validate the data
       const valid = validator(data);
 
@@ -55,12 +55,14 @@ export class JsonValidatorService {
     } catch (error) {
       return {
         valid: false,
-        errors: [{
-          path: '',
-          message: `Validation error: ${error instanceof Error ? error.message : String(error)}`,
-          keyword: 'error',
-          params: {}
-        }]
+        errors: [
+          {
+            path: '',
+            message: `Validation error: ${error instanceof Error ? error.message : String(error)}`,
+            keyword: 'error',
+            params: {},
+          },
+        ],
       };
     }
   }
@@ -68,14 +70,17 @@ export class JsonValidatorService {
   /**
    * Validate a batch of JSON data against the same schema
    */
-  async validateBatch(dataArray: any[], schema: JSONSchema): Promise<ValidationResult[]> {
+  async validateBatch(
+    dataArray: any[],
+    schema: JSONSchema
+  ): Promise<ValidationResult[]> {
     // Get compiled validator for reuse across all items
     const validator = this.getValidator(schema);
-    
+
     // Process all validations synchronously
-    return dataArray.map(data => {
+    return dataArray.map((data) => {
       const valid = validator(data);
-      
+
       if (valid) {
         return { valid: true };
       } else {
@@ -91,16 +96,16 @@ export class JsonValidatorService {
   private getValidator(schema: JSONSchema): ValidateFunction {
     // Create a cache key from the schema
     const cacheKey = JSON.stringify(schema);
-    
+
     // Check if we already have a compiled validator
     let validator = this.validators.get(cacheKey);
-    
+
     if (!validator) {
       // Compile the schema
       validator = this.ajv.compile(schema);
       this.validators.set(cacheKey, validator);
     }
-    
+
     return validator;
   }
 
@@ -108,18 +113,21 @@ export class JsonValidatorService {
    * Transform AJV errors to our format
    */
   private transformErrors(ajvErrors: ErrorObject[]): ValidationError[] {
-    return ajvErrors.map(error => ({
+    return ajvErrors.map((error) => ({
       path: error.instancePath || '/',
       message: error.message || 'Validation failed',
       keyword: error.keyword,
-      params: error.params
+      params: error.params,
     }));
   }
 
   /**
    * Add a custom format validator
    */
-  addFormat(name: string, format: string | RegExp | ((data: string) => boolean)): void {
+  addFormat(
+    name: string,
+    format: string | RegExp | ((data: string) => boolean)
+  ): void {
     this.ajv.addFormat(name, format);
   }
 
@@ -129,7 +137,7 @@ export class JsonValidatorService {
   addKeyword(keyword: string, definition: any): void {
     this.ajv.addKeyword({
       keyword,
-      ...definition
+      ...definition,
     });
   }
 
@@ -149,7 +157,7 @@ export class JsonValidatorService {
     }
 
     return errors
-      .map(error => {
+      .map((error) => {
         const path = error.path || 'root';
         return `${path}: ${error.message}`;
       })

@@ -35,11 +35,15 @@ export class CsvReporterService {
   private async initializeStreams(): Promise<void> {
     // Initialize error CSV stream
     this.errorStream = createWriteStream(this.errorCsvPath, { flags: 'w' });
-    this.errorStream.write('property_cid,data_group_cid,file_path,error,timestamp\n');
+    this.errorStream.write(
+      'property_cid,data_group_cid,file_path,error,timestamp\n'
+    );
 
     // Initialize warning CSV stream
     this.warningStream = createWriteStream(this.warningCsvPath, { flags: 'w' });
-    this.warningStream.write('property_cid,data_group_cid,file_path,reason,timestamp\n');
+    this.warningStream.write(
+      'property_cid,data_group_cid,file_path,reason,timestamp\n'
+    );
 
     // Wait for streams to be ready
     await Promise.all([
@@ -67,9 +71,9 @@ export class CsvReporterService {
 
     const escapedError = this.escapeCsvValue(entry.error);
     const escapedFilePath = this.escapeCsvValue(entry.filePath);
-    
+
     const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedError},${entry.timestamp}\n`;
-    
+
     return new Promise((resolve, reject) => {
       this.errorStream!.write(csvLine, (error) => {
         if (error) {
@@ -89,9 +93,9 @@ export class CsvReporterService {
 
     const escapedReason = this.escapeCsvValue(entry.reason);
     const escapedFilePath = this.escapeCsvValue(entry.filePath);
-    
+
     const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedReason},${entry.timestamp}\n`;
-    
+
     return new Promise((resolve, reject) => {
       this.warningStream!.write(csvLine, (error) => {
         if (error) {
@@ -107,18 +111,22 @@ export class CsvReporterService {
   private escapeCsvValue(value: string): string {
     // Escape double quotes by doubling them
     const escaped = value.replace(/"/g, '""');
-    
+
     // Wrap in quotes if contains comma, newline, or quotes
-    if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('"')) {
+    if (
+      escaped.includes(',') ||
+      escaped.includes('\n') ||
+      escaped.includes('"')
+    ) {
       return `"${escaped}"`;
     }
-    
+
     return escaped;
   }
 
   async finalize(): Promise<ReportSummary> {
     const endTime = new Date();
-    
+
     // Close streams
     await this.closeStreams();
 

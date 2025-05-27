@@ -23,7 +23,7 @@ export class FileScannerService {
 
       // Read directory contents
       const entries = await readdir(directoryPath, { withFileTypes: true });
-      
+
       if (entries.length === 0) {
         errors.push('Directory is empty');
         return { isValid: false, errors };
@@ -38,11 +38,14 @@ export class FileScannerService {
           } else {
             // Check files within the property directory
             const propertyDirPath = join(directoryPath, entry.name);
-            const propertyValidation = await this.validatePropertyDirectory(propertyDirPath);
+            const propertyValidation =
+              await this.validatePropertyDirectory(propertyDirPath);
             errors.push(...propertyValidation.errors);
           }
         } else {
-          errors.push(`Found file ${entry.name} in root directory. Only directories (property CIDs) are allowed.`);
+          errors.push(
+            `Found file ${entry.name} in root directory. Only directories (property CIDs) are allowed.`
+          );
         }
       }
 
@@ -51,17 +54,21 @@ export class FileScannerService {
         errors,
       };
     } catch (error) {
-      errors.push(`Failed to access directory: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(
+        `Failed to access directory: ${error instanceof Error ? error.message : String(error)}`
+      );
       return { isValid: false, errors };
     }
   }
 
-  private async validatePropertyDirectory(propertyDirPath: string): Promise<ValidationResult> {
+  private async validatePropertyDirectory(
+    propertyDirPath: string
+  ): Promise<ValidationResult> {
     const errors: string[] = [];
 
     try {
       const files = await readdir(propertyDirPath, { withFileTypes: true });
-      
+
       if (files.length === 0) {
         errors.push(`Property directory ${propertyDirPath} is empty`);
         return { isValid: false, errors };
@@ -71,19 +78,25 @@ export class FileScannerService {
         if (file.isFile()) {
           // Check if file has .json extension
           if (extname(file.name) !== '.json') {
-            errors.push(`File ${file.name} in ${propertyDirPath} must have .json extension`);
+            errors.push(
+              `File ${file.name} in ${propertyDirPath} must have .json extension`
+            );
             continue;
           }
 
           // Extract data group CID from filename (remove .json extension)
           const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
-          
+
           // Validate data group CID
           if (!this.isValidCid(dataGroupCid)) {
-            errors.push(`Invalid data group CID filename: ${file.name} in ${propertyDirPath}`);
+            errors.push(
+              `Invalid data group CID filename: ${file.name} in ${propertyDirPath}`
+            );
           }
         } else if (file.isDirectory()) {
-          errors.push(`Found subdirectory ${file.name} in property directory ${propertyDirPath}. Only JSON files are allowed.`);
+          errors.push(
+            `Found subdirectory ${file.name} in property directory ${propertyDirPath}. Only JSON files are allowed.`
+          );
         }
       }
 
@@ -92,7 +105,9 @@ export class FileScannerService {
         errors,
       };
     } catch (error) {
-      errors.push(`Failed to access property directory ${propertyDirPath}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(
+        `Failed to access property directory ${propertyDirPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
       return { isValid: false, errors };
     }
   }
@@ -101,7 +116,7 @@ export class FileScannerService {
     // Basic CID validation
     // IPFS CIDs typically start with 'Qm' (CIDv0) or 'b' (CIDv1 base32)
     // They are usually 46 characters for CIDv0 or vary for CIDv1
-    
+
     if (!cid || cid.length < 10) {
       return false;
     }
@@ -124,9 +139,14 @@ export class FileScannerService {
     return false;
   }
 
-  async* scanDirectory(directoryPath: string, batchSize = 1000): AsyncGenerator<FileEntry[]> {
+  async *scanDirectory(
+    directoryPath: string,
+    batchSize = 1000
+  ): AsyncGenerator<FileEntry[]> {
     try {
-      const propertyDirs = await readdir(directoryPath, { withFileTypes: true });
+      const propertyDirs = await readdir(directoryPath, {
+        withFileTypes: true,
+      });
       let batch: FileEntry[] = [];
 
       for (const propertyDir of propertyDirs) {
@@ -163,7 +183,10 @@ export class FileScannerService {
           }
         } catch (error) {
           // Log error but continue processing other directories
-          console.error(`Error scanning property directory ${propertyDirPath}:`, error);
+          console.error(
+            `Error scanning property directory ${propertyDirPath}:`,
+            error
+          );
         }
       }
 
@@ -172,7 +195,9 @@ export class FileScannerService {
         yield batch;
       }
     } catch (error) {
-      throw new Error(`Failed to scan directory ${directoryPath}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to scan directory ${directoryPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

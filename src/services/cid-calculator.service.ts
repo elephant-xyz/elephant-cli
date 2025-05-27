@@ -13,24 +13,26 @@ export class CidCalculatorService {
     try {
       // For CID v0, we need to create a proper UnixFS wrapper
       // This is a simplified version - full implementation would use ipfs-unixfs
-      
+
       // Create UnixFS protobuf for file
       const fileSize = data.length;
       const unixfsData = this.encodeUnixFsFile(data);
-      
+
       // Create DAG-PB wrapper
       const dagPbNode = this.encodeDagPbNode(unixfsData, []);
-      
+
       // Calculate SHA-256 hash
       const hash = await sha256.digest(dagPbNode);
-      
+
       // Create CID v0 (code 0x70 is dag-pb)
       const cid = CID.create(0, 0x70, hash);
-      
+
       // Return base58btc string (Qm...)
       return cid.toString(base58btc);
     } catch (error) {
-      throw new Error(`Failed to calculate CID v0: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to calculate CID v0: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -38,7 +40,7 @@ export class CidCalculatorService {
    * Calculate CIDs for multiple buffers in batch
    */
   async calculateBatch(dataArray: Buffer[]): Promise<string[]> {
-    const promises = dataArray.map(data => this.calculateCidV0(data));
+    const promises = dataArray.map((data) => this.calculateCidV0(data));
     return Promise.all(promises);
   }
 
@@ -55,31 +57,31 @@ export class CidCalculatorService {
   private encodeUnixFsFile(data: Buffer): Uint8Array {
     const encoder = new TextEncoder();
     const chunks: Uint8Array[] = [];
-    
+
     // Field 1: Type = 2 (File)
     chunks.push(new Uint8Array([0x08, 0x02])); // field 1, varint 2
-    
+
     // Field 2: Data (the file content)
     if (data.length > 0) {
       chunks.push(new Uint8Array([0x12])); // field 2, length-delimited
       chunks.push(this.encodeVarint(data.length));
       chunks.push(new Uint8Array(data));
     }
-    
+
     // Field 3: filesize
     chunks.push(new Uint8Array([0x18])); // field 3, varint
     chunks.push(this.encodeVarint(data.length));
-    
+
     // Combine all chunks
     const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const result = new Uint8Array(totalLength);
     let offset = 0;
-    
+
     for (const chunk of chunks) {
       result.set(chunk, offset);
       offset += chunk.length;
     }
-    
+
     return result;
   }
 
@@ -88,27 +90,27 @@ export class CidCalculatorService {
    */
   private encodeDagPbNode(data: Uint8Array, links: any[]): Uint8Array {
     const chunks: Uint8Array[] = [];
-    
+
     // Field 1: Data
     if (data.length > 0) {
       chunks.push(new Uint8Array([0x0a])); // field 1, length-delimited
       chunks.push(this.encodeVarint(data.length));
       chunks.push(data);
     }
-    
+
     // Field 2: Links (empty for simple files)
     // Skip if no links
-    
+
     // Combine all chunks
     const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const result = new Uint8Array(totalLength);
     let offset = 0;
-    
+
     for (const chunk of chunks) {
       result.set(chunk, offset);
       offset += chunk.length;
     }
-    
+
     return result;
   }
 

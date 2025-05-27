@@ -3,7 +3,6 @@ const { canonicalize } = require('json-canonicalize');
 export class JsonCanonicalizerService {
   constructor() {}
 
-
   /**
    * Canonicalize a JSON object according to RFC 8785
    * Returns the canonical JSON string representation
@@ -17,18 +16,20 @@ export class JsonCanonicalizerService {
       if (typeof json === 'function') {
         throw new Error('Cannot canonicalize functions');
       }
-      
+
       // The json-canonicalize library implements RFC 8785
       const result = canonicalize(json);
-      
+
       // Check if canonicalize returned undefined (for unsupported types)
       if (result === undefined) {
         throw new Error('Canonicalization failed for unsupported type');
       }
-      
+
       return result;
     } catch (error) {
-      throw new Error(`Failed to canonicalize JSON: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to canonicalize JSON: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -48,7 +49,9 @@ export class JsonCanonicalizerService {
       const parsed = JSON.parse(jsonString);
       return this.canonicalize(parsed);
     } catch (error) {
-      throw new Error(`Failed to parse or canonicalize JSON string: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to parse or canonicalize JSON string: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -57,7 +60,7 @@ export class JsonCanonicalizerService {
    */
   async canonicalizeBatch(jsonArray: any[]): Promise<string[]> {
     // Process all items synchronously
-    return jsonArray.map(json => this.canonicalize(json));
+    return jsonArray.map((json) => this.canonicalize(json));
   }
 
   /**

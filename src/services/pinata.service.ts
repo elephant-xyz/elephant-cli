@@ -29,22 +29,25 @@ export class PinataService {
   private pinataJwt: string | undefined;
   private uploadQueue: QueueManager<ProcessedFile, UploadResult>;
 
-  private readonly pinataApiUrl = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+  private readonly pinataApiUrl =
+    'https://api.pinata.cloud/pinning/pinFileToIPFS';
 
   constructor(
     pinataJwtOrApiKey: string,
     pinataSecretApiKey?: string,
-    maxConcurrentUploads = 10,
+    maxConcurrentUploads = 10
     // Add retry configuration for the queue manager if it supports it
     // For now, retry logic will be in the uploadFile itself
   ) {
     if (pinataSecretApiKey) {
       this.pinataApiKey = pinataJwtOrApiKey;
       this.pinataSecretApiKey = pinataSecretApiKey;
-      logger.warn('Using Pinata API Key and Secret. Consider migrating to JWT for enhanced security.');
+      logger.warn(
+        'Using Pinata API Key and Secret. Consider migrating to JWT for enhanced security.'
+      );
     } else {
       this.pinataJwt = pinataJwtOrApiKey;
-      this.pinataApiKey = ''; 
+      this.pinataApiKey = '';
       this.pinataSecretApiKey = '';
     }
 
@@ -54,25 +57,34 @@ export class PinataService {
     });
   }
 
-  private async processUpload(fileToProcess: ProcessedFile): Promise<UploadResult> {
-    logger.debug(`Processing upload for ${fileToProcess.filePath} (CID: ${fileToProcess.calculatedCid})`);
+  private async processUpload(
+    fileToProcess: ProcessedFile
+  ): Promise<UploadResult> {
+    logger.debug(
+      `Processing upload for ${fileToProcess.filePath} (CID: ${fileToProcess.calculatedCid})`
+    );
     try {
       const fileContent = await fsPromises.readFile(fileToProcess.filePath);
-      
+
       const metadata: PinMetadata = {
         name: `${fileToProcess.propertyCid}_${fileToProcess.dataGroupCid}.json`, // A descriptive name
         keyvalues: {
           propertyCid: fileToProcess.propertyCid,
           dataGroupCid: fileToProcess.dataGroupCid,
           originalCid: fileToProcess.calculatedCid, // If calculated CID is different from IPFS one
-        }
+        },
       };
 
       // The uploadFile method contains the actual Pinata API call and retry logic
-      return await this.uploadFileInternal(fileContent, metadata, fileToProcess);
-
+      return await this.uploadFileInternal(
+        fileContent,
+        metadata,
+        fileToProcess
+      );
     } catch (error) {
-      logger.error(`Error processing upload for ${fileToProcess.filePath}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(
+        `Error processing upload for ${fileToProcess.filePath}: ${error instanceof Error ? error.message : String(error)}`
+      );
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -90,7 +102,7 @@ export class PinataService {
     fileBuffer: Buffer,
     metadata: PinMetadata,
     originalFileInfo: ProcessedFile, // To pass through property/dataGroup CIDs for result
-    retries: number = 3 
+    retries: number = 3
   ): Promise<UploadResult> {
     const formData = new FormData();
     formData.append('file', fileBuffer, {
@@ -127,12 +139,16 @@ export class PinataService {
 
         if (!response.ok) {
           const errorBody = await response.text();
-          throw new Error(`Pinata API error: ${response.status} ${response.statusText} - ${errorBody}`);
+          throw new Error(
+            `Pinata API error: ${response.status} ${response.statusText} - ${errorBody}`
+          );
         }
 
         const resultJson = (await response.json()) as PinataPinResponse;
-        logger.info(`Successfully uploaded ${metadata.name} to IPFS. CID: ${resultJson.IpfsHash}`);
-        
+        logger.info(
+          `Successfully uploaded ${metadata.name} to IPFS. CID: ${resultJson.IpfsHash}`
+        );
+
         return {
           success: true,
           cid: resultJson.IpfsHash,
@@ -144,16 +160,20 @@ export class PinataService {
         };
       } catch (error) {
         lastError = error as Error;
-        logger.warn(`Upload attempt ${attempt + 1} for ${metadata.name} failed: ${lastError.message}`);
+        logger.warn(
+          `Upload attempt ${attempt + 1} for ${metadata.name} failed: ${lastError.message}`
+        );
         if (attempt < retries) {
           const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
           logger.info(`Retrying in ${delay / 1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
-    
-    logger.error(`Failed to upload ${metadata.name} after ${retries + 1} attempts.`);
+
+    logger.error(
+      `Failed to upload ${metadata.name} after ${retries + 1} attempts.`
+    );
     return {
       success: false,
       error: lastError?.message || 'Unknown upload error',
@@ -161,18 +181,20 @@ export class PinataService {
       dataGroupCid: originalFileInfo.dataGroupCid,
     };
   }
-  
+
   // Public facing uploadFile - might be deprecated if uploadBatch is primary
   public async uploadFile(
-    data: Buffer, 
-    metadata: PinMetadata,
+    data: Buffer,
+    metadata: PinMetadata
     // This version of uploadFile is more generic and doesn't assume ProcessedFile structure
     // It's kept for potential direct use, but processUpload is used by the queue.
   ): Promise<UploadResult> {
     // For this generic version, we don't have originalFileInfo, so pass dummy values or adapt.
     const dummyFileInfo: ProcessedFile = {
-      propertyCid: metadata.keyvalues?.propertyCid as string || 'unknownProperty',
-      dataGroupCid: metadata.keyvalues?.dataGroupCid as string || 'unknownGroup',
+      propertyCid:
+        (metadata.keyvalues?.propertyCid as string) || 'unknownProperty',
+      dataGroupCid:
+        (metadata.keyvalues?.dataGroupCid as string) || 'unknownGroup',
       filePath: metadata.name || 'unknownFile.json',
       canonicalJson: '', // Not relevant for this direct call
       calculatedCid: '', // Not relevant
@@ -186,15 +208,15 @@ export class PinataService {
       return [];
     }
     logger.info(`Queueing ${files.length} files for upload.`);
-    
-    const uploadPromises = files.map(file => this.uploadQueue.push(file));
-    
+
+    const uploadPromises = files.map((file) => this.uploadQueue.push(file));
+
     this.uploadQueue.start();
 
     const results = await Promise.all(uploadPromises);
-    
+
     // Consider if awaiting drain is necessary for the user of this service
-    // await this.uploadQueue.drain(); 
+    // await this.uploadQueue.drain();
 
     return results;
   }
@@ -211,7 +233,7 @@ export class PinataService {
       };
     }
   }
-  
+
   public getQueueStats() {
     return this.uploadQueue.getStats();
   }

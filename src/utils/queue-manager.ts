@@ -59,11 +59,13 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
       data,
       priority: options.priority || 0,
       retries: options.retries || 0,
-      maxRetries: options.maxRetries || 3
+      maxRetries: options.maxRetries || 3,
     };
 
     // Insert based on priority (higher priority first)
-    const insertIndex = this.queue.findIndex(item => item.priority! < task.priority!);
+    const insertIndex = this.queue.findIndex(
+      (item) => item.priority! < task.priority!
+    );
     if (insertIndex === -1) {
       this.queue.push(task);
     } else {
@@ -83,7 +85,7 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
    * Add multiple tasks to the queue
    */
   pushBatch(dataArray: T[], options: Partial<QueueTask<T, R>> = {}): string[] {
-    return dataArray.map(data => this.push(data, options));
+    return dataArray.map((data) => this.push(data, options));
   }
 
   /**
@@ -99,7 +101,10 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
     this.emit('start');
 
     // Process up to concurrency limit
-    const processCount = Math.min(this.concurrency - this.activeCount, this.queue.length);
+    const processCount = Math.min(
+      this.concurrency - this.activeCount,
+      this.queue.length
+    );
     for (let i = 0; i < processCount; i++) {
       this.processNext();
     }
@@ -119,9 +124,12 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
   resume(): void {
     this.isPaused = false;
     this.emit('resume');
-    
+
     // Process any pending tasks
-    const processCount = Math.min(this.concurrency - this.activeCount, this.queue.length);
+    const processCount = Math.min(
+      this.concurrency - this.activeCount,
+      this.queue.length
+    );
     for (let i = 0; i < processCount; i++) {
       this.processNext();
     }
@@ -131,7 +139,13 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
    * Process the next task in the queue
    */
   private async processNext(): Promise<void> {
-    if (!this.processor || this.isPaused || !this.isRunning || this.activeCount >= this.concurrency || this.queue.length === 0) {
+    if (
+      !this.processor ||
+      this.isPaused ||
+      !this.isRunning ||
+      this.activeCount >= this.concurrency ||
+      this.queue.length === 0
+    ) {
       return;
     }
 
@@ -145,14 +159,16 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
       // Set up timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(`Task ${task.id} timed out after ${this.timeout}ms`));
+          reject(
+            new Error(`Task ${task.id} timed out after ${this.timeout}ms`)
+          );
         }, this.timeout);
       });
 
       // Process the task
       const result = await Promise.race([
         this.processor!(task.data),
-        timeoutPromise
+        timeoutPromise,
       ]);
 
       if (timeoutId) clearTimeout(timeoutId);
@@ -160,25 +176,30 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
       const queueResult: QueueResult<R> = {
         id: task.id,
         result,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       };
 
       this.emit('task-complete', queueResult);
     } catch (error) {
       if (timeoutId) clearTimeout(timeoutId);
 
-      const errorObj = error instanceof Error ? error : new Error(String(error));
+      const errorObj =
+        error instanceof Error ? error : new Error(String(error));
 
       // Check if we should retry
       if (task.retries! < task.maxRetries!) {
         task.retries!++;
         this.queue.unshift(task); // Put back at front of queue
-        this.emit('task-retry', { id: task.id, error: errorObj, retries: task.retries });
+        this.emit('task-retry', {
+          id: task.id,
+          error: errorObj,
+          retries: task.retries,
+        });
       } else {
         const queueResult: QueueResult<R> = {
           id: task.id,
           error: errorObj,
-          duration: Date.now() - startTime
+          duration: Date.now() - startTime,
         };
 
         this.emit('task-error', queueResult);
@@ -234,7 +255,7 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
       total: this.queue.length + this.activeCount,
       concurrency: this.concurrency,
       isPaused: this.isPaused,
-      isRunning: this.isRunning
+      isRunning: this.isRunning,
     };
   }
 
@@ -242,14 +263,14 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
    * Get a specific task by ID
    */
   getTask(id: string): QueueTask<T, R> | undefined {
-    return this.queue.find(task => task.id === id);
+    return this.queue.find((task) => task.id === id);
   }
 
   /**
    * Remove a specific task by ID
    */
   removeTask(id: string): boolean {
-    const index = this.queue.findIndex(task => task.id === id);
+    const index = this.queue.findIndex((task) => task.id === id);
     if (index !== -1) {
       this.queue.splice(index, 1);
       this.emit('task-removed', id);
@@ -266,9 +287,17 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
     this.concurrency = concurrency;
 
     // If concurrency increased and we have pending tasks, process more
-    if (concurrency > oldConcurrency && this.queue.length > 0 && !this.isPaused) {
+    if (
+      concurrency > oldConcurrency &&
+      this.queue.length > 0 &&
+      !this.isPaused
+    ) {
       const additionalTasks = concurrency - oldConcurrency;
-      for (let i = 0; i < additionalTasks && this.activeCount < this.concurrency; i++) {
+      for (
+        let i = 0;
+        i < additionalTasks && this.activeCount < this.concurrency;
+        i++
+      ) {
         this.processNext();
       }
     }

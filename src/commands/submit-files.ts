@@ -1,8 +1,12 @@
 import { Command, Option } from 'commander';
-import {promises as fsPromises, existsSync } from 'fs';
+import { promises as fsPromises, existsSync } from 'fs';
 import path from 'path';
 import { DEFAULT_RPC_URL, DEFAULT_CONTRACT_ADDRESS } from '../config/constants'; // Assuming submit contract address might be different
-import { createSubmitConfig, SubmitConfig, DEFAULT_SUBMIT_CONFIG } from '../config/submit.config';
+import {
+  createSubmitConfig,
+  SubmitConfig,
+  DEFAULT_SUBMIT_CONFIG,
+} from '../config/submit.config';
 import { logger } from '../utils/logger';
 import { FileScannerService } from '../services/file-scanner.service';
 // ... import other services as they are integrated
@@ -24,29 +28,63 @@ export interface SubmitFilesCommandOptions {
 export function registerSubmitFilesCommand(program: Command) {
   program
     .command('submit-files <inputDir>')
-    .description('Validate, process, upload, and submit data files to the Elephant Network.')
-    .requiredOption('-k, --private-key <key>', 'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)')
-    .requiredOption('-j, --pinata-jwt <jwt>', 'Pinata JWT for IPFS uploads. (Or set PINATA_JWT env var)')
-    .option('--rpc-url <url>', 'RPC URL for the blockchain network.', process.env.RPC_URL || DEFAULT_RPC_URL)
-    .option('--contract-address <address>', 'Address of the submit smart contract.', process.env.SUBMIT_CONTRACT_ADDRESS || DEFAULT_CONTRACT_ADDRESS /* Placeholder - update if different */)
-    .option('--max-concurrent-uploads <number>', 'Maximum concurrent IPFS uploads.', (val) => parseInt(val, 10))
-    .option('--transaction-batch-size <number>', 'Number of items per blockchain transaction.', (val) => parseInt(val, 10))
-    .option('--dry-run', 'Perform all checks without uploading or submitting transactions.', false)
+    .description(
+      'Validate, process, upload, and submit data files to the Elephant Network.'
+    )
+    .requiredOption(
+      '-k, --private-key <key>',
+      'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)'
+    )
+    .requiredOption(
+      '-j, --pinata-jwt <jwt>',
+      'Pinata JWT for IPFS uploads. (Or set PINATA_JWT env var)'
+    )
+    .option(
+      '--rpc-url <url>',
+      'RPC URL for the blockchain network.',
+      process.env.RPC_URL || DEFAULT_RPC_URL
+    )
+    .option(
+      '--contract-address <address>',
+      'Address of the submit smart contract.',
+      process.env.SUBMIT_CONTRACT_ADDRESS ||
+        DEFAULT_CONTRACT_ADDRESS /* Placeholder - update if different */
+    )
+    .option(
+      '--max-concurrent-uploads <number>',
+      'Maximum concurrent IPFS uploads.',
+      (val) => parseInt(val, 10)
+    )
+    .option(
+      '--transaction-batch-size <number>',
+      'Number of items per blockchain transaction.',
+      (val) => parseInt(val, 10)
+    )
+    .option(
+      '--dry-run',
+      'Perform all checks without uploading or submitting transactions.',
+      false
+    )
     // TODO: Add more options from SubmitConfig as needed (e.g., retries, timeouts)
     .action(async (inputDir, options) => {
       // Resolve environment variables for required options if not provided directly
-      options.privateKey = options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      options.privateKey =
+        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
       if (!options.privateKey) {
-        logger.error('Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.');
+        logger.error(
+          'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.'
+        );
         process.exit(1);
       }
       if (!options.pinataJwt) {
-        logger.error('Error: Pinata JWT is required. Provide via --pinata-jwt or PINATA_JWT env var.');
+        logger.error(
+          'Error: Pinata JWT is required. Provide via --pinata-jwt or PINATA_JWT env var.'
+        );
         process.exit(1);
       }
-      
+
       // Construct full options object including resolved inputDir
       const commandOptions: SubmitFilesCommandOptions = {
         ...options,
@@ -63,7 +101,9 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   logger.info(`RPC URL: ${options.rpcUrl}`);
   logger.info(`Submit Contract Address: ${options.contractAddress}`);
   if (options.dryRun) {
-    logger.warn('DRY RUN active: No files will be uploaded, no transactions will be sent.');
+    logger.warn(
+      'DRY RUN active: No files will be uploaded, no transactions will be sent.'
+    );
   }
 
   // 1. Validate input directory
@@ -74,19 +114,22 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
       process.exit(1);
     }
   } catch (error) {
-    logger.error(`Error accessing input directory ${options.inputDir}: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(
+      `Error accessing input directory ${options.inputDir}: ${error instanceof Error ? error.message : String(error)}`
+    );
     process.exit(1);
   }
-  
+
   // Create submit configuration by overriding defaults with command options
   const submitConfigOverrides: Partial<SubmitConfig> = {};
-  if (options.maxConcurrentUploads) submitConfigOverrides.maxConcurrentUploads = options.maxConcurrentUploads;
-  if (options.transactionBatchSize) submitConfigOverrides.transactionBatchSize = options.transactionBatchSize;
+  if (options.maxConcurrentUploads)
+    submitConfigOverrides.maxConcurrentUploads = options.maxConcurrentUploads;
+  if (options.transactionBatchSize)
+    submitConfigOverrides.transactionBatchSize = options.transactionBatchSize;
   // ... map other options to configOverrides
 
   const config = createSubmitConfig(submitConfigOverrides);
   logger.debug('Submit configuration:', config);
-
 
   // Initialize services
   const fileScannerService = new FileScannerService();
@@ -100,18 +143,19 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   // const csvReporterService = new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
   // await csvReporterService.initialize();
 
-
   // --- Phase 1: Discovery (Task 12.2) ---
   logger.info('Phase 1: Discovery - Scanning files...');
-  const initialValidation = await fileScannerService.validateStructure(options.inputDir);
+  const initialValidation = await fileScannerService.validateStructure(
+    options.inputDir
+  );
   if (!initialValidation.isValid) {
     logger.error('Input directory structure is invalid. Errors:');
-    initialValidation.errors.forEach(err => logger.error(`- ${err}`));
+    initialValidation.errors.forEach((err) => logger.error(`- ${err}`));
     // await csvReporterService.finalize(); // Close CSV streams if open
     process.exit(1);
   }
   logger.info('Directory structure validation passed.');
-  
+
   // const totalFiles = await fileScannerService.countTotalFiles(options.inputDir);
   // logger.info(`Found ${totalFiles} potential files to process.`);
   // Initialize progress tracker here
@@ -128,7 +172,9 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   //   - Update progress
 
   // --- Phase 3: Processing (Task 12.4) ---
-  logger.info('Phase 3: Processing - Canonicalizing, calculating CIDs, checking chain state...');
+  logger.info(
+    'Phase 3: Processing - Canonicalizing, calculating CIDs, checking chain state...'
+  );
   // For each valid file:
   //   - Canonicalize (JsonCanonicalizerService)
   //   - Calculate CID (CidCalculatorService)
@@ -160,4 +206,3 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   // logger.info('Report summary:', reportSummary);
   // Handle checkpoint saving / cleanup
 }
-
