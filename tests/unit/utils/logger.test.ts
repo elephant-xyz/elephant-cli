@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock chalk using factory functions to avoid hoisting issues
 vi.mock('chalk', () => ({
-  __esModule: true, 
-  default: { 
+  __esModule: true,
+  default: {
     blue: vi.fn((text: string) => `blue(${text})`),
     green: vi.fn((text: string) => `green(${text})`),
     red: vi.fn((text: string) => `red(${text})`),
     yellow: vi.fn((text: string) => `yellow(${text})`),
-  }
+  },
 }));
 
 // Import SUT (logger) AFTER the mocks

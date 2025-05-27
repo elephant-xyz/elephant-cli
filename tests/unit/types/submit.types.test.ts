@@ -154,7 +154,7 @@ describe('Submit Types', () => {
     it('should contain complete processing summary', () => {
       const startTime = new Date('2023-01-01T00:00:00.000Z');
       const endTime = new Date('2023-01-01T01:00:00.000Z');
-      
+
       const summary: ReportSummary = {
         totalFiles: 1000,
         processedFiles: 950,

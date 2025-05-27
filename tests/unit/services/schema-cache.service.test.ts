@@ -8,7 +8,10 @@ vi.mock('../../../src/services/ipfs.service', () => ({
   })),
 }));
 
-import { SchemaCacheService, JSONSchema } from '../../../src/services/schema-cache.service';
+import {
+  SchemaCacheService,
+  JSONSchema,
+} from '../../../src/services/schema-cache.service';
 import { IpfsService } from '../../../src/services/ipfs.service';
 
 describe('SchemaCacheService', () => {
@@ -24,7 +27,7 @@ describe('SchemaCacheService', () => {
   describe('cache initialization', () => {
     it('should initialize with empty cache', () => {
       expect(schemaCacheService.has('test-cid')).toBe(false);
-      
+
       const stats = schemaCacheService.getCacheStats();
       expect(stats.size).toBe(0);
       expect(stats.maxSize).toBe(3);
@@ -43,8 +46,13 @@ describe('SchemaCacheService', () => {
     });
 
     it('should return true for cached entries', async () => {
-      const schema: JSONSchema = { type: 'object', properties: { test: { type: 'string' } } };
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: { test: { type: 'string' } },
+      };
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
 
       await schemaCacheService.getSchema('test-cid');
       expect(schemaCacheService.has('test-cid')).toBe(true);
@@ -62,7 +70,9 @@ describe('SchemaCacheService', () => {
         required: ['name'],
       };
 
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
 
       const result = await schemaCacheService.getSchema('test-cid');
 
@@ -73,7 +83,9 @@ describe('SchemaCacheService', () => {
 
     it('should return cached schema on subsequent requests', async () => {
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
 
       // First request
       const result1 = await schemaCacheService.getSchema('test-cid');
@@ -205,12 +217,16 @@ describe('SchemaCacheService', () => {
       const schema2: JSONSchema = { type: 'object', title: 'Schema 2' };
 
       // Pre-cache one schema
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema1)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema1))
+      );
       await schemaCacheService.getSchema('cid1');
 
       // Reset mock to count new calls
       mockDownloadFile.mockClear();
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema2))
+      );
 
       // Preload both - should only download cid2
       const cids = ['cid1', 'cid2'];
@@ -222,7 +238,9 @@ describe('SchemaCacheService', () => {
 
     it('should handle duplicate CIDs in preload list', async () => {
       const schema: JSONSchema = { type: 'object', title: 'Schema' };
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
 
       const cids = ['cid1', 'cid1', 'cid1']; // Duplicates
       await schemaCacheService.preloadSchemas(cids);
@@ -243,7 +261,9 @@ describe('SchemaCacheService', () => {
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)));
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
       const cids = ['cid1', 'cid2'];
       await schemaCacheService.preloadSchemas(cids);
@@ -268,7 +288,9 @@ describe('SchemaCacheService', () => {
       });
 
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
       await schemaCacheService.getSchema('test-cid');
 
       expect(schemaCacheService.getCacheStats()).toEqual({
@@ -279,7 +301,9 @@ describe('SchemaCacheService', () => {
 
     it('should clear cache completely', async () => {
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from(JSON.stringify(schema)));
+      mockDownloadFile.mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(schema))
+      );
       await schemaCacheService.getSchema('test-cid');
 
       expect(schemaCacheService.has('test-cid')).toBe(true);

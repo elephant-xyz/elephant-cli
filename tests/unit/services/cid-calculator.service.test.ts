@@ -20,7 +20,7 @@ describe('CidCalculatorService', () => {
 
     it('should handle empty string', () => {
       const buffer = cidCalculator.stringToBuffer('');
-      
+
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBe(0);
     });
@@ -46,7 +46,7 @@ describe('CidCalculatorService', () => {
 
     it('should calculate consistent CID for same data', async () => {
       const data = Buffer.from('Test data');
-      
+
       const cid1 = await cidCalculator.calculateCidV0(data);
       const cid2 = await cidCalculator.calculateCidV0(data);
 
@@ -93,12 +93,14 @@ describe('CidCalculatorService', () => {
 
       expect(cid).toMatch(/^Qm[a-zA-Z0-9]{44}$/);
       // In a real implementation, you would compare with a known CID
-      // expect(cid).toBe('QmXXX...'); 
+      // expect(cid).toBe('QmXXX...');
     });
 
     it('should throw error for invalid input', async () => {
       // Test with null/undefined (TypeScript would normally prevent this)
-      await expect(cidCalculator.calculateCidV0(null as any)).rejects.toThrow('Failed to calculate CID v0');
+      await expect(cidCalculator.calculateCidV0(null as any)).rejects.toThrow(
+        'Failed to calculate CID v0'
+      );
     });
   });
 
@@ -107,16 +109,16 @@ describe('CidCalculatorService', () => {
       const dataArray = [
         Buffer.from('Data 1'),
         Buffer.from('Data 2'),
-        Buffer.from('Data 3')
+        Buffer.from('Data 3'),
       ];
 
       const cids = await cidCalculator.calculateBatch(dataArray);
 
       expect(cids).toHaveLength(3);
-      cids.forEach(cid => {
+      cids.forEach((cid) => {
         expect(cid).toMatch(/^Qm[a-zA-Z0-9]{44}$/);
       });
-      
+
       // All CIDs should be different
       expect(new Set(cids).size).toBe(3);
     });
@@ -151,16 +153,16 @@ describe('CidCalculatorService', () => {
       const dataArray = [
         Buffer.from('AAA'),
         Buffer.from('BBB'),
-        Buffer.from('CCC')
+        Buffer.from('CCC'),
       ];
 
       const cids = await cidCalculator.calculateBatch(dataArray);
-      
+
       // Calculate individual CIDs to verify order
       const individualCids = await Promise.all([
         cidCalculator.calculateCidV0(dataArray[0]),
         cidCalculator.calculateCidV0(dataArray[1]),
-        cidCalculator.calculateCidV0(dataArray[2])
+        cidCalculator.calculateCidV0(dataArray[2]),
       ]);
 
       expect(cids).toEqual(individualCids);
@@ -170,7 +172,7 @@ describe('CidCalculatorService', () => {
       const dataArray = [
         Buffer.from('Valid data'),
         null as any, // This will cause an error
-        Buffer.from('Another valid data')
+        Buffer.from('Another valid data'),
       ];
 
       await expect(cidCalculator.calculateBatch(dataArray)).rejects.toThrow();
@@ -187,7 +189,7 @@ describe('CidCalculatorService', () => {
 
     it('should calculate same CID for same JSON', async () => {
       const json = { a: 1, b: 2 };
-      
+
       const cid1 = await cidCalculator.calculateCidFromJson(json);
       const cid2 = await cidCalculator.calculateCidFromJson(json);
 
@@ -217,9 +219,9 @@ describe('CidCalculatorService', () => {
             array: [1, 2, 3],
             string: 'test',
             boolean: true,
-            null: null
-          }
-        }
+            null: null,
+          },
+        },
       };
 
       const cid = await cidCalculator.calculateCidFromJson(json);
@@ -250,9 +252,9 @@ describe('CidCalculatorService', () => {
 
   describe('performance', () => {
     it('should handle batch calculation efficiently', async () => {
-      const dataArray = Array(100).fill(null).map((_, i) => 
-        Buffer.from(`Data ${i}`)
-      );
+      const dataArray = Array(100)
+        .fill(null)
+        .map((_, i) => Buffer.from(`Data ${i}`));
 
       const startTime = Date.now();
       const cids = await cidCalculator.calculateBatch(dataArray);

@@ -129,7 +129,6 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   // ... map other options to configOverrides
 
   const config = createSubmitConfig(submitConfigOverrides);
-  logger.debug('Submit configuration:', config);
 
   // Initialize services
   const fileScannerService = new FileScannerService();

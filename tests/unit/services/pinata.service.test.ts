@@ -117,11 +117,9 @@ describe('PinataService', () => {
     // Clear mocks
     // mockFsReadFile.mockClear(); // Removed
     mockFormDataAppend.mockClear();
-    mockFormDataGetHeaders
-      .mockClear()
-      .mockReturnValue({
-        'content-type': 'multipart/form-data; boundary=---123',
-      });
+    mockFormDataGetHeaders.mockClear().mockReturnValue({
+      'content-type': 'multipart/form-data; boundary=---123',
+    });
     mockFetch.mockClear();
     mockQueueManagerPush.mockClear();
     mockQueueManagerStart.mockClear();

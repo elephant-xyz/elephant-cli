@@ -9,7 +9,9 @@ describe('SubmitConfig', () => {
   describe('DEFAULT_SUBMIT_CONFIG', () => {
     it('should have correct default values', () => {
       expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentReads).toBe(100);
-      expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentValidations).toBeGreaterThanOrEqual(1);
+      expect(
+        DEFAULT_SUBMIT_CONFIG.maxConcurrentValidations
+      ).toBeGreaterThanOrEqual(1);
       expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentUploads).toBe(10);
       expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentChainQueries).toBe(20);
 
@@ -30,8 +32,12 @@ describe('SubmitConfig', () => {
       expect(DEFAULT_SUBMIT_CONFIG.chainQueryTimeout).toBe(10 * 1000);
 
       expect(DEFAULT_SUBMIT_CONFIG.errorCsvPath).toBe('./submit_errors.csv');
-      expect(DEFAULT_SUBMIT_CONFIG.warningCsvPath).toBe('./submit_warnings.csv');
-      expect(DEFAULT_SUBMIT_CONFIG.checkpointPath).toBe('./submit_checkpoint.json');
+      expect(DEFAULT_SUBMIT_CONFIG.warningCsvPath).toBe(
+        './submit_warnings.csv'
+      );
+      expect(DEFAULT_SUBMIT_CONFIG.checkpointPath).toBe(
+        './submit_checkpoint.json'
+      );
 
       expect(DEFAULT_SUBMIT_CONFIG.progressUpdateInterval).toBe(500);
       expect(DEFAULT_SUBMIT_CONFIG.enableProgressBar).toBe(true);
@@ -40,7 +46,9 @@ describe('SubmitConfig', () => {
     it('should calculate dynamic defaults correctly', () => {
       // Example: maxConcurrentValidations depends on CPU cores
       const cpus = require('os').cpus().length;
-      expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentValidations).toBe(Math.max(1, cpus - 1));
+      expect(DEFAULT_SUBMIT_CONFIG.maxConcurrentValidations).toBe(
+        Math.max(1, cpus - 1)
+      );
     });
   });
 
@@ -63,7 +71,9 @@ describe('SubmitConfig', () => {
       expect(config.enableProgressBar).toBe(false);
 
       // Check that other defaults are preserved
-      expect(config.maxConcurrentReads).toBe(DEFAULT_SUBMIT_CONFIG.maxConcurrentReads);
+      expect(config.maxConcurrentReads).toBe(
+        DEFAULT_SUBMIT_CONFIG.maxConcurrentReads
+      );
       expect(config.errorCsvPath).toBe(DEFAULT_SUBMIT_CONFIG.errorCsvPath);
     });
 
@@ -73,7 +83,9 @@ describe('SubmitConfig', () => {
       };
       const config = createSubmitConfig(partialOverrides);
       expect(config.maxConcurrentReads).toBe(50);
-      expect(config.maxConcurrentUploads).toBe(DEFAULT_SUBMIT_CONFIG.maxConcurrentUploads); // Stays default
+      expect(config.maxConcurrentUploads).toBe(
+        DEFAULT_SUBMIT_CONFIG.maxConcurrentUploads
+      ); // Stays default
     });
   });
 });

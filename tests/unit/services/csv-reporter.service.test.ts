@@ -14,12 +14,15 @@ describe('CsvReporterService', () => {
 
   beforeEach(async () => {
     // Create unique temporary directory for each test
-    tempDir = join(tmpdir(), `csv-reporter-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    tempDir = join(
+      tmpdir(),
+      `csv-reporter-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    );
     await mkdir(tempDir, { recursive: true });
-    
+
     errorCsvPath = join(tempDir, 'errors.csv');
     warningCsvPath = join(tempDir, 'warnings.csv');
-    
+
     csvReporter = new CsvReporterService(errorCsvPath, warningCsvPath);
   });
 
@@ -55,23 +58,30 @@ describe('CsvReporterService', () => {
       const errorContent = await readFile(errorCsvPath, 'utf-8');
       const warningContent = await readFile(warningCsvPath, 'utf-8');
 
-      expect(errorContent).toBe('property_cid,data_group_cid,file_path,error,timestamp\n');
-      expect(warningContent).toBe('property_cid,data_group_cid,file_path,reason,timestamp\n');
+      expect(errorContent).toBe(
+        'property_cid,data_group_cid,file_path,error,timestamp\n'
+      );
+      expect(warningContent).toBe(
+        'property_cid,data_group_cid,file_path,reason,timestamp\n'
+      );
     });
 
     it('should create directories if they do not exist', async () => {
       const nestedErrorPath = join(tempDir, 'nested', 'errors.csv');
       const nestedWarningPath = join(tempDir, 'other', 'warnings.csv');
-      
-      const nestedCsvReporter = new CsvReporterService(nestedErrorPath, nestedWarningPath);
-      
+
+      const nestedCsvReporter = new CsvReporterService(
+        nestedErrorPath,
+        nestedWarningPath
+      );
+
       await nestedCsvReporter.initialize();
 
       expect(existsSync(nestedErrorPath)).toBe(true);
       expect(existsSync(nestedWarningPath)).toBe(true);
 
       await nestedCsvReporter.finalize();
-      
+
       // Cleanup
       await unlink(nestedErrorPath).catch(() => {});
       await unlink(nestedWarningPath).catch(() => {});
@@ -101,9 +111,11 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(errorCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
+
       expect(lines).toHaveLength(2); // Header + 1 data line
-      expect(lines[1]).toBe('QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,JSON validation failed,2023-01-01T00:00:00.000Z');
+      expect(lines[1]).toBe(
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,JSON validation failed,2023-01-01T00:00:00.000Z'
+      );
       expect(csvReporter.getErrorCount()).toBe(1);
     });
 
@@ -120,8 +132,10 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(errorCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
-      expect(lines[1]).toBe('QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json","Error message, with commas",2023-01-01T00:00:00.000Z');
+
+      expect(lines[1]).toBe(
+        'QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json","Error message, with commas",2023-01-01T00:00:00.000Z'
+      );
     });
 
     it('should escape CSV values containing quotes', async () => {
@@ -137,8 +151,10 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(errorCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
-      expect(lines[1]).toBe('QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,"Error with ""quotes"" in message",2023-01-01T00:00:00.000Z');
+
+      expect(lines[1]).toBe(
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,"Error with ""quotes"" in message",2023-01-01T00:00:00.000Z'
+      );
     });
 
     it('should log multiple error entries', async () => {
@@ -163,13 +179,16 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(errorCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
+
       expect(lines).toHaveLength(3); // Header + 2 data lines
       expect(csvReporter.getErrorCount()).toBe(2);
     });
 
     it('should throw error if not initialized', async () => {
-      const uninitializedReporter = new CsvReporterService('/tmp/test.csv', '/tmp/test2.csv');
+      const uninitializedReporter = new CsvReporterService(
+        '/tmp/test.csv',
+        '/tmp/test2.csv'
+      );
       const errorEntry: ErrorEntry = {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
@@ -178,7 +197,9 @@ describe('CsvReporterService', () => {
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
-      await expect(uninitializedReporter.logError(errorEntry)).rejects.toThrow('CSV reporter not initialized');
+      await expect(uninitializedReporter.logError(errorEntry)).rejects.toThrow(
+        'CSV reporter not initialized'
+      );
     });
   });
 
@@ -200,9 +221,11 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(warningCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
+
       expect(lines).toHaveLength(2); // Header + 1 data line
-      expect(lines[1]).toBe('QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,File already submitted,2023-01-01T00:00:00.000Z');
+      expect(lines[1]).toBe(
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,File already submitted,2023-01-01T00:00:00.000Z'
+      );
       expect(csvReporter.getWarningCount()).toBe(1);
     });
 
@@ -219,12 +242,17 @@ describe('CsvReporterService', () => {
 
       const content = await readFile(warningCsvPath, 'utf-8');
       const lines = content.trim().split('\n');
-      
-      expect(lines[1]).toBe('QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,"Reason with, commas and ""quotes""",2023-01-01T00:00:00.000Z');
+
+      expect(lines[1]).toBe(
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,"Reason with, commas and ""quotes""",2023-01-01T00:00:00.000Z'
+      );
     });
 
     it('should throw error if not initialized', async () => {
-      const uninitializedReporter = new CsvReporterService('/tmp/test.csv', '/tmp/test2.csv');
+      const uninitializedReporter = new CsvReporterService(
+        '/tmp/test.csv',
+        '/tmp/test2.csv'
+      );
       const warningEntry: WarningEntry = {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
@@ -233,7 +261,9 @@ describe('CsvReporterService', () => {
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
-      await expect(uninitializedReporter.logWarning(warningEntry)).rejects.toThrow('CSV reporter not initialized');
+      await expect(
+        uninitializedReporter.logWarning(warningEntry)
+      ).rejects.toThrow('CSV reporter not initialized');
     });
   });
 
@@ -261,10 +291,10 @@ describe('CsvReporterService', () => {
 
       await csvReporter.logError(errorEntry);
       await csvReporter.logWarning(warningEntry);
-      
+
       // Add small delay to ensure time passes
-      await new Promise(resolve => setTimeout(resolve, 1));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1));
+
       const summary = await csvReporter.finalize();
 
       expect(summary.errorCount).toBe(1);
@@ -272,12 +302,14 @@ describe('CsvReporterService', () => {
       expect(summary.duration).toBeGreaterThanOrEqual(0);
       expect(summary.startTime).toBeInstanceOf(Date);
       expect(summary.endTime).toBeInstanceOf(Date);
-      expect(summary.endTime.getTime()).toBeGreaterThanOrEqual(summary.startTime.getTime());
+      expect(summary.endTime.getTime()).toBeGreaterThanOrEqual(
+        summary.startTime.getTime()
+      );
     });
 
     it('should close streams and prevent further writes', async () => {
       const summary = await csvReporter.finalize();
-      
+
       expect(summary).toBeDefined();
 
       // Attempting to log after finalize should throw

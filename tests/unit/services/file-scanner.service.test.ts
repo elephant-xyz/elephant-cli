@@ -11,9 +11,12 @@ describe('FileScannerService', () => {
 
   beforeEach(async () => {
     fileScannerService = new FileScannerService();
-    
+
     // Create unique temporary directory for each test
-    tempDir = join(tmpdir(), `file-scanner-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    tempDir = join(
+      tmpdir(),
+      `file-scanner-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    );
     await mkdir(tempDir, { recursive: true });
   });
 
@@ -33,10 +36,13 @@ describe('FileScannerService', () => {
       // Create valid structure
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
-      
+
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
-      await writeFile(join(propertyDir, `${dataGroupCid}.json`), '{"test": "data"}');
+      await writeFile(
+        join(propertyDir, `${dataGroupCid}.json`),
+        '{"test": "data"}'
+      );
 
       const result = await fileScannerService.validateStructure(tempDir);
 
@@ -46,7 +52,7 @@ describe('FileScannerService', () => {
 
     it('should reject non-existent directory', async () => {
       const nonExistentDir = join(tempDir, 'non-existent');
-      
+
       const result = await fileScannerService.validateStructure(nonExistentDir);
 
       expect(result.isValid).toBe(false);
@@ -79,7 +85,9 @@ describe('FileScannerService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('Found file'))).toBe(true);
+      expect(result.errors.some((err) => err.includes('Found file'))).toBe(
+        true
+      );
     });
 
     it('should reject invalid property CID directory names', async () => {
@@ -89,7 +97,9 @@ describe('FileScannerService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('Invalid property CID'))).toBe(true);
+      expect(
+        result.errors.some((err) => err.includes('Invalid property CID'))
+      ).toBe(true);
     });
 
     it('should reject non-JSON files in property directories', async () => {
@@ -102,20 +112,27 @@ describe('FileScannerService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('.json extension'))).toBe(true);
+      expect(result.errors.some((err) => err.includes('.json extension'))).toBe(
+        true
+      );
     });
 
     it('should reject invalid data group CID filenames', async () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
-      await writeFile(join(propertyDir, 'invalid-cid.json'), '{"test": "data"}');
+      await writeFile(
+        join(propertyDir, 'invalid-cid.json'),
+        '{"test": "data"}'
+      );
 
       const result = await fileScannerService.validateStructure(tempDir);
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('Invalid data group CID'))).toBe(true);
+      expect(
+        result.errors.some((err) => err.includes('Invalid data group CID'))
+      ).toBe(true);
     });
 
     it('should reject subdirectories in property directories', async () => {
@@ -128,7 +145,9 @@ describe('FileScannerService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('subdirectory'))).toBe(true);
+      expect(result.errors.some((err) => err.includes('subdirectory'))).toBe(
+        true
+      );
     });
 
     it('should reject empty property directories', async () => {
@@ -140,7 +159,7 @@ describe('FileScannerService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some(err => err.includes('empty'))).toBe(true);
+      expect(result.errors.some((err) => err.includes('empty'))).toBe(true);
     });
 
     it('should validate multiple property directories', async () => {
@@ -148,14 +167,20 @@ describe('FileScannerService', () => {
       const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
       const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
       const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
-      
+
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
-      
+
       await mkdir(propertyDir1);
       await mkdir(propertyDir2);
-      await writeFile(join(propertyDir1, `${dataGroupCid}.json`), '{"test": "data1"}');
-      await writeFile(join(propertyDir2, `${dataGroupCid}.json`), '{"test": "data2"}');
+      await writeFile(
+        join(propertyDir1, `${dataGroupCid}.json`),
+        '{"test": "data1"}'
+      );
+      await writeFile(
+        join(propertyDir2, `${dataGroupCid}.json`),
+        '{"test": "data2"}'
+      );
 
       const result = await fileScannerService.validateStructure(tempDir);
 
@@ -170,11 +195,17 @@ describe('FileScannerService', () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const dataGroupCid1 = 'QmDataGroupCid123456789012345678901234567';
       const dataGroupCid2 = 'QmDataGroupCid234567890123456789012345678';
-      
+
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
-      await writeFile(join(propertyDir, `${dataGroupCid1}.json`), '{"test": "data1"}');
-      await writeFile(join(propertyDir, `${dataGroupCid2}.json`), '{"test": "data2"}');
+      await writeFile(
+        join(propertyDir, `${dataGroupCid1}.json`),
+        '{"test": "data1"}'
+      );
+      await writeFile(
+        join(propertyDir, `${dataGroupCid2}.json`),
+        '{"test": "data2"}'
+      );
 
       const batches: any[] = [];
       for await (const batch of fileScannerService.scanDirectory(tempDir)) {
@@ -183,7 +214,7 @@ describe('FileScannerService', () => {
 
       expect(batches).toHaveLength(1);
       expect(batches[0]).toHaveLength(2);
-      
+
       const fileEntries = batches[0];
       expect(fileEntries[0]).toEqual({
         propertyCid,
@@ -202,14 +233,20 @@ describe('FileScannerService', () => {
       const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
       const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
       const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
-      
+
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
-      
+
       await mkdir(propertyDir1);
       await mkdir(propertyDir2);
-      await writeFile(join(propertyDir1, `${dataGroupCid}.json`), '{"test": "data1"}');
-      await writeFile(join(propertyDir2, `${dataGroupCid}.json`), '{"test": "data2"}');
+      await writeFile(
+        join(propertyDir1, `${dataGroupCid}.json`),
+        '{"test": "data1"}'
+      );
+      await writeFile(
+        join(propertyDir2, `${dataGroupCid}.json`),
+        '{"test": "data2"}'
+      );
 
       const allEntries: any[] = [];
       for await (const batch of fileScannerService.scanDirectory(tempDir)) {
@@ -217,8 +254,12 @@ describe('FileScannerService', () => {
       }
 
       expect(allEntries).toHaveLength(2);
-      expect(allEntries.some(entry => entry.propertyCid === propertyCid1)).toBe(true);
-      expect(allEntries.some(entry => entry.propertyCid === propertyCid2)).toBe(true);
+      expect(
+        allEntries.some((entry) => entry.propertyCid === propertyCid1)
+      ).toBe(true);
+      expect(
+        allEntries.some((entry) => entry.propertyCid === propertyCid2)
+      ).toBe(true);
     });
 
     it('should respect batch size', async () => {
@@ -230,7 +271,10 @@ describe('FileScannerService', () => {
       // Create 5 files
       for (let i = 0; i < 5; i++) {
         const dataGroupCid = `QmDataGroupCid12345678901234567890123456${i.toString().padStart(2, '0')}`;
-        await writeFile(join(propertyDir, `${dataGroupCid}.json`), `{"test": "data${i}"}`);
+        await writeFile(
+          join(propertyDir, `${dataGroupCid}.json`),
+          `{"test": "data${i}"}`
+        );
       }
 
       const batches: any[] = [];
@@ -248,10 +292,13 @@ describe('FileScannerService', () => {
     it('should skip non-JSON files without throwing', async () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
-      
+
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
-      await writeFile(join(propertyDir, `${dataGroupCid}.json`), '{"test": "data"}');
+      await writeFile(
+        join(propertyDir, `${dataGroupCid}.json`),
+        '{"test": "data"}'
+      );
       await writeFile(join(propertyDir, 'invalid.txt'), 'invalid file');
 
       const allEntries: any[] = [];
@@ -280,19 +327,28 @@ describe('FileScannerService', () => {
       const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
       const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
       const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
-      
+
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
-      
+
       await mkdir(propertyDir1);
       await mkdir(propertyDir2);
-      
+
       // Create 2 files in first property dir
-      await writeFile(join(propertyDir1, `${dataGroupCid}1.json`), '{"test": "data1"}');
-      await writeFile(join(propertyDir1, `${dataGroupCid}2.json`), '{"test": "data2"}');
-      
+      await writeFile(
+        join(propertyDir1, `${dataGroupCid}1.json`),
+        '{"test": "data1"}'
+      );
+      await writeFile(
+        join(propertyDir1, `${dataGroupCid}2.json`),
+        '{"test": "data2"}'
+      );
+
       // Create 1 file in second property dir
-      await writeFile(join(propertyDir2, `${dataGroupCid}3.json`), '{"test": "data3"}');
+      await writeFile(
+        join(propertyDir2, `${dataGroupCid}3.json`),
+        '{"test": "data3"}'
+      );
 
       const totalFiles = await fileScannerService.countTotalFiles(tempDir);
 

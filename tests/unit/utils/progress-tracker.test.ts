@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ProgressTracker, ProcessingPhase } from '../../../src/utils/progress-tracker';
+import {
+  ProgressTracker,
+  ProcessingPhase,
+} from '../../../src/utils/progress-tracker';
 
 describe('ProgressTracker', () => {
   let tracker: ProgressTracker;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    tracker = new ProgressTracker(1000, 100); 
+    tracker = new ProgressTracker(1000, 100);
   });
 
   afterEach(() => {
-    tracker.stop(); 
+    tracker.stop();
     vi.useRealTimers();
   });
 
@@ -41,7 +44,9 @@ describe('ProgressTracker', () => {
       const startHandler = vi.fn();
       tracker.on('start', startHandler);
       tracker.start();
-      expect(startHandler).toHaveBeenCalledWith(expect.objectContaining({ totalFiles: 1000 }));
+      expect(startHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ totalFiles: 1000 })
+      );
     });
 
     it('should emit stop event', () => {
@@ -116,7 +121,7 @@ describe('ProgressTracker', () => {
       tracker.setPhase(ProcessingPhase.SCANNING);
       expect(phaseChangeHandler).toHaveBeenCalledWith({
         from: ProcessingPhase.INITIALIZATION,
-        to: ProcessingPhase.SCANNING
+        to: ProcessingPhase.SCANNING,
       });
     });
 
@@ -147,7 +152,7 @@ describe('ProgressTracker', () => {
       tracker.incrementUploaded(50);
       // Advance time by 5 seconds. History will fill.
       // Oldest samples will have pF=0, newer will have pF=100.
-      vi.advanceTimersByTime(5000); 
+      vi.advanceTimersByTime(5000);
       // @ts-ignore
       tracker.update(); // Force update to calculate rates with full history.
       const metrics = tracker.getMetrics();
@@ -170,37 +175,37 @@ describe('ProgressTracker', () => {
   describe('time estimates', () => {
     it('should calculate estimated time remaining', () => {
       tracker.start();
-      vi.advanceTimersByTime(3000); 
-      tracker.incrementProcessed(100); 
+      vi.advanceTimersByTime(3000);
+      tracker.incrementProcessed(100);
       vi.advanceTimersByTime(3000);
       // @ts-ignore access private method
-      tracker.update(); 
+      tracker.update();
       const metrics = tracker.getMetrics();
-      
+
       // NOTE: If this fails with filesPerSecond being ~10 instead of ~20,
       // it might indicate a change in how ProgressTracker calculates rates,
       // possibly using a wider time window than the intended ~5 seconds from history.
       expect(metrics.filesPerSecond).toBeCloseTo(20, 1); // Allow a bit of leeway, original was 0 decimal places
-      
+
       expect(metrics.estimatedTimeRemaining).toBeGreaterThan(0);
       expect(metrics.estimatedTimeRemaining).not.toBe(Infinity);
-      expect(metrics.estimatedTimeRemaining).toBeCloseTo(45000, -3); 
+      expect(metrics.estimatedTimeRemaining).toBeCloseTo(45000, -3);
     });
 
     it('should handle completed processing', () => {
-      tracker.start(); 
-      tracker.incrementProcessed(1000); 
+      tracker.start();
+      tracker.incrementProcessed(1000);
       // @ts-ignore access private method
-      tracker.update(); 
+      tracker.update();
       const metrics = tracker.getMetrics();
       expect(metrics.estimatedTimeRemaining).toBe(0);
     });
 
     it('should handle zero processing rate for ETR', () => {
       tracker.start();
-      vi.advanceTimersByTime(1000); 
+      vi.advanceTimersByTime(1000);
       // @ts-ignore access private method
-      tracker.update(); 
+      tracker.update();
       const metrics = tracker.getMetrics();
       expect(metrics.estimatedTimeRemaining).toBe(Infinity);
     });
@@ -287,13 +292,14 @@ describe('ProgressTracker', () => {
   describe('history management', () => {
     it('should maintain limited history size and calculate rates', () => {
       tracker.start();
-      for (let i = 0; i < 100; i++) { // More updates than historySize
+      for (let i = 0; i < 100; i++) {
+        // More updates than historySize
         tracker.incrementProcessed(1);
         vi.advanceTimersByTime(100); // This also triggers an update
       }
       const metrics = tracker.getMetrics();
       // Check if rate is still sensible, implying history management works
-      expect(metrics.filesPerSecond).toBeGreaterThan(0); 
+      expect(metrics.filesPerSecond).toBeGreaterThan(0);
     });
   });
 });

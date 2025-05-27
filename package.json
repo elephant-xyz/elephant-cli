@@ -1,77 +1,75 @@
 {
   "name": "@elephant-xyz/cli",
   "version": "1.1.0",
-  "description": "CLI tool for Elephant Network on Polygon",
-  "type": "module",
+  "description": "CLI tool for Elephant Network",
   "main": "dist/index.js",
+  "bin": {
+    "elephant-cli": "./bin/elephant-cli"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc -w",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "clean": "rimraf dist",
+    "prepare": "husky || true",
+    "semantic-release": "semantic-release"
+  },
+  "keywords": [
+    "cli",
+    "blockchain",
+    "polygon",
+    "ipfs"
+  ],
+  "author": "Elephant XYZ",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-progress": "^3.12.0",
+    "commander": "^12.0.0",
+    "ethers": "^6.11.1",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.3.0",
+    "@commitlint/config-conventional": "^19.2.2",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^12.0.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^10.0.3",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^13.0.0",
+    "@types/cli-progress": "^3.11.5",
+    "@types/node": "^20.11.20",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "husky": "^9.0.11",
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
+    "semantic-release": "^23.0.8",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.0"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/elephant-xyz/elephant-cli.git"
+    "url": "https://github.com/elephant-xyz/elephant-cli.git"
   },
   "publishConfig": {
     "access": "public"
   },
-  "bin": {
-    "elephant-cli": "bin/elephant-cli"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "clean": "rm -rf dist",
-    "prepare": "npm run build && husky",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "format": "prettier --write src/**/*.ts",
-    "format:check": "prettier --check src/**/*.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
-  },
   "files": [
-    "dist",
-    "bin",
-    "README.md"
-  ],
-  "preferGlobal": false,
-  "keywords": [
-    "elephant",
-    "polygon",
-    "blockchain",
-    "cli",
-    "ipfs"
-  ],
-  "author": "elepant-xyz",
-  "license": "MIT",
-  "dependencies": {
-    "@ipld/dag-pb": "^4.1.5",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "chalk": "^4.1.2",
-    "commander": "^11.0.0",
-    "ethers": "^6.7.0",
-    "json-canonicalize": "^1.0.6",
-    "multiformats": "^13.3.6",
-    "ora": "^5.4.1"
-  },
-  "devDependencies": {
-    "@commitlint/cli": "^19.6.1",
-    "@commitlint/config-conventional": "^19.6.0",
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "@tsconfig/node22": "^22.0.2",
-    "@types/node": "^20.17.50",
-    "@typescript-eslint/eslint-plugin": "^8.32.1",
-    "@typescript-eslint/parser": "^8.32.1",
-    "@vitest/coverage-v8": "^3.1.4",
-    "@vitest/ui": "^3.1.4",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-prettier": "^5.4.0",
-    "husky": "^9.1.7",
-    "prettier": "^3.5.3",
-    "semantic-release": "^24.2.0",
-    "typescript": "^5.8.3",
-    "vitest": "^3.1.4"
-  }
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ]
 }
