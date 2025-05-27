@@ -44,11 +44,11 @@
   "author": "elepant-xyz",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^4.1.2",
-    "commander": "^11.0.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
     "ethers": "^6.7.0",
     "multiformats": "^13.3.6",
-    "ora": "^5.4.1"
+    "ora": "^8.2.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.1",
