@@ -6,6 +6,7 @@ import {
   DEFAULT_IPFS_GATEWAY,
 } from './config/constants.js';
 import { listAssignments } from './commands/list-assignments.js';
+import { registerSubmitFilesCommand } from './commands/submit-files.js';
 
 const program = new Command();
 
@@ -14,6 +15,7 @@ program
   .description('CLI tool for Elephant Network on Polygon')
   .version('1.0.0');
 
+// Register list-assignments command
 program
   .command('list-assignments')
   .description('List and download elephant assignments from the blockchain')
@@ -28,5 +30,8 @@ program
   .option('-f, --from-block <number>', 'Starting block number', '0')
   .option('-d, --download-dir <path>', 'Download directory', './downloads')
   .action(listAssignments);
+
+// Register submit-files command
+registerSubmitFilesCommand(program);
 
 program.parse();
