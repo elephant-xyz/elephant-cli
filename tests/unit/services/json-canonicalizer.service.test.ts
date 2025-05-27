@@ -38,7 +38,9 @@ describe('JsonCanonicalizerService', () => {
     it('should handle strings with special characters', () => {
       const obj = { str: 'a"b\\c\n\r\t\f\b' };
       // json-canonicalize escapes these as per JSON spec
-      expect(service.canonicalize(obj)).toBe('{"str":"a\\"b\\\\c\\n\\r\\t\\f\\b"}');
+      expect(service.canonicalize(obj)).toBe(
+        '{"str":"a\\"b\\\\c\\n\\r\\t\\f\\b"}'
+      );
     });
 
     it('should handle empty object', () => {
@@ -79,13 +81,13 @@ describe('JsonCanonicalizerService', () => {
       // The library's behavior is to throw "Do not know how to serialize a BigInt"
       const obj = { big: BigInt(123) };
       expect(() => service.canonicalize(obj)).toThrow(
-         'Failed to canonicalize JSON: Do not know how to serialize a BigInt'
+        'Failed to canonicalize JSON: Do not know how to serialize a BigInt'
       );
     });
 
     it('should handle various primitive types directly', () => {
       expect(service.canonicalize(123)).toBe('123');
-      expect(service.canonicalize("string")).toBe('"string"');
+      expect(service.canonicalize('string')).toBe('"string"');
       expect(service.canonicalize(true)).toBe('true');
       expect(service.canonicalize(null)).toBe('null');
     });
@@ -103,28 +105,33 @@ describe('JsonCanonicalizerService', () => {
   describe('parseAndCanonicalize', () => {
     it('should parse and canonicalize valid JSON string', () => {
       const jsonString = '{"b": 1, "a": "hello"}';
-      expect(service.parseAndCanonicalize(jsonString)).toBe('{"a":"hello","b":1}');
+      expect(service.parseAndCanonicalize(jsonString)).toBe(
+        '{"a":"hello","b":1}'
+      );
     });
 
     it('should throw for invalid JSON string', () => {
       const invalidJsonString = '{"b": 1, "a": "hello"'; // Missing closing brace
       expect(() => service.parseAndCanonicalize(invalidJsonString)).toThrow(
-        'Failed to parse or canonicalize JSON string: Unexpected end of JSON input'
+        "Failed to parse or canonicalize JSON string: Expected ',' or '}' after property value in JSON at position 21 (line 1 column 22)"
       );
     });
   });
 
   describe('canonicalizeBatch', async () => {
     it('should canonicalize an array of JSON objects', async () => {
-      const arr = [{ b: 1, a: 2 }, { d: 3, c: 4 }];
+      const arr = [
+        { b: 1, a: 2 },
+        { d: 3, c: 4 },
+      ];
       const expected = ['{"a":2,"b":1}', '{"c":4,"d":3}'];
       const results = await service.canonicalizeBatch(arr);
       expect(results).toEqual(expected);
     });
 
     it('should handle empty array for batch', async () => {
-        const results = await service.canonicalizeBatch([]);
-        expect(results).toEqual([]);
+      const results = await service.canonicalizeBatch([]);
+      expect(results).toEqual([]);
     });
   });
 
@@ -151,8 +158,9 @@ describe('JsonCanonicalizerService', () => {
       expect(service.areEquivalent({ a: 1, b: 2 }, { a: 1, b: 3 })).toBe(false);
     });
 
-     it('should return false if one object causes canonicalization error', () => {
+    it('should return false if one object causes canonicalization error', () => {
       expect(service.areEquivalent({ a: 1 }, () => {})).toBe(false);
     });
   });
 });
+

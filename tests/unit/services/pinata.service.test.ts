@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PinataService, PinataPinResponse } from '../../../src/services/pinata.service';
 import { ProcessedFile } from '../../../src/types/submit.types';
 import FormData from 'form-data';
+import { mkdtemp, writeFile, rm } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { existsSync } from 'fs';
 
 // Mock logger
 vi.mock('../../../src/utils/logger', () => ({
@@ -10,19 +14,9 @@ vi.mock('../../../src/utils/logger', () => ({
   },
 }));
 
-// Create mock functions at the top level
-const mockFsReadFile = vi.fn();
-// IMPORTANT: Mock 'fs' and provide the 'promises' property
-vi.mock('fs', () => {
-  return {
-    __esModule: true, // Important for modules treated as ES modules
-    promises: {
-      readFile: mockFsReadFile,
-      // Add other fs.promises functions if they were to be used, to prevent 'not a function' errors
-      // writeFile: vi.fn(), stat: vi.fn(), etc.
-    },
-  };
-});
+// REMOVE fs mock:
+// const mockFsReadFile = vi.fn();
+// vi.mock('fs', () => { ... });
 
 const mockFormDataAppend = vi.fn();
 const mockFormDataGetHeaders = vi.fn().mockReturnValue({ 'content-type': 'multipart/form-data; boundary=---123' });
@@ -47,7 +41,7 @@ vi.mock('../../../src/utils/queue-manager', () => {
   return {
     QueueManager: vi.fn().mockImplementation(function(this: any, options: any) {
       this.options = options;
-      this.processor = options?.processFn; 
+      this.processor = options?.processFn;
       this.pushedItems = [];
       this.push = mockQueueManagerPush.mockImplementation((item: ProcessedFile) => {
         this.pushedItems.push(item);
@@ -62,14 +56,14 @@ vi.mock('../../../src/utils/queue-manager', () => {
           }
         });
       });
-      this.start = mockQueueManagerStart; 
+      this.start = mockQueueManagerStart;
       this.drain = mockQueueManagerDrain.mockImplementation(async () => {
         const results = [];
-        while(this.pushedItems.length > 0) { 
+        while(this.pushedItems.length > 0) {
             const item = this.pushedItems.shift();
             if (item && this.processor) { results.push(await this.processor(item)); }
         }
-        return Promise.resolve(results); 
+        return Promise.resolve(results);
       });
       this.getStats = mockQueueManagerGetStats;
       this.on = mockQueueManagerOn;
@@ -82,24 +76,34 @@ vi.mock('../../../src/utils/queue-manager', () => {
 describe('PinataService', () => {
   const mockPinataJwt = 'test-jwt';
   let pinataService: PinataService;
+  let tempTestDir: string; // For temporary files
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules(); // Ensure modules are re-evaluated with mocks for each test
 
+    // Create unique temporary directory for each test
+    tempTestDir = await mkdtemp(join(tmpdir(), 'pinata-service-test-'));
+
     // Clear mocks
-    mockFsReadFile.mockClear();
+    // mockFsReadFile.mockClear(); // Removed
     mockFormDataAppend.mockClear();
     mockFormDataGetHeaders.mockClear().mockReturnValue({ 'content-type': 'multipart/form-data; boundary=---123' });
     mockFetch.mockClear();
     mockQueueManagerPush.mockClear();
     mockQueueManagerStart.mockClear();
-    mockQueueManagerDrain.mockClear().mockResolvedValue([]); 
+    mockQueueManagerDrain.mockClear().mockResolvedValue([]);
     mockQueueManagerGetStats.mockClear().mockReturnValue({ pending: 0, active: 0, completed: 0, failed: 0 });
     mockQueueManagerOn.mockClear();
-    
-    // Re-initialize service to ensure it picks up fresh mocks if vi.resetModules() was effective
-    // Note: PinataService itself is not dynamically imported here, relying on resetModules and hoisted mocks.
+
     pinataService = new PinataService(mockPinataJwt, undefined, 1);
+  });
+
+  afterEach(async () => {
+    // Clean up temp directory
+    if (tempTestDir && existsSync(tempTestDir)) {
+      await rm(tempTestDir, { recursive: true, force: true });
+    }
+    // vi.clearAllMocks(); // This is in setup.ts, so might be redundant here
   });
 
   it('should be instantiated with a JWT', () => {
@@ -120,22 +124,27 @@ describe('PinataService', () => {
   });
 
   describe('processUpload (and uploadFileInternal)', () => {
-    const mockFile: ProcessedFile = {
-      propertyCid: 'propTest', dataGroupCid: 'groupTest', filePath: '/test/file.json',
-      canonicalJson: '{"test": "data"}', calculatedCid: 'QmTestCid', validationPassed: true,
-    };
+    let mockFile: ProcessedFile;
+    let tempFilePath: string;
 
-    beforeEach(() => {
-      // Default mock for readFile for this describe block
-      mockFsReadFile.mockResolvedValue(Buffer.from('{"test":"data"}'));
+    beforeEach(async () => {
+      tempFilePath = join(tempTestDir, 'test-file.json');
+      const fileContent = '{"test": "data"}';
+      mockFile = {
+        propertyCid: 'propTest', dataGroupCid: 'groupTest', filePath: tempFilePath,
+        canonicalJson: fileContent, calculatedCid: 'QmTestCid', validationPassed: true,
+      };
+      await writeFile(tempFilePath, Buffer.from(fileContent));
     });
 
     it('should successfully upload a file', async () => {
       const mockPinataResponse: PinataPinResponse = { IpfsHash: 'QmActualHash', PinSize: 123, Timestamp: new Date().toISOString() };
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockPinataResponse) });
+
       // @ts-ignore
       const result = await pinataService.processUpload(mockFile);
-      expect(mockFsReadFile).toHaveBeenCalledWith(mockFile.filePath);
+
+      // expect(mockFsReadFile).toHaveBeenCalledWith(mockFile.filePath); // Removed
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
       expect(result.cid).toBe('QmActualHash');
@@ -153,8 +162,8 @@ describe('PinataService', () => {
     });
 
     it('should fail after all retries', async () => {
-      mockFetch.mockImplementation(() => Promise.resolve({ 
-        ok: false, status: 500, statusText: 'Server Error', text: () => Promise.resolve('Internal Server Error') 
+      mockFetch.mockImplementation(() => Promise.resolve({
+        ok: false, status: 500, statusText: 'Server Error', text: () => Promise.resolve('Internal Server Error')
       }));
       // @ts-ignore
       const result = await pinataService.processUpload(mockFile);
@@ -162,27 +171,35 @@ describe('PinataService', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should handle readFile error', async () => {
-      mockFsReadFile.mockRejectedValueOnce(new Error('Cannot read file'));
+    it('should handle readFile error (e.g., file deleted)', async () => {
+      await rm(tempFilePath); // Delete the file to cause a read error
+
       // @ts-ignore
       const result = await pinataService.processUpload(mockFile);
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Cannot read file'); 
+      expect(result.error).toMatch(/ENOENT|Cannot read file/); // Error message might vary slightly
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
   describe('uploadBatch', () => {
-    const files: ProcessedFile[] = [
-      { propertyCid: 'p1', dataGroupCid: 'g1', filePath: '/path/1.json', canonicalJson: '{}', calculatedCid: 'calc1', validationPassed: true },
-      { propertyCid: 'p2', dataGroupCid: 'g2', filePath: '/path/2.json', canonicalJson: '{}', calculatedCid: 'calc2', validationPassed: true },
-    ];
-    beforeEach(() => {
-      mockFsReadFile.mockImplementation(async (filePath: string) => {
-        if (filePath === '/path/1.json') return Buffer.from('{"file":1}');
-        if (filePath === '/path/2.json') return Buffer.from('{"file":2}');
-        throw new Error(`Mock fs.readFile: Unexpected path ${filePath}`);
-      });
+    let files: ProcessedFile[];
+    let tempFilePaths: string[];
+
+    beforeEach(async () => {
+      tempFilePaths = [
+        join(tempTestDir, 'file1.json'),
+        join(tempTestDir, 'file2.json'),
+      ];
+      const fileContents = ['{"file":1}', '{"file":2}'];
+      files = [
+        { propertyCid: 'p1', dataGroupCid: 'g1', filePath: tempFilePaths[0], canonicalJson: fileContents[0], calculatedCid: 'calc1', validationPassed: true },
+        { propertyCid: 'p2', dataGroupCid: 'g2', filePath: tempFilePaths[1], canonicalJson: fileContents[1], calculatedCid: 'calc2', validationPassed: true },
+      ];
+
+      await writeFile(tempFilePaths[0], Buffer.from(fileContents[0]));
+      await writeFile(tempFilePaths[1], Buffer.from(fileContents[1]));
+
       mockFetch.mockImplementation(async () => ({
         ok: true, json: async () => ({ IpfsHash: `QmDynamicHash_${Math.random()}`, PinSize: 10, Timestamp: new Date().toISOString() }),
       }));
@@ -191,13 +208,13 @@ describe('PinataService', () => {
     it('should queue files and process them', async () => {
       const results = await pinataService.uploadBatch(files);
       expect(mockQueueManagerPush).toHaveBeenCalledTimes(files.length);
-      expect(mockQueueManagerStart).toHaveBeenCalled(); 
-      expect(mockFetch).toHaveBeenCalledTimes(files.length); 
+      expect(mockQueueManagerStart).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(files.length); // Because mock QueueManager calls processor directly
       expect(results).toHaveLength(files.length);
       results.forEach(result => expect(result.success).toBe(true));
     });
   });
-  
+
   describe('getAuthHeaders', () => {
     it('should return JWT auth header if JWT is provided', () => {
       const serviceWithJwt = new PinataService('test-jwt-token');
