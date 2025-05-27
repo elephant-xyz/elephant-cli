@@ -7,13 +7,13 @@ A command-line tool for interacting with the Elephant Network on Polygon blockch
 ### Global Installation
 
 ```bash
-npm install -g @elephant/cli
+npm install -g @elephant-xyz/cli
 ```
 
 ### Using NPX (No Installation Required)
 
 ```bash
-npx @elephant/cli list-assignments --oracle 0xYourElephantAddress
+npx @elephant-xyz/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ List all assignments for an elephant address:
 elephant-cli list-assignments --oracle 0xYourElephantAddress
 
 # Using npx (recommended)
-npx @elephant/cli list-assignments --oracle 0xYourElephantAddress
+npx @elephant-xyz/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
 ### Command Options

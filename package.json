@@ -1,17 +1,24 @@
 {
-  "name": "@elephant/cli",
-  "version": "1.0.0",
+  "name": "@elephant-xyz/cli",
+  "version": "0.0.0-development",
   "description": "CLI tool for Elephant Network on Polygon",
   "type": "module",
   "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elephant-xyz/elephant-cli.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "elephant-cli": "./bin/elephant-cli"
+    "elephant-cli": "bin/elephant-cli"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "prepare": "npm run build",
+    "prepare": "npm run build && husky",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write src/**/*.ts",
@@ -44,6 +51,10 @@
     "ora": "^5.4.1"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@tsconfig/node22": "^22.0.2",
     "@types/node": "^20.17.50",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
@@ -53,7 +64,9 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.0",
+    "husky": "^9.1.7",
     "prettier": "^3.5.3",
+    "semantic-release": "^24.2.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.4"
   }
