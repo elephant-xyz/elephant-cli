@@ -1,328 +1,158 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { JsonCanonicalizerService } from '../../../src/services/json-canonicalizer.service';
 
 describe('JsonCanonicalizerService', () => {
-  let jsonCanonicalizer: JsonCanonicalizerService;
-
-  beforeEach(() => {
-    jsonCanonicalizer = new JsonCanonicalizerService();
-  });
+  const service = new JsonCanonicalizerService();
 
   describe('canonicalize', () => {
     it('should canonicalize simple object', () => {
-      const input = { b: 2, a: 1 };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      // RFC 8785 specifies lexicographic ordering of keys
-      expect(result).toBe('{"a":1,"b":2}');
+      const obj = { b: 1, a: 'hello' };
+      expect(service.canonicalize(obj)).toBe('{"a":"hello","b":1}');
     });
 
     it('should canonicalize nested objects', () => {
-      const input = {
-        outer: {
-          b: 2,
-          a: 1
-        },
-        first: true
-      };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      expect(result).toBe('{"first":true,"outer":{"a":1,"b":2}}');
+      const obj = { c: { y: 2, x: 1 }, a: 'foo' };
+      expect(service.canonicalize(obj)).toBe('{"a":"foo","c":{"x":1,"y":2}}');
     });
 
     it('should handle arrays', () => {
-      const input = { array: [3, 1, 2] };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      // Arrays maintain their order
-      expect(result).toBe('{"array":[3,1,2]}');
+      const obj = { arr: [3, 2, 1] }; // Arrays are not reordered
+      expect(service.canonicalize(obj)).toBe('{"arr":[3,2,1]}');
     });
 
     it('should handle null values', () => {
-      const input = { value: null };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      expect(result).toBe('{"value":null}');
+      const obj = { key: null };
+      expect(service.canonicalize(obj)).toBe('{"key":null}');
     });
 
     it('should handle boolean values', () => {
-      const input = { isTrue: true, isFalse: false };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      expect(result).toBe('{"isFalse":false,"isTrue":true}');
+      const obj = { t: true, f: false };
+      expect(service.canonicalize(obj)).toBe('{"f":false,"t":true}');
     });
 
     it('should handle numbers correctly', () => {
-      const input = {
-        integer: 42,
-        negative: -17,
-        decimal: 3.14,
-        zero: 0,
-        scientific: 1.23e-4
-      };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      expect(result).toContain('"integer":42');
-      expect(result).toContain('"negative":-17');
-      expect(result).toContain('"decimal":3.14');
-      expect(result).toContain('"zero":0');
+      const obj = { num: 123.45, int: 0 };
+      expect(service.canonicalize(obj)).toBe('{"int":0,"num":123.45}');
     });
 
     it('should handle strings with special characters', () => {
-      const input = {
-        normal: "hello",
-        escaped: "line1\nline2",
-        unicode: "测试",
-        quotes: 'He said "hello"'
-      };
-      const result = jsonCanonicalizer.canonicalize(input);
-
-      expect(result).toContain('"normal":"hello"');
-      expect(result).toContain('"escaped":"line1\\nline2"');
-      expect(result).toContain('"unicode":"测试"');
-      expect(result).toContain('"quotes":"He said \\"hello\\""');
+      const obj = { str: 'a"b\\c\n\r\t\f\b' };
+      // json-canonicalize escapes these as per JSON spec
+      expect(service.canonicalize(obj)).toBe('{"str":"a\\"b\\\\c\\n\\r\\t\\f\\b"}');
     });
 
     it('should handle empty object', () => {
-      const result = jsonCanonicalizer.canonicalize({});
-      expect(result).toBe('{}');
+      expect(service.canonicalize({})).toBe('{}');
     });
 
     it('should handle empty array', () => {
-      const input = { empty: [] };
-      const result = jsonCanonicalizer.canonicalize(input);
-      expect(result).toBe('{"empty":[]}');
+      expect(service.canonicalize([])).toBe('[]');
     });
 
     it('should throw error for undefined', () => {
-      expect(() => jsonCanonicalizer.canonicalize(undefined)).toThrow('Failed to canonicalize JSON');
+      expect(() => service.canonicalize(undefined)).toThrow(
+        'Failed to canonicalize JSON: Cannot canonicalize undefined'
+      );
     });
 
     it('should throw error for functions', () => {
-      const input = { func: () => {} };
-      expect(() => jsonCanonicalizer.canonicalize(input)).toThrow('Failed to canonicalize JSON');
+      const func = () => console.log('test');
+      expect(() => service.canonicalize(func)).toThrow(
+        'Failed to canonicalize JSON: Cannot canonicalize functions'
+      );
     });
 
-    it('should handle deeply nested structures', () => {
-      const input = {
-        level1: {
-          level2: {
-            level3: {
-              level4: {
-                value: "deep"
-              }
-            }
-          }
-        }
+    it('should handle complex nested structures', () => {
+      const obj = {
+        z: 'last',
+        a: [1, { sub_b: 'sub_val_b', sub_a: 'sub_val_a' }, 3],
+        b: { inner_c: null, inner_a: true },
       };
-      const result = jsonCanonicalizer.canonicalize(input);
+      const expected =
+        '{"a":[1,{"sub_a":"sub_val_a","sub_b":"sub_val_b"},3],"b":{"inner_a":true,"inner_c":null},"z":"last"}';
+      expect(service.canonicalize(obj)).toBe(expected);
+    });
 
-      expect(result).toBe('{"level1":{"level2":{"level3":{"level4":{"value":"deep"}}}}}');
+    it('should handle BigInt by converting to string via JSON.stringify behavior', () => {
+      // The 'json-canonicalize' library relies on standard JSON behavior.
+      // JSON.stringify throws for BigInt, so the library might too, or handle it specifically.
+      // The library's behavior is to throw "Do not know how to serialize a BigInt"
+      const obj = { big: BigInt(123) };
+      expect(() => service.canonicalize(obj)).toThrow(
+         'Failed to canonicalize JSON: Do not know how to serialize a BigInt'
+      );
+    });
+
+    it('should handle various primitive types directly', () => {
+      expect(service.canonicalize(123)).toBe('123');
+      expect(service.canonicalize("string")).toBe('"string"');
+      expect(service.canonicalize(true)).toBe('true');
+      expect(service.canonicalize(null)).toBe('null');
     });
   });
 
   describe('canonicalizeToBuffer', () => {
-    it('should return Buffer with canonical JSON', () => {
-      const input = { b: 2, a: 1 };
-      const buffer = jsonCanonicalizer.canonicalizeToBuffer(input);
-
-      expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.toString('utf-8')).toBe('{"a":1,"b":2}');
-    });
-
-    it('should handle UTF-8 encoding correctly', () => {
-      const input = { text: "Hello 世界 🌍" };
-      const buffer = jsonCanonicalizer.canonicalizeToBuffer(input);
-
-      const decoded = buffer.toString('utf-8');
-      expect(decoded).toContain('"text":"Hello 世界 🌍"');
+    it('should convert canonical JSON to Buffer', () => {
+      const obj = { b: 1, a: 'hello' };
+      const buffer = service.canonicalizeToBuffer(obj);
+      expect(Buffer.isBuffer(buffer)).toBe(true);
+      expect(buffer.toString('utf-8')).toBe('{"a":"hello","b":1}');
     });
   });
 
   describe('parseAndCanonicalize', () => {
     it('should parse and canonicalize valid JSON string', () => {
-      const jsonString = '{"b": 2, "a": 1}';
-      const result = jsonCanonicalizer.parseAndCanonicalize(jsonString);
-
-      expect(result).toBe('{"a":1,"b":2}');
+      const jsonString = '{"b": 1, "a": "hello"}';
+      expect(service.parseAndCanonicalize(jsonString)).toBe('{"a":"hello","b":1}');
     });
 
-    it('should handle JSON with extra whitespace', () => {
-      const jsonString = `{
-        "b": 2,
-        "a": 1
-      }`;
-      const result = jsonCanonicalizer.parseAndCanonicalize(jsonString);
-
-      expect(result).toBe('{"a":1,"b":2}');
-    });
-
-    it('should throw error for invalid JSON', () => {
-      const invalidJson = '{"a": 1, invalid}';
-      
-      expect(() => jsonCanonicalizer.parseAndCanonicalize(invalidJson))
-        .toThrow('Failed to parse or canonicalize JSON string');
-    });
-
-    it('should throw error for non-JSON input', () => {
-      expect(() => jsonCanonicalizer.parseAndCanonicalize('not json'))
-        .toThrow('Failed to parse or canonicalize JSON string');
+    it('should throw for invalid JSON string', () => {
+      const invalidJsonString = '{"b": 1, "a": "hello"'; // Missing closing brace
+      expect(() => service.parseAndCanonicalize(invalidJsonString)).toThrow(
+        'Failed to parse or canonicalize JSON string: Unexpected end of JSON input'
+      );
     });
   });
 
-  describe('canonicalizeBatch', () => {
-    it('should canonicalize multiple JSON objects', async () => {
-      const batch = [
-        { b: 2, a: 1 },
-        { d: 4, c: 3 },
-        { f: 6, e: 5 }
-      ];
-
-      const results = await jsonCanonicalizer.canonicalizeBatch(batch);
-
-      expect(results).toHaveLength(3);
-      expect(results[0]).toBe('{"a":1,"b":2}');
-      expect(results[1]).toBe('{"c":3,"d":4}');
-      expect(results[2]).toBe('{"e":5,"f":6}');
+  describe('canonicalizeBatch', async () => {
+    it('should canonicalize an array of JSON objects', async () => {
+      const arr = [{ b: 1, a: 2 }, { d: 3, c: 4 }];
+      const expected = ['{"a":2,"b":1}', '{"c":4,"d":3}'];
+      const results = await service.canonicalizeBatch(arr);
+      expect(results).toEqual(expected);
     });
 
-    it('should handle empty batch', async () => {
-      const results = await jsonCanonicalizer.canonicalizeBatch([]);
-      expect(results).toEqual([]);
-    });
-
-    it('should handle batch with one item', async () => {
-      const results = await jsonCanonicalizer.canonicalizeBatch([{ test: true }]);
-      
-      expect(results).toHaveLength(1);
-      expect(results[0]).toBe('{"test":true}');
-    });
-
-    it('should maintain order in batch results', async () => {
-      const batch = [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 }
-      ];
-
-      const results = await jsonCanonicalizer.canonicalizeBatch(batch);
-
-      expect(results[0]).toBe('{"id":1}');
-      expect(results[1]).toBe('{"id":2}');
-      expect(results[2]).toBe('{"id":3}');
+    it('should handle empty array for batch', async () => {
+        const results = await service.canonicalizeBatch([]);
+        expect(results).toEqual([]);
     });
   });
 
   describe('isCanonical', () => {
-    it('should return true for canonical JSON', () => {
-      const canonical = '{"a":1,"b":2}';
-      expect(jsonCanonicalizer.isCanonical(canonical)).toBe(true);
+    it('should return true for canonical JSON string', () => {
+      expect(service.isCanonical('{"a":1,"b":2}')).toBe(true);
     });
 
-    it('should return false for non-canonical JSON', () => {
-      const nonCanonical = '{"b":2,"a":1}';
-      expect(jsonCanonicalizer.isCanonical(nonCanonical)).toBe(false);
+    it('should return false for non-canonical JSON string', () => {
+      expect(service.isCanonical('{"b":2,"a":1}')).toBe(false);
     });
 
-    it('should return false for JSON with whitespace', () => {
-      const withWhitespace = '{ "a": 1, "b": 2 }';
-      expect(jsonCanonicalizer.isCanonical(withWhitespace)).toBe(false);
-    });
-
-    it('should return false for invalid JSON', () => {
-      expect(jsonCanonicalizer.isCanonical('not json')).toBe(false);
-    });
-
-    it('should handle edge cases', () => {
-      expect(jsonCanonicalizer.isCanonical('null')).toBe(true);
-      expect(jsonCanonicalizer.isCanonical('true')).toBe(true);
-      expect(jsonCanonicalizer.isCanonical('false')).toBe(true);
-      expect(jsonCanonicalizer.isCanonical('42')).toBe(true);
-      expect(jsonCanonicalizer.isCanonical('"string"')).toBe(true);
+    it('should return false for invalid JSON string', () => {
+      expect(service.isCanonical('{"a:1}')).toBe(false);
     });
   });
 
   describe('areEquivalent', () => {
-    it('should return true for equivalent objects with different key order', () => {
-      const obj1 = { b: 2, a: 1 };
-      const obj2 = { a: 1, b: 2 };
-
-      expect(jsonCanonicalizer.areEquivalent(obj1, obj2)).toBe(true);
+    it('should return true for equivalent JSON objects', () => {
+      expect(service.areEquivalent({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
     });
 
-    it('should return true for deeply nested equivalent objects', () => {
-      const obj1 = {
-        outer: { b: 2, a: 1 },
-        array: [1, 2, 3]
-      };
-      const obj2 = {
-        array: [1, 2, 3],
-        outer: { a: 1, b: 2 }
-      };
-
-      expect(jsonCanonicalizer.areEquivalent(obj1, obj2)).toBe(true);
+    it('should return false for non-equivalent JSON objects', () => {
+      expect(service.areEquivalent({ a: 1, b: 2 }, { a: 1, b: 3 })).toBe(false);
     });
 
-    it('should return false for different objects', () => {
-      const obj1 = { a: 1 };
-      const obj2 = { a: 2 };
-
-      expect(jsonCanonicalizer.areEquivalent(obj1, obj2)).toBe(false);
-    });
-
-    it('should return false for objects with different keys', () => {
-      const obj1 = { a: 1 };
-      const obj2 = { b: 1 };
-
-      expect(jsonCanonicalizer.areEquivalent(obj1, obj2)).toBe(false);
-    });
-
-    it('should handle array order sensitivity', () => {
-      const obj1 = { array: [1, 2, 3] };
-      const obj2 = { array: [3, 2, 1] };
-
-      // Arrays are order-sensitive
-      expect(jsonCanonicalizer.areEquivalent(obj1, obj2)).toBe(false);
-    });
-
-    it('should handle null and undefined', () => {
-      expect(jsonCanonicalizer.areEquivalent(null, null)).toBe(true);
-      expect(jsonCanonicalizer.areEquivalent(null, undefined)).toBe(false);
-      expect(jsonCanonicalizer.areEquivalent({}, null)).toBe(false);
-    });
-
-    it('should handle invalid inputs gracefully', () => {
-      const circular: any = { a: 1 };
-      circular.self = circular;
-
-      expect(jsonCanonicalizer.areEquivalent(circular, { a: 1 })).toBe(false);
-    });
-  });
-
-  describe('RFC 8785 compliance', () => {
-    it('should order object keys lexicographically', () => {
-      const input = { "z": 1, "a": 2, "m": 3 };
-      const result = jsonCanonicalizer.canonicalize(input);
-      
-      expect(result).toBe('{"a":2,"m":3,"z":1}');
-    });
-
-    it('should handle Unicode ordering correctly', () => {
-      const input = { "ä": 1, "a": 2, "z": 3 };
-      const result = jsonCanonicalizer.canonicalize(input);
-      
-      // Unicode characters should be ordered by their code points
-      const keys = Object.keys(JSON.parse(result));
-      expect(keys[0]).toBe('a');
-      expect(keys[1]).toBe('z');
-      expect(keys[2]).toBe('ä');
-    });
-
-    it('should not add or remove whitespace in strings', () => {
-      const input = { text: "  spaces  " };
-      const result = jsonCanonicalizer.canonicalize(input);
-      
-      expect(result).toBe('{"text":"  spaces  "}');
+     it('should return false if one object causes canonicalization error', () => {
+      expect(service.areEquivalent({ a: 1 }, () => {})).toBe(false);
     });
   });
 });

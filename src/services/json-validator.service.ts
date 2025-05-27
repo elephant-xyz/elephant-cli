@@ -20,15 +20,17 @@ export class JsonValidatorService {
 
   constructor() {
     // Initialize AJV with draft-07 support
-    this.ajv = new Ajv({
+    // Explicitly use 'new Ajv()'
+    const ajvInstance = new Ajv({
       strict: false, // Allow draft-07 schemas
       allErrors: true, // Report all errors, not just the first one
       verbose: true, // Include data in errors
-      validateFormats: true,
+      validateFormats: true, // This is the default with ajv-formats but good to be explicit
     });
 
     // Add format validators (date, time, email, etc.)
-    addFormats(this.ajv);
+    addFormats(ajvInstance);
+    this.ajv = ajvInstance;
 
     // Cache compiled validators for reuse
     this.validators = new Map();
@@ -101,6 +103,10 @@ export class JsonValidatorService {
     let validator = this.validators.get(cacheKey);
 
     if (!validator) {
+      if (!this.ajv || typeof this.ajv.compile !== 'function') {
+        // This check helps identify if ajv is not correctly initialized
+        throw new Error('Ajv instance or compile method is not available.');
+      }
       // Compile the schema
       validator = this.ajv.compile(schema);
       this.validators.set(cacheKey, validator);

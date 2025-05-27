@@ -68,7 +68,7 @@ export class ProgressTracker extends EventEmitter {
   constructor(totalFiles: number, updateFrequency = 1000) {
     super();
 
-    this.startTime = new Date();
+    this.startTime = new Date(); // Should be Date.now() when using fake timers
     this.phaseStartTime = new Date();
     this.lastUpdateTime = new Date();
     this.updateFrequency = updateFrequency;
@@ -89,7 +89,7 @@ export class ProgressTracker extends EventEmitter {
 
       elapsedTime: 0,
       estimatedTimeRemaining: 0,
-      estimatedCompletion: new Date(),
+      estimatedCompletion: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default to 1 year in future
 
       currentPhase: ProcessingPhase.INITIALIZATION,
       phaseProgress: 0,
@@ -107,6 +107,8 @@ export class ProgressTracker extends EventEmitter {
    * Start the progress tracker
    */
   start(): void {
+    // When using fake timers, ensure Date.now() is what we expect.
+    // Vitest patches global Date, so new Date() should use the fake time.
     this.startTime = new Date();
     this.phaseStartTime = new Date();
     this.lastUpdateTime = new Date();
@@ -136,7 +138,7 @@ export class ProgressTracker extends EventEmitter {
    * Update progress metrics
    */
   private update(): void {
-    const now = Date.now();
+    const now = Date.now(); // This should be the fake time
     const elapsedTime = now - this.startTime.getTime();
 
     // Update elapsed time
@@ -144,7 +146,7 @@ export class ProgressTracker extends EventEmitter {
 
     // Add to history
     this.history.push({
-      timestamp: now,
+      timestamp: now, // Use fake Date.now()
       processedFiles: this.metrics.processedFiles,
       uploadedFiles: this.metrics.uploadedFiles,
       validFiles: this.metrics.validFiles,
@@ -175,30 +177,61 @@ export class ProgressTracker extends EventEmitter {
    */
   private calculateRates(): void {
     if (this.history.length < 2) {
+      this.metrics.filesPerSecond = 0;
+      this.metrics.uploadsPerSecond = 0;
+      this.metrics.validationRate = 0;
       return;
     }
 
-    // Get samples from 5 seconds ago (or oldest available)
-    const targetTime = Date.now() - 5000;
+    const currentTime = Date.now(); // Use fake Date.now()
+    const fiveSecondsAgo = currentTime - 5000;
+    
     let oldSample = this.history[0];
+    // Find the oldest sample that is still within the last 5 seconds,
+    // or the very first sample if all are older than 5 seconds.
+    // This logic might be slightly off; we want a sample *around* 5s ago.
+    // A simpler approach for rate: use the oldest sample in history if history is not full,
+    // or a sample from a fixed window if history is full.
 
-    for (const sample of this.history) {
-      if (sample.timestamp >= targetTime) {
-        break;
-      }
-      oldSample = sample;
+    // Let's use the first and last points in the current history window for simplicity if it's not empty
+    // Or, more robustly, a point from ~5s ago.
+    let sampleFromApprox5SecAgo = this.history.find(s => s.timestamp <= fiveSecondsAgo);
+    if (!sampleFromApprox5SecAgo) {
+        // If no sample is that old (e.g. less than 5s of history), use the oldest one.
+        sampleFromApprox5SecAgo = this.history[0];
+    }
+    // Ensure oldSample is not the same as currentSample if history has multiple entries
+    if (sampleFromApprox5SecAgo === this.history[this.history.length -1] && this.history.length > 1) {
+        sampleFromApprox5SecAgo = this.history[this.history.length -2];
     }
 
-    const currentSample = this.history[this.history.length - 1];
-    const timeDiff = (currentSample.timestamp - oldSample.timestamp) / 1000; // seconds
 
-    if (timeDiff > 0) {
+    const currentSample = this.history[this.history.length - 1];
+    // Ensure oldSample is truly older than currentSample for timeDiff calculation
+    const effectiveOldSample = (currentSample.timestamp > sampleFromApprox5SecAgo.timestamp) ? sampleFromApprox5SecAgo : (this.history.length > 1 ? this.history[0] : currentSample) ;
+
+
+    const timeDiffSeconds = (currentSample.timestamp - effectiveOldSample.timestamp) / 1000;
+
+    if (timeDiffSeconds > 0) {
       this.metrics.filesPerSecond =
-        (currentSample.processedFiles - oldSample.processedFiles) / timeDiff;
+        (currentSample.processedFiles - effectiveOldSample.processedFiles) / timeDiffSeconds;
       this.metrics.uploadsPerSecond =
-        (currentSample.uploadedFiles - oldSample.uploadedFiles) / timeDiff;
+        (currentSample.uploadedFiles - effectiveOldSample.uploadedFiles) / timeDiffSeconds;
       this.metrics.validationRate =
-        (currentSample.validFiles - oldSample.validFiles) / timeDiff;
+        (currentSample.validFiles - effectiveOldSample.validFiles) / timeDiffSeconds;
+    } else {
+      // If no time has passed or only one sample, rates are 0 (or could be based on total elapsed time for an average)
+      const elapsedTimeSeconds = (currentTime - this.startTime.getTime()) / 1000;
+      if (elapsedTimeSeconds > 0) {
+          this.metrics.filesPerSecond = this.metrics.processedFiles / elapsedTimeSeconds;
+          this.metrics.uploadsPerSecond = this.metrics.uploadedFiles / elapsedTimeSeconds;
+          this.metrics.validationRate = this.metrics.validFiles / elapsedTimeSeconds;
+      } else {
+          this.metrics.filesPerSecond = 0;
+          this.metrics.uploadsPerSecond = 0;
+          this.metrics.validationRate = 0;
+      }
     }
   }
 
