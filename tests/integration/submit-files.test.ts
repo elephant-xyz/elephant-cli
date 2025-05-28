@@ -123,41 +123,17 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
     ) as vi.Mocked<InstanceType<typeof IPFSService>>;
 
     // Define behavior for mocked service methods
-    mockPinataServiceInstance.uploadBatch = vi.fn();
-    mockPinataServiceInstance.getQueueStats = vi
+    mockPinataServiceInstance.uploadBatch = vi
       .fn()
-      .mockReturnValue({ pending: 0, active: 0, completed: 0, total: 0 });
-    (mockPinataServiceInstance as any).uploadQueue = {
-      on: vi.fn(),
-      off: vi.fn(),
-      drain: vi.fn().mockResolvedValue(undefined),
-    }; // Add drain if PinataService uses it like p-queue
-    mockPinataServiceInstance.drainQueue = vi
-      .fn()
-      .mockImplementation(async () => {
-        // Manually trigger task_completed events for each uploaded file
-        // This simulates what would happen after uploadBatch completes
-        const lastUploadCall =
-          mockPinataServiceInstance.uploadBatch.mock.calls[
-            mockPinataServiceInstance.uploadBatch.mock.calls.length - 1
-          ];
-        if (lastUploadCall) {
-          const filesToUpload = lastUploadCall[0] as ProcessedFile[];
-          const uploadedCids = ['zdpuploadedFile1Cid', 'zdpuploadedFile2Cid'];
-
-          filesToUpload.forEach((file, index) => {
-            const taskCompletedCallback =
-              mockPinataServiceInstance.uploadQueue.on.mock.calls.find(
-                (call) => call[0] === 'task_completed'
-              )?.[1];
-            if (taskCompletedCallback) {
-              taskCompletedCallback({
-                task: file,
-                result: { success: true, cid: uploadedCids[index] },
-              });
-            }
-          });
-        }
+      .mockImplementation(async (files: ProcessedFile[]) => {
+        // Return successful upload results for all files
+        const uploadedCids = ['zdpuploadedFile1Cid', 'zdpuploadedFile2Cid'];
+        return files.map((file, index) => ({
+          success: true,
+          cid: uploadedCids[index] || `uploadedFile${index}Cid`,
+          propertyCid: file.propertyCid,
+          dataGroupCid: file.dataGroupCid,
+        }));
       });
 
     mockChainStateServiceInstance.getCurrentDataCid = vi

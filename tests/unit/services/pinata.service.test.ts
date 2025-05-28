@@ -39,69 +39,15 @@ vi.mock('form-data', () => {
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// Spies for QueueManager methods that PinataService will call
-const mockQueueManagerPush = vi.fn();
-const mockQueueManagerStart = vi.fn();
-const mockQueueManagerDrain = vi.fn();
-const mockQueueManagerGetStats = vi.fn(() => ({
-  pending: 0,
-  active: 0,
-  completed: 0,
-  failed: 0,
-}));
-const mockQueueManagerOn = vi.fn();
-
-vi.mock('../../../src/utils/queue-manager', () => {
-  return {
-    QueueManager: vi.fn().mockImplementation(function (
-      this: any,
-      options: any
-    ) {
-      this.options = options;
-      this.processor = options?.processFn;
-      this.pushedItems = [];
-      this.push = mockQueueManagerPush.mockImplementation(
-        (item: ProcessedFile) => {
-          this.pushedItems.push(item);
-          return new Promise(async (resolve, reject) => {
-            if (this.processor) {
-              try {
-                const result = await this.processor(item);
-                resolve(result);
-              } catch (e) {
-                reject(e);
-              }
-            } else {
-              resolve({
-                success: false,
-                error: 'Mock QueueManager: No processor set',
-                propertyCid: item.propertyCid,
-                dataGroupCid: item.dataGroupCid,
-              });
-            }
-          });
-        }
-      );
-      this.start = mockQueueManagerStart;
-      this.drain = mockQueueManagerDrain.mockImplementation(async () => {
-        const results = [];
-        while (this.pushedItems.length > 0) {
-          const item = this.pushedItems.shift();
-          if (item && this.processor) {
-            results.push(await this.processor(item));
-          }
-        }
-        return Promise.resolve(results);
-      });
-      this.getStats = mockQueueManagerGetStats;
-      this.on = mockQueueManagerOn;
-      this.setProcessor = vi.fn((processorFunc) => {
-        this.processor = processorFunc;
-      });
-      return this;
+// Mock async-mutex Semaphore
+const mockSemaphoreRunExclusive = vi.fn();
+vi.mock('async-mutex', () => ({
+  Semaphore: vi.fn().mockImplementation(() => ({
+    runExclusive: mockSemaphoreRunExclusive.mockImplementation(async (fn) => {
+      return await fn();
     }),
-  };
-});
+  })),
+}));
 
 describe('PinataService', () => {
   const mockPinataJwt = 'test-jwt';
@@ -115,19 +61,12 @@ describe('PinataService', () => {
     tempTestDir = await mkdtemp(join(tmpdir(), 'pinata-service-test-'));
 
     // Clear mocks
-    // mockFsReadFile.mockClear(); // Removed
     mockFormDataAppend.mockClear();
     mockFormDataGetHeaders.mockClear().mockReturnValue({
       'content-type': 'multipart/form-data; boundary=---123',
     });
     mockFetch.mockClear();
-    mockQueueManagerPush.mockClear();
-    mockQueueManagerStart.mockClear();
-    mockQueueManagerDrain.mockClear().mockResolvedValue([]);
-    mockQueueManagerGetStats
-      .mockClear()
-      .mockReturnValue({ pending: 0, active: 0, completed: 0, failed: 0 });
-    mockQueueManagerOn.mockClear();
+    mockSemaphoreRunExclusive.mockClear();
 
     pinataService = new PinataService(mockPinataJwt, undefined, 1);
   });
@@ -271,11 +210,10 @@ describe('PinataService', () => {
       }));
     });
 
-    it('should queue files and process them', async () => {
+    it('should upload files using semaphore for concurrency control', async () => {
       const results = await pinataService.uploadBatch(files);
-      expect(mockQueueManagerPush).toHaveBeenCalledTimes(files.length);
-      expect(mockQueueManagerStart).toHaveBeenCalled();
-      expect(mockFetch).toHaveBeenCalledTimes(files.length); // Because mock QueueManager calls processor directly
+      expect(mockSemaphoreRunExclusive).toHaveBeenCalledTimes(files.length);
+      expect(mockFetch).toHaveBeenCalledTimes(files.length);
       expect(results).toHaveLength(files.length);
       results.forEach((result) => expect(result.success).toBe(true));
     });
@@ -296,30 +234,6 @@ describe('PinataService', () => {
         pinata_api_key: 'key',
         pinata_secret_api_key: 'secret',
       });
-    });
-  });
-
-  describe('getQueueStats', () => {
-    it('should return the current stats of the queue', () => {
-      mockQueueManagerGetStats.mockReturnValueOnce({
-        pending: 1,
-        active: 1,
-        completed: 0,
-        failed: 0,
-      });
-      expect(pinataService.getQueueStats()).toEqual({
-        pending: 1,
-        active: 1,
-        completed: 0,
-        failed: 0,
-      });
-    });
-  });
-
-  describe('drainQueue', () => {
-    it('should drain the queue', async () => {
-      await pinataService.drainQueue();
-      expect(mockQueueManagerDrain).toHaveBeenCalled();
     });
   });
 });

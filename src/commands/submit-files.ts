@@ -273,7 +273,7 @@ export async function handleSubmitFiles(
       for (const fileEntry of fileBatch) {
         progressTracker.updateQueues(
           totalFiles - validatedFileCount, // Approx validation queue
-          pinataService.getQueueStats().pending,
+          0, // No upload queue with semaphore
           0 // Transaction queue not yet active
         );
         try {
@@ -362,7 +362,7 @@ export async function handleSubmitFiles(
 
       progressTracker.updateQueues(
         0, // Validation queue done
-        pinataService.getQueueStats().pending,
+        0, // No upload queue with semaphore
         0 // Transaction queue not yet active
       );
 
@@ -438,52 +438,38 @@ export async function handleSubmitFiles(
     if (!options.dryRun) {
       if (filesForUpload.length > 0) {
         const uploadResults = await pinataService.uploadBatch(filesForUpload);
-        pinataService.uploadQueue.on('task_completed', (result) => {
-          progressTracker.incrementUploaded();
-          progressTracker.setPhase(
-            ProcessingPhase.UPLOADING,
-            (progressTracker.getMetrics().uploadedFiles /
-              filesForUpload.length) *
-              100
-          );
-          // Find the original ProcessedFile to get its propertyCid and dataGroupCid
-          const originalFile = filesForUpload.find(
-            (f) =>
-              f.calculatedCid === (result.task as ProcessedFile).calculatedCid
-          ); // Assuming task is ProcessedFile
-          if (originalFile && result.result?.success && result.result.cid) {
-            dataItemsForTransaction.push({
-              propertyCid: originalFile.propertyCid,
-              dataGroupCID: originalFile.dataGroupCid,
-              dataCID: result.result.cid, // Use the CID from Pinata
-            });
-          }
-        });
-        pinataService.uploadQueue.on('task_failed', (result) => {
-          const originalFile = result.task as ProcessedFile;
-          const errorMsg = `Upload failed for ${originalFile.filePath}: ${result.error?.message}`;
-          logger.error(errorMsg);
-          csvReporterService.logError({
-            propertyCid: originalFile.propertyCid,
-            dataGroupCid: originalFile.dataGroupCid,
-            filePath: originalFile.filePath,
-            error: errorMsg,
-            timestamp: new Date().toISOString(),
-          });
-          progressTracker.incrementErrors();
-        });
 
-        await pinataService.drainQueue(); // Wait for all uploads to complete or fail
-
-        // Process results after drain
+        // Process results directly since uploadBatch now returns all results
         uploadResults.forEach((uploadResult) => {
-          if (!uploadResult.success) {
-            // Errors are logged by the queue event handler, but we can log a summary here if needed
-            logger.warn(
-              `Failed to upload for property ${uploadResult.propertyCid}, group ${uploadResult.dataGroupCid}. See error log.`
+          if (uploadResult.success && uploadResult.cid) {
+            // Successfully uploaded
+            progressTracker.incrementUploaded();
+            dataItemsForTransaction.push({
+              propertyCid: uploadResult.propertyCid,
+              dataGroupCID: uploadResult.dataGroupCid,
+              dataCID: uploadResult.cid,
+            });
+          } else {
+            // Upload failed
+            const originalFile = filesForUpload.find(
+              (f) =>
+                f.propertyCid === uploadResult.propertyCid &&
+                f.dataGroupCid === uploadResult.dataGroupCid
             );
+            const errorMsg = `Upload failed for ${originalFile?.filePath || 'unknown file'}: ${uploadResult.error || 'Unknown error'}`;
+            logger.error(errorMsg);
+            csvReporterService.logError({
+              propertyCid: uploadResult.propertyCid,
+              dataGroupCid: uploadResult.dataGroupCid,
+              filePath: originalFile?.filePath || 'unknown',
+              error: errorMsg,
+              timestamp: new Date().toISOString(),
+            });
+            progressTracker.incrementErrors();
           }
         });
+
+        progressTracker.setPhase(ProcessingPhase.UPLOADING, 100);
       } else {
         logger.info('No new files to upload.');
       }

@@ -1,6 +1,6 @@
 import FormData from 'form-data'; // Pinata expects multipart/form-data
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
-import { QueueManager } from '../utils/queue-manager.js';
+import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
 import { promises as fsPromises } from 'fs'; // For reading file content
 
@@ -26,7 +26,7 @@ export class PinataService {
   private pinataApiKey: string;
   private pinataSecretApiKey: string;
   private pinataJwt: string | undefined;
-  public uploadQueue: QueueManager<ProcessedFile, UploadResult>;
+  private semaphore: Semaphore;
 
   private readonly pinataApiUrl =
     'https://api.pinata.cloud/pinning/pinFileToIPFS';
@@ -35,8 +35,6 @@ export class PinataService {
     pinataJwtOrApiKey: string,
     pinataSecretApiKey?: string,
     maxConcurrentUploads = 10
-    // Add retry configuration for the queue manager if it supports it
-    // For now, retry logic will be in the uploadFile itself
   ) {
     if (pinataSecretApiKey) {
       this.pinataApiKey = pinataJwtOrApiKey;
@@ -50,9 +48,7 @@ export class PinataService {
       this.pinataSecretApiKey = '';
     }
 
-    this.uploadQueue = new QueueManager<ProcessedFile, UploadResult>({
-      concurrency: maxConcurrentUploads,
-    });
+    this.semaphore = new Semaphore(maxConcurrentUploads);
   }
 
   private async processUpload(
@@ -204,14 +200,12 @@ export class PinataService {
     }
     logger.info(`Uploading ${files.length} files to IPFS.`);
 
-    // Set the processor function for the queue
-    this.uploadQueue.setProcessor(this.processUpload.bind(this));
-
-    // Add all files to the queue
-    const uploadPromises = files.map((file) => this.uploadQueue.push(file));
-
-    // Start processing the queue
-    this.uploadQueue.start();
+    // Use semaphore to limit concurrent uploads
+    const uploadPromises = files.map(async (file) => {
+      return await this.semaphore.runExclusive(async () => {
+        return await this.processUpload(file);
+      });
+    });
 
     // Wait for all uploads to complete
     return await Promise.all(uploadPromises);
@@ -228,13 +222,5 @@ export class PinataService {
         pinata_secret_api_key: this.pinataSecretApiKey,
       };
     }
-  }
-
-  public getQueueStats() {
-    return this.uploadQueue.getStats();
-  }
-
-  public async drainQueue() {
-    await this.uploadQueue.drain();
   }
 }
