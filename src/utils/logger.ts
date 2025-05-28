@@ -63,4 +63,19 @@ export const logger = {
       fileLogger.debug(message);
     }
   },
+
+  // Technical details - log to file but don't show on console
+  technical: (message: string) => {
+    if (!isTestEnvironment) {
+      fileLogger.info(`TECHNICAL: ${message}`);
+    }
+  },
+
+  // Progress updates - simple console output
+  progress: (message: string) => {
+    console.log(chalk.gray(`  ${message}`));
+    if (!isTestEnvironment) {
+      fileLogger.info(`PROGRESS: ${message}`);
+    }
+  },
 };

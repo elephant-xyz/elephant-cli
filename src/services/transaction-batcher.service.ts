@@ -38,10 +38,10 @@ export class TransactionBatcherService {
     );
     this.config = { ...DEFAULT_SUBMIT_CONFIG, ...configOverrides };
 
-    logger.info(
+    logger.technical(
       `TransactionBatcherService initialized for address: ${this.wallet.address}`
     );
-    logger.info(
+    logger.technical(
       `Interacting with submit contract at: ${submitContractAddress}`
     );
   }

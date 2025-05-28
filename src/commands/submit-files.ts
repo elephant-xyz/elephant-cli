@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { promises as fsPromises, readFileSync } from 'fs';
 import path from 'path';
+import chalk from 'chalk';
 import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
@@ -128,15 +129,16 @@ export async function handleSubmitFiles(
   options: SubmitFilesCommandOptions,
   serviceOverrides: SubmitFilesServiceOverrides = {}
 ) {
-  logger.info('Starting submit-files process...');
-  logger.info(`Input directory: ${options.inputDir}`);
-  logger.info(`RPC URL: ${options.rpcUrl}`);
-  logger.info(`Submit Contract Address: ${options.contractAddress}`);
+  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Submit Files'));
+  console.log();
+  
   if (options.dryRun) {
-    logger.warn(
-      'DRY RUN active: No files will be uploaded, no transactions will be sent.'
-    );
+    logger.warn('DRY RUN MODE: No files will be uploaded or transactions sent');
   }
+  
+  logger.technical(`Input directory: ${options.inputDir}`);
+  logger.technical(`RPC URL: ${options.rpcUrl}`);
+  logger.technical(`Contract: ${options.contractAddress}`);
 
   // 1. Validate input directory
   try {
@@ -210,8 +212,8 @@ export async function handleSubmitFiles(
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
 
   await csvReporterService.initialize();
-  logger.info(`Error reports will be saved to: ${config.errorCsvPath}`);
-  logger.info(`Warning reports will be saved to: ${config.warningCsvPath}`);
+  logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
+  logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
   const progressTracker: ProgressTracker =
     serviceOverrides.progressTracker ||
@@ -223,7 +225,8 @@ export async function handleSubmitFiles(
 
   try {
     // --- Phase 1: Discovery (Task 12.2) ---
-    logger.info('Phase 1: Discovery - Scanning files...');
+    console.log(chalk.bold('📁 Phase 1: Discovery'));
+    logger.progress('Scanning files and validating directory structure...');
     progressTracker.start();
     progressTracker.setPhase(ProcessingPhase.SCANNING);
 
@@ -232,23 +235,23 @@ export async function handleSubmitFiles(
     );
     if (!initialValidation.isValid) {
       progressTracker.stop();
-      logger.error('Input directory structure is invalid. Errors:');
-      initialValidation.errors.forEach((err) => logger.error(`- ${err}`));
+      console.log(chalk.red('❌ Directory structure is invalid:'));
+      initialValidation.errors.forEach((err) => console.log(chalk.red(`   • ${err}`)));
       await csvReporterService.finalize();
       process.exit(1);
     }
-    logger.info('Directory structure validation passed.');
+    console.log(chalk.green('✅ Directory structure valid'));
 
     const totalFiles = await fileScannerService.countTotalFiles(
       options.inputDir
     );
-    logger.info(`Found ${totalFiles} potential files to process.`);
+    console.log(chalk.blue(`   Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`));
     progressTracker.reset(totalFiles); // Reset with actual total
     progressTracker.start(); // Restart with correct total
     progressTracker.setPhase(ProcessingPhase.SCANNING, 100); // Scanning complete
 
     if (totalFiles === 0) {
-      logger.info('No files found to process. Exiting.');
+      console.log(chalk.yellow('⚠️  No files found to process'));
       progressTracker.setPhase(ProcessingPhase.COMPLETED);
       progressTracker.stop();
       await csvReporterService.finalize();
@@ -260,9 +263,9 @@ export async function handleSubmitFiles(
     const dataItemsForTransaction: DataItem[] = [];
 
     // --- Phase 2: Validation (Task 12.3) ---
-    logger.info(
-      'Phase 2: Validation - Validating JSON files against schemas...'
-    );
+    console.log();
+    console.log(chalk.bold('🔍 Phase 2: Validation'));
+    logger.progress('Validating JSON files against schemas...');
     progressTracker.setPhase(ProcessingPhase.VALIDATION);
     let validatedFileCount = 0;
 
@@ -343,14 +346,14 @@ export async function handleSubmitFiles(
         );
       }
     }
-    logger.info(
-      `Validation complete. Valid files: ${progressTracker.getMetrics().validFiles}, Invalid files: ${progressTracker.getMetrics().invalidFiles}`
-    );
+    const validFiles = progressTracker.getMetrics().validFiles;
+    const invalidFiles = progressTracker.getMetrics().invalidFiles;
+    console.log(chalk.green(`✅ Validation complete: ${validFiles} valid, ${invalidFiles} invalid`));
 
     // --- Phase 3: Processing (Task 12.4) ---
-    logger.info(
-      'Phase 3: Processing - Canonicalizing, calculating CIDs, checking chain state...'
-    );
+    console.log();
+    console.log(chalk.bold('⚙️ Phase 3: Processing'));
+    logger.progress('Canonicalizing, calculating CIDs, checking chain state...');
     progressTracker.setPhase(ProcessingPhase.PROCESSING);
     let processedFileCount = 0;
 
@@ -424,16 +427,16 @@ export async function handleSubmitFiles(
         );
       }
     }
-    logger.info(
-      `Processing complete. Files ready for upload: ${filesForUpload.length}`
-    );
+    console.log(chalk.green(`✅ Processing complete: ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} ready for upload`));
 
     // --- Phase 4: Upload (Task 12.5) ---
-    logger.info('Phase 4: Upload - Uploading files to IPFS...');
+    console.log();
+    console.log(chalk.bold('☁️ Phase 4: Upload'));
     progressTracker.setPhase(ProcessingPhase.UPLOADING);
 
     if (!options.dryRun) {
       if (filesForUpload.length > 0) {
+        logger.progress(`Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`);
         const uploadResults = await pinataService.uploadBatch(filesForUpload);
 
         // Process results directly since uploadBatch now returns all results
@@ -453,8 +456,10 @@ export async function handleSubmitFiles(
                 f.propertyCid === uploadResult.propertyCid &&
                 f.dataGroupCid === uploadResult.dataGroupCid
             );
+            const fileName = originalFile?.filePath?.split('/').pop() || 'unknown file';
+            console.log(chalk.red(`❌ Upload failed: ${fileName}`));
             const errorMsg = `Upload failed for ${originalFile?.filePath || 'unknown file'}: ${uploadResult.error || 'Unknown error'}`;
-            logger.error(errorMsg);
+            logger.technical(errorMsg);
             csvReporterService.logError({
               propertyCid: uploadResult.propertyCid,
               dataGroupCid: uploadResult.dataGroupCid,

@@ -151,18 +151,18 @@ export class PinataService {
         };
       } catch (error) {
         lastError = error as Error;
-        logger.warn(
+        logger.debug(
           `Upload attempt ${attempt + 1} for ${metadata.name} failed: ${lastError.message}`
         );
         if (attempt < retries) {
           const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-          logger.info(`Retrying in ${delay / 1000}s...`);
+          logger.progress(`Retrying upload in ${delay / 1000}s...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    logger.error(
+    logger.debug(
       `Failed to upload ${metadata.name} after ${retries + 1} attempts.`
     );
     return {
