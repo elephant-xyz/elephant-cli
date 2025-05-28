@@ -7,10 +7,7 @@ import {
   DEFAULT_IPFS_GATEWAY,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
 } from '../config/constants';
-import {
-  createSubmitConfig,
-  SubmitConfig,
-} from '../config/submit.config';
+import { createSubmitConfig, SubmitConfig } from '../config/submit.config';
 import { logger } from '../utils/logger';
 import { FileScannerService } from '../services/file-scanner.service';
 import {
