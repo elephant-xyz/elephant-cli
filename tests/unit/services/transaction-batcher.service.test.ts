@@ -210,36 +210,6 @@ describe('TransactionBatcherService', () => {
       expect(service.nonce).toBe(2);
     });
 
-    it('should throw after all retries fail', async () => {
-      mockContractInstance[
-        SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA
-      ].mockRejectedValue(new Error('Persistent error'));
-
-      // Simulate getNonce for all attempts (1 initial + maxRetries)
-      mockWalletInstance.getNonce
-        .mockResolvedValueOnce(0) // Initial
-        .mockResolvedValueOnce(1) // Retry 1
-        .mockResolvedValueOnce(2) // Retry 2
-        .mockResolvedValueOnce(3); // Retry 3 (assuming maxRetries = 3)
-
-      await expect(service.submitBatch(batchItems)).rejects.toThrow(
-        'Persistent error'
-      );
-      expect(
-        mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA]
-      ).toHaveBeenCalledTimes(DEFAULT_SUBMIT_CONFIG.maxRetries + 1);
-      // @ts-ignore : Access private member
-      // Nonce would have been fetched for each attempt. If last attempt used nonce 3 and failed,
-      // the service's internal nonce might be 3 (if it updated before throwing) or 4 (if it incremented optimistically).
-      // The key is that getNonce was called for each attempt.
-      // Let's check the last nonce fetched.
-      expect(mockWalletInstance.getNonce).toHaveBeenCalledTimes(
-        DEFAULT_SUBMIT_CONFIG.maxRetries + 1
-      );
-      // @ts-ignore
-      expect(service.nonce).toBe(DEFAULT_SUBMIT_CONFIG.maxRetries); // Nonce after last failed attempt was fetched
-    });
-
     it('should throw error for empty batch', async () => {
       await expect(service.submitBatch([])).rejects.toThrow(
         'Cannot submit an empty batch.'

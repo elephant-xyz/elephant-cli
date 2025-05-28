@@ -1,4 +1,4 @@
-const { canonicalize } = require('json-canonicalize');
+const canonicalize = require('canonicalize');
 
 export class JsonCanonicalizerService {
   constructor() {}
@@ -17,7 +17,7 @@ export class JsonCanonicalizerService {
         throw new Error('Cannot canonicalize functions');
       }
 
-      // The json-canonicalize library implements RFC 8785
+      // The canonicalize library implements RFC 8785
       const result = canonicalize(json);
 
       // Check if canonicalize returned undefined (for unsupported types)
