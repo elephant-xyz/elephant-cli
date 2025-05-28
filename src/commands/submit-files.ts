@@ -231,10 +231,10 @@ export async function handleSubmitFiles(
       options.inputDir
     );
     if (!initialValidation.isValid) {
+      progressTracker.stop();
       logger.error('Input directory structure is invalid. Errors:');
       initialValidation.errors.forEach((err) => logger.error(`- ${err}`));
       await csvReporterService.finalize();
-      progressTracker.stop();
       process.exit(1);
     }
     logger.info('Directory structure validation passed.');
@@ -280,13 +280,9 @@ export async function handleSubmitFiles(
           const fileContentStr = readFileSync(fileEntry.filePath, 'utf-8');
           const jsonData = JSON.parse(fileContentStr);
 
-          // Determine schema URL/CID - this is a placeholder logic
-          // In a real scenario, this might come from the file itself, a config, or naming convention
-          const schemaCid = jsonData.schema || jsonData.$schema; // Example: file contains its schema CID
+          const schemaCid = fileEntry.dataGroupCid;
           if (!schemaCid || typeof schemaCid !== 'string') {
-            throw new Error(
-              `Schema CID not found or invalid in ${fileEntry.filePath}`
-            );
+            throw new Error(`Schema CID not found or invalid`);
           }
 
           const schema = await schemaCacheService.getSchema(schemaCid);
@@ -299,10 +295,10 @@ export async function handleSubmitFiles(
           const validationResult = await jsonValidatorService.validate(
             jsonData,
             schema as JSONSchema
-          ); // Cast schema
+          );
 
           if (!validationResult.valid) {
-            const errorMsg = `Validation failed for ${fileEntry.filePath}: ${jsonValidatorService.getErrorMessage(validationResult.errors || [])}`;
+            const errorMsg = `Validation failed, ${jsonValidatorService.getErrorMessage(validationResult.errors || [])}`;
             logger.warn(errorMsg);
             await csvReporterService.logError({
               propertyCid: fileEntry.propertyCid,
@@ -326,7 +322,8 @@ export async function handleSubmitFiles(
             progressTracker.incrementValid();
           }
         } catch (error) {
-          const errorMsg = `Error validating file ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}`;
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
           logger.error(errorMsg);
           await csvReporterService.logError({
             propertyCid: fileEntry.propertyCid,

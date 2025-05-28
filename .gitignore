@@ -55,3 +55,6 @@ pids
 # Yarn Integrity file
 .yarn-integrity
 test.sh
+data
+submit_errors.csv
+submit_warnings.csv

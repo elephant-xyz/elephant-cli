@@ -1,5 +1,9 @@
 #!/usr/bin/env node
+import { config } from 'dotenv';
 import { Command } from 'commander';
+
+// Load environment variables from .env file in current working directory
+config({ path: '.env' });
 import {
   DEFAULT_CONTRACT_ADDRESS,
   DEFAULT_RPC_URL,

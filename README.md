@@ -66,6 +66,24 @@ npx @elephant-xyz/cli submit-files ./path/to/data-directory \
 - `--transaction-batch-size <number>`: Number of items per blockchain transaction. (Default: 200)
 - `--dry-run`: Perform all checks without uploading or submitting transactions. (Optional, defaults to false if not present)
 
+### Environment Variables
+
+The CLI supports loading environment variables from a `.env` file in your current working directory. This is useful for storing sensitive information like private keys and API tokens securely.
+
+Create a `.env` file in your project directory:
+
+```env
+ELEPHANT_PRIVATE_KEY=your_private_key_here
+PINATA_JWT=your_pinata_jwt_token_here
+```
+
+When using a `.env` file, you can run commands without passing sensitive values as command-line arguments:
+
+```bash
+# With .env file, no need to specify private key or JWT
+elephant-cli submit-files ./data-directory --dry-run
+```
+
 ## Features
 
 - 🔍 Query blockchain for elephant assignments
