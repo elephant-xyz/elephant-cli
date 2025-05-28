@@ -1,4 +1,10 @@
-import { Contract, JsonRpcProvider, ZeroHash, getAddress } from 'ethers';
+import {
+  Contract,
+  JsonRpcProvider,
+  ZeroHash,
+  ethers,
+  getAddress,
+} from 'ethers';
 import { toUtf8Bytes, toUtf8String } from 'ethers';
 import { BlockchainService } from './blockchain.service.js';
 import { ABI } from '../types/index.js';
@@ -96,13 +102,16 @@ export class ChainStateService extends BlockchainService {
     dataCid: string
   ): Promise<string[]> {
     try {
-      const propertyCidBytes = toUtf8Bytes(`.${propertyCid}`);
-      const dataGroupCidBytes = toUtf8Bytes(`.${dataGroupCid}`);
-      const dataCidBytes = toUtf8Bytes(`.${dataCid}`);
+      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
+      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
+      const dataCidBytes = ethers.hexlify(toUtf8Bytes(dataCid));
 
       const participants: string[] = await this.submitContract[
         SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID
       ](propertyCidBytes, dataGroupCidBytes, dataCidBytes);
+      logger.technical(
+        `Fetched submitted participants for ${propertyCid}/${dataGroupCid}/${dataCid}. Submitted participants: ${participants.join(', ')}`
+      );
 
       return participants.map((addr) => getAddress(addr));
     } catch (error) {
