@@ -1,7 +1,6 @@
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
-import { promises as fsPromises } from 'fs'; // For reading file content
 
 export interface PinMetadata {
   name?: string;
@@ -34,8 +33,6 @@ export class PinataService {
       `Processing upload for ${fileToProcess.filePath} (CID: ${fileToProcess.calculatedCid})`
     );
     try {
-      const fileContent = await fsPromises.readFile(fileToProcess.filePath);
-
       const metadata: PinMetadata = {
         name: `${fileToProcess.dataGroupCid}.json`,
         keyvalues: {
@@ -46,7 +43,7 @@ export class PinataService {
       };
 
       return await this.uploadFileInternal(
-        fileContent,
+        Buffer.from(fileToProcess.canonicalJson),
         metadata,
         fileToProcess
       );

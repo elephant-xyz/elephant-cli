@@ -1,6 +1,8 @@
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { base58btc } from 'multiformats/bases/base58';
+import * as dagPB from '@ipld/dag-pb';
+import { UnixFS } from 'ipfs-unixfs';
 
 export class CidCalculatorService {
   constructor() {}
@@ -12,10 +14,19 @@ export class CidCalculatorService {
    */
   async calculateCidV0(data: Buffer): Promise<string> {
     try {
-      // Calculate SHA-256 hash of raw data
-      const hash = await sha256.digest(data);
+      // Create UnixFS file metadata (this is what IPFS/Pinata does)
+      const unixfs = new UnixFS({ type: 'file', data: new Uint8Array(data) });
 
-      // Create CID v0 with dag-pb codec (0x70)
+      // Create DAG-PB node with UnixFS data
+      const dagPbNode = { Data: unixfs.marshal(), Links: [] };
+
+      // Encode the DAG-PB node
+      const encoded = dagPB.encode(dagPbNode);
+
+      // Calculate SHA-256 hash
+      const hash = await sha256.digest(encoded);
+
+      // Create CID v0 (0x70 is dag-pb codec)
       const cid = CID.create(0, 0x70, hash);
 
       // Return base58btc string (Qm...)
