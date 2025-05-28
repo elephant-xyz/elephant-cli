@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QueueManager, QueueOptions } from '../../../src/utils/queue-manager'; // Adjust path as needed
+import { QueueManager, QueueOptions, QueueTask, QueueResult } from '../../../src/utils/queue-manager'; // Adjust path as needed
 
 // Helper to create a promise that can be resolved/rejected externally
 const createDeferredPromise = <T>() => {
@@ -25,32 +25,28 @@ describe('QueueManager', () => {
   describe('initialization', () => {
     it('should create queue with default options', () => {
       const q = new QueueManager();
-      expect(q.getStats().concurrency).toBe(1);
-      // @ts-ignore
-      expect(q.options.autoStart).toBe(true);
-      // @ts-ignore
-      expect(q.options.retries).toBe(3);
+      expect(q.getStats().concurrency).toBe(10); // Default concurrency is 10
+      // @ts-ignore access private member for test
+      expect(q.autoStart).toBe(true);
     });
 
     it('should create queue with custom options', () => {
-      const opts: QueueOptions<any, any> = {
+      const opts: QueueOptions = {
         concurrency: 5,
         autoStart: false,
-        retries: 1,
         timeout: 1000,
-        delayBetweenTasks: 50,
       };
       const q = new QueueManager(opts);
       expect(q.getStats().concurrency).toBe(5);
-      // @ts-ignore
-      expect(q.options.autoStart).toBe(false);
-      // @ts-ignore
-      expect(q.options.retries).toBe(1);
+      // @ts-ignore access private member for test
+      expect(q.autoStart).toBe(false);
+      // @ts-ignore access private member for test
+      expect(q.timeout).toBe(1000);
     });
 
     it('should throw error if start called with no processor set', () => {
       const q = new QueueManager({ autoStart: false });
-      expect(() => q.start()).toThrow('Processor function not set.');
+      expect(() => q.start()).toThrow('No processor function set. Call setProcessor() first.');
     });
   });
 
@@ -62,13 +58,20 @@ describe('QueueManager', () => {
       expect(q.getStats().pending).toBe(1);
     });
 
-    it('should return a promise that resolves with task result', async () => {
-      const q = new QueueManager<any, string>({ autoStart: false });
+    it('should resolve with task result via event', async () => {
+      const q = new QueueManager<{ id: number }, string>({ autoStart: false });
       q.setProcessor(vi.fn().mockResolvedValue('done'));
-      const taskPromise = q.push({ id: 1 });
+      
+      const taskCompletePromise = new Promise<QueueResult<string>>((resolve) => {
+        q.on('task-complete', (result) => resolve(result));
+      });
+
+      const taskId = q.push({ id: 1 });
       q.start();
-      await vi.runAllTimersAsync(); // Ensure setTimeout(processNext, 0) runs
-      const result = await taskPromise;
+      await vi.runAllTimersAsync(); 
+      
+      const result = await taskCompletePromise;
+      expect(result.id).toBe(taskId);
       expect(result.result).toBe('done');
     });
 
@@ -76,41 +79,76 @@ describe('QueueManager', () => {
       const processor = vi.fn().mockResolvedValue('processed');
       const q = new QueueManager({ autoStart: true, concurrency: 1 });
       q.setProcessor(processor);
-      const taskPromise = q.push({ id: 1 });
-      await vi.runAllTimersAsync(); // Allow microtasks and setTimeout(0) to run
-      await taskPromise; // Wait for the pushed task to complete
+      
+      const taskCompletePromise = new Promise<void>((resolve) => {
+        q.on('task-complete', () => resolve());
+      });
+
+      q.push({ id: 1 });
+      // Ensure processNext has a chance to be invoked if there's any microtask scheduling
+      await vi.advanceTimersByTimeAsync(0); 
+      await vi.runAllTimersAsync(); 
+      await taskCompletePromise; 
       expect(processor).toHaveBeenCalledWith({ id: 1 });
     });
 
     it('should assign unique task IDs', () => {
       const q = new QueueManager({ autoStart: false });
       q.setProcessor(vi.fn());
-      const p1 = q.push({ data: 'a' });
-      const p2 = q.push({ data: 'b' });
-      // @ts-ignore
-      const internalTasks = Array.from(q.taskMap.values());
-      expect(internalTasks[0].id).not.toBe(internalTasks[1].id);
+      const id1 = q.push({ data: 'a' });
+      const id2 = q.push({ data: 'b' });
+      expect(id1).toBeDefined();
+      expect(id2).toBeDefined();
+      expect(id1).not.toBe(id2);
+      expect(q.getTask(id1)).toBeDefined();
+      expect(q.getTask(id2)).toBeDefined();
     });
   });
 
   describe('pushBatch', () => {
-    it('should add multiple tasks and return array of promises', async () => {
-      const q = new QueueManager<any, string>({ autoStart: false });
-      q.setProcessor(vi.fn((task) => Promise.resolve(`processed: ${task.id}`)));
+    it('should add multiple tasks and return array of task IDs', async () => {
+      const q = new QueueManager<{ id: number }, string>({ autoStart: false });
+      const taskResults: Record<string, string> = {};
+      
+      q.setProcessor(vi.fn(async (taskData: {id: number}) => {
+        const res = `processed: ${taskData.id}`;
+        await new Promise(r => setTimeout(r,1)); // Simulate async work
+        return res;
+      }));
+
       const items = [{ id: 1 }, { id: 2 }];
-      const promises = q.pushBatch(items);
+      const taskIds = q.pushBatch(items);
+      
       expect(q.getStats().pending).toBe(2);
-      expect(promises).toHaveLength(2);
+      expect(taskIds).toHaveLength(2);
+      
+      const taskCompletionPromises = taskIds.map(id => 
+        new Promise<QueueResult<string>>(resolve => {
+          const handler = (result: QueueResult<string>) => {
+            if (result.id === id) {
+              taskResults[result.id] = result.result!;
+              q.off('task-complete', handler);
+              resolve(result);
+            }
+          };
+          q.on('task-complete', handler);
+        })
+      );
+      
       q.start();
       await vi.runAllTimersAsync();
-      const results = await Promise.all(promises);
-      expect(results.map(r => r.result)).toEqual(['processed: 1', 'processed: 2']);
+      
+      const completedResults = await Promise.all(taskCompletionPromises);
+
+      expect(taskResults[taskIds[0]]).toBe('processed: 1');
+      expect(taskResults[taskIds[1]]).toBe('processed: 2');
+      expect(completedResults.length).toBe(items.length);
     });
 
     it('should handle empty batch', () => {
       const q = new QueueManager();
-      const promises = q.pushBatch([]);
-      expect(promises).toEqual([]);
+      const ids = q.pushBatch([]);
+      expect(ids).toEqual([]);
       expect(q.getStats().pending).toBe(0);
     });
   });
@@ -124,76 +162,81 @@ describe('QueueManager', () => {
       q.pushBatch([{id:1},{id:2},{id:3}]);
       q.start();
 
-      expect(q.getStats().active).toBe(0); // Initially 0, start defers with setTimeout
-      await vi.advanceTimersByTimeAsync(0); // Process initial batch
-      expect(q.getStats().active).toBe(2);
+      // After start, processNext is called, and activeCount is incremented synchronously
+      expect(q.getStats().active).toBe(2); // Corrected: Should be 2 active tasks immediately
+      // await vi.advanceTimersByTimeAsync(0); // This line is not strictly necessary for the above assertion
       expect(q.getStats().pending).toBe(1);
 
-      await vi.advanceTimersByTimeAsync(10); // Finish first 2 tasks
-      expect(q.getStats().active).toBe(1); // 3rd task starts
+      await vi.advanceTimersByTimeAsync(10); 
+      expect(q.getStats().active).toBe(1); 
       expect(q.getStats().pending).toBe(0);
 
-      await vi.advanceTimersByTimeAsync(10); // Finish 3rd task
+      await vi.advanceTimersByTimeAsync(10); 
       expect(q.getStats().active).toBe(0);
     });
 
-    it('should emit task_completed on success', async () => {
+    it('should emit task-complete on success', async () => {
       const taskCompletedHandler = vi.fn();
-      const q = new QueueManager<any, string>();
+      const q = new QueueManager<{ id: string }, string>();
       q.setProcessor(vi.fn().mockResolvedValue('success'));
-      q.on('task_completed', taskCompletedHandler);
-      const taskPromise = q.push({ id: 'test' });
+      q.on('task-complete', taskCompletedHandler);
+      
+      const taskId = q.push({ id: 'test' });
       await vi.runAllTimersAsync();
-      await taskPromise;
-      expect(taskCompletedHandler).toHaveBeenCalledWith(expect.objectContaining({ result: 'success', task: { id: 'test' } }));
+      
+      expect(taskCompletedHandler).toHaveBeenCalledWith(expect.objectContaining({ id: taskId, result: 'success' }));
     });
 
-    it('should emit task_failed on error', async () => {
+    it('should emit task-error on error', async () => {
       const taskFailedHandler = vi.fn();
       const q = new QueueManager();
       q.setProcessor(vi.fn().mockRejectedValue(new Error('fail')));
-      q.on('task_failed', taskFailedHandler);
-      const taskPromise = q.push({ id: 'test' }).catch(() => {}); // Catch to prevent unhandled rejection
+      q.on('task-error', taskFailedHandler);
+      
+      const taskId = q.push({ id: 'test' });
       await vi.runAllTimersAsync();
-      await taskPromise;
-      expect(taskFailedHandler).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(Error), task: { id: 'test' } }));
+      
+      expect(taskFailedHandler).toHaveBeenCalledWith(expect.objectContaining({ id: taskId, error: expect.any(Error) }));
     });
   });
 
   describe('timeout', () => {
     it('should timeout task if it exceeds timeout duration', async () => {
       const taskFailedHandler = vi.fn();
-      const q = new QueueManager({ timeout: 50, retries: 0 }); // No retries for this test
-      q.setProcessor(() => new Promise(resolve => setTimeout(resolve, 100))); // Task takes 100ms
-      q.on('task_failed', taskFailedHandler);
+      const q = new QueueManager({ timeout: 50 }); 
+      q.setProcessor(() => new Promise(resolve => setTimeout(resolve, 100))); 
+      q.on('task-error', taskFailedHandler);
       
-      const taskPromise = q.push({ id: 'timeout_test' }).catch(() => {});
-      await vi.advanceTimersByTimeAsync(50); // Advance to timeout
-      
-      await taskPromise;
+      const taskId = q.push({ id: 'timeout_test' }, { maxRetries: 0 });
+      await vi.advanceTimersByTimeAsync(50); 
+      await vi.runAllTimersAsync(); // Ensure any subsequent event emissions are processed
+
       expect(taskFailedHandler).toHaveBeenCalledWith(expect.objectContaining({
+        id: taskId,
         error: expect.objectContaining({ message: expect.stringContaining('timed out') }),
-        task: { id: 'timeout_test' }
       }));
     });
   });
 
   describe('retry', () => {
-    it('should retry failed task up to retry limit', async () => {
+    it('should retry failed task up to maxRetries', async () => {
       let attempts = 0;
       const processor = vi.fn(async (task) => {
         attempts++;
         if (attempts < 2) throw new Error('fail');
         return 'success';
       });
-      const q = new QueueManager({ retries: 1 }); // 1 retry means 2 total attempts
+      const q = new QueueManager(); 
       q.setProcessor(processor);
       
-      const result = await q.push({ id: 'retry_test' });
+      const taskCompleteHandler = vi.fn();
+      q.on('task-complete', taskCompleteHandler);
+
+      const taskId = q.push({ id: 'retry_test' }, { maxRetries: 1 }); 
       await vi.runAllTimersAsync();
 
       expect(attempts).toBe(2);
-      expect(result.result).toBe('success');
+      expect(taskCompleteHandler).toHaveBeenCalledWith(expect.objectContaining({ id: taskId, result: 'success' }));
     });
 
     it('should fail permanently after max retries', async () => {
@@ -202,46 +245,45 @@ describe('QueueManager', () => {
         attempts++;
         throw new Error(`Attempt ${attempts} failed`);
       });
-      const taskError = vi.fn();
-      const q = new QueueManager({ retries: 1 }); // Test expects 1 initial + 1 retry = 2 attempts
+      const taskErrorHandler = vi.fn();
+      const q = new QueueManager(); 
       q.setProcessor(processor);
-      q.on('task_failed', taskError);
+      q.on('task-error', taskErrorHandler);
 
-      await expect(q.push({ id: 'perm_fail' })).rejects.toThrow('Attempt 2 failed');
+      const taskId = q.push({ id: 'perm_fail' }, { maxRetries: 1 }); // 1 initial + 1 retry = 2 attempts
       await vi.runAllTimersAsync();
       
-      expect(attempts).toBe(2);  // 1 initial + 1 retry
-      expect(taskError).toHaveBeenCalledWith(
-        expect.objectContaining({ error: expect.any(Error) })
+      expect(attempts).toBe(2); 
+      expect(taskErrorHandler).toHaveBeenCalledTimes(1); // Ensure task-error is emitted only once for the final failure
+      expect(taskErrorHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ id: taskId, error: expect.objectContaining({ message: 'Attempt 2 failed' }) })
       );
     });
   });
 
   describe('pause/resume', () => {
     it('should pause and resume processing', async () => {
-      const processor = vi.fn().mockResolvedValue('done');
+      const processor = vi.fn().mockImplementation(() => new Promise(r => setTimeout(() => r('done'), 10)));
       const q = new QueueManager({ concurrency: 1, autoStart: false });
       q.setProcessor(processor);
       q.pushBatch([{id:1},{id:2}]);
       q.start();
-      await vi.advanceTimersByTimeAsync(0); // Let one task start
+      await vi.advanceTimersByTimeAsync(0); 
       
       q.pause();
-      expect(q.getStats().active).toBe(1); // First task is active
+      expect(q.getStats().active).toBe(1); 
       expect(processor).toHaveBeenCalledTimes(1);
 
-      await vi.advanceTimersByTimeAsync(100); // Let active task finish, but queue is paused
+      await vi.advanceTimersByTimeAsync(100); 
       expect(q.getStats().active).toBe(0);
-      expect(q.getStats().completed).toBe(1);
-      expect(processor).toHaveBeenCalledTimes(1); // No new task started
+      expect(processor).toHaveBeenCalledTimes(1); 
 
       q.resume();
-      await vi.advanceTimersByTimeAsync(0); // Let next task start
+      await vi.advanceTimersByTimeAsync(0); 
       expect(q.getStats().active).toBe(1);
       
-      await vi.advanceTimersByTimeAsync(100); // Let it finish
+      await vi.advanceTimersByTimeAsync(100); 
       expect(processor).toHaveBeenCalledTimes(2);
-      expect(q.getStats().completed).toBe(2);
     });
   });
 
@@ -260,22 +302,27 @@ describe('QueueManager', () => {
     it('should remove a specific task by ID if pending', async () => {
       const q = new QueueManager<any, string>({ autoStart: false });
       q.setProcessor(vi.fn().mockResolvedValue('done'));
-      const promise1 = q.push({ id: 'task1' });
-      const promise2 = q.push({ id: 'task2' });
-      // @ts-ignore
-      const internalTask1 = Array.from(q.taskMap.values()).find(t => t.originalTask.id === 'task1');
+      
+      const taskRemovedHandler = vi.fn();
+      q.on('task-removed', taskRemovedHandler);
+
+      const id1 = q.push({ id: 'task1' });
+      const id2 = q.push({ id: 'task2' });
       
       expect(q.getStats().pending).toBe(2);
-      // @ts-ignore
-      const removed = q.removeTask(internalTask1.id);
+      const removed = q.removeTask(id1);
       expect(removed).toBe(true);
       expect(q.getStats().pending).toBe(1);
+      expect(taskRemovedHandler).toHaveBeenCalledWith(id1);
+      expect(q.getTask(id1)).toBeUndefined();
+      expect(q.getTask(id2)).toBeDefined();
 
+      const taskCompleteHandler = vi.fn();
+      q.on('task-complete', taskCompleteHandler);
       q.start();
       await vi.runAllTimersAsync();
-      
-      await expect(promise1).rejects.toThrow('Task removed before processing');
-      await expect(promise2).resolves.toEqual(expect.objectContaining({ result: 'done' }));
+      expect(taskCompleteHandler).toHaveBeenCalledTimes(1);
+      expect(taskCompleteHandler).toHaveBeenCalledWith(expect.objectContaining({ id: id2 }));
     });
 
     it('should not remove an active or completed task', async () => {
@@ -283,24 +330,19 @@ describe('QueueManager', () => {
       const q = new QueueManager<any, string>({ concurrency: 1, autoStart: false });
       q.setProcessor(() => deferred.promise);
       
-      const taskPromise = q.push({ id: 'active_task' });
+      const taskId = q.push({ id: 'active_task' });
       q.start();
-      await vi.advanceTimersByTimeAsync(0); // Ensure task becomes active
+      await vi.advanceTimersByTimeAsync(0); 
       
-      // @ts-ignore
-      const internalTask = Array.from(q.taskMap.values())[0];
-      // @ts-ignore
-      const removed = q.removeTask(internalTask.id);
-      expect(removed).toBe(false);
+      const removedActive = q.removeTask(taskId);
+      expect(removedActive).toBe(false); 
       expect(q.getStats().active).toBe(1);
 
       deferred.resolve('completed');
-      await taskPromise;
-      await vi.runAllTimersAsync();
-      // @ts-ignore
-      const removedAfterComplete = q.removeTask(internalTask.id);
-      expect(removedAfterComplete).toBe(false);
-
+      await vi.runAllTimersAsync(); 
+      
+      const removedCompleted = q.removeTask(taskId);
+      expect(removedCompleted).toBe(false); 
     });
   });
   
@@ -309,26 +351,36 @@ describe('QueueManager', () => {
       const processor = vi.fn(() => new Promise(resolve => setTimeout(() => resolve('done'), 10)));
       const q = new QueueManager({ concurrency: 1, autoStart: false });
       q.setProcessor(processor);
-      q.pushBatch([{id:1},{id:2},{id:3}]);
-      q.start();
+      q.pushBatch([{id:1},{id:2},{id:3}]); // 3 tasks pending
+      q.start(); // 1 active, 2 pending
       await vi.advanceTimersByTimeAsync(0);
       expect(q.getStats().active).toBe(1);
+      expect(q.getStats().pending).toBe(2);
 
       q.setConcurrency(3);
-      await vi.advanceTimersByTimeAsync(0); // Allow new tasks to start
-      expect(q.getStats().active).toBe(3);
+      await vi.advanceTimersByTimeAsync(0); 
+      // Now 2 more tasks should start
+      expect(q.getStats().active).toBe(3); // All 3 tasks should be active
+      expect(q.getStats().pending).toBe(0);
     });
   });
 
   describe('events', () => {
-    it('should emit "drain" event when queue is empty', async () => {
+    it('should emit "drain" event when queue is empty and no active tasks', async () => {
       const drainHandler = vi.fn();
-      const q = new QueueManager();
-      q.setProcessor(vi.fn().mockResolvedValue('done'));
+      const q = new QueueManager({concurrency: 1}); // Ensure concurrency for predictability
+      q.setProcessor(vi.fn(async () => {
+        await new Promise(r => setTimeout(r, 1)); // Simulate async work
+        return 'done';
+      }));
       q.on('drain', drainHandler);
+      
       q.push({ id: 1 });
-      await vi.runAllTimersAsync(); // Process the task
-      await q.drain(); // Wait for drain
+      // Allow the task to be processed and completed
+      await vi.runAllTimersAsync(); 
+      // Ensure any final microtasks or zero-delay timers related to drain emission run
+      await vi.advanceTimersByTimeAsync(0); 
+
       expect(drainHandler).toHaveBeenCalled();
     });
   });
@@ -339,23 +391,34 @@ describe('QueueManager', () => {
       const queue = new QueueManager({ concurrency: 1, autoStart: false });
       queue.setProcessor(processor);
 
-      expect(queue.getStats()).toEqual({ pending: 0, active: 0, completed: 0, failed: 0, retries: 0, concurrency: 1, isPaused: false });
+      expect(queue.getStats()).toEqual({ 
+        pending: 0, 
+        active: 0, 
+        total: 0, 
+        concurrency: 1, 
+        isPaused: false,
+        isRunning: false 
+      });
       
-      const taskPromise = queue.push({ id: 1 });
-      expect(queue.getStats().pending).toBe(1);
+      queue.push({ id: 1 });
+      expect(queue.getStats()).toEqual(expect.objectContaining({ pending: 1, total: 1, isRunning: false, active: 0 }));
 
       queue.start();
-      await vi.advanceTimersByTimeAsync(0); // Task becomes active
-      expect(queue.getStats().active).toBe(1);
-      expect(queue.getStats().pending).toBe(0);
+      // After start() is called, and processNext() runs synchronously for the first task:
+      expect(queue.getStats()).toEqual(expect.objectContaining({ pending: 0, active: 1, total: 1, isRunning: true }));
+
+      // No need to advance timers here if checking state immediately after start and synchronous part of processNext
+      // await vi.advanceTimersByTimeAsync(0); // Task becomes active (already asserted)
+      // expect(queue.getStats()).toEqual(expect.objectContaining({ pending: 0, active: 1, total: 1, isRunning: true }));
       
-      await taskPromise; // Wait for task to complete
-      await vi.runAllTimersAsync(); // Ensure all microtasks/timers related to completion are done
+      await vi.runAllTimersAsync(); // Ensure task completes
       
-      const finalStats  = queue.getStats();
-      expect(finalStats.completed).toBe(1);
-      expect(finalStats.active).toBe(0);
-      expect(finalStats.pending).toBe(0);
+      expect(queue.getStats()).toEqual(expect.objectContaining({ 
+        pending: 0, 
+        active: 0, 
+        total: 0, 
+        isRunning: true, 
+      }));
     });
   });
 });

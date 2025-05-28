@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ZeroHash } from 'ethers'; // Import directly if not re-exported by mocked 'ethers'
+// Import necessary items from 'ethers' directly.
+// Due to vi.mock, these will be the mocked versions.
+import { Contract, JsonRpcProvider, ZeroHash, toUtf8Bytes, toUtf8String, getAddress } from 'ethers';
 
 // --- Mock dependencies FIRST ---
 
@@ -23,25 +25,24 @@ const mockJsonRpcProviderInstance = {
 vi.mock('ethers', async (importOriginal) => {
   const originalEthers = await importOriginal<typeof import('ethers')>();
   return {
-    ...originalEthers,
+    // Spread originalEthers first to ensure all exports are available
+    ...originalEthers, 
+    // Then override specific parts with mocks
     JsonRpcProvider: vi
       .fn()
       .mockImplementation(() => mockJsonRpcProviderInstance),
     Contract: vi.fn().mockImplementation(() => mockEthersContractInstance),
-    toUtf8Bytes: originalEthers.toUtf8Bytes,
-    toUtf8String: originalEthers.toUtf8String,
-    getAddress: originalEthers.getAddress,
-    ZeroHash: originalEthers.ZeroHash,
+    // Keep original utilities if they are not meant to be mocked or are used by SUT
+    // If toUtf8Bytes, toUtf8String, getAddress, ZeroHash are used by the SUT and don't need mocking,
+    // they will be taken from originalEthers. If they need to be spies, they should be vi.fn() here.
+    // For this test, it seems they are used as utilities, so keeping them from original is fine.
   };
 });
 
 // --- Import SUT (ChainStateService) AFTER mocks ---
 import { ChainStateService } from '../../../src/services/chain-state.service';
 import { ABI } from '../../../src/types';
-import { SUBMIT_CONTRACT_ABI_FRAGMENTS } from '../../../src/config/constants'; // Removed SUBMIT_CONTRACT_METHODS as it's not directly used in this test file's logic after SUT import
-
-// Import actual ethers utils needed for tests, after mock setup
-import { toUtf8Bytes } from 'ethers'; // toUtf8String is also used but implicitly via originalEthers spread
+import { SUBMIT_CONTRACT_ABI_FRAGMENTS } from '../../../src/config/constants';
 
 describe('ChainStateService', () => {
   const mockRpcUrl = 'http://localhost:8545';
@@ -55,9 +56,14 @@ describe('ChainStateService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Ensure the mock functions on the instance are reset
     mockEthersContractInstance.getCurrentFieldDataCID.mockReset();
     mockEthersContractInstance.getParticipantsForConsensusDataCID.mockReset();
-    mockIsValidCID.mockReturnValue(true); // Use the hoisted mock
+    // Also reset the Contract constructor spy itself if it's re-used across tests for constructor calls
+    (Contract as ReturnType<typeof vi.fn>).mockClear();
+    (JsonRpcProvider as ReturnType<typeof vi.fn>).mockClear();
+    
+    mockIsValidCID.mockReturnValue(true);
 
     chainStateService = new ChainStateService(
       mockRpcUrl,
@@ -70,14 +76,20 @@ describe('ChainStateService', () => {
   describe('constructor', () => {
     it('should initialize BlockchainService superclass', () => {
       expect(chainStateService).toBeInstanceOf(ChainStateService);
+      // Check if JsonRpcProvider was called for the super class
+      expect(JsonRpcProvider).toHaveBeenCalledWith(mockRpcUrl);
     });
 
     it('should create a new Contract instance for submitContract', () => {
-      const ethers = require('ethers');
-      expect(ethers.Contract).toHaveBeenCalledWith(
+      // JsonRpcProvider is called once for super, once for this.submitContract
+      expect(JsonRpcProvider).toHaveBeenCalledTimes(2);
+      expect(JsonRpcProvider).toHaveBeenLastCalledWith(mockRpcUrl);
+      
+      // Assert against the imported (and mocked) Contract constructor
+      expect(Contract).toHaveBeenCalledWith(
         mockSubmitContractAddress,
         SUBMIT_CONTRACT_ABI_FRAGMENTS,
-        expect.any(ethers.JsonRpcProvider)
+        mockJsonRpcProviderInstance // The instance returned by the mocked JsonRpcProvider
       );
     });
   });
@@ -105,7 +117,7 @@ describe('ChainStateService', () => {
         toUtf8Bytes(`.${dataGroupCid}`)
       );
       expect(result).toBe(expectedDataCid);
-      expect(mockIsValidCID).toHaveBeenCalledWith(expectedDataCid); // Check with the hoisted mock
+      expect(mockIsValidCID).toHaveBeenCalledWith(expectedDataCid);
     });
 
     it('should return null if contract returns ZeroHash', async () => {
@@ -132,7 +144,7 @@ describe('ChainStateService', () => {
       mockEthersContractInstance.getCurrentFieldDataCID.mockResolvedValue(
         toUtf8Bytes('.invalidCidFormat')
       );
-      mockIsValidCID.mockReturnValue(false); // Use the hoisted mock
+      mockIsValidCID.mockReturnValue(false);
 
       const result = await chainStateService.getCurrentDataCid(
         propertyCid,
@@ -140,7 +152,7 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBeNull();
-      expect(mockIsValidCID).toHaveBeenCalledWith('invalidCidFormat'); // Check with the hoisted mock
+      expect(mockIsValidCID).toHaveBeenCalledWith('invalidCidFormat');
     });
 
     it('should return null and log error on contract call failure', async () => {
@@ -166,9 +178,8 @@ describe('ChainStateService', () => {
       '0x1234567890123456789012345678901234567890',
       '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
     ];
-    const normalizedAddresses = mockAddresses.map((addr) =>
-      require('ethers').getAddress(addr)
-    );
+    // Use the imported getAddress from ethers
+    const normalizedAddresses = mockAddresses.map((addr) => getAddress(addr));
 
     it('should fetch and return participant addresses', async () => {
       mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(

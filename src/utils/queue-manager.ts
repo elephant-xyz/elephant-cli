@@ -37,7 +37,7 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
     super();
     this.concurrency = options.concurrency || 10;
     this.timeout = options.timeout || 30000;
-    this.autoStart = options.autoStart ?? true;
+    this.autoStart = options.autoStart ?? true; // Ensure autoStart defaults to true if undefined
   }
 
   /**
@@ -75,7 +75,12 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
     this.emit('task-added', task);
 
     if (this.autoStart && this.processor && !this.isPaused) {
-      this.processNext();
+      if (!this.isRunning) {
+        this.start(); // This will set isRunning and call processNext for existing tasks
+      } else {
+        // If already running, new task was added, processNext might be needed if concurrency allows
+        this.processNext(); 
+      }
     }
 
     return task.id;
