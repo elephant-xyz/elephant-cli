@@ -1,6 +1,6 @@
 import { stat, readdir } from 'fs/promises';
 import { join, extname } from 'path';
-import { FileEntry } from '../types/submit.types';
+import { FileEntry } from '../types/submit.types.js';
 
 export interface ValidationResult {
   isValid: boolean;

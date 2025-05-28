@@ -1,4 +1,4 @@
-import { IPFSService } from './ipfs.service';
+import { IPFSService } from './ipfs.service.js';
 
 export interface JSONSchema {
   $schema?: string;

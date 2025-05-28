@@ -1,7 +1,7 @@
 import FormData from 'form-data'; // Pinata expects multipart/form-data
-import { UploadResult, ProcessedFile } from '../types/submit.types';
-import { QueueManager } from '../utils/queue-manager';
-import { logger } from '../utils/logger';
+import { UploadResult, ProcessedFile } from '../types/submit.types.js';
+import { QueueManager } from '../utils/queue-manager.js';
+import { logger } from '../utils/logger.js';
 import { promises as fsPromises } from 'fs'; // For reading file content
 
 export interface PinataOptions {
@@ -26,7 +26,7 @@ export class PinataService {
   private pinataApiKey: string;
   private pinataSecretApiKey: string;
   private pinataJwt: string | undefined;
-  private uploadQueue: QueueManager<ProcessedFile, UploadResult>;
+  public uploadQueue: QueueManager<ProcessedFile, UploadResult>;
 
   private readonly pinataApiUrl =
     'https://api.pinata.cloud/pinning/pinFileToIPFS';
@@ -52,7 +52,6 @@ export class PinataService {
 
     this.uploadQueue = new QueueManager<ProcessedFile, UploadResult>({
       concurrency: maxConcurrentUploads,
-      processFn: this.processUpload.bind(this),
     });
   }
 
@@ -153,9 +152,6 @@ export class PinataService {
           cid: resultJson.IpfsHash,
           propertyCid: originalFileInfo.propertyCid,
           dataGroupCid: originalFileInfo.dataGroupCid,
-          pinSize: resultJson.PinSize,
-          timestamp: resultJson.Timestamp,
-          isDuplicate: resultJson.isDuplicate,
         };
       } catch (error) {
         lastError = error as Error;
@@ -206,18 +202,38 @@ export class PinataService {
     if (files.length === 0) {
       return [];
     }
-    logger.info(`Queueing ${files.length} files for upload.`);
+    logger.info(`Uploading ${files.length} files to IPFS.`);
 
-    const uploadPromises = files.map((file) => this.uploadQueue.push(file));
+    const uploadPromises = files.map(async (file) => {
+      try {
+        const fileContent = await fsPromises.readFile(file.filePath);
+        const metadata = {
+          name: `${file.propertyCid}_${file.dataGroupCid}`,
+          keyvalues: {
+            propertyCid: file.propertyCid,
+            dataGroupCid: file.dataGroupCid,
+          }
+        };
+        const originalFileInfo: ProcessedFile = {
+          propertyCid: file.propertyCid,
+          dataGroupCid: file.dataGroupCid,
+          filePath: file.filePath,
+          canonicalJson: file.canonicalJson,
+          calculatedCid: file.calculatedCid,
+          validationPassed: file.validationPassed,
+        };
+        return await this.uploadFileInternal(fileContent, metadata, originalFileInfo);
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          propertyCid: file.propertyCid,
+          dataGroupCid: file.dataGroupCid,
+        };
+      }
+    });
 
-    this.uploadQueue.start();
-
-    const results = await Promise.all(uploadPromises);
-
-    // Consider if awaiting drain is necessary for the user of this service
-    // await this.uploadQueue.drain();
-
-    return results;
+    return await Promise.all(uploadPromises);
   }
 
   private getAuthHeaders(): Record<string, string> {

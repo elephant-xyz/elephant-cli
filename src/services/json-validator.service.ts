@@ -1,6 +1,7 @@
-import Ajv, { ValidateFunction, ErrorObject } from 'ajv';
-import addFormats from 'ajv-formats';
-import { JSONSchema } from './schema-cache.service';
+const Ajv = require('ajv').default || require('ajv');
+const addFormats = require('ajv-formats').default || require('ajv-formats');
+import type { ValidateFunction, ErrorObject } from 'ajv';
+import { JSONSchema } from './schema-cache.service.js';
 
 export interface ValidationError {
   path: string;
@@ -15,7 +16,7 @@ export interface ValidationResult {
 }
 
 export class JsonValidatorService {
-  private ajv: Ajv;
+  private ajv: InstanceType<typeof Ajv>;
   private validators: Map<string, ValidateFunction>;
 
   constructor() {
@@ -108,10 +109,17 @@ export class JsonValidatorService {
         throw new Error('Ajv instance or compile method is not available.');
       }
       // Compile the schema
-      validator = this.ajv.compile(schema);
+      validator = this.ajv.compile(schema) as ValidateFunction<unknown>;
       this.validators.set(cacheKey, validator);
+      
+      if (!validator) {
+        throw new Error('Failed to compile schema validator');
+      }
     }
 
+    if (!validator) {
+      throw new Error('Failed to compile or retrieve validator');
+    }
     return validator;
   }
 

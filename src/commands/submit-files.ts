@@ -6,25 +6,25 @@ import {
   DEFAULT_CONTRACT_ADDRESS,
   DEFAULT_IPFS_GATEWAY,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
-} from '../config/constants';
-import { createSubmitConfig, SubmitConfig } from '../config/submit.config';
-import { logger } from '../utils/logger';
-import { FileScannerService } from '../services/file-scanner.service';
+} from '../config/constants.js';
+import { createSubmitConfig, SubmitConfig } from '../config/submit.config.js';
+import { logger } from '../utils/logger.js';
+import { FileScannerService } from '../services/file-scanner.service.js';
 import {
   SchemaCacheService,
   JSONSchema,
-} from '../services/schema-cache.service';
-import { JsonValidatorService } from '../services/json-validator.service';
-import { JsonCanonicalizerService } from '../services/json-canonicalizer.service';
-import { CidCalculatorService } from '../services/cid-calculator.service';
-import { ChainStateService } from '../services/chain-state.service';
-import { PinataService } from '../services/pinata.service';
-import { TransactionBatcherService } from '../services/transaction-batcher.service';
-import { CsvReporterService } from '../services/csv-reporter.service';
-import { ProgressTracker, ProcessingPhase } from '../utils/progress-tracker';
-import { ProcessedFile } from '../types/submit.types';
-import { DataItem } from '../types/contract.types';
-import { IPFSService } from '../services/ipfs.service'; // For schema downloads
+} from '../services/schema-cache.service.js';
+import { JsonValidatorService } from '../services/json-validator.service.js';
+import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.js';
+import { CidCalculatorService } from '../services/cid-calculator.service.js';
+import { ChainStateService } from '../services/chain-state.service.js';
+import { PinataService } from '../services/pinata.service.js';
+import { TransactionBatcherService } from '../services/transaction-batcher.service.js';
+import { CsvReporterService } from '../services/csv-reporter.service.js';
+import { ProgressTracker, ProcessingPhase } from '../utils/progress-tracker.js';
+import { ProcessedFile } from '../types/submit.types.js';
+import { DataItem } from '../types/contract.types.js';
+import { IPFSService } from '../services/ipfs.service.js'; // For schema downloads
 
 // Define command options interface
 export interface SubmitFilesCommandOptions {
@@ -214,18 +214,15 @@ export async function handleSubmitFiles(
   logger.info(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
   let progressTracker: ProgressTracker =
-    serviceOverrides.progressTracker ?? undefined;
+    serviceOverrides.progressTracker || new ProgressTracker(
+      0,
+      config.progressUpdateInterval,
+      config.enableProgressBar
+    );
 
   try {
     // --- Phase 1: Discovery (Task 12.2) ---
     logger.info('Phase 1: Discovery - Scanning files...');
-    if (!progressTracker) {
-      progressTracker = new ProgressTracker(
-        0,
-        config.progressUpdateInterval,
-        config.enableProgressBar
-      ); // Initialize with 0, update later
-    }
     progressTracker.start();
     progressTracker.setPhase(ProcessingPhase.SCANNING);
 

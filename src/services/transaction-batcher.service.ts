@@ -5,13 +5,13 @@ import {
   TransactionResponse,
   TransactionReceipt,
 } from 'ethers';
-import { DataItem, BatchSubmissionResult } from '../types/contract.types';
+import { DataItem, BatchSubmissionResult } from '../types/contract.types.js';
 import {
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
   SUBMIT_CONTRACT_METHODS,
-} from '../config/constants';
-import { DEFAULT_SUBMIT_CONFIG, SubmitConfig } from '../config/submit.config';
-import { logger } from '../utils/logger';
+} from '../config/constants.js';
+import { DEFAULT_SUBMIT_CONFIG, SubmitConfig } from '../config/submit.config.js';
+import { logger } from '../utils/logger.js';
 import { toUtf8Bytes } from 'ethers'; // For converting CIDs to bytes
 
 export class TransactionBatcherService {

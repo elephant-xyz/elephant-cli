@@ -155,7 +155,7 @@ export class CsvReporterService {
     if (this.errorStream) {
       promises.push(
         new Promise((resolve, reject) => {
-          this.errorStream!.end((error) => {
+          this.errorStream!.end((error?: Error) => {
             if (error) reject(error);
             else resolve();
           });
@@ -166,7 +166,7 @@ export class CsvReporterService {
     if (this.warningStream) {
       promises.push(
         new Promise((resolve, reject) => {
-          this.warningStream!.end((error) => {
+          this.warningStream!.end((error?: Error) => {
             if (error) reject(error);
             else resolve();
           });

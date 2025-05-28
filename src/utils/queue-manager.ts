@@ -53,8 +53,8 @@ export class QueueManager<T = unknown, R = unknown> extends EventEmitter {
   /**
    * Add a task to the queue
    */
-  push(data: T, options: Partial<QueueTask<T, R>> = {}): string {
-    const task: QueueTask<T, R> = {
+  push(data: T, options: Partial<QueueTask<T>> = {}): string {
+    const task: QueueTask<T> = {
       id: options.id || Math.random().toString(36).substr(2, 9),
       data,
       priority: options.priority || 0,
@@ -89,7 +89,7 @@ export class QueueManager<T = unknown, R = unknown> extends EventEmitter {
   /**
    * Add multiple tasks to the queue
    */
-  pushBatch(dataArray: T[], options: Partial<QueueTask<T, R>> = {}): string[] {
+  pushBatch(dataArray: T[], options: Partial<QueueTask<T>> = {}): string[] {
     return dataArray.map((data) => this.push(data, options));
   }
 
@@ -267,7 +267,7 @@ export class QueueManager<T = unknown, R = unknown> extends EventEmitter {
   /**
    * Get a specific task by ID
    */
-  getTask(id: string): QueueTask<T, R> | undefined {
+  getTask(id: string): QueueTask<T> | undefined {
     return this.queue.find((task) => task.id === id);
   }
 
