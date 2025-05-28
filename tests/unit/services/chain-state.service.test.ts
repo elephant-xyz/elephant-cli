@@ -25,6 +25,7 @@ vi.mock('../../../src/utils/validation', () => ({
 const mockEthersContractInstance = {
   getCurrentFieldDataCID: vi.fn(),
   getParticipantsForConsensusDataCID: vi.fn(),
+  hasUserSubmittedDataCID: vi.fn(),
 };
 const mockJsonRpcProviderInstance = {
   getBlockNumber: vi.fn().mockResolvedValue(12345),
@@ -67,6 +68,7 @@ describe('ChainStateService', () => {
     // Ensure the mock functions on the instance are reset
     mockEthersContractInstance.getCurrentFieldDataCID.mockReset();
     mockEthersContractInstance.getParticipantsForConsensusDataCID.mockReset();
+    mockEthersContractInstance.hasUserSubmittedDataCID.mockReset();
     // Also reset the Contract constructor spy itself if it's re-used across tests for constructor calls
     (Contract as ReturnType<typeof vi.fn>).mockClear();
     (JsonRpcProvider as ReturnType<typeof vi.fn>).mockClear();
@@ -275,13 +277,7 @@ describe('ChainStateService', () => {
     const normalizedUserAddress = getAddress(userAddress);
 
     it('should return true if user has submitted data', async () => {
-      const mockParticipants = [
-        normalizedUserAddress,
-        '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-      ];
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
-        mockParticipants
-      );
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(true);
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -292,22 +288,17 @@ describe('ChainStateService', () => {
 
       expect(result).toBe(true);
       expect(
-        mockEthersContractInstance.getParticipantsForConsensusDataCID
+        mockEthersContractInstance.hasUserSubmittedDataCID
       ).toHaveBeenCalledWith(
         ethers.hexlify(toUtf8Bytes(propertyCid)),
         ethers.hexlify(toUtf8Bytes(dataGroupCid)),
-        ethers.hexlify(toUtf8Bytes(dataCid))
+        ethers.hexlify(toUtf8Bytes(dataCid)),
+        normalizedUserAddress
       );
     });
 
     it('should return false if user has not submitted data', async () => {
-      const mockParticipants = [
-        '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-        '0x9876543210987654321098765432109876543210',
-      ];
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
-        mockParticipants
-      );
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(false);
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -317,12 +308,18 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBe(false);
+      expect(
+        mockEthersContractInstance.hasUserSubmittedDataCID
+      ).toHaveBeenCalledWith(
+        ethers.hexlify(toUtf8Bytes(propertyCid)),
+        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
+        ethers.hexlify(toUtf8Bytes(dataCid)),
+        normalizedUserAddress
+      );
     });
 
-    it('should return false if no participants found', async () => {
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
-        []
-      );
+    it('should return false when contract returns false', async () => {
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(false);
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -336,7 +333,7 @@ describe('ChainStateService', () => {
 
     it('should return false and log error on contract call failure', async () => {
       const error = new Error('Contract call failed');
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockRejectedValue(
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockRejectedValue(
         error
       );
 
@@ -352,10 +349,7 @@ describe('ChainStateService', () => {
 
     it('should handle address normalization correctly', async () => {
       const lowercaseAddress = userAddress.toLowerCase();
-      const mockParticipants = [normalizedUserAddress];
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
-        mockParticipants
-      );
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(true);
 
       const result = await chainStateService.hasUserSubmittedData(
         lowercaseAddress,
@@ -365,6 +359,14 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBe(true);
+      expect(
+        mockEthersContractInstance.hasUserSubmittedDataCID
+      ).toHaveBeenCalledWith(
+        ethers.hexlify(toUtf8Bytes(propertyCid)),
+        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
+        ethers.hexlify(toUtf8Bytes(dataCid)),
+        normalizedUserAddress // Should be normalized even if input was lowercase
+      );
     });
   });
 });

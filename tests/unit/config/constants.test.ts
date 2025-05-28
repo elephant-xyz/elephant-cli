@@ -169,13 +169,14 @@ describe('Constants', () => {
     });
 
     it('should have all required ABI fragments', () => {
-      expect(SUBMIT_CONTRACT_ABI_FRAGMENTS).toHaveLength(3);
+      expect(SUBMIT_CONTRACT_ABI_FRAGMENTS).toHaveLength(4);
 
       const methodNames = SUBMIT_CONTRACT_ABI_FRAGMENTS.map(
         (fragment) => fragment.name
       );
       expect(methodNames).toContain('getCurrentFieldDataCID');
       expect(methodNames).toContain('getParticipantsForConsensusDataCID');
+      expect(methodNames).toContain('hasUserSubmittedDataCID');
       expect(methodNames).toContain('submitBatchData');
     });
 

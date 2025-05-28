@@ -96,8 +96,8 @@ describe('CidCalculatorService', () => {
       // expect(cid).toBe('QmXXX...');
     });
 
-    it('should throw error for invalid input', async () => {
-      // Test with null/undefined (TypeScript would normally prevent this)
+    it('should throw error for null input', async () => {
+      // Simplified implementation properly rejects null input
       await expect(cidCalculator.calculateCidV0(null as any)).rejects.toThrow(
         'Failed to calculate CID v0'
       );

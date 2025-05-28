@@ -168,15 +168,23 @@ export class ChainStateService extends BlockchainService {
     dataCid: string
   ): Promise<boolean> {
     try {
-      const participants = await this.getSubmittedParticipants(
-        propertyCid,
-        dataGroupCid,
-        dataCid
+      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
+      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
+      const dataCidBytes = ethers.hexlify(toUtf8Bytes(dataCid));
+      const normalizedUserAddress = getAddress(userAddress);
+
+      const hasSubmitted: boolean = await this.submitContract[
+        SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_CID
+      ](
+        propertyCidBytes,
+        dataGroupCidBytes,
+        dataCidBytes,
+        normalizedUserAddress
       );
 
-      const normalizedUserAddress = getAddress(userAddress);
-      const hasSubmitted = participants.includes(normalizedUserAddress);
-
+      logger.technical(
+        `Bytes values - propertyCid: ${propertyCidBytes}, dataGroupCid: ${dataGroupCidBytes}, dataCid: ${dataCidBytes}, userAddress: ${normalizedUserAddress}`
+      );
       logger.technical(
         `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'} submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}`
       );

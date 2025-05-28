@@ -9,6 +9,7 @@ export const BLOCKS_PER_QUERY = 10000;
 export const SUBMIT_CONTRACT_METHODS = {
   GET_CURRENT_FIELD_DATA_CID: 'getCurrentFieldDataCID',
   GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID: 'getParticipantsForConsensusDataCID',
+  HAS_USER_SUBMITTED_DATA_CID: 'hasUserSubmittedDataCID',
   SUBMIT_BATCH_DATA: 'submitBatchData',
 } as const;
 
@@ -36,6 +37,18 @@ export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
     ],
     name: 'getParticipantsForConsensusDataCID',
     outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'bytes', name: 'propertyCid', type: 'bytes' },
+      { internalType: 'bytes', name: 'dataGroupCID', type: 'bytes' },
+      { internalType: 'bytes', name: 'dataCID', type: 'bytes' },
+      { internalType: 'address', name: 'submitter', type: 'address' },
+    ],
+    name: 'hasUserSubmittedDataCID',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
     stateMutability: 'view',
     type: 'function',
   },
