@@ -46,7 +46,11 @@ export class TransactionBatcherService {
   /**
    * Prepares DataItem for contract call by converting CIDs to bytes.
    */
-  private prepareDataItemForContract(item: DataItem): any {
+  private prepareDataItemForContract(item: DataItem): {
+    propertyCid: Uint8Array;
+    dataGroupCID: Uint8Array;
+    dataCID: Uint8Array;
+  } {
     return {
       propertyCid: toUtf8Bytes(`.${item.propertyCid}`),
       dataGroupCID: toUtf8Bytes(`.${item.dataGroupCID}`), // Matches contract.types.ts and ABI

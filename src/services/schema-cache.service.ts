@@ -3,10 +3,10 @@ import { IPFSService } from './ipfs.service';
 export interface JSONSchema {
   $schema?: string;
   type?: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   required?: string[];
   additionalProperties?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface LRUCacheNode {

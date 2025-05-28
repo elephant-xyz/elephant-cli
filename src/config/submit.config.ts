@@ -1,3 +1,5 @@
+import { cpus } from 'os';
+
 export interface SubmitConfig {
   // Concurrency limits
   maxConcurrentReads: number;
@@ -39,7 +41,7 @@ export interface SubmitConfig {
 export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
   // Concurrency limits
   maxConcurrentReads: 100,
-  maxConcurrentValidations: Math.max(1, require('os').cpus().length - 1),
+  maxConcurrentValidations: Math.max(1, cpus().length - 1),
   maxConcurrentUploads: 10,
   maxConcurrentChainQueries: 20,
 

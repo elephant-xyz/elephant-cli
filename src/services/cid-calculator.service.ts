@@ -129,7 +129,7 @@ export class CidCalculatorService {
    * Helper method to calculate CID from a JSON object
    * Converts the object to canonical JSON string first
    */
-  async calculateCidFromJson(json: any): Promise<string> {
+  async calculateCidFromJson(json: unknown): Promise<string> {
     const jsonString = JSON.stringify(json);
     const buffer = this.stringToBuffer(jsonString);
     return this.calculateCidV0(buffer);

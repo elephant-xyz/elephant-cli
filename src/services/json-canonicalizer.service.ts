@@ -1,4 +1,4 @@
-const canonicalize = require('canonicalize');
+import canonicalize from 'canonicalize';
 
 export class JsonCanonicalizerService {
   constructor() {}

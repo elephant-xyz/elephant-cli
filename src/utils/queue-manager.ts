@@ -6,7 +6,7 @@ export interface QueueOptions {
   autoStart?: boolean;
 }
 
-export interface QueueTask<T = any, R = any> {
+export interface QueueTask<T = unknown> {
   id: string;
   data: T;
   priority?: number;
@@ -14,7 +14,7 @@ export interface QueueTask<T = any, R = any> {
   maxRetries?: number;
 }
 
-export interface QueueResult<R = any> {
+export interface QueueResult<R = unknown> {
   id: string;
   result?: R;
   error?: Error;
@@ -23,8 +23,8 @@ export interface QueueResult<R = any> {
 
 type TaskProcessor<T, R> = (data: T) => Promise<R>;
 
-export class QueueManager<T = any, R = any> extends EventEmitter {
-  private queue: QueueTask<T, R>[] = [];
+export class QueueManager<T = unknown, R = unknown> extends EventEmitter {
+  private queue: QueueTask<T>[] = [];
   private activeCount = 0;
   private concurrency: number;
   private timeout: number;

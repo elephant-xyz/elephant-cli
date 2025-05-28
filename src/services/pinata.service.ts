@@ -7,7 +7,7 @@ import { promises as fsPromises } from 'fs'; // For reading file content
 export interface PinataOptions {
   cidVersion?: 0 | 1;
   wrapWithDirectory?: boolean;
-  customPinPolicy?: any; // Define more strictly if needed
+  customPinPolicy?: Record<string, unknown>; // Define more strictly if needed
 }
 
 export interface PinataPinResponse {
