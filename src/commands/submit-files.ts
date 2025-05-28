@@ -1,16 +1,15 @@
-import { Command, Option } from 'commander';
-import { promises as fsPromises, existsSync, readFileSync } from 'fs';
+import { Command } from 'commander';
+import { promises as fsPromises, readFileSync } from 'fs';
 import path from 'path';
 import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
+  DEFAULT_IPFS_GATEWAY,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
-  ELEPHANT_CONTRACT_ABI,
 } from '../config/constants';
 import {
   createSubmitConfig,
   SubmitConfig,
-  DEFAULT_SUBMIT_CONFIG,
 } from '../config/submit.config';
 import { logger } from '../utils/logger';
 import { FileScannerService } from '../services/file-scanner.service';
@@ -171,15 +170,10 @@ export async function handleSubmitFiles(
     serviceOverrides.fileScannerService ?? new FileScannerService();
   const ipfsServiceForSchemas =
     serviceOverrides.ipfsServiceForSchemas ??
-    new IPFSService(DEFAULT_SUBMIT_CONFIG.schemaIpfsGateway); // Use a default or configurable gateway
+    new IPFSService(DEFAULT_IPFS_GATEWAY);
   const schemaCacheService =
     serviceOverrides.schemaCacheService ??
-    new SchemaCacheService(
-      config.schemaCacheSize,
-      ipfsServiceForSchemas,
-      config.enableDiskCache,
-      config.schemaCachePath
-    );
+    new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
   const jsonValidatorService =
     serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
   const jsonCanonicalizerService =

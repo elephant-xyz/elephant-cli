@@ -129,4 +129,40 @@ export class IPFSService {
 
     return results;
   }
+
+  async fetchContent(cid: string, retries: number = 1): Promise<Buffer> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const url = `${this.gateway}${cid}`;
+
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < retries) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * (attempt + 1))
+          );
+        }
+      }
+    }
+
+    throw lastError || new Error(`Failed to fetch content for CID ${cid}`);
+  }
 }

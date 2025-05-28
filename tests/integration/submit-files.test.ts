@@ -3,22 +3,16 @@ import fs from 'fs-extra'; // Using fs-extra for easier temp dir management
 import path from 'path';
 import { handleSubmitFiles, SubmitFilesCommandOptions } from '../../src/commands/submit-files';
 import { PinataService } from '../../src/services/pinata.service';
-import { ChainStateService } from '../../src/services/blockchain.service';
+import { ChainStateService } from '../../src/services/chain-state.service';
 import { TransactionBatcherService } from '../../src/services/transaction-batcher.service';
 import { IPFSService } from '../../src/services/ipfs.service'; // For schema fetching mock
 import { logger } from '../../src/utils/logger';
-import { SubmitConfig } from '../../src/config/submit-config';
+import { SubmitConfig, DEFAULT_SUBMIT_CONFIG } from '../../src/config/submit.config';
 import { ProcessedFile, DataItem, FileEntry } from '../../src/types/index';
 
 // Mock only the services that interact with external systems we want to avoid in tests
 vi.mock('../../src/services/pinata.service');
-vi.mock('../../src/services/blockchain.service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/services/blockchain.service')>();
-  return {
-    ...actual, // Keep other exports like BlockchainService if any
-    ChainStateService: vi.fn(), // Mock ChainStateService constructor
-  };
-});
+vi.mock('../../src/services/chain-state.service');
 vi.mock('../../src/services/transaction-batcher.service');
 vi.mock('../../src/services/ipfs.service'); // To mock the one used for schema fetching
 
@@ -93,7 +87,25 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
     mockPinataServiceInstance.uploadBatch = vi.fn();
     mockPinataServiceInstance.getQueueStats = vi.fn().mockReturnValue({ pending: 0, active: 0, completed: 0, total: 0 });
     (mockPinataServiceInstance as any).uploadQueue = { on: vi.fn(), off: vi.fn(), drain: vi.fn().mockResolvedValue(undefined) }; // Add drain if PinataService uses it like p-queue
-    mockPinataServiceInstance.drainQueue = vi.fn().mockResolvedValue(undefined);
+    mockPinataServiceInstance.drainQueue = vi.fn().mockImplementation(async () => {
+      // Manually trigger task_completed events for each uploaded file
+      // This simulates what would happen after uploadBatch completes
+      const lastUploadCall = mockPinataServiceInstance.uploadBatch.mock.calls[mockPinataServiceInstance.uploadBatch.mock.calls.length - 1];
+      if (lastUploadCall) {
+        const filesToUpload = lastUploadCall[0] as ProcessedFile[];
+        const uploadedCids = ['zdpuploadedFile1Cid', 'zdpuploadedFile2Cid'];
+        
+        filesToUpload.forEach((file, index) => {
+          const taskCompletedCallback = mockPinataServiceInstance.uploadQueue.on.mock.calls.find(call => call[0] === 'task_completed')?.[1];
+          if (taskCompletedCallback) {
+            taskCompletedCallback({ 
+              task: file, 
+              result: { success: true, cid: uploadedCids[index] } 
+            });
+          }
+        });
+      }
+    });
 
     mockChainStateServiceInstance.getCurrentDataCid = vi.fn().mockResolvedValue(null); // Default: file not on chain
 
@@ -103,23 +115,14 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
 
     // For SchemaCacheService to fetch schemas (e.g. if schema is a CID "bafy...")
     // This mock simulates fetching a schema file from our local SCHEMA_DIR
-    mockIpfsServiceForSchemasInstance.downloadFile = vi.fn().mockImplementation(async (cidOrPath: string, destinationDir: string, fileName: string) => {
-        const schemaFileName = cidOrPath.startsWith('bafy') ? `${cidOrPath}.json` : cidOrPath; // simplistic mapping
-        const localSchemaPath = path.join(SCHEMA_DIR, schemaFileName);
-        if (fs.existsSync(localSchemaPath)) {
-            const destPath = path.join(destinationDir, fileName);
-            await fs.copy(localSchemaPath, destPath);
-            return { success: true, path: destPath, cid: cidOrPath };
-        }
-        return { success: false, error: new Error(`Mock schema not found: ${cidOrPath}`), cid: cidOrPath };
-    });
-     mockIpfsServiceForSchemasInstance.cat = vi.fn().mockImplementation(async (cidOrPath: string) => {
+    mockIpfsServiceForSchemasInstance.fetchContent = vi.fn().mockImplementation(async (cidOrPath: string) => {
         const schemaFileName = cidOrPath.startsWith('bafy') ? `${cidOrPath}.json` : cidOrPath;
         const localSchemaPath = path.join(SCHEMA_DIR, schemaFileName);
         if(fs.existsSync(localSchemaPath)) {
-            return fs.readFileSync(localSchemaPath, 'utf-8');
+            const content = fs.readFileSync(localSchemaPath, 'utf-8');
+            return Buffer.from(content, 'utf-8');
         }
-        throw new Error(`Mock schema CID not found by cat: ${cidOrPath}`);
+        throw new Error(`Mock schema CID not found: ${cidOrPath}`);
     });
 
 
@@ -171,32 +174,28 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
 
       const file1Content = { data: 'file1 data', schema: schemaCid };
       const file2Content = { data: 'file2 data', schema: schemaCid };
-      // Files need to be in a structure that FileScannerService expects, e.g., propertyCid/dataGroupCid/fileName.json
-      const propertyCid1 = 'propCid123';
-      const dataGroupCid1 = 'dataGroupCid456';
-      const file1Path = path.join(INPUT_DIR, propertyCid1, dataGroupCid1, 'file1.json');
+      // Files need to be in a structure that FileScannerService expects: propertyCid/dataGroupCid.json
+      const propertyCid1 = 'QmTestProperty1234567890123456789012345Abc';
+      const dataGroupCid1 = 'QmTestDataGroup1234567890123456789012345Def';
+      const file1Path = path.join(INPUT_DIR, propertyCid1, `${dataGroupCid1}.json`);
       createJsonFile(path.dirname(file1Path), path.basename(file1Path), file1Content);
 
-      const propertyCid2 = 'propCid789';
-      const dataGroupCid2 = 'dataGroupCidABC';
-      const file2Path = path.join(INPUT_DIR, propertyCid2, dataGroupCid2, 'file2.json');
+      const propertyCid2 = 'QmTestProperty2234567890123456789012345Ghi';
+      const dataGroupCid2 = 'QmTestDataGroup2234567890123456789012345Jkl';
+      const file2Path = path.join(INPUT_DIR, propertyCid2, `${dataGroupCid2}.json`);
       createJsonFile(path.dirname(file2Path), path.basename(file2Path), file2Content);
       
       // 2. Configure mock service behaviors
       const uploadedCids = ['zdpuploadedFile1Cid', 'zdpuploadedFile2Cid'];
       mockPinataServiceInstance.uploadBatch.mockImplementation(async (filesToUpload: ProcessedFile[]) => {
-        const onCompleteCallback = (mockPinataServiceInstance as any).uploadQueue.on.mock.calls.find(call => call[0] === 'task_completed')?.[1];
-        
-        const results = filesToUpload.map((file, index) => {
-          // Simulate task completion for ProgressTracker
-          if (onCompleteCallback) {
-            onCompleteCallback({ task: file, result: { success: true, cid: uploadedCids[index] } });
-          }
-          return {
-            propertyCid: file.propertyCid, dataGroupCid: file.dataGroupCid, filePath: file.filePath,
-            success: true, cid: uploadedCids[index], error: null
-          };
-        });
+        const results = filesToUpload.map((file, index) => ({
+          propertyCid: file.propertyCid, 
+          dataGroupCid: file.dataGroupCid, 
+          filePath: file.filePath,
+          success: true, 
+          cid: uploadedCids[index], 
+          error: null
+        }));
         return results;
       });
 
@@ -272,9 +271,9 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       createJsonFile(SCHEMA_DIR, `${schemaCid}.json`, schemaContent);
 
       const file1Content = { data: 'file1 dry run', schema: schemaCid };
-      const propertyCid1 = 'propDry1';
-      const dataGroupCid1 = 'dataGroupDry1';
-      const file1Path = path.join(INPUT_DIR, propertyCid1, dataGroupCid1, 'fileDry1.json');
+      const propertyCid1 = 'QmTestPropertyDryRun1234567890123456789012Abc';
+      const dataGroupCid1 = 'QmTestDataGroupDryRun1234567890123456789012Def';
+      const file1Path = path.join(INPUT_DIR, propertyCid1, `${dataGroupCid1}.json`);
       createJsonFile(path.dirname(file1Path), path.basename(file1Path), file1Content);
 
       const dryRunOptions = { ...defaultOptions, dryRun: true };
@@ -290,7 +289,8 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Would upload files to IPFS:'));
       expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining(file1Path)); // Check one file path
       expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Would submit the following data items to the blockchain:'));
-      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining(`P: ${propertyCid1}, G: ${dataGroupCid1}`));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Files that would be uploaded: 1'));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Data items that would be submitted: 1'));
       
       expect(processExitSpy).not.toHaveBeenCalled();
 

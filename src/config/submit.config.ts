@@ -29,6 +29,7 @@ export interface SubmitConfig {
   errorCsvPath: string;
   warningCsvPath: string;
   checkpointPath: string;
+  schemaCachePath: string;
 
   // Progress configuration
   progressUpdateInterval: number; // in milliseconds
@@ -66,6 +67,7 @@ export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
   errorCsvPath: './submit_errors.csv',
   warningCsvPath: './submit_warnings.csv',
   checkpointPath: './submit_checkpoint.json',
+  schemaCachePath: './schema_cache',
 
   // Progress configuration
   progressUpdateInterval: 500, // 500ms

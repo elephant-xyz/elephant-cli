@@ -1,4 +1,4 @@
-import { IpfsService } from './ipfs.service';
+import { IPFSService } from './ipfs.service';
 
 export interface JSONSchema {
   $schema?: string;
@@ -23,7 +23,7 @@ export class SchemaCacheService {
   private readonly maxSize: number;
 
   constructor(
-    private ipfsService: IpfsService,
+    private ipfsService: IPFSService,
     maxSize = 1000
   ) {
     this.cache = new Map();
@@ -129,7 +129,7 @@ export class SchemaCacheService {
 
     // Download from IPFS
     try {
-      const schemaBuffer = await this.ipfsService.downloadFile(dataGroupCid);
+      const schemaBuffer = await this.ipfsService.fetchContent(dataGroupCid);
       const schemaText = schemaBuffer.toString('utf-8');
       const schema: JSONSchema = JSON.parse(schemaText);
 
