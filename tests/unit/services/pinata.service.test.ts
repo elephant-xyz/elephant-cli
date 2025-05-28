@@ -95,21 +95,9 @@ describe('PinataService', () => {
 
     it('should successfully upload a file', async () => {
       const mockPinataResponse = {
-        data: {
-          id: 'some-id',
-          name: 'propTest_groupTest.json',
-          cid: 'bafyTestHash',
-          size: 123,
-          number_of_files: 1,
-          mime_type: 'application/json',
-          group_id: null,
-          keyvalues: {
-            propertyCid: 'propTest',
-            dataGroupCid: 'groupTest',
-            originalCid: 'QmTestCid',
-          },
-          created_at: new Date().toISOString(),
-        },
+        IpfsHash: 'bafyTestHash',
+        PinSize: 123,
+        Timestamp: new Date().toISOString(),
       };
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -126,21 +114,9 @@ describe('PinataService', () => {
 
     it('should retry on failure and then succeed', async () => {
       const mockPinataResponse = {
-        data: {
-          id: 'some-id',
-          name: 'propTest_groupTest.json',
-          cid: 'bafyRetryHash',
-          size: 100,
-          number_of_files: 1,
-          mime_type: 'application/json',
-          group_id: null,
-          keyvalues: {
-            propertyCid: 'propTest',
-            dataGroupCid: 'groupTest',
-            originalCid: 'QmTestCid',
-          },
-          created_at: new Date().toISOString(),
-        },
+        IpfsHash: 'bafyRetryHash',
+        PinSize: 100,
+        Timestamp: new Date().toISOString(),
       };
       mockFetch
         .mockResolvedValueOnce({
@@ -206,17 +182,9 @@ describe('PinataService', () => {
       mockFetch.mockImplementation(async () => ({
         ok: true,
         json: async () => ({
-          data: {
-            id: `id_${Math.random()}`,
-            name: 'file.json',
-            cid: `bafyDynamicHash_${Math.random()}`,
-            size: 10,
-            number_of_files: 1,
-            mime_type: 'application/json',
-            group_id: null,
-            keyvalues: {},
-            created_at: new Date().toISOString(),
-          },
+          IpfsHash: `bafyDynamicHash_${Math.random()}`,
+          PinSize: 10,
+          Timestamp: new Date().toISOString(),
         }),
       }));
     });
