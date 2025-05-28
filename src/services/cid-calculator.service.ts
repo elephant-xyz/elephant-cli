@@ -14,6 +14,11 @@ export class CidCalculatorService {
    */
   async calculateCidV0(data: Buffer): Promise<string> {
     try {
+      // Validate input
+      if (!data || !Buffer.isBuffer(data)) {
+        throw new Error('Invalid input: data must be a valid Buffer');
+      }
+
       // Create UnixFS file metadata (this is what IPFS/Pinata does)
       const unixfs = new UnixFS({ type: 'file', data: new Uint8Array(data) });
 

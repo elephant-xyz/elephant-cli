@@ -56,10 +56,16 @@ export class TransactionBatcherService {
     dataCID: string;
   } {
     // Strip leading dots from CIDs if present - dots should not be submitted to smart contract
-    const cleanPropertyCid = item.propertyCid.startsWith('.') ? item.propertyCid.substring(1) : item.propertyCid;
-    const cleanDataGroupCID = item.dataGroupCID.startsWith('.') ? item.dataGroupCID.substring(1) : item.dataGroupCID;
-    const cleanDataCID = item.dataCID.startsWith('.') ? item.dataCID.substring(1) : item.dataCID;
-    
+    const cleanPropertyCid = item.propertyCid.startsWith('.')
+      ? item.propertyCid.substring(1)
+      : item.propertyCid;
+    const cleanDataGroupCID = item.dataGroupCID.startsWith('.')
+      ? item.dataGroupCID.substring(1)
+      : item.dataGroupCID;
+    const cleanDataCID = item.dataCID.startsWith('.')
+      ? item.dataCID.substring(1)
+      : item.dataCID;
+
     return {
       propertyCid: hexlify(toUtf8Bytes(cleanPropertyCid)),
       dataGroupCID: hexlify(toUtf8Bytes(cleanDataGroupCID)),

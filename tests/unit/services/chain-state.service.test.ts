@@ -277,7 +277,9 @@ describe('ChainStateService', () => {
     const normalizedUserAddress = getAddress(userAddress);
 
     it('should return true if user has submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(true);
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+        true
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -298,7 +300,9 @@ describe('ChainStateService', () => {
     });
 
     it('should return false if user has not submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(false);
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+        false
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -319,7 +323,9 @@ describe('ChainStateService', () => {
     });
 
     it('should return false when contract returns false', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(false);
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+        false
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -349,7 +355,9 @@ describe('ChainStateService', () => {
 
     it('should handle address normalization correctly', async () => {
       const lowercaseAddress = userAddress.toLowerCase();
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(true);
+      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+        true
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         lowercaseAddress,

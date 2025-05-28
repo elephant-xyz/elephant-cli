@@ -99,7 +99,7 @@ describe('CidCalculatorService', () => {
     it('should throw error for null input', async () => {
       // Simplified implementation properly rejects null input
       await expect(cidCalculator.calculateCidV0(null as any)).rejects.toThrow(
-        'Failed to calculate CID v0'
+        'Invalid input: data must be a valid Buffer'
       );
     });
   });

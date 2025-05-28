@@ -50,9 +50,10 @@ const MockedTransactionBatcherService =
 const MockedIPFSServiceForSchemas = IPFSService as unknown as vi.Mocked<
   typeof IPFSService
 >; // For schema fetching
-const MockedAssignmentCheckerService = AssignmentCheckerService as unknown as vi.Mocked<
-  typeof AssignmentCheckerService
->;
+const MockedAssignmentCheckerService =
+  AssignmentCheckerService as unknown as vi.Mocked<
+    typeof AssignmentCheckerService
+  >;
 const mockedLogger = logger as vi.Mocked<typeof logger>;
 
 describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
@@ -81,7 +82,8 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
 
   const MOCK_RPC_URL = 'http://localhost:8545/mock'; // Not actually called
   const MOCK_CONTRACT_ADDRESS = '0xMockSubmitContract123'; // Not actually called
-  const MOCK_PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // Valid private key format
+  const MOCK_PRIVATE_KEY =
+    '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // Valid private key format
   const MOCK_PINATA_JWT = 'mockPinataJWT';
 
   const setupTestFileSystem = () => {

@@ -29,9 +29,10 @@ export class AssignmentCheckerService {
 
     try {
       const parsedFromBlock = fromBlock;
-      const parsedToBlock = toBlock === 'latest' 
-        ? await this.blockchainService.getCurrentBlock()
-        : toBlock;
+      const parsedToBlock =
+        toBlock === 'latest'
+          ? await this.blockchainService.getCurrentBlock()
+          : toBlock;
 
       logger.technical(
         `Scanning blocks ${parsedFromBlock} to ${parsedToBlock} for assignments`

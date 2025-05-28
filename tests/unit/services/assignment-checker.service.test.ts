@@ -70,16 +70,15 @@ describe('AssignmentCheckerService', () => {
         mockEvents
       );
 
-      const result = await assignmentCheckerService.fetchAssignedCids(
-        mockElephantAddress
-      );
+      const result =
+        await assignmentCheckerService.fetchAssignedCids(mockElephantAddress);
 
-      expect(mockBlockchainServiceInstance.getCurrentBlock).toHaveBeenCalledTimes(1);
-      expect(mockBlockchainServiceInstance.getOracleAssignedEvents).toHaveBeenCalledWith(
-        mockElephantAddress,
-        0,
-        1000
-      );
+      expect(
+        mockBlockchainServiceInstance.getCurrentBlock
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        mockBlockchainServiceInstance.getOracleAssignedEvents
+      ).toHaveBeenCalledWith(mockElephantAddress, 0, 1000);
 
       expect(result.size).toBe(2);
       expect(result.has('QmTestCid1')).toBe(true);
@@ -106,12 +105,12 @@ describe('AssignmentCheckerService', () => {
         200
       );
 
-      expect(mockBlockchainServiceInstance.getCurrentBlock).not.toHaveBeenCalled();
-      expect(mockBlockchainServiceInstance.getOracleAssignedEvents).toHaveBeenCalledWith(
-        mockElephantAddress,
-        50,
-        200
-      );
+      expect(
+        mockBlockchainServiceInstance.getCurrentBlock
+      ).not.toHaveBeenCalled();
+      expect(
+        mockBlockchainServiceInstance.getOracleAssignedEvents
+      ).toHaveBeenCalledWith(mockElephantAddress, 50, 200);
 
       expect(result.size).toBe(1);
       expect(result.has('QmTestCid1')).toBe(true);
@@ -119,11 +118,12 @@ describe('AssignmentCheckerService', () => {
 
     it('should handle no assigned CIDs', async () => {
       mockBlockchainServiceInstance.getCurrentBlock.mockResolvedValue(1000);
-      mockBlockchainServiceInstance.getOracleAssignedEvents.mockResolvedValue([]);
-
-      const result = await assignmentCheckerService.fetchAssignedCids(
-        mockElephantAddress
+      mockBlockchainServiceInstance.getOracleAssignedEvents.mockResolvedValue(
+        []
       );
+
+      const result =
+        await assignmentCheckerService.fetchAssignedCids(mockElephantAddress);
 
       expect(result.size).toBe(0);
     });
@@ -169,7 +169,9 @@ describe('AssignmentCheckerService', () => {
     });
 
     it('should return false for non-assigned CIDs', () => {
-      expect(assignmentCheckerService.isCidAssigned('QmNotAssigned')).toBe(false);
+      expect(assignmentCheckerService.isCidAssigned('QmNotAssigned')).toBe(
+        false
+      );
     });
   });
 

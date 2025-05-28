@@ -77,7 +77,7 @@ export class PinataService {
         logger.debug(`Attempt ${attempt + 1} to upload ${metadata.name}`);
 
         // Use native File and FormData (Node 18+)
-        // @ts-ignore
+        // @ts-expect-error - File constructor not available in Node types
         const file = new File([fileBuffer], metadata.name || 'file.json', {
           type: 'application/json',
         });
