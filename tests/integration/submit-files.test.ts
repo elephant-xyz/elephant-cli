@@ -161,7 +161,7 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       .fn()
       .mockReturnValue([]);
 
-    // Mock AssignmentCheckerService to return empty assignments (no filtering)
+    // Mock AssignmentCheckerService to return empty assignments (skip all files)
     mockAssignmentCheckerServiceInstance.fetchAssignedCids = vi
       .fn()
       .mockResolvedValue(new Set());
@@ -302,18 +302,18 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
 
       // 4. Assertions
       expect(processExitSpy).not.toHaveBeenCalled();
-      // Schema loading is expected to fail with mocked IPFS service, so expect errors
-      expect(mockedLogger.error).toHaveBeenCalled();
+      // Files are skipped due to no assignments, so warnings but no errors
+      expect(mockedLogger.warn).toHaveBeenCalled();
 
-      // No files will be uploaded due to validation failures
+      // No files will be uploaded due to assignment filtering
       expect(mockPinataServiceInstance.uploadBatch).toHaveBeenCalledTimes(0);
 
-      // No transactions will be submitted due to validation failures
+      // No transactions will be submitted due to assignment filtering
       expect(
         mockTransactionBatcherServiceInstance.submitAll
       ).toHaveBeenCalledTimes(0);
 
-      // No ChainStateService calls since no files passed validation
+      // No ChainStateService calls since no files passed assignment filtering
       expect(
         mockChainStateServiceInstance.getCurrentDataCid
       ).toHaveBeenCalledTimes(0);

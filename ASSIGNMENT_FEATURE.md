@@ -10,7 +10,10 @@ This feature adds intelligent assignment checking to the `submit-files` command,
    - Caches the assigned CIDs for efficient checking
 
 2. **File Filtering** - During validation, each file is checked:
-   - If the file's `dataGroupCid` is NOT in the assigned CIDs set, it's skipped
+   - **If assignment fetching succeeded**: Files are filtered based on assigned CIDs
+     - If no CIDs are assigned (empty set): ALL files are skipped
+     - If CIDs are assigned: Only files with matching `dataGroupCid` are processed
+   - **If assignment fetching failed**: No filtering is applied (processing continues normally)
    - Skipped files are logged to `submit_warnings.csv` with reason: "File skipped - dataGroupCid {CID} is not assigned to your address"
    - Progress tracking correctly handles skipped files
 

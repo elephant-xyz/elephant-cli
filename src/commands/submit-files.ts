@@ -213,12 +213,12 @@ export async function handleSubmitFiles(
   const csvReporterService =
     serviceOverrides.csvReporterService ??
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
-  
+
   // Derive wallet address from private key to check assignments
   const wallet = new Wallet(options.privateKey);
   const userAddress = wallet.address;
   logger.technical(`User wallet address: ${userAddress}`);
-  
+
   const assignmentCheckerService =
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
@@ -282,20 +282,38 @@ export async function handleSubmitFiles(
     console.log();
     console.log(chalk.bold('🔗 Phase 1.5: Assignment Check'));
     logger.progress('Fetching assigned CIDs for your address...');
-    
+
     let assignedCids: Set<string>;
+    let assignmentFilteringEnabled = false;
     try {
-      assignedCids = await assignmentCheckerService.fetchAssignedCids(userAddress);
+      assignedCids =
+        await assignmentCheckerService.fetchAssignedCids(userAddress);
+      assignmentFilteringEnabled = true; // Successfully fetched assignments
       const assignedCount = assignedCids.size;
-      console.log(chalk.green(`✅ Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`));
-      
+      console.log(
+        chalk.green(
+          `✅ Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`
+        )
+      );
+
       if (assignedCount === 0) {
-        console.log(chalk.yellow('⚠️  No CIDs assigned to your address. All files will be skipped.'));
+        console.log(
+          chalk.yellow(
+            '⚠️  No CIDs assigned to your address. All files will be skipped.'
+          )
+        );
       }
     } catch (error) {
-      console.log(chalk.yellow('⚠️  Could not fetch assignments - proceeding without assignment filtering'));
-      logger.warn(`Assignment check failed: ${error instanceof Error ? error.message : String(error)}`);
-      assignedCids = new Set(); // Empty set means no filtering
+      console.log(
+        chalk.yellow(
+          '⚠️  Could not fetch assignments - proceeding without assignment filtering'
+        )
+      );
+      logger.warn(
+        `Assignment check failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      assignedCids = new Set(); // Empty set, but filtering disabled
+      assignmentFilteringEnabled = false;
     }
 
     const allFilesToProcess: ProcessedFile[] = [];
@@ -319,9 +337,12 @@ export async function handleSubmitFiles(
           0, // No upload queue with semaphore
           0 // Transaction queue not yet active
         );
-        
+
         // Check if this file's dataGroupCid is assigned to the user
-        if (assignedCids.size > 0 && !assignedCids.has(fileEntry.dataGroupCid)) {
+        if (
+          assignmentFilteringEnabled &&
+          !assignedCids.has(fileEntry.dataGroupCid)
+        ) {
           const warningMsg = `File skipped - dataGroupCid ${fileEntry.dataGroupCid} is not assigned to your address`;
           logger.warn(warningMsg);
           await csvReporterService.logWarning({
@@ -341,7 +362,7 @@ export async function handleSubmitFiles(
           );
           continue; // Skip this file
         }
-        
+
         try {
           const fileContentStr = readFileSync(fileEntry.filePath, 'utf-8');
           const jsonData = JSON.parse(fileContentStr);
