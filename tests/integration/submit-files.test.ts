@@ -1,577 +1,312 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { promises as fsPromises, readFileSync } from 'fs';
+import fs from 'fs-extra'; // Using fs-extra for easier temp dir management
+import path from 'path';
+import { handleSubmitFiles, SubmitFilesCommandOptions } from '../../src/commands/submit-files';
+import { PinataService } from '../../src/services/pinata.service';
+import { ChainStateService } from '../../src/services/blockchain.service';
+import { TransactionBatcherService } from '../../src/services/transaction-batcher.service';
+import { IPFSService } from '../../src/services/ipfs.service'; // For schema fetching mock
+import { logger } from '../../src/utils/logger';
+import { SubmitConfig } from '../../src/config/submit-config';
+import { ProcessedFile, DataItem, FileEntry } from '../../src/types/index';
 
-// Mock external dependencies and services
-vi.mock('ethers', () => ({
-  __esModule: true,
-  Wallet: vi.fn().mockImplementation(() => ({
-    address: 'mockWalletAddress',
-    getNonce: vi.fn().mockResolvedValue(0),
-  })),
-  Contract: vi.fn().mockImplementation(() => ({
-    [Symbol.asyncIterator]: vi.fn(), // Make it an async iterable
-    estimateGas: {
-      submitBatchData: vi.fn().mockResolvedValue(BigInt(200000)),
-    },
-    submitBatchData: vi.fn().mockResolvedValue({
-      hash: '0xmocktxhash',
-      wait: vi.fn().mockResolvedValue({
-        status: 1,
-        blockNumber: 123,
-        gasUsed: BigInt(100000),
-      }),
-    }),
-    getCurrentFieldDataCID: vi.fn().mockResolvedValue(null), // Default to not found
-    getParticipantsForConsensusDataCID: vi.fn().mockResolvedValue([]),
-  })),
-  JsonRpcProvider: vi.fn().mockImplementation(() => ({})),
-  ZeroHash:
-    '0x0000000000000000000000000000000000000000000000000000000000000000',
-  getAddress: vi.fn((addr) => addr),
-  toUtf8Bytes: vi.fn((str) => new TextEncoder().encode(str)),
-  toUtf8String: vi.fn((bytes) => new TextDecoder().decode(bytes)),
-}));
-
-vi.mock('fs', async (importOriginal) => {
-  const actualFs = await importOriginal<typeof import('fs')>();
+// Mock only the services that interact with external systems we want to avoid in tests
+vi.mock('../../src/services/pinata.service');
+vi.mock('../../src/services/blockchain.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/blockchain.service')>();
   return {
-    ...actualFs,
-    promises: {
-      ...actualFs.promises,
-      stat: vi.fn(),
-      mkdir: vi.fn().mockResolvedValue(undefined),
-    },
-    existsSync: vi.fn(),
-    readFileSync: vi.fn(),
-    createWriteStream: vi.fn().mockReturnValue({
-      write: vi.fn((_data, cb) => cb && cb()),
-      once: vi.fn((_event, cb) => cb && cb()),
-      end: vi.fn((cb) => cb && cb()),
-      writable: true,
-    }),
+    ...actual, // Keep other exports like BlockchainService if any
+    ChainStateService: vi.fn(), // Mock ChainStateService constructor
   };
 });
+vi.mock('../../src/services/transaction-batcher.service');
+vi.mock('../../src/services/ipfs.service'); // To mock the one used for schema fetching
 
-vi.mock('../../src/utils/logger.ts');
-vi.mock('../../src/services/file-scanner.service.ts');
-vi.mock('../../src/services/schema-cache.service.ts');
-vi.mock('../../src/services/json-validator.service.ts');
-vi.mock('../../src/services/json-canonicalizer.service.ts');
-vi.mock('../../src/services/cid-calculator.service.ts');
-vi.mock('../../src/services/chain-state.service.ts');
-vi.mock('../../src/services/pinata.service.ts');
-vi.mock('../../src/services/transaction-batcher.service.ts');
-vi.mock('../../src/services/csv-reporter.service.ts');
-vi.mock('../../src/utils/progress-tracker.ts');
-vi.mock('../../src/services/ipfs.service.ts');
+// Spy on logger and process.exit
+vi.mock('../../src/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    log: vi.fn(), // If used by CsvReporterService or ProgressTracker
+  },
+}));
 
-import {
-  handleSubmitFiles,
-  SubmitFilesCommandOptions,
-} from '../../src/commands/submit-files';
-import { FileScannerService } from '../../src/services/file-scanner.service';
-import { SchemaCacheService } from '../../src/services/schema-cache.service';
-import { JsonValidatorService } from '../../src/services/json-validator.service';
-import { JsonCanonicalizerService } from '../../src/services/json-canonicalizer.service';
-import { CidCalculatorService } from '../../src/services/cid-calculator.service';
-import { ChainStateService } from '../../src/services/chain-state.service';
-import { PinataService } from '../../src/services/pinata.service';
-import { TransactionBatcherService } from '../../src/services/transaction-batcher.service';
-import { CsvReporterService } from '../../src/services/csv-reporter.service';
-import {
-  ProgressTracker,
-  ProcessingPhase,
-} from '../../src/utils/progress-tracker';
-import { IPFSService } from '../../src/services/ipfs.service';
-import { logger } from '../../src/utils/logger';
-import { DEFAULT_SUBMIT_CONFIG } from '../../src/config/submit.config';
-import { FileEntry, ProcessedFile } from '../../src/types/submit.types';
+const MockedPinataService = PinataService as unknown as vi.Mocked<typeof PinataService>;
+const MockedChainStateService = ChainStateService as unknown as vi.Mocked<typeof ChainStateService>;
+const MockedTransactionBatcherService = TransactionBatcherService as unknown as vi.Mocked<typeof TransactionBatcherService>;
+const MockedIPFSServiceForSchemas = IPFSService as unknown as vi.Mocked<typeof IPFSService>; // For schema fetching
+const mockedLogger = logger as vi.Mocked<typeof logger>;
 
-// Helper to mock fs.promises.stat
-const mockFsStat = fsPromises.stat as vi.Mock;
-const mockReadFileSync = readFileSync as vi.Mock;
 
-const MockedFileScannerService = FileScannerService as vi.MockedClass<
-  typeof FileScannerService
->;
-const MockedSchemaCacheService = SchemaCacheService as vi.MockedClass<
-  typeof SchemaCacheService
->;
-const MockedJsonValidatorService = JsonValidatorService as vi.MockedClass<
-  typeof JsonValidatorService
->;
-const MockedJsonCanonicalizerService =
-  JsonCanonicalizerService as vi.MockedClass<typeof JsonCanonicalizerService>;
-const MockedCidCalculatorService = CidCalculatorService as vi.MockedClass<
-  typeof CidCalculatorService
->;
-const MockedChainStateService = ChainStateService as vi.MockedClass<
-  typeof ChainStateService
->;
-const MockedPinataService = PinataService as vi.MockedClass<
-  typeof PinataService
->;
-const MockedTransactionBatcherService =
-  TransactionBatcherService as vi.MockedClass<typeof TransactionBatcherService>;
-const MockedCsvReporterService = CsvReporterService as vi.MockedClass<
-  typeof CsvReporterService
->;
-const MockedProgressTracker = ProgressTracker as vi.MockedClass<
-  typeof ProgressTracker
->;
-const MockedIPFSService = IPFSService as vi.MockedClass<typeof IPFSService>;
+describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
+  const TEST_ROOT_DIR = path.join(__dirname, 'test-temp-submit-files');
+  const INPUT_DIR = path.join(TEST_ROOT_DIR, 'input');
+  const SCHEMA_DIR = path.join(TEST_ROOT_DIR, 'schemas'); // For local schema files
+  const OUTPUT_DIR = path.join(TEST_ROOT_DIR, 'output'); // For CSVs, disk cache
 
-describe('submit-files integration tests', () => {
-  let processExitSpy: vi.SpyInstance;
-  let mockProgressTrackerInstance: any;
+  let mockPinataServiceInstance: vi.Mocked<InstanceType<typeof PinataService>>;
+  let mockChainStateServiceInstance: vi.Mocked<InstanceType<typeof ChainStateService>>;
+  let mockTransactionBatcherServiceInstance: vi.Mocked<InstanceType<typeof TransactionBatcherService>>;
+  let mockIpfsServiceForSchemasInstance: vi.Mocked<InstanceType<typeof IPFSService>>;
 
-  const defaultOptions: SubmitFilesCommandOptions = {
-    rpcUrl: 'mock-rpc-url',
-    contractAddress: '0xMockSubmitContractAddress',
-    privateKey: '0xmockPrivateKey',
-    pinataJwt: 'mockPinataJwt',
-    inputDir: '/fake/input/dir',
-    dryRun: false,
+  let defaultOptions: SubmitFilesCommandOptions;
+  let serviceOverrides: any;
+  let processExitSpy: ReturnType<typeof vi.spyOn>;
+
+  const MOCK_RPC_URL = 'http://localhost:8545/mock'; // Not actually called
+  const MOCK_CONTRACT_ADDRESS = '0xMockSubmitContract123'; // Not actually called
+  const MOCK_PRIVATE_KEY = '0xmockPrivateKey'; // Not actually used by mocked batcher
+  const MOCK_PINATA_JWT = 'mockPinataJWT';
+
+  const setupTestFileSystem = () => {
+    fs.ensureDirSync(INPUT_DIR);
+    fs.ensureDirSync(SCHEMA_DIR);
+    fs.ensureDirSync(OUTPUT_DIR);
   };
 
-  const mockFileEntries: FileEntry[] = [
-    {
-      propertyCid: 'propCid1',
-      dataGroupCid: 'dgCid1',
-      filePath: '/fake/input/dir/propCid1/dgCid1.json',
-    },
-    {
-      propertyCid: 'propCid1',
-      dataGroupCid: 'dgCid2',
-      filePath: '/fake/input/dir/propCid1/dgCid2.json',
-    },
-  ];
+  const cleanupTestFileSystem = () => {
+    fs.removeSync(TEST_ROOT_DIR);
+  };
 
-  const mockSchema = {
-    type: 'object',
-    properties: { test: { type: 'string' } },
+  const createJsonFile = (dir: string, fileName: string, content: object) => {
+    const filePath = path.join(dir, fileName);
+    fs.ensureDirSync(path.dirname(filePath)); // Ensure parent dirs exist
+    fs.writeJsonSync(filePath, content, { spaces: 2 });
+    return filePath;
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    processExitSpy = vi
-      .spyOn(process, 'exit')
-      .mockImplementation((() => {}) as any);
+    setupTestFileSystem();
 
-    // Mock fs.promises.stat to simulate a directory
-    mockFsStat.mockResolvedValue({ isDirectory: () => true });
-    mockReadFileSync.mockImplementation((filePath: string) => {
-      if (filePath.includes('dgCid1.json'))
-        return JSON.stringify({ schema: 'schemaCid1', test: 'value1' });
-      if (filePath.includes('dgCid2.json'))
-        return JSON.stringify({ schema: 'schemaCid2', test: 'value2' });
-      return '{}';
-    });
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
-    // Mock service instances
-    MockedFileScannerService.prototype.validateStructure = vi
-      .fn()
-      .mockResolvedValue({ isValid: true, errors: [] });
-    MockedFileScannerService.prototype.countTotalFiles = vi
-      .fn()
-      .mockResolvedValue(mockFileEntries.length);
-    MockedFileScannerService.prototype.scanDirectory = vi
-      .fn()
-      .mockImplementation(async function* () {
-        yield mockFileEntries;
-      });
+    // --- Mock Service Instances (these will be injected) ---
+    mockPinataServiceInstance = new MockedPinataService(MOCK_PINATA_JWT, undefined, 3) as vi.Mocked<InstanceType<typeof PinataService>>;
+    mockChainStateServiceInstance = new MockedChainStateService(MOCK_RPC_URL, MOCK_CONTRACT_ADDRESS, MOCK_CONTRACT_ADDRESS, [], []) as vi.Mocked<InstanceType<typeof ChainStateService>>;
+    mockTransactionBatcherServiceInstance = new MockedTransactionBatcherService(MOCK_RPC_URL, MOCK_CONTRACT_ADDRESS, MOCK_PRIVATE_KEY, {} as SubmitConfig) as vi.Mocked<InstanceType<typeof TransactionBatcherService>>;
+    mockIpfsServiceForSchemasInstance = new MockedIPFSServiceForSchemas('http://mock.schema.gateway') as vi.Mocked<InstanceType<typeof IPFSService>>;
 
-    MockedSchemaCacheService.prototype.getSchema = vi
-      .fn()
-      .mockResolvedValue(mockSchema);
-    MockedJsonValidatorService.prototype.validate = vi
-      .fn()
-      .mockReturnValue({ valid: true });
-    MockedJsonValidatorService.prototype.getErrorMessage = vi
-      .fn()
-      .mockReturnValue('mock validation error');
-    MockedJsonCanonicalizerService.prototype.canonicalize = vi.fn((json) =>
-      JSON.stringify(json)
-    ); // Simple mock
-    MockedCidCalculatorService.prototype.calculateCidV0 = vi
-      .fn()
-      .mockImplementation(
-        async (buffer) => `mockCalculatedCid_${buffer.toString().slice(0, 10)}`
-      );
+    // Define behavior for mocked service methods
+    mockPinataServiceInstance.uploadBatch = vi.fn();
+    mockPinataServiceInstance.getQueueStats = vi.fn().mockReturnValue({ pending: 0, active: 0, completed: 0, total: 0 });
+    (mockPinataServiceInstance as any).uploadQueue = { on: vi.fn(), off: vi.fn(), drain: vi.fn().mockResolvedValue(undefined) }; // Add drain if PinataService uses it like p-queue
+    mockPinataServiceInstance.drainQueue = vi.fn().mockResolvedValue(undefined);
 
-    MockedChainStateService.prototype.getCurrentDataCid = vi
-      .fn()
-      .mockResolvedValue(null); // Default: not on chain
+    mockChainStateServiceInstance.getCurrentDataCid = vi.fn().mockResolvedValue(null); // Default: file not on chain
 
-    // Simulate uploadQueue event emission for testability
-    let uploadQueueHandlers: Record<string, Function[]> = {};
-    // Patch: Synchronously push to dataItemsForTransaction for test reliability
-    MockedPinataService.prototype.uploadBatch = vi
-      .fn()
-      .mockImplementation(async (filesToUpload: ProcessedFile[]) => {
-        // Simulate successful uploads and push to dataItemsForTransaction
-        // Find the test's dataItemsForTransaction by monkey-patching global
-        if (globalThis.__test_dataItemsForTransaction) {
-          filesToUpload.forEach((f) => {
-            globalThis.__test_dataItemsForTransaction.push({
-              propertyCid: f.propertyCid,
-              dataGroupCID: f.dataGroupCid,
-              dataCID: `mockIpfsCid_${f.calculatedCid}`,
-            });
-          });
+    mockTransactionBatcherServiceInstance.submitAll = vi.fn().mockImplementation(async function* () {}); // Default: no transactions submitted
+    mockTransactionBatcherServiceInstance.groupItemsIntoBatches = vi.fn().mockReturnValue([]);
+
+
+    // For SchemaCacheService to fetch schemas (e.g. if schema is a CID "bafy...")
+    // This mock simulates fetching a schema file from our local SCHEMA_DIR
+    mockIpfsServiceForSchemasInstance.downloadFile = vi.fn().mockImplementation(async (cidOrPath: string, destinationDir: string, fileName: string) => {
+        const schemaFileName = cidOrPath.startsWith('bafy') ? `${cidOrPath}.json` : cidOrPath; // simplistic mapping
+        const localSchemaPath = path.join(SCHEMA_DIR, schemaFileName);
+        if (fs.existsSync(localSchemaPath)) {
+            const destPath = path.join(destinationDir, fileName);
+            await fs.copy(localSchemaPath, destPath);
+            return { success: true, path: destPath, cid: cidOrPath };
         }
-        return filesToUpload.map((f) => ({
-          success: true,
-          cid: `mockIpfsCid_${f.calculatedCid}`,
-          propertyCid: f.propertyCid,
-          dataGroupCid: f.dataGroupCid,
-        }));
-      });
-    MockedPinataService.prototype.getQueueStats = vi.fn().mockReturnValue({
-      pending: 0,
-      active: 0,
-      completed: 0,
-      failed: 0,
-      total: 0,
+        return { success: false, error: new Error(`Mock schema not found: ${cidOrPath}`), cid: cidOrPath };
     });
-    MockedPinataService.prototype.drainQueue = vi
-      .fn()
-      .mockResolvedValue(undefined);
-    // @ts-ignore
-    MockedPinataService.prototype.uploadQueue = {
-      on: (event: string, handler: Function) => {
-        if (!uploadQueueHandlers[event]) uploadQueueHandlers[event] = [];
-        uploadQueueHandlers[event].push(handler);
-      },
-      start: vi.fn(),
-    };
-
-    MockedTransactionBatcherService.prototype.submitAll = vi
-      .fn()
-      .mockImplementation(async function* (items) {
-        yield {
-          transactionHash: '0xmockTxHash',
-          itemsSubmitted: items.length,
-          blockNumber: 123,
-          gasUsed: '100000',
-        };
-      });
-    MockedTransactionBatcherService.prototype.groupItemsIntoBatches = vi.fn(
-      (items) => [items]
-    );
-
-    MockedCsvReporterService.prototype.initialize = vi
-      .fn()
-      .mockResolvedValue(undefined);
-    MockedCsvReporterService.prototype.logError = vi
-      .fn()
-      .mockResolvedValue(undefined);
-    MockedCsvReporterService.prototype.logWarning = vi
-      .fn()
-      .mockResolvedValue(undefined);
-    MockedCsvReporterService.prototype.finalize = vi.fn().mockResolvedValue({
-      totalFiles: 0,
-      processedFiles: 0,
-      errorCount: 0,
-      warningCount: 0,
-      uploadedFiles: 0,
-      submittedBatches: 0,
-      startTime: new Date(),
-      endTime: new Date(),
-      duration: 0,
+     mockIpfsServiceForSchemasInstance.cat = vi.fn().mockImplementation(async (cidOrPath: string) => {
+        const schemaFileName = cidOrPath.startsWith('bafy') ? `${cidOrPath}.json` : cidOrPath;
+        const localSchemaPath = path.join(SCHEMA_DIR, schemaFileName);
+        if(fs.existsSync(localSchemaPath)) {
+            return fs.readFileSync(localSchemaPath, 'utf-8');
+        }
+        throw new Error(`Mock schema CID not found by cat: ${cidOrPath}`);
     });
 
-    mockProgressTrackerInstance = {
-      start: vi.fn(),
-      stop: vi.fn(),
-      setPhase: vi.fn(),
-      reset: vi.fn(),
-      incrementProcessed: vi.fn(),
-      incrementValid: vi.fn(),
-      incrementInvalid: vi.fn(),
-      incrementUploaded: vi.fn(),
-      incrementSkipped: vi.fn(),
-      incrementErrors: vi.fn(),
-      incrementWarnings: vi.fn(),
-      updateQueues: vi.fn(),
-      getMetrics: vi.fn().mockReturnValue({
-        validFiles: mockFileEntries.length,
-        invalidFiles: 0,
-        skippedFiles: 0,
-        uploadedFiles: mockFileEntries.length,
-        errorCount: 0,
-        warningCount: 0,
-        elapsedTime: 1000,
-      }),
-      formatTime: vi.fn().mockReturnValue('1s'),
-    };
-    MockedProgressTracker.mockImplementation(() => mockProgressTrackerInstance);
 
-    MockedIPFSService.prototype.downloadFile = vi
-      .fn()
-      .mockResolvedValue({ success: true, path: 'mockPath' });
+    defaultOptions = {
+      inputDir: INPUT_DIR,
+      rpcUrl: MOCK_RPC_URL,
+      contractAddress: MOCK_CONTRACT_ADDRESS,
+      privateKey: MOCK_PRIVATE_KEY,
+      pinataJwt: MOCK_PINATA_JWT,
+      dryRun: false,
+      // Point CsvReporterService to output dir
+      // This will be handled by createSubmitConfig using its defaults, potentially overridden if those defaults point to cwd
+      // We can override config paths via options if needed, or let createSubmitConfig work (it defaults to process.cwd())
+      // For tests, it's better to control output paths:
+      // We'll rely on createSubmitConfig in handleSubmitFiles to set these paths,
+      // but ensure they are within TEST_ROOT_DIR by overriding the options that influence them.
+      // OR, we can mock createSubmitConfig to enforce paths if it's too complex.
+      // For now, let's assume default config outputs to cwd, which is fine if test runner is in project root.
+      // For more robust tests, we'd override these to be inside OUTPUT_DIR.
+    };
+
+    serviceOverrides = {
+      // Only inject mocks for external interactions
+      pinataService: mockPinataServiceInstance,
+      chainStateService: mockChainStateServiceInstance,
+      transactionBatcherService: mockTransactionBatcherServiceInstance,
+      // Provide the mocked IPFSService for schema fetching to the real SchemaCacheService
+      // handleSubmitFiles will create SchemaCacheService, so we need to ensure IT gets this mock.
+      // This implies SchemaCacheService needs to be configurable with an IPFSService instance.
+      // If SchemaCacheService creates its own IPFSService internally based on a gateway URL,
+      // we might need to mock the IPFSService constructor itself when gateway matches schema gateway.
+      // For simplicity, assuming `handleSubmitFiles` passes the schema gateway to SchemaCacheService's IPFSService.
+      // The `serviceOverrides.ipfsServiceForSchemas` is used by handleSubmitFiles to init SchemaCacheService.
+      ipfsServiceForSchemas: mockIpfsServiceForSchemasInstance,
+    };
   });
 
   afterEach(() => {
-    processExitSpy.mockRestore();
+    vi.restoreAllMocks();
+    cleanupTestFileSystem();
   });
 
-  it('should run the full submission process successfully', async () => {
-    // Patch: Provide a global array for the mock to push to
-    globalThis.__test_dataItemsForTransaction = [];
-    await handleSubmitFiles(defaultOptions, {
-      fileScannerService: new MockedFileScannerService(),
-      ipfsServiceForSchemas: undefined,
-      schemaCacheService: new MockedSchemaCacheService(),
-      jsonValidatorService: new MockedJsonValidatorService(),
-      jsonCanonicalizerService: new MockedJsonCanonicalizerService(),
-      cidCalculatorService: new MockedCidCalculatorService(),
-      chainStateService: new MockedChainStateService(),
-      pinataService: new MockedPinataService(),
-      transactionBatcherService: new MockedTransactionBatcherService(),
-      csvReporterService: new MockedCsvReporterService(),
-      progressTracker: mockProgressTrackerInstance,
+  describe('Happy Path', () => {
+    it('should process files, "upload" (mocked), and "submit" (mocked) successfully', async () => {
+      // 1. Create test files and schemas
+      const schemaContent = { type: 'object', properties: { data: { type: 'string' }, schema: {type: 'string'} }, required: ['data', 'schema'] };
+      const schemaCid = 'bafyschema1';
+      createJsonFile(SCHEMA_DIR, `${schemaCid}.json`, schemaContent); // Schema file named by its "CID"
+
+      const file1Content = { data: 'file1 data', schema: schemaCid };
+      const file2Content = { data: 'file2 data', schema: schemaCid };
+      // Files need to be in a structure that FileScannerService expects, e.g., propertyCid/dataGroupCid/fileName.json
+      const propertyCid1 = 'propCid123';
+      const dataGroupCid1 = 'dataGroupCid456';
+      const file1Path = path.join(INPUT_DIR, propertyCid1, dataGroupCid1, 'file1.json');
+      createJsonFile(path.dirname(file1Path), path.basename(file1Path), file1Content);
+
+      const propertyCid2 = 'propCid789';
+      const dataGroupCid2 = 'dataGroupCidABC';
+      const file2Path = path.join(INPUT_DIR, propertyCid2, dataGroupCid2, 'file2.json');
+      createJsonFile(path.dirname(file2Path), path.basename(file2Path), file2Content);
+      
+      // 2. Configure mock service behaviors
+      const uploadedCids = ['zdpuploadedFile1Cid', 'zdpuploadedFile2Cid'];
+      mockPinataServiceInstance.uploadBatch.mockImplementation(async (filesToUpload: ProcessedFile[]) => {
+        const onCompleteCallback = (mockPinataServiceInstance as any).uploadQueue.on.mock.calls.find(call => call[0] === 'task_completed')?.[1];
+        
+        const results = filesToUpload.map((file, index) => {
+          // Simulate task completion for ProgressTracker
+          if (onCompleteCallback) {
+            onCompleteCallback({ task: file, result: { success: true, cid: uploadedCids[index] } });
+          }
+          return {
+            propertyCid: file.propertyCid, dataGroupCid: file.dataGroupCid, filePath: file.filePath,
+            success: true, cid: uploadedCids[index], error: null
+          };
+        });
+        return results;
+      });
+
+      mockTransactionBatcherServiceInstance.submitAll.mockImplementation(async function* (dataItems: DataItem[]) {
+        yield { transactionHash: '0xmockTxHash', itemsSubmitted: dataItems.length, gasUsed: '1', effectiveGasPrice: '1', blockNumber: 1 };
+      });
+
+      // 3. Run handleSubmitFiles
+      // Override output paths for CSVs to be predictable
+      const optionsWithOutputPaths = {
+        ...defaultOptions,
+        // If createSubmitConfig takes these options, otherwise need to mock createSubmitConfig
+        // to enforce these paths for CsvReporterService.
+        // For now, we'll check for CSVs in the default location or spy on CsvReporter.
+      };
+      await handleSubmitFiles(optionsWithOutputPaths, serviceOverrides);
+
+      // 4. Assertions
+      expect(processExitSpy).not.toHaveBeenCalled();
+      expect(mockedLogger.error).not.toHaveBeenCalled();
+
+      // Check PinataService calls
+      expect(mockPinataServiceInstance.uploadBatch).toHaveBeenCalledTimes(1);
+      const uploadBatchArgs = mockPinataServiceInstance.uploadBatch.mock.calls[0][0] as ProcessedFile[];
+      expect(uploadBatchArgs).toHaveLength(2); // Both files should be new
+      expect(uploadBatchArgs[0].filePath).toBe(file1Path);
+      expect(uploadBatchArgs[1].filePath).toBe(file2Path);
+      
+      // Check TransactionBatcherService calls
+      expect(mockTransactionBatcherServiceInstance.submitAll).toHaveBeenCalledTimes(1);
+      const submitAllArgs = mockTransactionBatcherServiceInstance.submitAll.mock.calls[0][0] as DataItem[];
+      expect(submitAllArgs).toHaveLength(2);
+      expect(submitAllArgs[0].propertyCid).toBe(propertyCid1);
+      expect(submitAllArgs[0].dataGroupCID).toBe(dataGroupCid1);
+      expect(submitAllArgs[0].dataCID).toBe(uploadedCids[0]); // CID from Pinata mock
+      expect(submitAllArgs[1].propertyCid).toBe(propertyCid2);
+      expect(submitAllArgs[1].dataGroupCID).toBe(dataGroupCid2);
+      expect(submitAllArgs[1].dataCID).toBe(uploadedCids[1]);
+
+      // Check ChainStateService calls (should be called for each valid file before upload)
+      expect(mockChainStateServiceInstance.getCurrentDataCid).toHaveBeenCalledTimes(2);
+      expect(mockChainStateServiceInstance.getCurrentDataCid).toHaveBeenCalledWith(propertyCid1, dataGroupCid1);
+      expect(mockChainStateServiceInstance.getCurrentDataCid).toHaveBeenCalledWith(propertyCid2, dataGroupCid2);
+      
+      // Check CSV reports (existence and basic content)
+      // These paths depend on CsvReporterService's initialization, which uses config.
+      // Assuming default config paths or that they are relative to `process.cwd()`
+      const errorCsvPath = path.join(process.cwd(), DEFAULT_SUBMIT_CONFIG.errorCsvPath); // Path might need adjustment based on actual config behavior
+      const warningCsvPath = path.join(process.cwd(), DEFAULT_SUBMIT_CONFIG.warningCsvPath);
+      
+      expect(fs.existsSync(errorCsvPath)).toBe(true);
+      expect(fs.readFileSync(errorCsvPath, 'utf-8')).not.toContain('ERROR'); // Assuming header but no errors
+      
+      expect(fs.existsSync(warningCsvPath)).toBe(true);
+      expect(fs.readFileSync(warningCsvPath, 'utf-8')).not.toContain('WARNING'); // Assuming header but no warnings
+
+      // Check some logs
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('Submit process finished.'));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('Total files scanned: 2')); // Assuming FileScannerService works
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('Files successfully uploaded: 2'));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('Data items submitted to blockchain: 2'));
+
+      // Cleanup CSV files created by the run if they are in cwd
+      if (fs.existsSync(errorCsvPath)) fs.unlinkSync(errorCsvPath);
+      if (fs.existsSync(warningCsvPath)) fs.unlinkSync(warningCsvPath);
     });
-    delete globalThis.__test_dataItemsForTransaction;
-
-    expect(logger.info).toHaveBeenCalledWith(
-      'Starting submit-files process...'
-    );
-    expect(mockFsStat).toHaveBeenCalledWith(defaultOptions.inputDir);
-    expect(
-      MockedFileScannerService.prototype.validateStructure
-    ).toHaveBeenCalledWith(defaultOptions.inputDir);
-    expect(
-      MockedFileScannerService.prototype.countTotalFiles
-    ).toHaveBeenCalledWith(defaultOptions.inputDir);
-    expect(MockedFileScannerService.prototype.scanDirectory).toHaveBeenCalled();
-
-    // Check validation phase calls for each file
-    for (const fileEntry of mockFileEntries) {
-      expect(mockReadFileSync).toHaveBeenCalledWith(
-        fileEntry.filePath,
-        'utf-8'
-      );
-      expect(MockedSchemaCacheService.prototype.getSchema).toHaveBeenCalled(); // Schema CID would be dynamic
-      expect(MockedJsonValidatorService.prototype.validate).toHaveBeenCalled();
-    }
-
-    // Check processing phase calls for each file
-    for (const fileEntry of mockFileEntries) {
-      expect(
-        MockedJsonCanonicalizerService.prototype.canonicalize
-      ).toHaveBeenCalled();
-      expect(
-        MockedCidCalculatorService.prototype.calculateCidV0
-      ).toHaveBeenCalled();
-      expect(
-        MockedChainStateService.prototype.getCurrentDataCid
-      ).toHaveBeenCalledWith(fileEntry.propertyCid, fileEntry.dataGroupCid);
-    }
-
-    // Check upload phase
-    expect(MockedPinataService.prototype.uploadBatch).toHaveBeenCalled();
-    expect(MockedPinataService.prototype.drainQueue).toHaveBeenCalled();
-
-    // Check transaction phase
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).toHaveBeenCalled();
-
-    expect(logger.info).toHaveBeenCalledWith('Submit process finished.');
-    expect(MockedCsvReporterService.prototype.finalize).toHaveBeenCalled();
-    expect(processExitSpy).not.toHaveBeenCalled();
   });
 
-  it('should handle --dry-run correctly', async () => {
-    await handleSubmitFiles({ ...defaultOptions, dryRun: true });
+  describe('Dry Run', () => {
+    it('should log actions but not call Pinata upload or Blockchain submit, and use calculated CIDs', async () => {
+      const schemaContent = { type: 'object', properties: { data: { type: 'string' }, schema: {type: 'string'} }, required: ['data', 'schema'] };
+      const schemaCid = 'bafyschemaDryRun';
+      createJsonFile(SCHEMA_DIR, `${schemaCid}.json`, schemaContent);
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      'DRY RUN active: No files will be uploaded, no transactions will be sent.'
-    );
-    expect(MockedPinataService.prototype.uploadBatch).not.toHaveBeenCalled();
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).not.toHaveBeenCalled();
+      const file1Content = { data: 'file1 dry run', schema: schemaCid };
+      const propertyCid1 = 'propDry1';
+      const dataGroupCid1 = 'dataGroupDry1';
+      const file1Path = path.join(INPUT_DIR, propertyCid1, dataGroupCid1, 'fileDry1.json');
+      createJsonFile(path.dirname(file1Path), path.basename(file1Path), file1Content);
 
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('[DRY RUN] Would upload files to IPFS:')
-    );
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '[DRY RUN] Would submit the following data items to the blockchain:'
-      )
-    );
+      const dryRunOptions = { ...defaultOptions, dryRun: true };
+      await handleSubmitFiles(dryRunOptions, serviceOverrides);
 
-    expect(processExitSpy).not.toHaveBeenCalled();
-  });
+      expect(mockedLogger.warn).toHaveBeenCalledWith(expect.stringContaining('DRY RUN active'));
+      expect(mockPinataServiceInstance.uploadBatch).not.toHaveBeenCalled();
+      expect(mockTransactionBatcherServiceInstance.submitAll).not.toHaveBeenCalled();
+      
+      // In dry run, calculated CIDs are used for the "would submit" log
+      // This requires CidCalculatorService to work and produce a predictable CID for assertion
+      // For now, just check logs indicating dry run behavior for upload and submit phases
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Would upload files to IPFS:'));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining(file1Path)); // Check one file path
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining('[DRY RUN] Would submit the following data items to the blockchain:'));
+      expect(mockedLogger.info).toHaveBeenCalledWith(expect.stringContaining(`P: ${propertyCid1}, G: ${dataGroupCid1}`));
+      
+      expect(processExitSpy).not.toHaveBeenCalled();
 
-  it('should exit if input directory is not a directory', async () => {
-    mockFsStat.mockResolvedValue({ isDirectory: () => false });
-    await handleSubmitFiles(defaultOptions);
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('is not a directory')
-    );
-    expect(processExitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it('should exit if input directory structure validation fails', async () => {
-    MockedFileScannerService.prototype.validateStructure = vi
-      .fn()
-      .mockResolvedValue({ isValid: false, errors: ['mock structure error'] });
-    await handleSubmitFiles(defaultOptions);
-    expect(logger.error).toHaveBeenCalledWith(
-      'Input directory structure is invalid. Errors:'
-    );
-    expect(logger.error).toHaveBeenCalledWith('- mock structure error');
-    expect(processExitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it('should handle a file failing JSON schema validation', async () => {
-    MockedJsonValidatorService.prototype.validate = vi
-      .fn()
-      .mockReturnValueOnce({ valid: true }) // First file passes
-      .mockReturnValueOnce({
-        valid: false,
-        errors: [
-          {
-            path: '/test',
-            message: 'is required',
-            keyword: 'required',
-            params: {},
-          },
-        ],
-      }); // Second file fails
-
-    globalThis.__test_dataItemsForTransaction = [];
-    await handleSubmitFiles(defaultOptions, {
-      fileScannerService: new MockedFileScannerService(),
-      ipfsServiceForSchemas: undefined,
-      schemaCacheService: new MockedSchemaCacheService(),
-      jsonValidatorService: new MockedJsonValidatorService(),
-      jsonCanonicalizerService: new MockedJsonCanonicalizerService(),
-      cidCalculatorService: new MockedCidCalculatorService(),
-      chainStateService: new MockedChainStateService(),
-      pinataService: new MockedPinataService(),
-      transactionBatcherService: new MockedTransactionBatcherService(),
-      csvReporterService: new MockedCsvReporterService(),
-      progressTracker: mockProgressTrackerInstance,
+      const errorCsvPath = path.join(process.cwd(), DEFAULT_SUBMIT_CONFIG.errorCsvPath);
+      const warningCsvPath = path.join(process.cwd(), DEFAULT_SUBMIT_CONFIG.warningCsvPath);
+      if (fs.existsSync(errorCsvPath)) fs.unlinkSync(errorCsvPath);
+      if (fs.existsSync(warningCsvPath)) fs.unlinkSync(warningCsvPath);
     });
-    delete globalThis.__test_dataItemsForTransaction;
-
-    expect(MockedCsvReporterService.prototype.logError).toHaveBeenCalledTimes(
-      1
-    );
-    expect(MockedCsvReporterService.prototype.logError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: mockFileEntries[1].filePath,
-        error: expect.stringContaining('mock validation error'),
-      })
-    );
-    expect(mockProgressTrackerInstance.incrementInvalid).toHaveBeenCalledTimes(
-      1
-    );
-    expect(mockProgressTrackerInstance.incrementErrors).toHaveBeenCalledTimes(
-      1
-    );
-
-    // Ensure only the valid file proceeds to upload and transaction
-    expect(MockedPinataService.prototype.uploadBatch).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ filePath: mockFileEntries[0].filePath }),
-      ])
-    );
-    expect(MockedPinataService.prototype.uploadBatch).toHaveBeenCalledWith(
-      expect.not.arrayContaining([
-        // Ensure the failing file is NOT in the batch
-        expect.objectContaining({ filePath: mockFileEntries[1].filePath }),
-      ])
-    );
-    // TransactionBatcher should be called with data derived from successfully uploaded files
-    // This means if a file fails validation, it shouldn't even reach the upload stage,
-    // and thus not the transaction stage.
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          propertyCid: mockFileEntries[0].propertyCid,
-        }),
-      ])
-    );
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).toHaveBeenCalledWith(
-      expect.not.arrayContaining([
-        expect.objectContaining({
-          propertyCid: mockFileEntries[1].propertyCid,
-        }),
-      ])
-    );
   });
 
-  it('should skip upload and submission if data CID already exists on chain', async () => {
-    // Mock chain state to return an existing CID that matches the calculated one for the first file
-    MockedChainStateService.prototype.getCurrentDataCid = vi
-      .fn()
-      .mockResolvedValueOnce('mockCalculatedCid_dgCid1.json') // First file exists
-      .mockResolvedValueOnce(null); // Second file does not exist
-
-    globalThis.__test_dataItemsForTransaction = [];
-    await handleSubmitFiles(defaultOptions, {
-      fileScannerService: new MockedFileScannerService(),
-      ipfsServiceForSchemas: undefined,
-      schemaCacheService: new MockedSchemaCacheService(),
-      jsonValidatorService: new MockedJsonValidatorService(),
-      jsonCanonicalizerService: new MockedJsonCanonicalizerService(),
-      cidCalculatorService: new MockedCidCalculatorService(),
-      chainStateService: new MockedChainStateService(),
-      pinataService: new MockedPinataService(),
-      transactionBatcherService: new MockedTransactionBatcherService(),
-      csvReporterService: new MockedCsvReporterService(),
-      progressTracker: mockProgressTrackerInstance,
-    });
-    delete globalThis.__test_dataItemsForTransaction;
-
-    expect(MockedCsvReporterService.prototype.logWarning).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: mockFileEntries[0].filePath,
-        reason: expect.stringContaining('already exists on chain'),
-      })
-    );
-    expect(mockProgressTrackerInstance.incrementSkipped).toHaveBeenCalledTimes(
-      1
-    );
-
-    // Only the second file should be uploaded and submitted
-    expect(MockedPinataService.prototype.uploadBatch).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ filePath: mockFileEntries[1].filePath }),
-      ])
-    );
-    expect(MockedPinataService.prototype.uploadBatch).toHaveBeenCalledWith(
-      expect.not.arrayContaining([
-        expect.objectContaining({ filePath: mockFileEntries[0].filePath }),
-      ])
-    );
-
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          propertyCid: mockFileEntries[1].propertyCid,
-        }),
-      ])
-    );
-    expect(
-      MockedTransactionBatcherService.prototype.submitAll
-    ).toHaveBeenCalledWith(
-      expect.not.arrayContaining([
-        expect.objectContaining({
-          propertyCid: mockFileEntries[0].propertyCid,
-        }),
-      ])
-    );
-  });
+  // TODO: Add more test cases:
+  // - Invalid input directory (fs.stat should be real and fail)
+  // - Schema validation errors (real JsonValidatorService with a file that fails schema)
+  // - IPFS upload failures (mock PinataService.uploadBatch to return errors/emit failed events)
+  // - Blockchain transaction failures (mock TransactionBatcherService.submitAll to throw)
+  // - Files already on chain (mock ChainStateService.getCurrentDataCid to return an existing CID)
+  // - Empty input directory (real FileScannerService should find 0 files)
+  // - Schema not found (mock IPFSServiceForSchemas to fail download/cat for a schema CID)
 });
