@@ -23,5 +23,5 @@
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "prettier/prettier": "error"
   },
-  "ignorePatterns": ["dist", "node_modules", "coverage", "*.js"]
+  "ignorePatterns": ["dist", "node_modules", "coverage", "*.js", "tests"]
 }

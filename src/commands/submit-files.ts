@@ -26,13 +26,7 @@ import { PinataService } from '../services/pinata.service';
 import { TransactionBatcherService } from '../services/transaction-batcher.service';
 import { CsvReporterService } from '../services/csv-reporter.service';
 import { ProgressTracker, ProcessingPhase } from '../utils/progress-tracker';
-import {
-  FileEntry,
-  ProcessedFile,
-  UploadResult,
-  ErrorEntry,
-  WarningEntry,
-} from '../types/submit.types';
+import { ProcessedFile } from '../types/submit.types';
 import { DataItem } from '../types/contract.types';
 import { IPFSService } from '../services/ipfs.service'; // For schema downloads
 
@@ -120,7 +114,24 @@ export function registerSubmitFilesCommand(program: Command) {
     });
 }
 
-async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
+export interface SubmitFilesServiceOverrides {
+  fileScannerService?: FileScannerService;
+  ipfsServiceForSchemas?: IPFSService;
+  schemaCacheService?: SchemaCacheService;
+  jsonValidatorService?: JsonValidatorService;
+  jsonCanonicalizerService?: JsonCanonicalizerService;
+  cidCalculatorService?: CidCalculatorService;
+  chainStateService?: ChainStateService;
+  pinataService?: PinataService;
+  transactionBatcherService?: TransactionBatcherService;
+  csvReporterService?: CsvReporterService;
+  progressTracker?: ProgressTracker;
+}
+
+export async function handleSubmitFiles(
+  options: SubmitFilesCommandOptions,
+  serviceOverrides: SubmitFilesServiceOverrides = {}
+) {
   logger.info('Starting submit-files process...');
   logger.info(`Input directory: ${options.inputDir}`);
   logger.info(`RPC URL: ${options.rpcUrl}`);
@@ -155,43 +166,43 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
 
   const config = createSubmitConfig(submitConfigOverrides);
 
-  // Initialize services
-  const fileScannerService = new FileScannerService();
-  const ipfsServiceForSchemas = new IPFSService(
+  // Initialize services, using overrides if provided
+  const fileScannerService = serviceOverrides.fileScannerService ?? new FileScannerService();
+  const ipfsServiceForSchemas = serviceOverrides.ipfsServiceForSchemas ?? new IPFSService(
     DEFAULT_SUBMIT_CONFIG.schemaIpfsGateway
   ); // Use a default or configurable gateway
-  const schemaCacheService = new SchemaCacheService(
+  const schemaCacheService = serviceOverrides.schemaCacheService ?? new SchemaCacheService(
     config.schemaCacheSize,
     ipfsServiceForSchemas,
     config.enableDiskCache,
     config.schemaCachePath
   );
-  const jsonValidatorService = new JsonValidatorService();
-  const jsonCanonicalizerService = new JsonCanonicalizerService();
-  const cidCalculatorService = new CidCalculatorService();
+  const jsonValidatorService = serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
+  const jsonCanonicalizerService = serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
+  const cidCalculatorService = serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
   // Note: ChainStateService needs the main contract ABI, not just submit ABI.
   // Assuming ELEPHANT_CONTRACT_ABI is the correct one for general interactions if needed,
   // or pass SUBMIT_CONTRACT_ABI_FRAGMENTS if it's only for submit contract.
   // For now, using SUBMIT_CONTRACT_ABI_FRAGMENTS for both as ChainStateService primarily uses submitContract.
-  const chainStateService = new ChainStateService(
+  const chainStateService = serviceOverrides.chainStateService ?? new ChainStateService(
     options.rpcUrl,
     options.contractAddress,
     options.contractAddress,
     SUBMIT_CONTRACT_ABI_FRAGMENTS,
     SUBMIT_CONTRACT_ABI_FRAGMENTS
   );
-  const pinataService = new PinataService(
+  const pinataService = serviceOverrides.pinataService ?? new PinataService(
     options.pinataJwt,
     undefined,
     config.maxConcurrentUploads
   );
-  const transactionBatcherService = new TransactionBatcherService(
+  const transactionBatcherService = serviceOverrides.transactionBatcherService ?? new TransactionBatcherService(
     options.rpcUrl,
     options.contractAddress,
     options.privateKey,
     config
   );
-  const csvReporterService = new CsvReporterService(
+  const csvReporterService = serviceOverrides.csvReporterService ?? new CsvReporterService(
     config.errorCsvPath,
     config.warningCsvPath
   );
@@ -200,16 +211,18 @@ async function handleSubmitFiles(options: SubmitFilesCommandOptions) {
   logger.info(`Error reports will be saved to: ${config.errorCsvPath}`);
   logger.info(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
-  let progressTracker: ProgressTracker;
+  let progressTracker: ProgressTracker = serviceOverrides.progressTracker ?? undefined;
 
   try {
     // --- Phase 1: Discovery (Task 12.2) ---
     logger.info('Phase 1: Discovery - Scanning files...');
-    progressTracker = new ProgressTracker(
-      0,
-      config.progressUpdateInterval,
-      config.enableProgressBar
-    ); // Initialize with 0, update later
+    if (!progressTracker) {
+      progressTracker = new ProgressTracker(
+        0,
+        config.progressUpdateInterval,
+        config.enableProgressBar
+      ); // Initialize with 0, update later
+    }
     progressTracker.start();
     progressTracker.setPhase(ProcessingPhase.SCANNING);
 

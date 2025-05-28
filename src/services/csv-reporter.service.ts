@@ -1,7 +1,11 @@
 import { createWriteStream, WriteStream } from 'fs';
 import { dirname } from 'path';
 import { mkdir } from 'fs/promises';
-import { ErrorEntry, WarningEntry, ReportSummary } from '../types/submit.types';
+import {
+  ErrorEntry,
+  WarningEntry,
+  ReportSummary,
+} from '../types/submit.types.js';
 
 export class CsvReporterService {
   private errorStream: WriteStream | null = null;

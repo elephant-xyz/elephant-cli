@@ -15,11 +15,10 @@ export class CidCalculatorService {
       // This is a simplified version - full implementation would use ipfs-unixfs
 
       // Create UnixFS protobuf for file
-      const fileSize = data.length;
       const unixfsData = this.encodeUnixFsFile(data);
 
       // Create DAG-PB wrapper
-      const dagPbNode = this.encodeDagPbNode(unixfsData, []);
+      const dagPbNode = this.encodeDagPbNode(unixfsData);
 
       // Calculate SHA-256 hash
       const hash = await sha256.digest(dagPbNode);
@@ -55,7 +54,6 @@ export class CidCalculatorService {
    * Encode UnixFS file protobuf
    */
   private encodeUnixFsFile(data: Buffer): Uint8Array {
-    const encoder = new TextEncoder();
     const chunks: Uint8Array[] = [];
 
     // Field 1: Type = 2 (File)
@@ -88,7 +86,7 @@ export class CidCalculatorService {
   /**
    * Encode DAG-PB node
    */
-  private encodeDagPbNode(data: Uint8Array, links: any[]): Uint8Array {
+  private encodeDagPbNode(data: Uint8Array): Uint8Array {
     const chunks: Uint8Array[] = [];
 
     // Field 1: Data
