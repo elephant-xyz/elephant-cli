@@ -50,8 +50,8 @@ export class ChainStateService extends BlockchainService {
     dataGroupCid: string
   ): Promise<string | null> {
     try {
-      const propertyCidBytes = toUtf8Bytes(`.${propertyCid}`);
-      const dataGroupCidBytes = toUtf8Bytes(`.${dataGroupCid}`);
+      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
+      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
 
       const returnedBytes: string = await this.submitContract[
         SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_CID
@@ -151,5 +151,42 @@ export class ChainStateService extends BlockchainService {
     }
 
     return results;
+  }
+
+  /**
+   * Checks if a specific user has already submitted data for the given CIDs combination.
+   * @param userAddress The user's wallet address.
+   * @param propertyCid The property CID.
+   * @param dataGroupCid The data group CID.
+   * @param dataCid The data CID.
+   * @returns True if the user has already submitted this data.
+   */
+  async hasUserSubmittedData(
+    userAddress: string,
+    propertyCid: string,
+    dataGroupCid: string,
+    dataCid: string
+  ): Promise<boolean> {
+    try {
+      const participants = await this.getSubmittedParticipants(
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      const normalizedUserAddress = getAddress(userAddress);
+      const hasSubmitted = participants.includes(normalizedUserAddress);
+
+      logger.technical(
+        `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'} submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}`
+      );
+
+      return hasSubmitted;
+    } catch (error) {
+      logger.error(
+        `Error checking if user ${userAddress} has submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return false; // Default to false to allow submission if check fails
+    }
   }
 }

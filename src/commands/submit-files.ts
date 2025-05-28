@@ -469,13 +469,15 @@ export async function handleSubmitFiles(
         );
         processedEntry.calculatedCid = calculatedCid;
 
-        // Check chain state
-        const existingDataCid = await chainStateService.getCurrentDataCid(
+        // Check if user has already submitted this exact data
+        const hasUserSubmitted = await chainStateService.hasUserSubmittedData(
+          userAddress,
           processedEntry.propertyCid,
-          processedEntry.dataGroupCid
+          processedEntry.dataGroupCid,
+          calculatedCid
         );
-        if (existingDataCid === calculatedCid) {
-          const warningMsg = `Data CID ${calculatedCid} for ${processedEntry.filePath} already exists on chain. Skipping upload and submission.`;
+        if (hasUserSubmitted) {
+          const warningMsg = `Data already submitted by user for ${processedEntry.filePath} (CID: ${calculatedCid}). Skipping upload and submission.`;
           logger.warn(warningMsg);
           await csvReporterService.logWarning({
             propertyCid: processedEntry.propertyCid,
@@ -486,12 +488,29 @@ export async function handleSubmitFiles(
           });
           progressTracker.incrementSkipped();
           progressTracker.incrementWarnings();
-          // Do not add to filesForUpload or dataItemsForTransaction
         } else {
-          // Check if this user has already submitted this exact data CID (though for a different property/group or if existingDataCid was different)
-          // This check might be more complex depending on exact requirements (e.g. if user can submit same data to different groups)
-          // For now, we assume if existingDataCid is different or null, it's a new submission for this property/group.
-          filesForUpload.push(processedEntry); // Add to upload list
+          // Check chain state for existing data
+          const existingDataCid = await chainStateService.getCurrentDataCid(
+            processedEntry.propertyCid,
+            processedEntry.dataGroupCid
+          );
+          if (existingDataCid === calculatedCid) {
+            const warningMsg = `Data CID ${calculatedCid} for ${processedEntry.filePath} already exists on chain. Skipping upload and submission.`;
+            logger.warn(warningMsg);
+            await csvReporterService.logWarning({
+              propertyCid: processedEntry.propertyCid,
+              dataGroupCid: processedEntry.dataGroupCid,
+              filePath: processedEntry.filePath,
+              reason: warningMsg,
+              timestamp: new Date().toISOString(),
+            });
+            progressTracker.incrementSkipped();
+            progressTracker.incrementWarnings();
+            // Do not add to filesForUpload or dataItemsForTransaction
+          } else {
+            // File is ready for upload - passed all checks
+            filesForUpload.push(processedEntry); // Add to upload list
+          }
         }
       } catch (error) {
         const errorMsg = `Error processing file ${processedEntry.filePath}: ${error instanceof Error ? error.message : String(error)}`;

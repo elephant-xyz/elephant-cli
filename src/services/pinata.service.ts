@@ -37,7 +37,7 @@ export class PinataService {
       const fileContent = await fsPromises.readFile(fileToProcess.filePath);
 
       const metadata: PinMetadata = {
-        name: `${fileToProcess.propertyCid}_${fileToProcess.dataGroupCid}.json`,
+        name: `${fileToProcess.dataGroupCid}.json`,
         keyvalues: {
           propertyCid: fileToProcess.propertyCid,
           dataGroupCid: fileToProcess.dataGroupCid,

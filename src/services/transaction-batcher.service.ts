@@ -4,6 +4,8 @@ import {
   Contract,
   TransactionResponse,
   TransactionReceipt,
+  toUtf8Bytes,
+  hexlify,
 } from 'ethers';
 import { DataItem, BatchSubmissionResult } from '../types/contract.types.js';
 import {
@@ -53,10 +55,15 @@ export class TransactionBatcherService {
     dataGroupCID: string;
     dataCID: string;
   } {
+    // Strip leading dots from CIDs if present - dots should not be submitted to smart contract
+    const cleanPropertyCid = item.propertyCid.startsWith('.') ? item.propertyCid.substring(1) : item.propertyCid;
+    const cleanDataGroupCID = item.dataGroupCID.startsWith('.') ? item.dataGroupCID.substring(1) : item.dataGroupCID;
+    const cleanDataCID = item.dataCID.startsWith('.') ? item.dataCID.substring(1) : item.dataCID;
+    
     return {
-      propertyCid: ethers.hexlify(ethers.toUtf8Bytes(item.propertyCid)),
-      dataGroupCID: ethers.hexlify(ethers.toUtf8Bytes(`.${item.dataGroupCID}`)), // Matches contract.types.ts and ABI
-      dataCID: ethers.hexlify(ethers.toUtf8Bytes(`.${item.dataCID}`)), // Matches contract.types.ts and ABI
+      propertyCid: hexlify(toUtf8Bytes(cleanPropertyCid)),
+      dataGroupCID: hexlify(toUtf8Bytes(cleanDataGroupCID)),
+      dataCID: hexlify(toUtf8Bytes(cleanDataCID)),
     };
   }
 

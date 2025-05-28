@@ -8,6 +8,7 @@ import {
   toUtf8Bytes,
   toUtf8String,
   getAddress,
+  ethers,
 } from 'ethers';
 
 // --- Mock dependencies FIRST ---
@@ -120,8 +121,8 @@ describe('ChainStateService', () => {
       expect(
         mockEthersContractInstance.getCurrentFieldDataCID
       ).toHaveBeenCalledWith(
-        toUtf8Bytes(`.${propertyCid}`),
-        toUtf8Bytes(`.${dataGroupCid}`)
+        ethers.hexlify(toUtf8Bytes(propertyCid)),
+        ethers.hexlify(toUtf8Bytes(dataGroupCid))
       );
       expect(result).toBe(expectedDataCid);
       expect(mockIsValidCID).toHaveBeenCalledWith(expectedDataCid);
@@ -202,9 +203,9 @@ describe('ChainStateService', () => {
       expect(
         mockEthersContractInstance.getParticipantsForConsensusDataCID
       ).toHaveBeenCalledWith(
-        toUtf8Bytes(`.${propertyCid}`),
-        toUtf8Bytes(`.${dataGroupCid}`),
-        toUtf8Bytes(`.${dataCid}`)
+        ethers.hexlify(toUtf8Bytes(propertyCid)),
+        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
+        ethers.hexlify(toUtf8Bytes(dataCid))
       );
       expect(result).toEqual(normalizedAddresses);
     });
@@ -263,6 +264,107 @@ describe('ChainStateService', () => {
       expect(results.get('prop1/group1')).toBe(expectedCid1);
       expect(results.get('prop2/group2')).toBeNull();
       expect(results.get('prop3/group3')).toBe(expectedCid2);
+    });
+  });
+
+  describe('hasUserSubmittedData', () => {
+    const userAddress = '0x1234567890123456789012345678901234567890';
+    const propertyCid = 'propQm123';
+    const dataGroupCid = 'groupQm456';
+    const dataCid = 'dataQm789';
+    const normalizedUserAddress = getAddress(userAddress);
+
+    it('should return true if user has submitted data', async () => {
+      const mockParticipants = [
+        normalizedUserAddress,
+        '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+      ];
+      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
+        mockParticipants
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        userAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(true);
+      expect(
+        mockEthersContractInstance.getParticipantsForConsensusDataCID
+      ).toHaveBeenCalledWith(
+        ethers.hexlify(toUtf8Bytes(propertyCid)),
+        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
+        ethers.hexlify(toUtf8Bytes(dataCid))
+      );
+    });
+
+    it('should return false if user has not submitted data', async () => {
+      const mockParticipants = [
+        '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        '0x9876543210987654321098765432109876543210',
+      ];
+      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
+        mockParticipants
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        userAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if no participants found', async () => {
+      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
+        []
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        userAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false and log error on contract call failure', async () => {
+      const error = new Error('Contract call failed');
+      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockRejectedValue(
+        error
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        userAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should handle address normalization correctly', async () => {
+      const lowercaseAddress = userAddress.toLowerCase();
+      const mockParticipants = [normalizedUserAddress];
+      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
+        mockParticipants
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        lowercaseAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(true);
     });
   });
 });

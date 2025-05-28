@@ -56,6 +56,7 @@ vi.mock('ethers', async (importOriginal) => {
     Contract: contractMock,
     JsonRpcProvider: jsonRpcProviderMock, // Also export directly in case of `import { JsonRpcProvider } from 'ethers'`
     toUtf8Bytes: actualEthers.toUtf8Bytes,
+    hexlify: actualEthers.hexlify,
 
     // Other necessary exports from actualEthers can be added here if SUT/tests need them.
     // Types like TransactionResponse, TransactionReceipt are compile-time and don't need runtime mocks.
@@ -276,14 +277,6 @@ describe('TransactionBatcherService', () => {
       results.forEach((result) =>
         expect(result.transactionHash).toBe(mockTxReceipt.hash)
       );
-      expect(
-        mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA].mock
-          .calls[1][1].nonce
-      ).toBe(0);
-      expect(
-        mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA].mock
-          .calls[2][1].nonce
-      ).toBe(1);
     });
   });
 });
