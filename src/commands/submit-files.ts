@@ -338,12 +338,12 @@ export async function handleSubmitFiles(
           0 // Transaction queue not yet active
         );
 
-        // Check if this file's dataGroupCid is assigned to the user
+        // Check if this file's propertyCid is assigned to the user
         if (
           assignmentFilteringEnabled &&
-          !assignedCids.has(fileEntry.dataGroupCid)
+          !assignedCids.has(fileEntry.propertyCid)
         ) {
-          const warningMsg = `File skipped - dataGroupCid ${fileEntry.dataGroupCid} is not assigned to your address`;
+          const warningMsg = `File skipped - propertyCid ${fileEntry.propertyCid} is not assigned to your address`;
           logger.warn(warningMsg);
           await csvReporterService.logWarning({
             propertyCid: fileEntry.propertyCid,

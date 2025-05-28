@@ -15,7 +15,6 @@ import {
   SubmitConfig,
 } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
-import { toUtf8Bytes } from 'ethers'; // For converting CIDs to bytes
 
 export class TransactionBatcherService {
   private wallet: Wallet;
@@ -50,14 +49,14 @@ export class TransactionBatcherService {
    * Prepares DataItem for contract call by converting CIDs to bytes.
    */
   private prepareDataItemForContract(item: DataItem): {
-    propertyCid: Uint8Array;
-    dataGroupCID: Uint8Array;
-    dataCID: Uint8Array;
+    propertyCid: string;
+    dataGroupCID: string;
+    dataCID: string;
   } {
     return {
-      propertyCid: toUtf8Bytes(`.${item.propertyCid}`),
-      dataGroupCID: toUtf8Bytes(`.${item.dataGroupCID}`), // Matches contract.types.ts and ABI
-      dataCID: toUtf8Bytes(`.${item.dataCID}`), // Matches contract.types.ts and ABI
+      propertyCid: ethers.hexlify(ethers.toUtf8Bytes(item.propertyCid)),
+      dataGroupCID: ethers.hexlify(ethers.toUtf8Bytes(`.${item.dataGroupCID}`)), // Matches contract.types.ts and ABI
+      dataCID: ethers.hexlify(ethers.toUtf8Bytes(`.${item.dataCID}`)), // Matches contract.types.ts and ABI
     };
   }
 
@@ -127,7 +126,7 @@ export class TransactionBatcherService {
         const txOptions = {
           gasLimit:
             estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)), // Add 20% buffer
-          nonce: currentNonce - 1, // Use the nonce fetched for this attempt
+          // nonce: currentNonce - 1, // Use the nonce fetched for this attempt
         };
 
         const txResponse: TransactionResponse = await this.contract[

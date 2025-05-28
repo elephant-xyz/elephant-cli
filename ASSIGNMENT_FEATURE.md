@@ -12,9 +12,9 @@ This feature adds intelligent assignment checking to the `submit-files` command,
 2. **File Filtering** - During validation, each file is checked:
    - **If assignment fetching succeeded**: Files are filtered based on assigned CIDs
      - If no CIDs are assigned (empty set): ALL files are skipped
-     - If CIDs are assigned: Only files with matching `dataGroupCid` are processed
+     - If CIDs are assigned: Only files in directories with matching `propertyCid` (directory name) are processed
    - **If assignment fetching failed**: No filtering is applied (processing continues normally)
-   - Skipped files are logged to `submit_warnings.csv` with reason: "File skipped - dataGroupCid {CID} is not assigned to your address"
+   - Skipped files are logged to `submit_warnings.csv` with reason: "File skipped - propertyCid {CID} is not assigned to your address"
    - Progress tracking correctly handles skipped files
 
 ## Console Output Example
@@ -33,8 +33,8 @@ This feature adds intelligent assignment checking to the `submit-files` command,
 
 🔍 Phase 2: Validation
   Validating JSON files against schemas...
-⚠️  File skipped - dataGroupCid QmNotAssigned1... is not assigned to your address
-⚠️  File skipped - dataGroupCid QmNotAssigned2... is not assigned to your address
+⚠️  File skipped - propertyCid QmNotAssigned1... is not assigned to your address
+⚠️  File skipped - propertyCid QmNotAssigned2... is not assigned to your address
 ✅ Validation complete: 3 valid, 0 invalid
 
 ... rest of processing continues with only assigned files
