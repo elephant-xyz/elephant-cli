@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  PinataService,
-  PinataPinResponse,
-} from '../../../src/services/pinata.service';
+import { PinataService } from '../../../src/services/pinata.service';
 import { ProcessedFile } from '../../../src/types/submit.types';
-import FormData from 'form-data';
+// No longer using FormData directly
 import { mkdtemp, writeFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -20,21 +17,17 @@ vi.mock('../../../src/utils/logger', () => ({
   },
 }));
 
-// REMOVE fs mock:
-// const mockFsReadFile = vi.fn();
-// vi.mock('fs', () => { ... });
-
-const mockFormDataAppend = vi.fn();
-const mockFormDataGetHeaders = vi
-  .fn()
-  .mockReturnValue({ 'content-type': 'multipart/form-data; boundary=---123' });
-vi.mock('form-data', () => {
-  const FormDataMockConstructor = vi.fn(() => ({
-    append: mockFormDataAppend,
-    getHeaders: mockFormDataGetHeaders,
-  }));
-  return { default: FormDataMockConstructor };
-});
+// Mock File (Web API) for Node
+global.File = class MockFile {
+  buffer: Buffer;
+  name: string;
+  type: string;
+  constructor(parts: Buffer[], name: string, opts: { type?: string }) {
+    this.buffer = Buffer.concat(parts);
+    this.name = name;
+    this.type = opts?.type || '';
+  }
+};
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -55,16 +48,10 @@ describe('PinataService', () => {
   let tempTestDir: string; // For temporary files
 
   beforeEach(async () => {
-    vi.resetModules(); // Ensure modules are re-evaluated with mocks for each test
+    vi.resetModules();
 
-    // Create unique temporary directory for each test
     tempTestDir = await mkdtemp(join(tmpdir(), 'pinata-service-test-'));
 
-    // Clear mocks
-    mockFormDataAppend.mockClear();
-    mockFormDataGetHeaders.mockClear().mockReturnValue({
-      'content-type': 'multipart/form-data; boundary=---123',
-    });
     mockFetch.mockClear();
     mockSemaphoreRunExclusive.mockClear();
 
@@ -72,11 +59,9 @@ describe('PinataService', () => {
   });
 
   afterEach(async () => {
-    // Clean up temp directory
     if (tempTestDir && existsSync(tempTestDir)) {
       await rm(tempTestDir, { recursive: true, force: true });
     }
-    // vi.clearAllMocks(); // This is in setup.ts, so might be redundant here
   });
 
   it('should be instantiated with a JWT', () => {
@@ -85,15 +70,9 @@ describe('PinataService', () => {
     expect(pinataService.pinataJwt).toBe(mockPinataJwt);
   });
 
-  it('should be instantiated with API key and secret', () => {
-    const apiKey = 'test-api-key';
-    const secretKey = 'test-secret-key';
-    const serviceWithKeys = new PinataService(apiKey, secretKey);
-    expect(serviceWithKeys).toBeInstanceOf(PinataService);
+  it('should throw if JWT is missing', () => {
     // @ts-ignore
-    expect(serviceWithKeys.pinataApiKey).toBe(apiKey);
-    // @ts-ignore
-    expect(serviceWithKeys.pinataSecretApiKey).toBe(secretKey);
+    expect(() => new PinataService(undefined)).toThrow();
   });
 
   describe('processUpload (and uploadFileInternal)', () => {
@@ -115,10 +94,22 @@ describe('PinataService', () => {
     });
 
     it('should successfully upload a file', async () => {
-      const mockPinataResponse: PinataPinResponse = {
-        IpfsHash: 'QmActualHash',
-        PinSize: 123,
-        Timestamp: new Date().toISOString(),
+      const mockPinataResponse = {
+        data: {
+          id: 'some-id',
+          name: 'propTest_groupTest.json',
+          cid: 'bafyTestHash',
+          size: 123,
+          number_of_files: 1,
+          mime_type: 'application/json',
+          group_id: null,
+          keyvalues: {
+            propertyCid: 'propTest',
+            dataGroupCid: 'groupTest',
+            originalCid: 'QmTestCid',
+          },
+          created_at: new Date().toISOString(),
+        },
       };
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -128,17 +119,28 @@ describe('PinataService', () => {
       // @ts-ignore
       const result = await pinataService.processUpload(mockFile);
 
-      // expect(mockFsReadFile).toHaveBeenCalledWith(mockFile.filePath); // Removed
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
-      expect(result.cid).toBe('QmActualHash');
+      expect(result.cid).toBe('bafyTestHash');
     });
 
     it('should retry on failure and then succeed', async () => {
-      const mockPinataResponse: PinataPinResponse = {
-        IpfsHash: 'QmRetryHash',
-        PinSize: 100,
-        Timestamp: new Date().toISOString(),
+      const mockPinataResponse = {
+        data: {
+          id: 'some-id',
+          name: 'propTest_groupTest.json',
+          cid: 'bafyRetryHash',
+          size: 100,
+          number_of_files: 1,
+          mime_type: 'application/json',
+          group_id: null,
+          keyvalues: {
+            propertyCid: 'propTest',
+            dataGroupCid: 'groupTest',
+            originalCid: 'QmTestCid',
+          },
+          created_at: new Date().toISOString(),
+        },
       };
       mockFetch
         .mockResolvedValueOnce({
@@ -155,15 +157,16 @@ describe('PinataService', () => {
       const result = await pinataService.processUpload(mockFile);
       expect(mockFetch).toHaveBeenCalledTimes(2);
       expect(result.success).toBe(true);
+      expect(result.cid).toBe('bafyRetryHash');
     });
 
     it('should handle readFile error (e.g., file deleted)', async () => {
-      await rm(tempFilePath); // Delete the file to cause a read error
+      await rm(tempFilePath);
 
       // @ts-ignore
       const result = await pinataService.processUpload(mockFile);
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/ENOENT|Cannot read file/); // Error message might vary slightly
+      expect(result.error).toMatch(/ENOENT|Cannot read file/);
       expect(mockFetch).not.toHaveBeenCalled();
     });
   });
@@ -203,9 +206,17 @@ describe('PinataService', () => {
       mockFetch.mockImplementation(async () => ({
         ok: true,
         json: async () => ({
-          IpfsHash: `QmDynamicHash_${Math.random()}`,
-          PinSize: 10,
-          Timestamp: new Date().toISOString(),
+          data: {
+            id: `id_${Math.random()}`,
+            name: 'file.json',
+            cid: `bafyDynamicHash_${Math.random()}`,
+            size: 10,
+            number_of_files: 1,
+            mime_type: 'application/json',
+            group_id: null,
+            keyvalues: {},
+            created_at: new Date().toISOString(),
+          },
         }),
       }));
     });
@@ -219,21 +230,5 @@ describe('PinataService', () => {
     });
   });
 
-  describe('getAuthHeaders', () => {
-    it('should return JWT auth header if JWT is provided', () => {
-      const serviceWithJwt = new PinataService('test-jwt-token');
-      // @ts-ignore
-      const headers = serviceWithJwt.getAuthHeaders();
-      expect(headers).toEqual({ Authorization: 'Bearer test-jwt-token' });
-    });
-    it('should return API key headers if API key and secret are provided', () => {
-      const serviceWithKeys = new PinataService('key', 'secret');
-      // @ts-ignore
-      const headers = serviceWithKeys.getAuthHeaders();
-      expect(headers).toEqual({
-        pinata_api_key: 'key',
-        pinata_secret_api_key: 'secret',
-      });
-    });
-  });
+  // getAuthHeaders is no longer present (JWT only, handled inline)
 });

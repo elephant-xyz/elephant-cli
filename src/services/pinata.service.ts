@@ -1,53 +1,29 @@
-import FormData from 'form-data'; // Pinata expects multipart/form-data
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
 import { promises as fsPromises } from 'fs'; // For reading file content
 
-export interface PinataOptions {
-  cidVersion?: 0 | 1;
-  wrapWithDirectory?: boolean;
-  customPinPolicy?: Record<string, unknown>; // Define more strictly if needed
-}
-
-export interface PinataPinResponse {
-  IpfsHash: string;
-  PinSize: number;
-  Timestamp: string; // ISO 8601 Date
-  isDuplicate?: boolean;
-}
-
 export interface PinMetadata {
   name?: string;
-  keyvalues?: Record<string, string | number | Date | null | undefined>; // Allow null/undefined for keyvalues
+  keyvalues?: Record<string, string | number | Date | null | undefined>;
 }
 
 export class PinataService {
-  private pinataApiKey: string;
-  private pinataSecretApiKey: string;
-  private pinataJwt: string | undefined;
+  private pinataJwt: string;
   private semaphore: Semaphore;
 
   private readonly pinataApiUrl =
     'https://api.pinata.cloud/pinning/pinFileToIPFS';
 
   constructor(
-    pinataJwtOrApiKey: string,
-    pinataSecretApiKey?: string,
+    pinataJwt: string,
+    _pinataSecretApiKey?: string,
     maxConcurrentUploads = 10
   ) {
-    if (pinataSecretApiKey) {
-      this.pinataApiKey = pinataJwtOrApiKey;
-      this.pinataSecretApiKey = pinataSecretApiKey;
-      logger.warn(
-        'Using Pinata API Key and Secret. Consider migrating to JWT for enhanced security.'
-      );
-    } else {
-      this.pinataJwt = pinataJwtOrApiKey;
-      this.pinataApiKey = '';
-      this.pinataSecretApiKey = '';
+    if (!pinataJwt) {
+      throw new Error('Pinata JWT is required for authentication.');
     }
-
+    this.pinataJwt = pinataJwt;
     this.semaphore = new Semaphore(maxConcurrentUploads);
   }
 
@@ -61,15 +37,14 @@ export class PinataService {
       const fileContent = await fsPromises.readFile(fileToProcess.filePath);
 
       const metadata: PinMetadata = {
-        name: `${fileToProcess.propertyCid}_${fileToProcess.dataGroupCid}.json`, // A descriptive name
+        name: `${fileToProcess.propertyCid}_${fileToProcess.dataGroupCid}.json`,
         keyvalues: {
           propertyCid: fileToProcess.propertyCid,
           dataGroupCid: fileToProcess.dataGroupCid,
-          originalCid: fileToProcess.calculatedCid, // If calculated CID is different from IPFS one
+          originalCid: fileToProcess.calculatedCid,
         },
       };
 
-      // The uploadFile method contains the actual Pinata API call and retry logic
       return await this.uploadFileInternal(
         fileContent,
         metadata,
@@ -89,46 +64,42 @@ export class PinataService {
   }
 
   /**
-   * Internal method to upload a single file's content to Pinata.
+   * Internal method to upload a single file's content to Pinata v2 API (CID v0).
    * Includes retry logic.
    */
   private async uploadFileInternal(
     fileBuffer: Buffer,
     metadata: PinMetadata,
-    originalFileInfo: ProcessedFile, // To pass through property/dataGroup CIDs for result
+    originalFileInfo: ProcessedFile,
     retries: number = 3
   ): Promise<UploadResult> {
-    const formData = new FormData();
-    formData.append('file', fileBuffer, {
-      filename: metadata.name || 'file.json', // Pinata requires a filename
-    });
-
-    const pinataMetadata = JSON.stringify({
-      name: metadata.name,
-      keyvalues: metadata.keyvalues || {},
-    });
-    formData.append('pinataMetadata', pinataMetadata);
-
-    // Pinata options (optional)
-    const pinataOptions = JSON.stringify({
-      cidVersion: 0, // As per architecture.md, CID v0 is used
-      // wrapWithDirectory: false, // Default
-    });
-    formData.append('pinataOptions', pinataOptions);
-
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         logger.debug(`Attempt ${attempt + 1} to upload ${metadata.name}`);
+
+        // Use native File and FormData (Node 18+)
+        // @ts-ignore
+        const file = new File([fileBuffer], metadata.name || 'file.json', {
+          type: 'application/json',
+        });
+        const form = new FormData();
+        form.append('file', file);
+        form.append('pinataOptions', JSON.stringify({ cidVersion: 0 }));
+        const pinataMetadata = JSON.stringify({
+          name: metadata.name,
+          keyvalues: metadata.keyvalues || {},
+        });
+        form.append('pinataMetadata', pinataMetadata);
+
         const response = await fetch(this.pinataApiUrl, {
           method: 'POST',
           headers: {
-            ...this.getAuthHeaders(),
-            // FormData sets Content-Type automatically, including boundary
-            // ...formData.getHeaders(), // This is for Node's http module, not fetch
+            Authorization: `Bearer ${this.pinataJwt}`,
+            // Do NOT set Content-Type, let FormData handle it
           },
-          body: formData as any, // Type assertion for fetch body
+          body: form,
         });
 
         if (!response.ok) {
@@ -138,14 +109,16 @@ export class PinataService {
           );
         }
 
-        const resultJson = (await response.json()) as PinataPinResponse;
+        const resultJson = await response.json();
+        // v2 returns { IpfsHash: ... }
+        const cid = resultJson?.IpfsHash;
         logger.info(
-          `Successfully uploaded ${metadata.name} to IPFS. CID: ${resultJson.IpfsHash}`
+          `Successfully uploaded ${metadata.name} to IPFS. CID: ${cid}`
         );
 
         return {
           success: true,
-          cid: resultJson.IpfsHash,
+          cid,
           propertyCid: originalFileInfo.propertyCid,
           dataGroupCid: originalFileInfo.dataGroupCid,
         };
@@ -156,7 +129,7 @@ export class PinataService {
         );
         if (attempt < retries) {
           const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-          logger.progress(`Retrying upload in ${delay / 1000}s...`);
+          logger.debug(`Retrying upload in ${delay / 1000}s...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
@@ -173,23 +146,20 @@ export class PinataService {
     };
   }
 
-  // Public facing uploadFile - might be deprecated if uploadBatch is primary
+  // Public facing uploadFile - for direct use with Buffer
   public async uploadFile(
     data: Buffer,
     metadata: PinMetadata
-    // This version of uploadFile is more generic and doesn't assume ProcessedFile structure
-    // It's kept for potential direct use, but processUpload is used by the queue.
   ): Promise<UploadResult> {
-    // For this generic version, we don't have originalFileInfo, so pass dummy values or adapt.
     const dummyFileInfo: ProcessedFile = {
       propertyCid:
         (metadata.keyvalues?.propertyCid as string) || 'unknownProperty',
       dataGroupCid:
         (metadata.keyvalues?.dataGroupCid as string) || 'unknownGroup',
       filePath: metadata.name || 'unknownFile.json',
-      canonicalJson: '', // Not relevant for this direct call
-      calculatedCid: '', // Not relevant
-      validationPassed: true, // Assume valid if called directly
+      canonicalJson: '',
+      calculatedCid: '',
+      validationPassed: true,
     };
     return this.uploadFileInternal(data, metadata, dummyFileInfo);
   }
@@ -211,16 +181,5 @@ export class PinataService {
     return await Promise.all(uploadPromises);
   }
 
-  private getAuthHeaders(): Record<string, string> {
-    if (this.pinataJwt) {
-      return {
-        Authorization: `Bearer ${this.pinataJwt}`,
-      };
-    } else {
-      return {
-        pinata_api_key: this.pinataApiKey,
-        pinata_secret_api_key: this.pinataSecretApiKey,
-      };
-    }
-  }
+  // No longer needed: getAuthHeaders (JWT only, handled inline)
 }

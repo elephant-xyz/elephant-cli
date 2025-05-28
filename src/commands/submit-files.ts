@@ -131,11 +131,11 @@ export async function handleSubmitFiles(
 ) {
   console.log(chalk.bold.blue('🐘 Elephant Network CLI - Submit Files'));
   console.log();
-  
+
   if (options.dryRun) {
     logger.warn('DRY RUN MODE: No files will be uploaded or transactions sent');
   }
-  
+
   logger.technical(`Input directory: ${options.inputDir}`);
   logger.technical(`RPC URL: ${options.rpcUrl}`);
   logger.technical(`Contract: ${options.contractAddress}`);
@@ -213,7 +213,9 @@ export async function handleSubmitFiles(
 
   await csvReporterService.initialize();
   logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-  logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
+  logger.technical(
+    `Warning reports will be saved to: ${config.warningCsvPath}`
+  );
 
   const progressTracker: ProgressTracker =
     serviceOverrides.progressTracker ||
@@ -236,7 +238,9 @@ export async function handleSubmitFiles(
     if (!initialValidation.isValid) {
       progressTracker.stop();
       console.log(chalk.red('❌ Directory structure is invalid:'));
-      initialValidation.errors.forEach((err) => console.log(chalk.red(`   • ${err}`)));
+      initialValidation.errors.forEach((err) =>
+        console.log(chalk.red(`   • ${err}`))
+      );
       await csvReporterService.finalize();
       process.exit(1);
     }
@@ -245,7 +249,11 @@ export async function handleSubmitFiles(
     const totalFiles = await fileScannerService.countTotalFiles(
       options.inputDir
     );
-    console.log(chalk.blue(`   Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`));
+    console.log(
+      chalk.blue(
+        `   Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+      )
+    );
     progressTracker.reset(totalFiles); // Reset with actual total
     progressTracker.start(); // Restart with correct total
     progressTracker.setPhase(ProcessingPhase.SCANNING, 100); // Scanning complete
@@ -348,12 +356,18 @@ export async function handleSubmitFiles(
     }
     const validFiles = progressTracker.getMetrics().validFiles;
     const invalidFiles = progressTracker.getMetrics().invalidFiles;
-    console.log(chalk.green(`✅ Validation complete: ${validFiles} valid, ${invalidFiles} invalid`));
+    console.log(
+      chalk.green(
+        `✅ Validation complete: ${validFiles} valid, ${invalidFiles} invalid`
+      )
+    );
 
     // --- Phase 3: Processing (Task 12.4) ---
     console.log();
     console.log(chalk.bold('⚙️ Phase 3: Processing'));
-    logger.progress('Canonicalizing, calculating CIDs, checking chain state...');
+    logger.progress(
+      'Canonicalizing, calculating CIDs, checking chain state...'
+    );
     progressTracker.setPhase(ProcessingPhase.PROCESSING);
     let processedFileCount = 0;
 
@@ -427,7 +441,11 @@ export async function handleSubmitFiles(
         );
       }
     }
-    console.log(chalk.green(`✅ Processing complete: ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} ready for upload`));
+    console.log(
+      chalk.green(
+        `✅ Processing complete: ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} ready for upload`
+      )
+    );
 
     // --- Phase 4: Upload (Task 12.5) ---
     console.log();
@@ -436,7 +454,9 @@ export async function handleSubmitFiles(
 
     if (!options.dryRun) {
       if (filesForUpload.length > 0) {
-        logger.progress(`Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`);
+        logger.progress(
+          `Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`
+        );
         const uploadResults = await pinataService.uploadBatch(filesForUpload);
 
         // Process results directly since uploadBatch now returns all results
@@ -456,7 +476,8 @@ export async function handleSubmitFiles(
                 f.propertyCid === uploadResult.propertyCid &&
                 f.dataGroupCid === uploadResult.dataGroupCid
             );
-            const fileName = originalFile?.filePath?.split('/').pop() || 'unknown file';
+            const fileName =
+              originalFile?.filePath?.split('/').pop() || 'unknown file';
             console.log(chalk.red(`❌ Upload failed: ${fileName}`));
             const errorMsg = `Upload failed for ${originalFile?.filePath || 'unknown file'}: ${uploadResult.error || 'Unknown error'}`;
             logger.technical(errorMsg);
