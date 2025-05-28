@@ -47,12 +47,12 @@ export function registerSubmitFilesCommand(program: Command) {
       'Validate, process, upload, and submit data files to the Elephant Network.'
     )
     .requiredOption(
-      '-k, --private-key <key>',
-      'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)'
-    )
-    .requiredOption(
       '-j, --pinata-jwt <jwt>',
       'Pinata JWT for IPFS uploads. (Or set PINATA_JWT env var)'
+    )
+    .option(
+      '-k, --private-key <key>',
+      'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)'
     )
     .option(
       '--rpc-url <url>',
@@ -68,12 +68,12 @@ export function registerSubmitFilesCommand(program: Command) {
     .option(
       '--max-concurrent-uploads <number>',
       'Maximum concurrent IPFS uploads.',
-      (val) => parseInt(val, 10)
+      (val) => parseInt(val, 200)
     )
     .option(
       '--transaction-batch-size <number>',
       'Number of items per blockchain transaction.',
-      (val) => parseInt(val, 10)
+      (val) => parseInt(val, 200)
     )
     .option(
       '--dry-run',

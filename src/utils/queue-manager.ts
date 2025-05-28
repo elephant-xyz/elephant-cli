@@ -55,7 +55,7 @@ export class QueueManager<T = unknown, R = unknown> extends EventEmitter {
    */
   push(data: T, options: Partial<QueueTask<T>> = {}): string {
     const task: QueueTask<T> = {
-      id: options.id || Math.random().toString(36).substr(2, 9),
+      id: options.id || Math.random().toString(36).substring(2, 9),
       data,
       priority: options.priority || 0,
       retries: options.retries || 0,
