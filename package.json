@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "rimraf dist",
     "prepare": "husky || true",
     "semantic-release": "semantic-release"
