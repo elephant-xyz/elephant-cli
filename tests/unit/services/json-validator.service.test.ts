@@ -110,12 +110,16 @@ describe('JsonValidatorService', () => {
         maxItems: 5,
       };
 
-      expect((await jsonValidator.validate([1, 2, 3], schema)).valid).toBe(true);
+      expect((await jsonValidator.validate([1, 2, 3], schema)).valid).toBe(
+        true
+      );
       expect((await jsonValidator.validate([], schema)).valid).toBe(false); // Too few
-      expect((await jsonValidator.validate([1, 2, 3, 4, 5, 6], schema)).valid).toBe(
+      expect(
+        (await jsonValidator.validate([1, 2, 3, 4, 5, 6], schema)).valid
+      ).toBe(false); // Too many
+      expect((await jsonValidator.validate([1, 'two', 3], schema)).valid).toBe(
         false
-      ); // Too many
-      expect((await jsonValidator.validate([1, 'two', 3], schema)).valid).toBe(false); // Wrong type
+      ); // Wrong type
     });
 
     it('should validate with additional properties', async () => {
@@ -142,12 +146,12 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      expect((await jsonValidator.validate({ status: 'active' }, schema)).valid).toBe(
-        true
-      );
-      expect((await jsonValidator.validate({ status: 'invalid' }, schema)).valid).toBe(
-        false
-      );
+      expect(
+        (await jsonValidator.validate({ status: 'active' }, schema)).valid
+      ).toBe(true);
+      expect(
+        (await jsonValidator.validate({ status: 'invalid' }, schema)).valid
+      ).toBe(false);
     });
 
     it('should validate patterns', async () => {
@@ -158,12 +162,12 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      expect((await jsonValidator.validate({ code: 'ABC123' }, schema)).valid).toBe(
-        true
-      );
-      expect((await jsonValidator.validate({ code: 'abc123' }, schema)).valid).toBe(
-        false
-      );
+      expect(
+        (await jsonValidator.validate({ code: 'ABC123' }, schema)).valid
+      ).toBe(true);
+      expect(
+        (await jsonValidator.validate({ code: 'abc123' }, schema)).valid
+      ).toBe(false);
     });
 
     it('should validate number constraints', async () => {
@@ -178,9 +182,15 @@ describe('JsonValidatorService', () => {
       expect(
         (await jsonValidator.validate({ age: 30, score: 85.5 }, schema)).valid
       ).toBe(true);
-      expect((await jsonValidator.validate({ age: -1 }, schema)).valid).toBe(false);
-      expect((await jsonValidator.validate({ age: 200 }, schema)).valid).toBe(false);
-      expect((await jsonValidator.validate({ score: 85.3 }, schema)).valid).toBe(false);
+      expect((await jsonValidator.validate({ age: -1 }, schema)).valid).toBe(
+        false
+      );
+      expect((await jsonValidator.validate({ age: 200 }, schema)).valid).toBe(
+        false
+      );
+      expect(
+        (await jsonValidator.validate({ score: 85.3 }, schema)).valid
+      ).toBe(false);
     });
 
     it('should validate string constraints', async () => {
@@ -191,14 +201,15 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      expect((await jsonValidator.validate({ username: 'john' }, schema)).valid).toBe(
-        true
-      );
-      expect((await jsonValidator.validate({ username: 'jo' }, schema)).valid).toBe(
-        false
-      );
       expect(
-        (await jsonValidator.validate({ username: 'a'.repeat(25) }, schema)).valid
+        (await jsonValidator.validate({ username: 'john' }, schema)).valid
+      ).toBe(true);
+      expect(
+        (await jsonValidator.validate({ username: 'jo' }, schema)).valid
+      ).toBe(false);
+      expect(
+        (await jsonValidator.validate({ username: 'a'.repeat(25) }, schema))
+          .valid
       ).toBe(false);
     });
 
@@ -275,10 +286,12 @@ describe('JsonValidatorService', () => {
         format: 'email',
       };
 
-      expect((await jsonValidator.validate('test@example.com', schema)).valid).toBe(
-        true
-      );
-      expect((await jsonValidator.validate('invalid-email', schema)).valid).toBe(false);
+      expect(
+        (await jsonValidator.validate('test@example.com', schema)).valid
+      ).toBe(true);
+      expect(
+        (await jsonValidator.validate('invalid-email', schema)).valid
+      ).toBe(false);
     });
 
     it('should validate date format', async () => {
@@ -287,8 +300,12 @@ describe('JsonValidatorService', () => {
         format: 'date',
       };
 
-      expect((await jsonValidator.validate('2023-12-25', schema)).valid).toBe(true);
-      expect((await jsonValidator.validate('25-12-2023', schema)).valid).toBe(false);
+      expect((await jsonValidator.validate('2023-12-25', schema)).valid).toBe(
+        true
+      );
+      expect((await jsonValidator.validate('25-12-2023', schema)).valid).toBe(
+        false
+      );
     });
 
     it('should validate uri format', async () => {
@@ -297,10 +314,12 @@ describe('JsonValidatorService', () => {
         format: 'uri',
       };
 
-      expect((await jsonValidator.validate('https://example.com', schema)).valid).toBe(
-        true
+      expect(
+        (await jsonValidator.validate('https://example.com', schema)).valid
+      ).toBe(true);
+      expect((await jsonValidator.validate('not a uri', schema)).valid).toBe(
+        false
       );
-      expect((await jsonValidator.validate('not a uri', schema)).valid).toBe(false);
     });
 
     it('should validate ipv4 format', async () => {
@@ -309,10 +328,12 @@ describe('JsonValidatorService', () => {
         format: 'ipv4',
       };
 
-      expect((await jsonValidator.validate('192.168.1.1', schema)).valid).toBe(true);
-      expect((await jsonValidator.validate('999.999.999.999', schema)).valid).toBe(
-        false
+      expect((await jsonValidator.validate('192.168.1.1', schema)).valid).toBe(
+        true
       );
+      expect(
+        (await jsonValidator.validate('999.999.999.999', schema)).valid
+      ).toBe(false);
     });
   });
 
@@ -471,13 +492,17 @@ describe('JsonValidatorService', () => {
         shipping: { street: '456 Oak Ave', city: 'Other City', zip: '67890' },
       };
 
-      expect((await jsonValidator.validate(validData, schema)).valid).toBe(true);
+      expect((await jsonValidator.validate(validData, schema)).valid).toBe(
+        true
+      );
 
       const invalidData = {
         billing: { street: '123 Main St', city: 'Anytown', zip: 'abc' },
       };
 
-      expect((await jsonValidator.validate(invalidData, schema)).valid).toBe(false);
+      expect((await jsonValidator.validate(invalidData, schema)).valid).toBe(
+        false
+      );
     });
 
     it('should validate with allOf, anyOf, oneOf', async () => {
@@ -490,11 +515,15 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      expect((await jsonValidator.validate({ value: 'text' }, schema)).valid).toBe(
+      expect(
+        (await jsonValidator.validate({ value: 'text' }, schema)).valid
+      ).toBe(true);
+      expect((await jsonValidator.validate({ value: 123 }, schema)).valid).toBe(
         true
       );
-      expect((await jsonValidator.validate({ value: 123 }, schema)).valid).toBe(true);
-      expect((await jsonValidator.validate({ value: true }, schema)).valid).toBe(false);
+      expect(
+        (await jsonValidator.validate({ value: true }, schema)).valid
+      ).toBe(false);
     });
   });
 });
