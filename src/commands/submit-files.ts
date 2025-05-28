@@ -26,6 +26,8 @@ import { ProgressTracker, ProcessingPhase } from '../utils/progress-tracker.js';
 import { ProcessedFile } from '../types/submit.types.js';
 import { DataItem } from '../types/contract.types.js';
 import { IPFSService } from '../services/ipfs.service.js'; // For schema downloads
+import { AssignmentCheckerService } from '../services/assignment-checker.service.js';
+import { Wallet } from 'ethers';
 
 // Define command options interface
 export interface SubmitFilesCommandOptions {
@@ -123,6 +125,7 @@ export interface SubmitFilesServiceOverrides {
   transactionBatcherService?: TransactionBatcherService;
   csvReporterService?: CsvReporterService;
   progressTracker?: ProgressTracker;
+  assignmentCheckerService?: AssignmentCheckerService;
 }
 
 export async function handleSubmitFiles(
@@ -210,6 +213,15 @@ export async function handleSubmitFiles(
   const csvReporterService =
     serviceOverrides.csvReporterService ??
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
+  
+  // Derive wallet address from private key to check assignments
+  const wallet = new Wallet(options.privateKey);
+  const userAddress = wallet.address;
+  logger.technical(`User wallet address: ${userAddress}`);
+  
+  const assignmentCheckerService =
+    serviceOverrides.assignmentCheckerService ??
+    new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
   await csvReporterService.initialize();
   logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
@@ -266,6 +278,26 @@ export async function handleSubmitFiles(
       return;
     }
 
+    // --- Phase 1.5: Assignment Check ---
+    console.log();
+    console.log(chalk.bold('🔗 Phase 1.5: Assignment Check'));
+    logger.progress('Fetching assigned CIDs for your address...');
+    
+    let assignedCids: Set<string>;
+    try {
+      assignedCids = await assignmentCheckerService.fetchAssignedCids(userAddress);
+      const assignedCount = assignedCids.size;
+      console.log(chalk.green(`✅ Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`));
+      
+      if (assignedCount === 0) {
+        console.log(chalk.yellow('⚠️  No CIDs assigned to your address. All files will be skipped.'));
+      }
+    } catch (error) {
+      console.log(chalk.yellow('⚠️  Could not fetch assignments - proceeding without assignment filtering'));
+      logger.warn(`Assignment check failed: ${error instanceof Error ? error.message : String(error)}`);
+      assignedCids = new Set(); // Empty set means no filtering
+    }
+
     const allFilesToProcess: ProcessedFile[] = [];
     const filesForUpload: ProcessedFile[] = [];
     const dataItemsForTransaction: DataItem[] = [];
@@ -287,6 +319,29 @@ export async function handleSubmitFiles(
           0, // No upload queue with semaphore
           0 // Transaction queue not yet active
         );
+        
+        // Check if this file's dataGroupCid is assigned to the user
+        if (assignedCids.size > 0 && !assignedCids.has(fileEntry.dataGroupCid)) {
+          const warningMsg = `File skipped - dataGroupCid ${fileEntry.dataGroupCid} is not assigned to your address`;
+          logger.warn(warningMsg);
+          await csvReporterService.logWarning({
+            propertyCid: fileEntry.propertyCid,
+            dataGroupCid: fileEntry.dataGroupCid,
+            filePath: fileEntry.filePath,
+            reason: warningMsg,
+            timestamp: new Date().toISOString(),
+          });
+          progressTracker.incrementSkipped();
+          progressTracker.incrementWarnings();
+          validatedFileCount++;
+          progressTracker.incrementProcessed();
+          progressTracker.setPhase(
+            ProcessingPhase.VALIDATION,
+            (validatedFileCount / totalFiles) * 100
+          );
+          continue; // Skip this file
+        }
+        
         try {
           const fileContentStr = readFileSync(fileEntry.filePath, 'utf-8');
           const jsonData = JSON.parse(fileContentStr);

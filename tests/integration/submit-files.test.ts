@@ -15,12 +15,14 @@ import {
   DEFAULT_SUBMIT_CONFIG,
 } from '../../src/config/submit.config';
 import { ProcessedFile, DataItem, FileEntry } from '../../src/types/index';
+import { AssignmentCheckerService } from '../../src/services/assignment-checker.service';
 
 // Mock only the services that interact with external systems we want to avoid in tests
 vi.mock('../../src/services/pinata.service');
 vi.mock('../../src/services/chain-state.service');
 vi.mock('../../src/services/transaction-batcher.service');
 vi.mock('../../src/services/ipfs.service'); // To mock the one used for schema fetching
+vi.mock('../../src/services/assignment-checker.service');
 
 // Spy on logger and process.exit
 vi.mock('../../src/utils/logger', () => ({
@@ -48,6 +50,9 @@ const MockedTransactionBatcherService =
 const MockedIPFSServiceForSchemas = IPFSService as unknown as vi.Mocked<
   typeof IPFSService
 >; // For schema fetching
+const MockedAssignmentCheckerService = AssignmentCheckerService as unknown as vi.Mocked<
+  typeof AssignmentCheckerService
+>;
 const mockedLogger = logger as vi.Mocked<typeof logger>;
 
 describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
@@ -66,6 +71,9 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
   let mockIpfsServiceForSchemasInstance: vi.Mocked<
     InstanceType<typeof IPFSService>
   >;
+  let mockAssignmentCheckerServiceInstance: vi.Mocked<
+    InstanceType<typeof AssignmentCheckerService>
+  >;
 
   let defaultOptions: SubmitFilesCommandOptions;
   let serviceOverrides: any;
@@ -73,7 +81,7 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
 
   const MOCK_RPC_URL = 'http://localhost:8545/mock'; // Not actually called
   const MOCK_CONTRACT_ADDRESS = '0xMockSubmitContract123'; // Not actually called
-  const MOCK_PRIVATE_KEY = '0xmockPrivateKey'; // Not actually used by mocked batcher
+  const MOCK_PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // Valid private key format
   const MOCK_PINATA_JWT = 'mockPinataJWT';
 
   const setupTestFileSystem = () => {
@@ -123,6 +131,10 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
     mockIpfsServiceForSchemasInstance = new MockedIPFSServiceForSchemas(
       'http://mock.schema.gateway'
     ) as vi.Mocked<InstanceType<typeof IPFSService>>;
+    mockAssignmentCheckerServiceInstance = new MockedAssignmentCheckerService(
+      MOCK_RPC_URL,
+      MOCK_CONTRACT_ADDRESS
+    ) as vi.Mocked<InstanceType<typeof AssignmentCheckerService>>;
 
     // Define behavior for mocked service methods
     mockPinataServiceInstance.uploadBatch = vi
@@ -148,6 +160,11 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
     mockTransactionBatcherServiceInstance.groupItemsIntoBatches = vi
       .fn()
       .mockReturnValue([]);
+
+    // Mock AssignmentCheckerService to return empty assignments (no filtering)
+    mockAssignmentCheckerServiceInstance.fetchAssignedCids = vi
+      .fn()
+      .mockResolvedValue(new Set());
 
     // For SchemaCacheService to fetch schemas (e.g. if schema is a CID "bafy...")
     // This mock simulates fetching a schema file from our local SCHEMA_DIR
@@ -196,6 +213,7 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       // For simplicity, assuming `handleSubmitFiles` passes the schema gateway to SchemaCacheService's IPFSService.
       // The `serviceOverrides.ipfsServiceForSchemas` is used by handleSubmitFiles to init SchemaCacheService.
       ipfsServiceForSchemas: mockIpfsServiceForSchemasInstance,
+      assignmentCheckerService: mockAssignmentCheckerServiceInstance,
     };
   });
 
