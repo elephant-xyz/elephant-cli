@@ -26,7 +26,7 @@ describe('Constants', () => {
     });
 
     it('should have valid IPFS gateway', () => {
-      expect(DEFAULT_IPFS_GATEWAY).toBe('https://gateway.pinata.cloud/ipfs/');
+      expect(DEFAULT_IPFS_GATEWAY).toBe('https://ipfs.io/ipfs/');
       expect(DEFAULT_IPFS_GATEWAY).toMatch(/^https?:\/\/.+\/$/);
     });
 

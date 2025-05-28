@@ -429,7 +429,6 @@ describe('JsonValidatorService', () => {
 
     it('should handle complex valid schemas', async () => {
       const complexSchema = {
-        $schema: 'http://json-schema.org/draft-07/schema#',
         type: 'object',
         properties: {
           items: {
