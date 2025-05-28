@@ -46,7 +46,7 @@ export function registerSubmitFilesCommand(program: Command) {
     .description(
       'Validate, process, upload, and submit data files to the Elephant Network.'
     )
-    .requiredOption(
+    .option(
       '-j, --pinata-jwt <jwt>',
       'Pinata JWT for IPFS uploads. (Or set PINATA_JWT env var)'
     )
