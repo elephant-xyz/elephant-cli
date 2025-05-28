@@ -227,15 +227,13 @@ describe('submit-files integration tests', () => {
           dataGroupCid: f.dataGroupCid,
         }));
       });
-    MockedPinataService.prototype.getQueueStats = vi
-      .fn()
-      .mockReturnValue({
-        pending: 0,
-        active: 0,
-        completed: 0,
-        failed: 0,
-        total: 0,
-      });
+    MockedPinataService.prototype.getQueueStats = vi.fn().mockReturnValue({
+      pending: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      total: 0,
+    });
     MockedPinataService.prototype.drainQueue = vi
       .fn()
       .mockResolvedValue(undefined);

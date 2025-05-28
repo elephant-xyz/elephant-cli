@@ -167,51 +167,63 @@ export async function handleSubmitFiles(
   const config = createSubmitConfig(submitConfigOverrides);
 
   // Initialize services, using overrides if provided
-  const fileScannerService = serviceOverrides.fileScannerService ?? new FileScannerService();
-  const ipfsServiceForSchemas = serviceOverrides.ipfsServiceForSchemas ?? new IPFSService(
-    DEFAULT_SUBMIT_CONFIG.schemaIpfsGateway
-  ); // Use a default or configurable gateway
-  const schemaCacheService = serviceOverrides.schemaCacheService ?? new SchemaCacheService(
-    config.schemaCacheSize,
-    ipfsServiceForSchemas,
-    config.enableDiskCache,
-    config.schemaCachePath
-  );
-  const jsonValidatorService = serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
-  const jsonCanonicalizerService = serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
-  const cidCalculatorService = serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
+  const fileScannerService =
+    serviceOverrides.fileScannerService ?? new FileScannerService();
+  const ipfsServiceForSchemas =
+    serviceOverrides.ipfsServiceForSchemas ??
+    new IPFSService(DEFAULT_SUBMIT_CONFIG.schemaIpfsGateway); // Use a default or configurable gateway
+  const schemaCacheService =
+    serviceOverrides.schemaCacheService ??
+    new SchemaCacheService(
+      config.schemaCacheSize,
+      ipfsServiceForSchemas,
+      config.enableDiskCache,
+      config.schemaCachePath
+    );
+  const jsonValidatorService =
+    serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
+  const jsonCanonicalizerService =
+    serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
+  const cidCalculatorService =
+    serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
   // Note: ChainStateService needs the main contract ABI, not just submit ABI.
   // Assuming ELEPHANT_CONTRACT_ABI is the correct one for general interactions if needed,
   // or pass SUBMIT_CONTRACT_ABI_FRAGMENTS if it's only for submit contract.
   // For now, using SUBMIT_CONTRACT_ABI_FRAGMENTS for both as ChainStateService primarily uses submitContract.
-  const chainStateService = serviceOverrides.chainStateService ?? new ChainStateService(
-    options.rpcUrl,
-    options.contractAddress,
-    options.contractAddress,
-    SUBMIT_CONTRACT_ABI_FRAGMENTS,
-    SUBMIT_CONTRACT_ABI_FRAGMENTS
-  );
-  const pinataService = serviceOverrides.pinataService ?? new PinataService(
-    options.pinataJwt,
-    undefined,
-    config.maxConcurrentUploads
-  );
-  const transactionBatcherService = serviceOverrides.transactionBatcherService ?? new TransactionBatcherService(
-    options.rpcUrl,
-    options.contractAddress,
-    options.privateKey,
-    config
-  );
-  const csvReporterService = serviceOverrides.csvReporterService ?? new CsvReporterService(
-    config.errorCsvPath,
-    config.warningCsvPath
-  );
+  const chainStateService =
+    serviceOverrides.chainStateService ??
+    new ChainStateService(
+      options.rpcUrl,
+      options.contractAddress,
+      options.contractAddress,
+      SUBMIT_CONTRACT_ABI_FRAGMENTS,
+      SUBMIT_CONTRACT_ABI_FRAGMENTS
+    );
+  const pinataService =
+    serviceOverrides.pinataService ??
+    new PinataService(
+      options.pinataJwt,
+      undefined,
+      config.maxConcurrentUploads
+    );
+  const transactionBatcherService =
+    serviceOverrides.transactionBatcherService ??
+    new TransactionBatcherService(
+      options.rpcUrl,
+      options.contractAddress,
+      options.privateKey,
+      config
+    );
+  const csvReporterService =
+    serviceOverrides.csvReporterService ??
+    new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
 
   await csvReporterService.initialize();
   logger.info(`Error reports will be saved to: ${config.errorCsvPath}`);
   logger.info(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
-  let progressTracker: ProgressTracker = serviceOverrides.progressTracker ?? undefined;
+  let progressTracker: ProgressTracker =
+    serviceOverrides.progressTracker ?? undefined;
 
   try {
     // --- Phase 1: Discovery (Task 12.2) ---

@@ -79,7 +79,7 @@ export class QueueManager<T = any, R = any> extends EventEmitter {
         this.start(); // This will set isRunning and call processNext for existing tasks
       } else {
         // If already running, new task was added, processNext might be needed if concurrency allows
-        this.processNext(); 
+        this.processNext();
       }
     }
 

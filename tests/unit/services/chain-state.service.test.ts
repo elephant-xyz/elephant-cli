@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Import necessary items from 'ethers' directly.
 // Due to vi.mock, these will be the mocked versions.
-import { Contract, JsonRpcProvider, ZeroHash, toUtf8Bytes, toUtf8String, getAddress } from 'ethers';
+import {
+  Contract,
+  JsonRpcProvider,
+  ZeroHash,
+  toUtf8Bytes,
+  toUtf8String,
+  getAddress,
+} from 'ethers';
 
 // --- Mock dependencies FIRST ---
 
@@ -26,7 +33,7 @@ vi.mock('ethers', async (importOriginal) => {
   const originalEthers = await importOriginal<typeof import('ethers')>();
   return {
     // Spread originalEthers first to ensure all exports are available
-    ...originalEthers, 
+    ...originalEthers,
     // Then override specific parts with mocks
     JsonRpcProvider: vi
       .fn()
@@ -62,7 +69,7 @@ describe('ChainStateService', () => {
     // Also reset the Contract constructor spy itself if it's re-used across tests for constructor calls
     (Contract as ReturnType<typeof vi.fn>).mockClear();
     (JsonRpcProvider as ReturnType<typeof vi.fn>).mockClear();
-    
+
     mockIsValidCID.mockReturnValue(true);
 
     chainStateService = new ChainStateService(
@@ -84,7 +91,7 @@ describe('ChainStateService', () => {
       // JsonRpcProvider is called once for super, once for this.submitContract
       expect(JsonRpcProvider).toHaveBeenCalledTimes(2);
       expect(JsonRpcProvider).toHaveBeenLastCalledWith(mockRpcUrl);
-      
+
       // Assert against the imported (and mocked) Contract constructor
       expect(Contract).toHaveBeenCalledWith(
         mockSubmitContractAddress,
