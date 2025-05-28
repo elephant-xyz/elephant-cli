@@ -1,5 +1,3 @@
-const Ajv = require('ajv').default || require('ajv');
-const addFormats = require('ajv-formats').default || require('ajv-formats');
 import type { ValidateFunction, ErrorObject } from 'ajv';
 import { JSONSchema } from './schema-cache.service.js';
 
@@ -16,12 +14,25 @@ export interface ValidationResult {
 }
 
 export class JsonValidatorService {
-  private ajv: InstanceType<typeof Ajv>;
-  private validators: Map<string, ValidateFunction>;
+  private ajv: any;
+  private validators: Map<string, ValidateFunction> = new Map();
+
+  private ajvInitialized: Promise<void>;
 
   constructor() {
+    // Initialize AJV dynamically to work with ES modules
+    this.ajvInitialized = this.initializeAjv();
+  }
+
+  private async initializeAjv(): Promise<void> {
+    // Use dynamic import with createRequire for CommonJS compatibility
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+
+    const Ajv = require('ajv');
+    const addFormats = require('ajv-formats');
+
     // Initialize AJV with draft-07 support
-    // Explicitly use 'new Ajv()'
     const ajvInstance = new Ajv({
       strict: false, // Allow draft-07 schemas
       allErrors: true, // Report all errors, not just the first one
@@ -40,7 +51,9 @@ export class JsonValidatorService {
   /**
    * Validate JSON data against a schema
    */
-  validate(data: any, schema: JSONSchema): ValidationResult {
+  async validate(data: any, schema: JSONSchema): Promise<ValidationResult> {
+    await this.ajvInitialized; // Wait for AJV to be initialized
+
     try {
       // Get or compile validator
       const validator = this.getValidator(schema);
@@ -77,6 +90,8 @@ export class JsonValidatorService {
     dataArray: any[],
     schema: JSONSchema
   ): Promise<ValidationResult[]> {
+    await this.ajvInitialized; // Wait for AJV to be initialized
+
     // Get compiled validator for reuse across all items
     const validator = this.getValidator(schema);
 
@@ -111,7 +126,7 @@ export class JsonValidatorService {
       // Compile the schema
       validator = this.ajv.compile(schema) as ValidateFunction<unknown>;
       this.validators.set(cacheKey, validator);
-      
+
       if (!validator) {
         throw new Error('Failed to compile schema validator');
       }
@@ -138,17 +153,19 @@ export class JsonValidatorService {
   /**
    * Add a custom format validator
    */
-  addFormat(
+  async addFormat(
     name: string,
     format: string | RegExp | ((data: string) => boolean)
-  ): void {
+  ): Promise<void> {
+    await this.ajvInitialized;
     this.ajv.addFormat(name, format);
   }
 
   /**
    * Add a custom keyword validator
    */
-  addKeyword(keyword: string, definition: any): void {
+  async addKeyword(keyword: string, definition: any): Promise<void> {
+    await this.ajvInitialized;
     this.ajv.addKeyword({
       keyword,
       ...definition,
@@ -181,7 +198,8 @@ export class JsonValidatorService {
   /**
    * Check if a schema is valid
    */
-  isValidSchema(schema: any): boolean {
+  async isValidSchema(schema: any): Promise<boolean> {
+    await this.ajvInitialized;
     try {
       this.ajv.compile(schema);
       return true;

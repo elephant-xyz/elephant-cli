@@ -204,35 +204,16 @@ export class PinataService {
     }
     logger.info(`Uploading ${files.length} files to IPFS.`);
 
-    const uploadPromises = files.map(async (file) => {
-      try {
-        const fileContent = await fsPromises.readFile(file.filePath);
-        const metadata = {
-          name: `${file.propertyCid}_${file.dataGroupCid}`,
-          keyvalues: {
-            propertyCid: file.propertyCid,
-            dataGroupCid: file.dataGroupCid,
-          }
-        };
-        const originalFileInfo: ProcessedFile = {
-          propertyCid: file.propertyCid,
-          dataGroupCid: file.dataGroupCid,
-          filePath: file.filePath,
-          canonicalJson: file.canonicalJson,
-          calculatedCid: file.calculatedCid,
-          validationPassed: file.validationPassed,
-        };
-        return await this.uploadFileInternal(fileContent, metadata, originalFileInfo);
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          propertyCid: file.propertyCid,
-          dataGroupCid: file.dataGroupCid,
-        };
-      }
-    });
+    // Set the processor function for the queue
+    this.uploadQueue.setProcessor(this.processUpload.bind(this));
 
+    // Add all files to the queue
+    const uploadPromises = files.map((file) => this.uploadQueue.push(file));
+
+    // Start processing the queue
+    this.uploadQueue.start();
+
+    // Wait for all uploads to complete
     return await Promise.all(uploadPromises);
   }
 

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock IpfsService
-const mockDownloadFile = vi.fn();
+const mockFetchContent = vi.fn();
 vi.mock('../../../src/services/ipfs.service', () => ({
   IpfsService: vi.fn().mockImplementation(() => ({
-    downloadFile: mockDownloadFile,
+    fetchContent: mockFetchContent,
   })),
 }));
 
@@ -50,7 +50,7 @@ describe('SchemaCacheService', () => {
         type: 'object',
         properties: { test: { type: 'string' } },
       };
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
 
@@ -70,36 +70,36 @@ describe('SchemaCacheService', () => {
         required: ['name'],
       };
 
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
 
       const result = await schemaCacheService.getSchema('test-cid');
 
-      expect(mockDownloadFile).toHaveBeenCalledWith('test-cid');
+      expect(mockFetchContent).toHaveBeenCalledWith('test-cid');
       expect(result).toEqual(schema);
       expect(schemaCacheService.has('test-cid')).toBe(true);
     });
 
     it('should return cached schema on subsequent requests', async () => {
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
 
       // First request
       const result1 = await schemaCacheService.getSchema('test-cid');
-      expect(mockDownloadFile).toHaveBeenCalledTimes(1);
+      expect(mockFetchContent).toHaveBeenCalledTimes(1);
 
       // Second request should use cache
       const result2 = await schemaCacheService.getSchema('test-cid');
-      expect(mockDownloadFile).toHaveBeenCalledTimes(1); // No additional calls
+      expect(mockFetchContent).toHaveBeenCalledTimes(1); // No additional calls
       expect(result2).toEqual(schema);
       expect(result1).toEqual(result2);
     });
 
     it('should handle JSON parsing errors', async () => {
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from('invalid json'));
+      mockFetchContent.mockResolvedValueOnce(Buffer.from('invalid json'));
 
       await expect(schemaCacheService.getSchema('invalid-cid')).rejects.toThrow(
         'Failed to download or parse schema invalid-cid'
@@ -107,7 +107,7 @@ describe('SchemaCacheService', () => {
     });
 
     it('should handle IPFS download errors', async () => {
-      mockDownloadFile.mockRejectedValueOnce(new Error('Network error'));
+      mockFetchContent.mockRejectedValueOnce(new Error('Network error'));
 
       await expect(schemaCacheService.getSchema('error-cid')).rejects.toThrow(
         'Failed to download or parse schema error-cid: Network error'
@@ -115,7 +115,7 @@ describe('SchemaCacheService', () => {
     });
 
     it('should reject non-object schemas', async () => {
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from('"not an object"'));
+      mockFetchContent.mockResolvedValueOnce(Buffer.from('"not an object"'));
 
       await expect(schemaCacheService.getSchema('string-cid')).rejects.toThrow(
         'Invalid JSON schema: not an object'
@@ -123,7 +123,7 @@ describe('SchemaCacheService', () => {
     });
 
     it('should reject null schemas', async () => {
-      mockDownloadFile.mockResolvedValueOnce(Buffer.from('null'));
+      mockFetchContent.mockResolvedValueOnce(Buffer.from('null'));
 
       await expect(schemaCacheService.getSchema('null-cid')).rejects.toThrow(
         'Invalid JSON schema: not an object'
@@ -138,7 +138,7 @@ describe('SchemaCacheService', () => {
       const schema3: JSONSchema = { type: 'object', title: 'Schema 3' };
       const schema4: JSONSchema = { type: 'object', title: 'Schema 4' };
 
-      mockDownloadFile
+      mockFetchContent
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema1)))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema3)))
@@ -171,7 +171,7 @@ describe('SchemaCacheService', () => {
       const schema3: JSONSchema = { type: 'object', title: 'Schema 3' };
       const schema4: JSONSchema = { type: 'object', title: 'Schema 4' };
 
-      mockDownloadFile
+      mockFetchContent
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema1)))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema3)))
@@ -200,14 +200,14 @@ describe('SchemaCacheService', () => {
       const schema1: JSONSchema = { type: 'object', title: 'Schema 1' };
       const schema2: JSONSchema = { type: 'object', title: 'Schema 2' };
 
-      mockDownloadFile
+      mockFetchContent
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema1)))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)));
 
       const cids = ['cid1', 'cid2'];
       await schemaCacheService.preloadSchemas(cids);
 
-      expect(mockDownloadFile).toHaveBeenCalledTimes(2);
+      expect(mockFetchContent).toHaveBeenCalledTimes(2);
       expect(schemaCacheService.has('cid1')).toBe(true);
       expect(schemaCacheService.has('cid2')).toBe(true);
     });
@@ -217,14 +217,14 @@ describe('SchemaCacheService', () => {
       const schema2: JSONSchema = { type: 'object', title: 'Schema 2' };
 
       // Pre-cache one schema
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema1))
       );
       await schemaCacheService.getSchema('cid1');
 
       // Reset mock to count new calls
-      mockDownloadFile.mockClear();
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockClear();
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema2))
       );
 
@@ -232,32 +232,32 @@ describe('SchemaCacheService', () => {
       const cids = ['cid1', 'cid2'];
       await schemaCacheService.preloadSchemas(cids);
 
-      expect(mockDownloadFile).toHaveBeenCalledTimes(1);
-      expect(mockDownloadFile).toHaveBeenCalledWith('cid2');
+      expect(mockFetchContent).toHaveBeenCalledTimes(1);
+      expect(mockFetchContent).toHaveBeenCalledWith('cid2');
     });
 
     it('should handle duplicate CIDs in preload list', async () => {
       const schema: JSONSchema = { type: 'object', title: 'Schema' };
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
 
       const cids = ['cid1', 'cid1', 'cid1']; // Duplicates
       await schemaCacheService.preloadSchemas(cids);
 
-      expect(mockDownloadFile).toHaveBeenCalledTimes(1);
+      expect(mockFetchContent).toHaveBeenCalledTimes(1);
       expect(schemaCacheService.has('cid1')).toBe(true);
     });
 
     it('should handle empty preload list', async () => {
       await schemaCacheService.preloadSchemas([]);
-      expect(mockDownloadFile).not.toHaveBeenCalled();
+      expect(mockFetchContent).not.toHaveBeenCalled();
     });
 
     it('should continue preloading even if some schemas fail', async () => {
       const schema2: JSONSchema = { type: 'object', title: 'Schema 2' };
 
-      mockDownloadFile
+      mockFetchContent
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)));
 
@@ -268,7 +268,7 @@ describe('SchemaCacheService', () => {
       const cids = ['cid1', 'cid2'];
       await schemaCacheService.preloadSchemas(cids);
 
-      expect(mockDownloadFile).toHaveBeenCalledTimes(2);
+      expect(mockFetchContent).toHaveBeenCalledTimes(2);
       expect(schemaCacheService.has('cid1')).toBe(false); // Failed to load
       expect(schemaCacheService.has('cid2')).toBe(true); // Successfully loaded
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -288,7 +288,7 @@ describe('SchemaCacheService', () => {
       });
 
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
       await schemaCacheService.getSchema('test-cid');
@@ -301,7 +301,7 @@ describe('SchemaCacheService', () => {
 
     it('should clear cache completely', async () => {
       const schema: JSONSchema = { type: 'object' };
-      mockDownloadFile.mockResolvedValueOnce(
+      mockFetchContent.mockResolvedValueOnce(
         Buffer.from(JSON.stringify(schema))
       );
       await schemaCacheService.getSchema('test-cid');

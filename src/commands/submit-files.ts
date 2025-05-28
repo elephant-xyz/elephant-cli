@@ -213,8 +213,9 @@ export async function handleSubmitFiles(
   logger.info(`Error reports will be saved to: ${config.errorCsvPath}`);
   logger.info(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
-  let progressTracker: ProgressTracker =
-    serviceOverrides.progressTracker || new ProgressTracker(
+  const progressTracker: ProgressTracker =
+    serviceOverrides.progressTracker ||
+    new ProgressTracker(
       0,
       config.progressUpdateInterval,
       config.enableProgressBar
@@ -295,7 +296,7 @@ export async function handleSubmitFiles(
             );
           }
 
-          const validationResult = jsonValidatorService.validate(
+          const validationResult = await jsonValidatorService.validate(
             jsonData,
             schema as JSONSchema
           ); // Cast schema
@@ -369,7 +370,8 @@ export async function handleSubmitFiles(
         const fileContentStr = readFileSync(processedEntry.filePath, 'utf-8');
         const jsonData = JSON.parse(fileContentStr);
 
-        const canonicalJson = jsonCanonicalizerService.canonicalize(jsonData);
+        const canonicalJson =
+          await jsonCanonicalizerService.canonicalize(jsonData);
         processedEntry.canonicalJson = canonicalJson;
 
         const calculatedCid = await cidCalculatorService.calculateCidV0(

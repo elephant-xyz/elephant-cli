@@ -10,7 +10,10 @@ import {
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
   SUBMIT_CONTRACT_METHODS,
 } from '../config/constants.js';
-import { DEFAULT_SUBMIT_CONFIG, SubmitConfig } from '../config/submit.config.js';
+import {
+  DEFAULT_SUBMIT_CONFIG,
+  SubmitConfig,
+} from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { toUtf8Bytes } from 'ethers'; // For converting CIDs to bytes
 
