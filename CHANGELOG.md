@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.1.0...v1.2.0) (2025-05-29)
+
+
+### Features
+
+* submit files command ([#8](https://github.com/elephant-xyz/elephant-cli/issues/8)) ([bb4cd44](https://github.com/elephant-xyz/elephant-cli/commit/bb4cd447ac09f13348f9c455724bf8705a0f8bfb))
+
 # [1.1.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.0.0...v1.1.0) (2025-05-27)
 
 
