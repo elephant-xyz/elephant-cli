@@ -13,7 +13,7 @@
   "parserOptions": {
     "ecmaVersion": 2020,
     "sourceType": "module",
-    "project": "./tsconfig.json"
+    "project": "./tsconfig.eslint.json"
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
@@ -23,5 +23,5 @@
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "prettier/prettier": "error"
   },
-  "ignorePatterns": ["dist", "node_modules", "coverage", "*.js"]
+  "ignorePatterns": ["dist", "node_modules", "coverage", "*.js", "tests"]
 }

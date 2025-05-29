@@ -5,7 +5,9 @@ vi.mock('ethers', () => ({
   __esModule: true,
   AbiCoder: { defaultAbiCoder: vi.fn(() => ({ decode: vi.fn() })) },
   getAddress: vi.fn((address: string) => address),
-  dataSlice: vi.fn((data: string, offset: number) => '0x' + data.slice(2 + offset * 2)),
+  dataSlice: vi.fn(
+    (data: string, offset: number) => '0x' + data.slice(2 + offset * 2)
+  ),
   JsonRpcProvider: vi.fn().mockImplementation(() => ({
     getBlockNumber: vi.fn<() => Promise<number>>().mockResolvedValue(71875900),
   })),
@@ -148,11 +150,17 @@ describe('listAssignments integration', () => {
   it('should complete full flow successfully', async () => {
     await listAssignments(defaultOptions);
 
-    expect(validation.isValidAddress).toHaveBeenCalledWith(defaultOptions.oracle);
-    expect(validation.isValidAddress).toHaveBeenCalledWith(defaultOptions.contract);
+    expect(validation.isValidAddress).toHaveBeenCalledWith(
+      defaultOptions.oracle
+    );
+    expect(validation.isValidAddress).toHaveBeenCalledWith(
+      defaultOptions.contract
+    );
     expect(validation.isValidUrl).toHaveBeenCalledWith(defaultOptions.rpc);
     expect(validation.isValidUrl).toHaveBeenCalledWith(defaultOptions.gateway);
-    expect(validation.isValidBlock).toHaveBeenCalledWith(defaultOptions.fromBlock);
+    expect(validation.isValidBlock).toHaveBeenCalledWith(
+      defaultOptions.fromBlock
+    );
 
     expect(MockedBlockchainService).toHaveBeenCalledWith(
       defaultOptions.rpc,
@@ -198,7 +206,9 @@ describe('listAssignments integration', () => {
     };
 
     // Set the validation to return false for the invalid address
-    vi.mocked(validation.isValidAddress).mockImplementation((addr) => addr !== 'invalid-address');
+    vi.mocked(validation.isValidAddress).mockImplementation(
+      (addr) => addr !== 'invalid-address'
+    );
 
     await listAssignments(invalidOptions);
 

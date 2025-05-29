@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock ora module using factory function to avoid hoisting issues
-vi.mock('ora', () => ({ 
+vi.mock('ora', () => ({
   default: vi.fn((options) => {
     const mockSpinnerInstance = {
       start: vi.fn().mockReturnThis(),
@@ -14,7 +14,7 @@ vi.mock('ora', () => ({
       isSpinning: false,
     };
     return mockSpinnerInstance;
-  })
+  }),
 }));
 
 import ora from 'ora';
@@ -37,7 +37,7 @@ describe('progress utils', () => {
 
     it('should start the spinner immediately', () => {
       const text = 'Processing...';
-      
+
       const spinner = createSpinner(text);
 
       expect(ora).toHaveBeenCalledWith({ text });
@@ -54,7 +54,7 @@ describe('progress utils', () => {
 
     it('should handle special characters in text', () => {
       const specialText = '🚀 Loading with unicode! 测试 тест';
-      
+
       createSpinner(specialText);
 
       expect(ora).toHaveBeenCalledWith({ text: specialText });
@@ -93,7 +93,7 @@ describe('progress utils', () => {
 
     it('should handle very long text', () => {
       const longText = 'A'.repeat(1000);
-      
+
       const spinner = createSpinner(longText);
 
       expect(ora).toHaveBeenCalledWith({ text: longText });
@@ -102,7 +102,7 @@ describe('progress utils', () => {
 
     it('should handle multiline text', () => {
       const multilineText = 'Line 1\nLine 2\nLine 3';
-      
+
       createSpinner(multilineText);
 
       expect(ora).toHaveBeenCalledWith({ text: multilineText });
@@ -110,11 +110,11 @@ describe('progress utils', () => {
 
     it('should be used correctly in async context', async () => {
       const spinner = createSpinner('Async operation...');
-      
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
       spinner.succeed('Done!');
-      
+
       expect(spinner.succeed).toHaveBeenCalledWith('Done!');
     });
 
@@ -122,7 +122,8 @@ describe('progress utils', () => {
       // To test if createSpinner handles errors from ora,
       // the mock for ora would need to throw an error.
       const error = new Error('Ora initialization failed');
-      vi.mocked(ora).mockImplementationOnce(() => { // Note: mockImplementationOnce
+      vi.mocked(ora).mockImplementationOnce(() => {
+        // Note: mockImplementationOnce
         throw error;
       });
 
