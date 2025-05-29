@@ -30,7 +30,7 @@ export class JsonValidatorService {
     const require = createRequire(import.meta.url);
 
     const Ajv = require('ajv/dist/2020');
-    const addFormats = require('ajv-formats-draft2019');
+    const addFormats = require('ajv-formats');
 
     // Initialize AJV with draft-07 support
     const ajvInstance = new Ajv({
