@@ -49,6 +49,18 @@ export enum ProcessingPhase {
   ERROR = 'error',
 }
 
+const phaseLabels: Record<ProcessingPhase, string> = {
+  [ProcessingPhase.INITIALIZATION]: chalk.bold.cyan('🚀 Initializing'),
+  [ProcessingPhase.SCANNING]: chalk.bold.blue('📁 Scanning'),
+  [ProcessingPhase.VALIDATION]: chalk.bold.yellow('🔍 Validating'),
+  [ProcessingPhase.PROCESSING]: chalk.bold.magenta('⚙️ Processing'),
+  [ProcessingPhase.UPLOADING]: chalk.bold.cyan('☁️ Uploading'),
+  [ProcessingPhase.DOWNLOADING]: chalk.bold.blue('⬇️ Downloading'),
+  [ProcessingPhase.SUBMITTING]: chalk.bold.green('⛓️ Submitting'),
+  [ProcessingPhase.COMPLETED]: chalk.bold.green('✅ Completed'),
+  [ProcessingPhase.ERROR]: chalk.bold.red('❌ Error'),
+};
+
 export class ProgressTracker extends EventEmitter {
   private startTime: Date;
   private phaseStartTime: Date;
@@ -116,7 +128,7 @@ export class ProgressTracker extends EventEmitter {
       // Only show bar in TTY
       this.progressBar = new cliProgress.SingleBar(
         {
-          format: `${chalk.cyan('{bar}')} | {phase} | {percentage}% | {value}/{total} Files | ETA: {eta_formatted} | Speed: {speed} files/s`,
+          format: `${chalk.cyan('{bar}')} {phaseLabel} {percentage}% | {value}/{total} files | ⚠️ {warningCount} | ❌ {errorCount} | ETA: {eta_formatted} | {speed} files/s`,
           barCompleteChar: '\u2588',
           barIncompleteChar: '\u2591',
           hideCursor: true,
@@ -125,8 +137,10 @@ export class ProgressTracker extends EventEmitter {
         cliProgress.Presets.shades_classic
       );
       this.progressBar.start(this.metrics.totalFiles, 0, {
-        phase: this.metrics.currentPhase.toUpperCase(),
+        phaseLabel: phaseLabels[this.metrics.currentPhase],
         speed: 'N/A',
+        warningCount: this.metrics.warningCount,
+        errorCount: this.metrics.errorCount,
       });
     }
 
@@ -171,8 +185,10 @@ export class ProgressTracker extends EventEmitter {
 
     if (this.progressBar) {
       this.progressBar.update(this.metrics.processedFiles, {
-        phase: this.metrics.currentPhase.toUpperCase(),
+        phaseLabel: phaseLabels[this.metrics.currentPhase],
         speed: this.metrics.filesPerSecond.toFixed(1),
+        warningCount: this.metrics.warningCount,
+        errorCount: this.metrics.errorCount,
       });
     }
 
