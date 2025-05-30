@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.0...v1.2.1) (2025-05-30)
+
+
+### Bug Fixes
+
+* fixed progress bar and output logging ([#12](https://github.com/elephant-xyz/elephant-cli/issues/12)) ([0236f9a](https://github.com/elephant-xyz/elephant-cli/commit/0236f9afcbe6f7f58c01bce3b9b4c2e23d8969a7))
+
 # [1.2.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.1.0...v1.2.0) (2025-05-29)
 
 
