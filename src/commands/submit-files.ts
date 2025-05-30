@@ -290,6 +290,9 @@ export async function handleSubmitFiles(
         await assignmentCheckerService.fetchAssignedCids(userAddress);
       assignmentFilteringEnabled = true; // Successfully fetched assignments
       const assignedCount = assignedCids.size;
+      logger.technical(
+        `Assigned CIDs for ${userAddress}: ${Array.from(assignedCids).join(', ')}`
+      );
       console.log(
         chalk.green(
           `✅ Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`

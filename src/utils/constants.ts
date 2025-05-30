@@ -7,9 +7,9 @@ export const DEFAULT_CONTRACT_ABI = [
     inputs: [
       {
         indexed: false,
-        internalType: 'bytes',
-        name: 'propertyCid',
-        type: 'bytes',
+        internalType: 'bytes32',
+        name: 'propertyHash',
+        type: 'bytes32',
       },
       {
         indexed: true,

@@ -4,8 +4,6 @@ import {
   Contract,
   TransactionResponse,
   TransactionReceipt,
-  toUtf8Bytes,
-  hexlify,
 } from 'ethers';
 import { DataItem, BatchSubmissionResult } from '../types/contract.types.js';
 import {
@@ -16,6 +14,7 @@ import {
   DEFAULT_SUBMIT_CONFIG,
   SubmitConfig,
 } from '../config/submit.config.js';
+import { extractHashFromCID } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
 
 export class TransactionBatcherService {
@@ -48,14 +47,14 @@ export class TransactionBatcherService {
   }
 
   /**
-   * Prepares DataItem for contract call by converting CIDs to bytes.
+   * Prepares DataItem for contract call by converting CIDs to hashes.
    */
   private prepareDataItemForContract(item: DataItem): {
-    propertyCid: string;
-    dataGroupCID: string;
-    dataCID: string;
+    propertyHash: string;
+    dataGroupHash: string;
+    dataHash: string;
   } {
-    // Strip leading dots from CIDs if present - dots should not be submitted to smart contract
+    // Strip leading dots from CIDs if present and convert to hashes
     const cleanPropertyCid = item.propertyCid.startsWith('.')
       ? item.propertyCid.substring(1)
       : item.propertyCid;
@@ -67,9 +66,9 @@ export class TransactionBatcherService {
       : item.dataCID;
 
     return {
-      propertyCid: hexlify(toUtf8Bytes(cleanPropertyCid)),
-      dataGroupCID: hexlify(toUtf8Bytes(cleanDataGroupCID)),
-      dataCID: hexlify(toUtf8Bytes(cleanDataCID)),
+      propertyHash: extractHashFromCID(cleanPropertyCid),
+      dataGroupHash: extractHashFromCID(cleanDataGroupCID),
+      dataHash: extractHashFromCID(cleanDataCID),
     };
   }
 

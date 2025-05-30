@@ -44,6 +44,14 @@ vi.mock('ethers', () => ({
   })),
 }));
 
+// Mock validation utils
+vi.mock('../../../src/utils/validation.ts', () => ({
+  isValidCID: vi.fn().mockReturnValue(true),
+  deriveCIDFromHash: vi
+    .fn()
+    .mockReturnValue('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'),
+}));
+
 // Import SUT after mocks
 import { EventDecoderService } from '../../../src/services/event-decoder.service.ts';
 import { ABI } from '../../../src/types/index.ts'; // ABI type is used
@@ -55,7 +63,7 @@ describe('EventDecoderService', () => {
       type: 'event',
       name: 'OracleAssigned',
       inputs: [
-        { name: 'propertyCid', type: 'bytes', indexed: false },
+        { name: 'propertyHash', type: 'bytes32', indexed: false },
         { name: 'elephant', type: 'address', indexed: true },
       ],
     },
@@ -69,7 +77,7 @@ describe('EventDecoderService', () => {
 
     // Set up default mock return values
     mockDecodeImplementation.mockReturnValue([
-      '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     ]);
     mockDataSliceImplementation.mockReturnValue(
       '0x0e44bfab0f7e1943cF47942221929F898E181505'
@@ -81,7 +89,7 @@ describe('EventDecoderService', () => {
       // Mock other properties of EventFragment if needed by the SUT's logic
       // For example, if it checks `eventFragment.inputs`
       inputs: [
-        { name: 'propertyCid', type: 'bytes', indexed: false },
+        { name: 'propertyHash', type: 'bytes32', indexed: false },
         { name: 'elephant', type: 'address', indexed: true },
       ],
     });
@@ -119,19 +127,19 @@ describe('EventDecoderService', () => {
       '0x1234567890123456789012345678901234567890';
 
     it('should correctly parse a valid OracleAssigned event', () => {
-      const decodedCidString =
-        '.QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const decodedHashString =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const expectedCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
 
       mockDecodeImplementation.mockReturnValueOnce([
-        decodedCidString,
+        decodedHashString,
       ] as Result);
 
       const parsedEvent =
         eventDecoderService.parseOracleAssignedEvent(mockRawEvent);
 
       expect(mockDecodeImplementation).toHaveBeenCalledWith(
-        ['string'],
+        ['bytes32'],
         mockRawEvent.data
       );
       expect(parsedEvent).toEqual({
@@ -142,15 +150,18 @@ describe('EventDecoderService', () => {
       });
     });
 
-    it('should handle CID without leading dot', () => {
-      const decodedCidString = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+    it('should handle hash and derive CID', () => {
+      const decodedHashString =
+        '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
       mockDecodeImplementation.mockReturnValueOnce([
-        decodedCidString,
+        decodedHashString,
       ] as unknown as Result);
 
       const parsedEvent =
         eventDecoderService.parseOracleAssignedEvent(mockRawEvent);
-      expect(parsedEvent.cid).toBe(decodedCidString);
+      expect(parsedEvent.cid).toBe(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
     });
 
     it('should throw an error if event data is invalid for decoding', () => {

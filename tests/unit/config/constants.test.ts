@@ -15,7 +15,7 @@ describe('Constants', () => {
   describe('existing constants', () => {
     it('should have valid contract address', () => {
       expect(DEFAULT_CONTRACT_ADDRESS).toBe(
-        '0x79D5046e34D4A56D357E12636A18da6eaEfe0586'
+        '0xD28285598597a5a213AebD116E9A093Ed44b127e'
       );
       expect(DEFAULT_CONTRACT_ADDRESS).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
@@ -45,32 +45,41 @@ describe('Constants', () => {
 
   describe('submit contract methods', () => {
     it('should define all required contract methods', () => {
-      expect(SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_CID).toBe(
-        'getCurrentFieldDataCID'
+      expect(SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_HASH).toBe(
+        'getCurrentFieldDataHash'
       );
       expect(
-        SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID
-      ).toBe('getParticipantsForConsensusDataCID');
+        SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH
+      ).toBe('getParticipantsForConsensusDataHash');
+      expect(SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_HASH).toBe(
+        'hasUserSubmittedDataHash'
+      );
       expect(SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA).toBe('submitBatchData');
     });
 
     it('should be readonly object', () => {
       // TypeScript prevents modification at compile time with 'as const'
       // At runtime, the values are accessible and of correct type
-      expect(typeof SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_CID).toBe(
+      expect(typeof SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_HASH).toBe(
         'string'
       );
       expect(
-        typeof SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID
+        typeof SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH
       ).toBe('string');
+      expect(typeof SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_HASH).toBe(
+        'string'
+      );
       expect(typeof SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA).toBe('string');
 
       // Verify the object has the expected structure
       expect(SUBMIT_CONTRACT_METHODS).toHaveProperty(
-        'GET_CURRENT_FIELD_DATA_CID'
+        'GET_CURRENT_FIELD_DATA_HASH'
       );
       expect(SUBMIT_CONTRACT_METHODS).toHaveProperty(
-        'GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID'
+        'GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH'
+      );
+      expect(SUBMIT_CONTRACT_METHODS).toHaveProperty(
+        'HAS_USER_SUBMITTED_DATA_HASH'
       );
       expect(SUBMIT_CONTRACT_METHODS).toHaveProperty('SUBMIT_BATCH_DATA');
     });
@@ -93,9 +102,9 @@ describe('Constants', () => {
   });
 
   describe('submit contract ABI fragments', () => {
-    it('should have getCurrentFieldDataCID ABI', () => {
+    it('should have getCurrentFieldDataHash ABI', () => {
       const getCurrentAbi = SUBMIT_CONTRACT_ABI_FRAGMENTS.find(
-        (fragment) => fragment.name === 'getCurrentFieldDataCID'
+        (fragment) => fragment.name === 'getCurrentFieldDataHash'
       );
 
       expect(getCurrentAbi).toBeDefined();
@@ -105,18 +114,18 @@ describe('Constants', () => {
       expect(getCurrentAbi?.outputs).toHaveLength(1);
 
       // Check input parameters
-      expect(getCurrentAbi?.inputs[0].name).toBe('propertyCid');
-      expect(getCurrentAbi?.inputs[0].type).toBe('bytes');
-      expect(getCurrentAbi?.inputs[1].name).toBe('dataGroupCID');
-      expect(getCurrentAbi?.inputs[1].type).toBe('bytes');
+      expect(getCurrentAbi?.inputs[0].name).toBe('propertyHash');
+      expect(getCurrentAbi?.inputs[0].type).toBe('bytes32');
+      expect(getCurrentAbi?.inputs[1].name).toBe('dataGroupHash');
+      expect(getCurrentAbi?.inputs[1].type).toBe('bytes32');
 
       // Check output
-      expect(getCurrentAbi?.outputs[0].type).toBe('bytes');
+      expect(getCurrentAbi?.outputs[0].type).toBe('bytes32');
     });
 
-    it('should have getParticipantsForConsensusDataCID ABI', () => {
+    it('should have getParticipantsForConsensusDataHash ABI', () => {
       const getParticipantsAbi = SUBMIT_CONTRACT_ABI_FRAGMENTS.find(
-        (fragment) => fragment.name === 'getParticipantsForConsensusDataCID'
+        (fragment) => fragment.name === 'getParticipantsForConsensusDataHash'
       );
 
       expect(getParticipantsAbi).toBeDefined();
@@ -126,12 +135,12 @@ describe('Constants', () => {
       expect(getParticipantsAbi?.outputs).toHaveLength(1);
 
       // Check input parameters
-      expect(getParticipantsAbi?.inputs[0].name).toBe('propertyCid');
-      expect(getParticipantsAbi?.inputs[0].type).toBe('bytes');
-      expect(getParticipantsAbi?.inputs[1].name).toBe('dataGroupCID');
-      expect(getParticipantsAbi?.inputs[1].type).toBe('bytes');
-      expect(getParticipantsAbi?.inputs[2].name).toBe('dataCID');
-      expect(getParticipantsAbi?.inputs[2].type).toBe('bytes');
+      expect(getParticipantsAbi?.inputs[0].name).toBe('propertyHash');
+      expect(getParticipantsAbi?.inputs[0].type).toBe('bytes32');
+      expect(getParticipantsAbi?.inputs[1].name).toBe('dataGroupHash');
+      expect(getParticipantsAbi?.inputs[1].type).toBe('bytes32');
+      expect(getParticipantsAbi?.inputs[2].name).toBe('dataHash');
+      expect(getParticipantsAbi?.inputs[2].type).toBe('bytes32');
 
       // Check output
       expect(getParticipantsAbi?.outputs[0].type).toBe('address[]');
@@ -160,12 +169,12 @@ describe('Constants', () => {
       const components = itemsInput?.components;
       expect(components).toHaveLength(3);
 
-      expect(components?.[0].name).toBe('propertyCid');
-      expect(components?.[0].type).toBe('bytes');
-      expect(components?.[1].name).toBe('dataGroupCID');
-      expect(components?.[1].type).toBe('bytes');
-      expect(components?.[2].name).toBe('dataCID');
-      expect(components?.[2].type).toBe('bytes');
+      expect(components?.[0].name).toBe('propertyHash');
+      expect(components?.[0].type).toBe('bytes32');
+      expect(components?.[1].name).toBe('dataGroupHash');
+      expect(components?.[1].type).toBe('bytes32');
+      expect(components?.[2].name).toBe('dataHash');
+      expect(components?.[2].type).toBe('bytes32');
     });
 
     it('should have all required ABI fragments', () => {
@@ -174,9 +183,9 @@ describe('Constants', () => {
       const methodNames = SUBMIT_CONTRACT_ABI_FRAGMENTS.map(
         (fragment) => fragment.name
       );
-      expect(methodNames).toContain('getCurrentFieldDataCID');
-      expect(methodNames).toContain('getParticipantsForConsensusDataCID');
-      expect(methodNames).toContain('hasUserSubmittedDataCID');
+      expect(methodNames).toContain('getCurrentFieldDataHash');
+      expect(methodNames).toContain('getParticipantsForConsensusDataHash');
+      expect(methodNames).toContain('hasUserSubmittedDataHash');
       expect(methodNames).toContain('submitBatchData');
     });
 
