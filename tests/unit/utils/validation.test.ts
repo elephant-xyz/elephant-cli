@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Mock multiformats using Vitest
-vi.mock('multiformats', () => ({
+vi.mock('multiformats/cid', () => ({
   CID: {
     parse: (cid: string) => {
       if (!cid || typeof cid !== 'string') {
@@ -23,6 +23,27 @@ vi.mock('multiformats', () => ({
       }
       throw new Error('Invalid CID');
     },
+    createV0: (multihash: any) => ({
+      toString: () => 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
+    }),
+  },
+}));
+
+vi.mock('multiformats/hashes/sha2', () => ({
+  sha256: {
+    code: 0x12,
+  },
+}));
+
+vi.mock('multiformats/hashes/digest', () => ({
+  create: (code: number, bytes: Uint8Array) => {
+    if (!bytes || bytes.length !== 32) {
+      throw new Error('Invalid hash length');
+    }
+    return {
+      code,
+      digest: bytes,
+    };
   },
 }));
 
@@ -32,6 +53,7 @@ import {
   isValidUrl,
   isValidBlock,
   isValidCID,
+  deriveCIDFromHash,
 } from '../../../src/utils/validation.ts';
 
 describe('validation utils', () => {
@@ -158,6 +180,33 @@ describe('validation utils', () => {
       ];
       invalidCIDs.forEach((cid) => {
         expect(isValidCID(cid as string)).toBe(false);
+      });
+    });
+  });
+
+  describe('deriveCIDFromHash', () => {
+    it('should derive CID v0 from bytes32 hash', () => {
+      const hash =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const result = deriveCIDFromHash(hash);
+      expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+    });
+
+    it('should handle hash without 0x prefix', () => {
+      const hash =
+        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const result = deriveCIDFromHash(hash);
+      expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+    });
+
+    it('should throw error for invalid hash format', () => {
+      const invalidHashes = [
+        '0x123', // Too short, will cause invalid byte array length
+        '', // Empty string
+      ];
+
+      invalidHashes.forEach((hash) => {
+        expect(() => deriveCIDFromHash(hash)).toThrow('Invalid hash format');
       });
     });
   });

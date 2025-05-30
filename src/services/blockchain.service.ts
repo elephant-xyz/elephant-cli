@@ -24,7 +24,7 @@ export class BlockchainService {
     toBlock?: number
   ): Promise<OracleAssignment[]> {
     // Define the filter for the OracleAssigned event, filtering by the indexed elephant address
-    // The event is: event OracleAssigned(bytes propertyCid, address indexed elephant);
+    // The event is: event OracleAssigned(bytes32 propertyHash, address indexed elephant);
     // In ethers.js v6, contract.filters.EventName(arg1, arg2, ...) is used.
     // For an indexed address, you pass the address directly.
     // If an argument is not indexed or you don't want to filter by it, use null.

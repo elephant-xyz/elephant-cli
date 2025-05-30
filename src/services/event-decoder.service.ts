@@ -1,6 +1,6 @@
 import { AbiCoder, getAddress, dataSlice, Log } from 'ethers';
 import { OracleAssignment } from '../types/index.js';
-import { isValidCID } from '../utils/validation.js';
+import { isValidCID, deriveCIDFromHash } from '../utils/validation.js';
 
 export class EventDecoderService {
   private abiCoder: AbiCoder;
@@ -9,12 +9,12 @@ export class EventDecoderService {
     this.abiCoder = AbiCoder.defaultAbiCoder();
   }
 
-  public decodePropertyCid(bytes: string): string {
-    // Decode the dynamic string from event data
-    const decoded = this.abiCoder.decode(['string'], bytes)[0];
+  public decodePropertyHash(bytes: string): string {
+    // Decode the bytes32 hash from event data
+    const decoded = this.abiCoder.decode(['bytes32'], bytes)[0];
 
-    // Remove the leading dot if present
-    const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
+    // Derive CID v0 from the hash
+    const cid = deriveCIDFromHash(decoded);
 
     if (!isValidCID(cid)) {
       throw new Error(`Invalid CID format: ${cid}`);
@@ -23,7 +23,7 @@ export class EventDecoderService {
   }
 
   public parseOracleAssignedEvent(event: Log): OracleAssignment {
-    const propertyCid = this.decodePropertyCid(event.data);
+    const propertyCid = this.decodePropertyHash(event.data);
     let elephantAddress = '';
 
     // Assuming elephant address is always the second topic (index 1) if present
