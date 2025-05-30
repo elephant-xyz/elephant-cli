@@ -75,6 +75,15 @@ vi.mock('../../../src/utils/logger', () => ({
   },
 }));
 
+// Mock validation utils for hash extraction
+vi.mock('../../../src/utils/validation', () => ({
+  extractHashFromCID: vi
+    .fn()
+    .mockReturnValue(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    ),
+}));
+
 describe('TransactionBatcherService', () => {
   const mockRpcUrl = 'http://localhost:8545';
   const mockContractAddress = '0x1234567890123456789012345678901234567890';

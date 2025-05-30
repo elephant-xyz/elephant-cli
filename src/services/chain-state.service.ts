@@ -1,18 +1,15 @@
-import {
-  Contract,
-  JsonRpcProvider,
-  ZeroHash,
-  ethers,
-  getAddress,
-} from 'ethers';
-import { toUtf8Bytes, toUtf8String } from 'ethers';
+import { Contract, JsonRpcProvider, ZeroHash, getAddress } from 'ethers';
 import { BlockchainService } from './blockchain.service.js';
 import { ABI } from '../types/index.js';
 import {
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
   SUBMIT_CONTRACT_METHODS,
 } from '../config/constants.js';
-import { isValidCID } from '../utils/validation.js';
+import {
+  isValidCID,
+  extractHashFromCID,
+  deriveCIDFromHash,
+} from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
 
 interface DataQuery {
@@ -50,34 +47,35 @@ export class ChainStateService extends BlockchainService {
     dataGroupCid: string
   ): Promise<string | null> {
     try {
-      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
-      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
+      // Convert CIDs to hashes for contract call
+      const propertyHash = extractHashFromCID(propertyCid);
+      const dataGroupHash = extractHashFromCID(dataGroupCid);
 
-      const returnedBytes: string = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_CID
-      ](propertyCidBytes, dataGroupCidBytes);
+      const returnedHash: string = await this.submitContract[
+        SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_HASH
+      ](propertyHash, dataGroupHash);
 
       if (
-        !returnedBytes ||
-        returnedBytes === '0x' ||
-        returnedBytes === ZeroHash
+        !returnedHash ||
+        returnedHash === '0x' ||
+        returnedHash === ZeroHash ||
+        returnedHash ===
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
       ) {
         logger.debug(
-          `No data CID found on-chain for property ${propertyCid}, group ${dataGroupCid}`
+          `No data hash found on-chain for property ${propertyCid}, group ${dataGroupCid}`
         );
         return null;
       }
 
-      let cidString = toUtf8String(returnedBytes);
-      if (cidString.startsWith('.')) {
-        cidString = cidString.substring(1);
-      }
+      // Convert hash back to CID
+      const cidString = deriveCIDFromHash(returnedHash);
 
       if (isValidCID(cidString)) {
         return cidString;
       } else {
         logger.warn(
-          `Invalid data CID format received from chain: ${cidString} (raw: ${returnedBytes}) for property ${propertyCid}, group ${dataGroupCid}`
+          `Invalid data CID derived from hash: ${cidString} (raw hash: ${returnedHash}) for property ${propertyCid}, group ${dataGroupCid}`
         );
         return null;
       }
@@ -102,13 +100,14 @@ export class ChainStateService extends BlockchainService {
     dataCid: string
   ): Promise<string[]> {
     try {
-      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
-      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
-      const dataCidBytes = ethers.hexlify(toUtf8Bytes(dataCid));
+      // Convert CIDs to hashes for contract call
+      const propertyHash = extractHashFromCID(propertyCid);
+      const dataGroupHash = extractHashFromCID(dataGroupCid);
+      const dataHash = extractHashFromCID(dataCid);
 
       const participants: string[] = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID
-      ](propertyCidBytes, dataGroupCidBytes, dataCidBytes);
+        SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH
+      ](propertyHash, dataGroupHash, dataHash);
       logger.technical(
         `Fetched submitted participants for ${propertyCid}/${dataGroupCid}/${dataCid}. Submitted participants: ${participants.join(', ')}`
       );
@@ -168,22 +167,18 @@ export class ChainStateService extends BlockchainService {
     dataCid: string
   ): Promise<boolean> {
     try {
-      const propertyCidBytes = ethers.hexlify(toUtf8Bytes(propertyCid));
-      const dataGroupCidBytes = ethers.hexlify(toUtf8Bytes(dataGroupCid));
-      const dataCidBytes = ethers.hexlify(toUtf8Bytes(dataCid));
+      // Convert CIDs to hashes for contract call
+      const propertyHash = extractHashFromCID(propertyCid);
+      const dataGroupHash = extractHashFromCID(dataGroupCid);
+      const dataHash = extractHashFromCID(dataCid);
       const normalizedUserAddress = getAddress(userAddress);
 
       const hasSubmitted: boolean = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_CID
-      ](
-        propertyCidBytes,
-        dataGroupCidBytes,
-        dataCidBytes,
-        normalizedUserAddress
-      );
+        SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_HASH
+      ](propertyHash, dataGroupHash, dataHash, normalizedUserAddress);
 
       logger.technical(
-        `Bytes values - propertyCid: ${propertyCidBytes}, dataGroupCid: ${dataGroupCidBytes}, dataCid: ${dataCidBytes}, userAddress: ${normalizedUserAddress}`
+        `Hash values - propertyHash: ${propertyHash}, dataGroupHash: ${dataGroupHash}, dataHash: ${dataHash}, userAddress: ${normalizedUserAddress}`
       );
       logger.technical(
         `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'} submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}`

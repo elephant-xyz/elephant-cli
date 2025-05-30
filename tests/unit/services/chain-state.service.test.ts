@@ -19,13 +19,21 @@ const { mockIsValidCID } = vi.hoisted(() => {
 });
 vi.mock('../../../src/utils/validation', () => ({
   isValidCID: mockIsValidCID,
+  extractHashFromCID: vi
+    .fn()
+    .mockReturnValue(
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    ),
+  deriveCIDFromHash: vi
+    .fn()
+    .mockReturnValue('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'),
 }));
 
 // Mock ethers
 const mockEthersContractInstance = {
-  getCurrentFieldDataCID: vi.fn(),
-  getParticipantsForConsensusDataCID: vi.fn(),
-  hasUserSubmittedDataCID: vi.fn(),
+  getCurrentFieldDataHash: vi.fn(),
+  getParticipantsForConsensusDataHash: vi.fn(),
+  hasUserSubmittedDataHash: vi.fn(),
 };
 const mockJsonRpcProviderInstance = {
   getBlockNumber: vi.fn().mockResolvedValue(12345),
@@ -66,9 +74,9 @@ describe('ChainStateService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Ensure the mock functions on the instance are reset
-    mockEthersContractInstance.getCurrentFieldDataCID.mockReset();
-    mockEthersContractInstance.getParticipantsForConsensusDataCID.mockReset();
-    mockEthersContractInstance.hasUserSubmittedDataCID.mockReset();
+    mockEthersContractInstance.getCurrentFieldDataHash.mockReset();
+    mockEthersContractInstance.getParticipantsForConsensusDataHash.mockReset();
+    mockEthersContractInstance.hasUserSubmittedDataHash.mockReset();
     // Also reset the Contract constructor spy itself if it's re-used across tests for constructor calls
     (Contract as ReturnType<typeof vi.fn>).mockClear();
     (JsonRpcProvider as ReturnType<typeof vi.fn>).mockClear();
@@ -111,8 +119,10 @@ describe('ChainStateService', () => {
     const expectedDataCidWithDot = `.${expectedDataCid}`;
 
     it('should fetch and return a valid data CID', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID.mockResolvedValue(
-        toUtf8Bytes(expectedDataCidWithDot)
+      const mockHash =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
+        mockHash
       );
 
       const result = await chainStateService.getCurrentDataCid(
@@ -121,17 +131,19 @@ describe('ChainStateService', () => {
       );
 
       expect(
-        mockEthersContractInstance.getCurrentFieldDataCID
+        mockEthersContractInstance.getCurrentFieldDataHash
       ).toHaveBeenCalledWith(
-        ethers.hexlify(toUtf8Bytes(propertyCid)),
-        ethers.hexlify(toUtf8Bytes(dataGroupCid))
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       );
-      expect(result).toBe(expectedDataCid);
-      expect(mockIsValidCID).toHaveBeenCalledWith(expectedDataCid);
+      expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+      expect(mockIsValidCID).toHaveBeenCalledWith(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
     });
 
     it('should return null if contract returns ZeroHash', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID.mockResolvedValue(
+      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
         ZeroHash
       );
       const result = await chainStateService.getCurrentDataCid(
@@ -142,7 +154,9 @@ describe('ChainStateService', () => {
     });
 
     it('should return null if contract returns "0x"', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID.mockResolvedValue('0x');
+      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
+        '0x'
+      );
       const result = await chainStateService.getCurrentDataCid(
         propertyCid,
         dataGroupCid
@@ -151,8 +165,10 @@ describe('ChainStateService', () => {
     });
 
     it('should return null and log warning if CID is invalid', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID.mockResolvedValue(
-        toUtf8Bytes('.invalidCidFormat')
+      const invalidHash =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
+        invalidHash
       );
       mockIsValidCID.mockReturnValue(false);
 
@@ -162,12 +178,14 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBeNull();
-      expect(mockIsValidCID).toHaveBeenCalledWith('invalidCidFormat');
+      expect(mockIsValidCID).toHaveBeenCalledWith(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
     });
 
     it('should return null and log error on contract call failure', async () => {
       const error = new Error('Contract call failed');
-      mockEthersContractInstance.getCurrentFieldDataCID.mockRejectedValue(
+      mockEthersContractInstance.getCurrentFieldDataHash.mockRejectedValue(
         error
       );
 
@@ -192,7 +210,7 @@ describe('ChainStateService', () => {
     const normalizedAddresses = mockAddresses.map((addr) => getAddress(addr));
 
     it('should fetch and return participant addresses', async () => {
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockResolvedValue(
+      mockEthersContractInstance.getParticipantsForConsensusDataHash.mockResolvedValue(
         mockAddresses
       );
 
@@ -203,18 +221,18 @@ describe('ChainStateService', () => {
       );
 
       expect(
-        mockEthersContractInstance.getParticipantsForConsensusDataCID
+        mockEthersContractInstance.getParticipantsForConsensusDataHash
       ).toHaveBeenCalledWith(
-        ethers.hexlify(toUtf8Bytes(propertyCid)),
-        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
-        ethers.hexlify(toUtf8Bytes(dataCid))
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
       );
       expect(result).toEqual(normalizedAddresses);
     });
 
     it('should return an empty array and log error on contract call failure', async () => {
       const error = new Error('Contract call failed');
-      mockEthersContractInstance.getParticipantsForConsensusDataCID.mockRejectedValue(
+      mockEthersContractInstance.getParticipantsForConsensusDataHash.mockRejectedValue(
         error
       );
 
@@ -238,34 +256,52 @@ describe('ChainStateService', () => {
     const expectedCid2 = 'dataQm222';
 
     it('should fetch CIDs for all queries concurrently', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID
-        .mockResolvedValueOnce(toUtf8Bytes(`.${expectedCid1}`))
-        .mockResolvedValueOnce(toUtf8Bytes(`.${expectedCid2}`))
+      const mockHash1 =
+        '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const mockHash2 =
+        '0x2222222222222222222222222222222222222222222222222222222222222222';
+
+      mockEthersContractInstance.getCurrentFieldDataHash
+        .mockResolvedValueOnce(mockHash1)
+        .mockResolvedValueOnce(mockHash2)
         .mockResolvedValueOnce(ZeroHash);
 
       const results = await chainStateService.batchGetCurrentDataCids(queries);
 
       expect(
-        mockEthersContractInstance.getCurrentFieldDataCID
+        mockEthersContractInstance.getCurrentFieldDataHash
       ).toHaveBeenCalledTimes(3);
       expect(results.size).toBe(3);
-      expect(results.get('prop1/group1')).toBe(expectedCid1);
-      expect(results.get('prop2/group2')).toBe(expectedCid2);
+      expect(results.get('prop1/group1')).toBe(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
+      expect(results.get('prop2/group2')).toBe(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
       expect(results.get('prop3/group3')).toBeNull();
     });
 
     it('should handle errors in individual getCurrentDataCid calls gracefully', async () => {
-      mockEthersContractInstance.getCurrentFieldDataCID
-        .mockResolvedValueOnce(toUtf8Bytes(`.${expectedCid1}`))
+      const mockHash1 =
+        '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const mockHash2 =
+        '0x2222222222222222222222222222222222222222222222222222222222222222';
+
+      mockEthersContractInstance.getCurrentFieldDataHash
+        .mockResolvedValueOnce(mockHash1)
         .mockRejectedValueOnce(new Error('Network error for prop2/group2'))
-        .mockResolvedValueOnce(toUtf8Bytes(`.${expectedCid2}`));
+        .mockResolvedValueOnce(mockHash2);
 
       const results = await chainStateService.batchGetCurrentDataCids(queries);
 
       expect(results.size).toBe(3);
-      expect(results.get('prop1/group1')).toBe(expectedCid1);
+      expect(results.get('prop1/group1')).toBe(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
       expect(results.get('prop2/group2')).toBeNull();
-      expect(results.get('prop3/group3')).toBe(expectedCid2);
+      expect(results.get('prop3/group3')).toBe(
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+      );
     });
   });
 
@@ -277,7 +313,7 @@ describe('ChainStateService', () => {
     const normalizedUserAddress = getAddress(userAddress);
 
     it('should return true if user has submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
         true
       );
 
@@ -290,17 +326,17 @@ describe('ChainStateService', () => {
 
       expect(result).toBe(true);
       expect(
-        mockEthersContractInstance.hasUserSubmittedDataCID
+        mockEthersContractInstance.hasUserSubmittedDataHash
       ).toHaveBeenCalledWith(
-        ethers.hexlify(toUtf8Bytes(propertyCid)),
-        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
-        ethers.hexlify(toUtf8Bytes(dataCid)),
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
         normalizedUserAddress
       );
     });
 
     it('should return false if user has not submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
         false
       );
 
@@ -313,17 +349,17 @@ describe('ChainStateService', () => {
 
       expect(result).toBe(false);
       expect(
-        mockEthersContractInstance.hasUserSubmittedDataCID
+        mockEthersContractInstance.hasUserSubmittedDataHash
       ).toHaveBeenCalledWith(
-        ethers.hexlify(toUtf8Bytes(propertyCid)),
-        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
-        ethers.hexlify(toUtf8Bytes(dataCid)),
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
         normalizedUserAddress
       );
     });
 
     it('should return false when contract returns false', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
         false
       );
 
@@ -339,7 +375,7 @@ describe('ChainStateService', () => {
 
     it('should return false and log error on contract call failure', async () => {
       const error = new Error('Contract call failed');
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockRejectedValue(
+      mockEthersContractInstance.hasUserSubmittedDataHash.mockRejectedValue(
         error
       );
 
@@ -355,7 +391,7 @@ describe('ChainStateService', () => {
 
     it('should handle address normalization correctly', async () => {
       const lowercaseAddress = userAddress.toLowerCase();
-      mockEthersContractInstance.hasUserSubmittedDataCID.mockResolvedValue(
+      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
         true
       );
 
@@ -368,11 +404,11 @@ describe('ChainStateService', () => {
 
       expect(result).toBe(true);
       expect(
-        mockEthersContractInstance.hasUserSubmittedDataCID
+        mockEthersContractInstance.hasUserSubmittedDataHash
       ).toHaveBeenCalledWith(
-        ethers.hexlify(toUtf8Bytes(propertyCid)),
-        ethers.hexlify(toUtf8Bytes(dataGroupCid)),
-        ethers.hexlify(toUtf8Bytes(dataCid)),
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
         normalizedUserAddress // Should be normalized even if input was lowercase
       );
     });

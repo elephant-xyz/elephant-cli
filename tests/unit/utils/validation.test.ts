@@ -12,14 +12,26 @@ vi.mock('multiformats/cid', () => ({
         cid.length === 46 &&
         /^[A-Za-z0-9]+$/.test(cid)
       ) {
-        return { valid: true };
+        return {
+          valid: true,
+          version: 0,
+          multihash: {
+            digest: new Uint8Array(32).fill(0x12), // Mock hash
+          },
+        };
       }
       if (
         cid.startsWith('bafy') &&
         cid.length >= 59 &&
         /^[a-z2-7]+$/.test(cid)
       ) {
-        return { valid: true };
+        return {
+          valid: true,
+          version: 1,
+          multihash: {
+            digest: new Uint8Array(32).fill(0x13), // Mock hash for v1
+          },
+        };
       }
       throw new Error('Invalid CID');
     },
@@ -54,6 +66,7 @@ import {
   isValidBlock,
   isValidCID,
   deriveCIDFromHash,
+  extractHashFromCID,
 } from '../../../src/utils/validation.ts';
 
 describe('validation utils', () => {
@@ -208,6 +221,43 @@ describe('validation utils', () => {
       invalidHashes.forEach((hash) => {
         expect(() => deriveCIDFromHash(hash)).toThrow('Invalid hash format');
       });
+    });
+  });
+
+  describe('extractHashFromCID', () => {
+    it('should extract hash from CID v0', () => {
+      const cid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const result = extractHashFromCID(cid);
+      // This should return the mocked hash (all 0x12 bytes)
+      expect(result).toBe(
+        '0x1212121212121212121212121212121212121212121212121212121212121212'
+      );
+    });
+
+    it('should throw error for CID v1', () => {
+      const cidV1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      expect(() => extractHashFromCID(cidV1)).toThrow('Invalid CID format');
+    });
+
+    it('should throw error for invalid CID', () => {
+      const invalidCids = [
+        'not_a_cid',
+        'Qm123', // Too short
+        '',
+      ];
+
+      invalidCids.forEach((cid) => {
+        expect(() => extractHashFromCID(cid)).toThrow('Invalid CID format');
+      });
+    });
+
+    it('should work with deriveCIDFromHash for round-trip conversion', () => {
+      const originalCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const extractedHash = extractHashFromCID(originalCid);
+      const derivedCid = deriveCIDFromHash(extractedHash);
+      // Both should return the mocked CID
+      expect(derivedCid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
     });
   });
 });

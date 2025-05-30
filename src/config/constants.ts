@@ -1,5 +1,5 @@
 export const DEFAULT_CONTRACT_ADDRESS =
-  '0x79D5046e34D4A56D357E12636A18da6eaEfe0586';
+  '0xD28285598597a5a213AebD116E9A093Ed44b127e';
 export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
 export const DEFAULT_IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
 export const MAX_CONCURRENT_DOWNLOADS = 25;
@@ -7,9 +7,10 @@ export const BLOCKS_PER_QUERY = 10000;
 
 // Submit command specific constants
 export const SUBMIT_CONTRACT_METHODS = {
-  GET_CURRENT_FIELD_DATA_CID: 'getCurrentFieldDataCID',
-  GET_PARTICIPANTS_FOR_CONSENSUS_DATA_CID: 'getParticipantsForConsensusDataCID',
-  HAS_USER_SUBMITTED_DATA_CID: 'hasUserSubmittedDataCID',
+  GET_CURRENT_FIELD_DATA_HASH: 'getCurrentFieldDataHash',
+  GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH:
+    'getParticipantsForConsensusDataHash',
+  HAS_USER_SUBMITTED_DATA_HASH: 'hasUserSubmittedDataHash',
   SUBMIT_BATCH_DATA: 'submitBatchData',
 } as const;
 
@@ -21,33 +22,33 @@ export const PINATA_GATEWAY_BASE_URL = 'https://gateway.pinata.cloud/ipfs/';
 export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
   {
     inputs: [
-      { internalType: 'bytes', name: 'propertyCid', type: 'bytes' },
-      { internalType: 'bytes', name: 'dataGroupCID', type: 'bytes' },
+      { internalType: 'bytes32', name: 'propertyHash', type: 'bytes32' },
+      { internalType: 'bytes32', name: 'dataGroupHash', type: 'bytes32' },
     ],
-    name: 'getCurrentFieldDataCID',
-    outputs: [{ internalType: 'bytes', name: '', type: 'bytes' }],
+    name: 'getCurrentFieldDataHash',
+    outputs: [{ internalType: 'bytes32', name: '', type: 'bytes32' }],
     stateMutability: 'view',
     type: 'function',
   },
   {
     inputs: [
-      { internalType: 'bytes', name: 'propertyCid', type: 'bytes' },
-      { internalType: 'bytes', name: 'dataGroupCID', type: 'bytes' },
-      { internalType: 'bytes', name: 'dataCID', type: 'bytes' },
+      { internalType: 'bytes32', name: 'propertyHash', type: 'bytes32' },
+      { internalType: 'bytes32', name: 'dataGroupHash', type: 'bytes32' },
+      { internalType: 'bytes32', name: 'dataHash', type: 'bytes32' },
     ],
-    name: 'getParticipantsForConsensusDataCID',
+    name: 'getParticipantsForConsensusDataHash',
     outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
     stateMutability: 'view',
     type: 'function',
   },
   {
     inputs: [
-      { internalType: 'bytes', name: 'propertyCid', type: 'bytes' },
-      { internalType: 'bytes', name: 'dataGroupCID', type: 'bytes' },
-      { internalType: 'bytes', name: 'dataCID', type: 'bytes' },
+      { internalType: 'bytes32', name: 'propertyHash', type: 'bytes32' },
+      { internalType: 'bytes32', name: 'dataGroupHash', type: 'bytes32' },
+      { internalType: 'bytes32', name: 'dataHash', type: 'bytes32' },
       { internalType: 'address', name: 'submitter', type: 'address' },
     ],
-    name: 'hasUserSubmittedDataCID',
+    name: 'hasUserSubmittedDataHash',
     outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
     stateMutability: 'view',
     type: 'function',
@@ -56,9 +57,9 @@ export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
     inputs: [
       {
         components: [
-          { internalType: 'bytes', name: 'propertyCid', type: 'bytes' },
-          { internalType: 'bytes', name: 'dataGroupCID', type: 'bytes' },
-          { internalType: 'bytes', name: 'dataCID', type: 'bytes' },
+          { internalType: 'bytes32', name: 'propertyHash', type: 'bytes32' },
+          { internalType: 'bytes32', name: 'dataGroupHash', type: 'bytes32' },
+          { internalType: 'bytes32', name: 'dataHash', type: 'bytes32' },
         ],
         internalType: 'struct IPropertyDataConsensus.DataItem[]',
         name: 'items',

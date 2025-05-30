@@ -58,3 +58,4 @@ test.sh
 data
 submit_errors.csv
 submit_warnings.csv
+test_data

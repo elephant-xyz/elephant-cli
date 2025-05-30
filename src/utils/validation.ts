@@ -61,3 +61,31 @@ export const deriveCIDFromHash = (hash: string): string => {
     throw new Error(`Invalid hash format: ${hash}`);
   }
 };
+
+export const extractHashFromCID = (cid: string): string => {
+  try {
+    const parsedCid = CID.parse(cid);
+
+    // Ensure it's CID v0 (which uses SHA-256 and dag-pb)
+    if (parsedCid.version !== 0) {
+      throw new Error(
+        `Only CID v0 is supported, got version ${parsedCid.version}`
+      );
+    }
+
+    // Extract the hash bytes from the multihash
+    const hashBytes = parsedCid.multihash.digest;
+
+    // Convert to hex string with 0x prefix
+    const hexHash =
+      '0x' +
+      Array.from(hashBytes)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+
+    return hexHash;
+  } catch (e: unknown) {
+    logger.error(`Failed to extract hash from CID: ${String(e)}`);
+    throw new Error(`Invalid CID format: ${cid}`);
+  }
+};
