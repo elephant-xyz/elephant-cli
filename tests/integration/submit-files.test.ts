@@ -174,9 +174,10 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
     mockIpfsServiceForSchemasInstance.fetchContent = vi
       .fn()
       .mockImplementation(async (cidOrPath: string) => {
-        const schemaFileName = cidOrPath.startsWith('bafy') || cidOrPath.startsWith('Qm')
-          ? `${cidOrPath}.json`
-          : cidOrPath;
+        const schemaFileName =
+          cidOrPath.startsWith('bafy') || cidOrPath.startsWith('Qm')
+            ? `${cidOrPath}.json`
+            : cidOrPath;
         const localSchemaPath = path.join(SCHEMA_DIR, schemaFileName);
         if (fs.existsSync(localSchemaPath)) {
           const content = fs.readFileSync(localSchemaPath, 'utf-8');
