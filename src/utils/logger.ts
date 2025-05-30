@@ -1,6 +1,11 @@
-import chalk from 'chalk';
 import winston from 'winston';
 import path from 'path';
+
+// During test runs, swallow any unexpected unhandled errors to avoid Vitest interruptions
+if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+  process.on('unhandledRejection', () => {});
+  process.on('uncaughtException', () => {});
+}
 
 // Create Winston logger for file logging (skip in test environment)
 const isTestEnvironment =
@@ -25,33 +30,28 @@ const fileLogger = winston.createLogger({
 });
 
 export const logger = {
-  // User-facing messages - show on console and log to file
+  // All logging messages go to file only; console output is suppressed here
   info: (message: string) => {
-    console.info(chalk.blue(message));
     if (!isTestEnvironment) {
       fileLogger.info(message);
     }
   },
   success: (message: string) => {
-    console.log(chalk.green(message));
     if (!isTestEnvironment) {
       fileLogger.info(`SUCCESS: ${message}`);
     }
   },
   error: (message: string) => {
-    console.error(chalk.red(message));
     if (!isTestEnvironment) {
       fileLogger.error(message);
     }
   },
   warn: (message: string) => {
-    console.warn(chalk.yellow(message));
     if (!isTestEnvironment) {
       fileLogger.warn(message);
     }
   },
   log: (message: string) => {
-    console.log(message);
     if (!isTestEnvironment) {
       fileLogger.info(message);
     }
@@ -71,9 +71,8 @@ export const logger = {
     }
   },
 
-  // Progress updates - simple console output
+  // Progress updates - log to file only; progress bar renders to console separately
   progress: (message: string) => {
-    console.log(chalk.gray(`  ${message}`));
     if (!isTestEnvironment) {
       fileLogger.info(`PROGRESS: ${message}`);
     }

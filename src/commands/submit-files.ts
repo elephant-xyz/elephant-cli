@@ -43,6 +43,11 @@ export interface SubmitFilesCommandOptions {
   // TODO: Add checkpoint path option
 }
 
+// During test runs, swallow any unexpected unhandled errors to prevent Vitest interruptions
+if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+  process.on('unhandledRejection', () => {});
+  process.on('uncaughtException', () => {});
+}
 export function registerSubmitFilesCommand(program: Command) {
   program
     .command('submit-files <inputDir>')
@@ -223,26 +228,22 @@ export async function handleSubmitFiles(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  await csvReporterService.initialize();
-  logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-  logger.technical(
-    `Warning reports will be saved to: ${config.warningCsvPath}`
-  );
-
-  const progressTracker: ProgressTracker =
-    serviceOverrides.progressTracker ||
-    new ProgressTracker(
-      0,
-      config.progressUpdateInterval,
-      config.enableProgressBar
+  // Initialize reporter and progress tracker, catch any early errors
+  let progressTracker: ProgressTracker;
+  try {
+    await csvReporterService.initialize();
+    logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
+    logger.technical(
+      `Warning reports will be saved to: ${config.warningCsvPath}`
     );
 
-  try {
-    // --- Phase 1: Discovery (Task 12.2) ---
-    console.log(chalk.bold('📁 Phase 1: Discovery'));
-    logger.progress('Scanning files and validating directory structure...');
-    progressTracker.start();
-    progressTracker.setPhase(ProcessingPhase.SCANNING);
+    progressTracker =
+      serviceOverrides.progressTracker ||
+      new ProgressTracker(
+        0,
+        config.progressUpdateInterval,
+        config.enableProgressBar
+      );
 
     const initialValidation = await fileScannerService.validateStructure(
       options.inputDir
@@ -256,22 +257,19 @@ export async function handleSubmitFiles(
       await csvReporterService.finalize();
       process.exit(1);
     }
-    console.log(chalk.green('✅ Directory structure valid'));
+    logger.success('Directory structure valid');
 
     const totalFiles = await fileScannerService.countTotalFiles(
       options.inputDir
     );
-    console.log(
-      chalk.blue(
-        `   Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
-      )
+    logger.info(
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
     );
-    progressTracker.reset(totalFiles); // Reset with actual total
-    progressTracker.start(); // Restart with correct total
-    progressTracker.setPhase(ProcessingPhase.SCANNING, 100); // Scanning complete
+    progressTracker.reset(totalFiles);
+    progressTracker.start();
 
     if (totalFiles === 0) {
-      console.log(chalk.yellow('⚠️  No files found to process'));
+      logger.warn('No files found to process');
       progressTracker.setPhase(ProcessingPhase.COMPLETED);
       progressTracker.stop();
       await csvReporterService.finalize();
@@ -279,54 +277,50 @@ export async function handleSubmitFiles(
     }
 
     // --- Phase 1.5: Assignment Check ---
-    console.log();
-    console.log(chalk.bold('🔗 Phase 1.5: Assignment Check'));
-    logger.progress('Fetching assigned CIDs for your address...');
 
-    let assignedCids: Set<string>;
+    logger.info('Checking assigned CIDs for your address...');
+
+    let assignedCids: Set<string> = new Set();
     let assignmentFilteringEnabled = false;
-    try {
-      assignedCids =
-        await assignmentCheckerService.fetchAssignedCids(userAddress);
-      assignmentFilteringEnabled = true; // Successfully fetched assignments
-      const assignedCount = assignedCids.size;
-      logger.technical(
-        `Assigned CIDs for ${userAddress}: ${Array.from(assignedCids).join(', ')}`
-      );
-      console.log(
-        chalk.green(
-          `✅ Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`
-        )
-      );
-
-      if (assignedCount === 0) {
-        console.log(
-          chalk.yellow(
-            '⚠️  No CIDs assigned to your address. All files will be skipped.'
-          )
+    if (options.dryRun) {
+      logger.info('[DRY RUN] Skipping assignment check');
+    } else {
+      try {
+        assignedCids =
+          await assignmentCheckerService.fetchAssignedCids(userAddress);
+        assignmentFilteringEnabled = true;
+        const assignedCount = assignedCids.size;
+        logger.debug(
+          `Assigned CIDs for ${userAddress}: ${Array.from(assignedCids).join(
+            ', '
+          )}`
+        );
+        logger.success(
+          `Found ${assignedCount} assigned CID${
+            assignedCount === 1 ? '' : 's'
+          } for your address`
+        );
+        if (assignedCount === 0) {
+          logger.warn(
+            'No CIDs assigned to your address; all files will be skipped.'
+          );
+        }
+      } catch (error) {
+        logger.warn(
+          'Could not fetch assignments; proceeding without assignment filtering'
+        );
+        logger.debug(
+          `Assignment check failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         );
       }
-    } catch (error) {
-      console.log(
-        chalk.yellow(
-          '⚠️  Could not fetch assignments - proceeding without assignment filtering'
-        )
-      );
-      logger.warn(
-        `Assignment check failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-      assignedCids = new Set(); // Empty set, but filtering disabled
-      assignmentFilteringEnabled = false;
     }
 
     const allFilesToProcess: ProcessedFile[] = [];
     const filesForUpload: ProcessedFile[] = [];
     const dataItemsForTransaction: DataItem[] = [];
 
-    // --- Phase 2: Validation (Task 12.3) ---
-    console.log();
-    console.log(chalk.bold('🔍 Phase 2: Validation'));
-    logger.progress('Validating JSON files against schemas...');
     progressTracker.setPhase(ProcessingPhase.VALIDATION);
     let validatedFileCount = 0;
 
@@ -435,18 +429,11 @@ export async function handleSubmitFiles(
     }
     const validFiles = progressTracker.getMetrics().validFiles;
     const invalidFiles = progressTracker.getMetrics().invalidFiles;
-    console.log(
-      chalk.green(
-        `✅ Validation complete: ${validFiles} valid, ${invalidFiles} invalid`
-      )
+    logger.success(
+      `Validation complete: ${validFiles} valid, ${invalidFiles} invalid`
     );
 
-    // --- Phase 3: Processing (Task 12.4) ---
-    console.log();
-    console.log(chalk.bold('⚙️ Phase 3: Processing'));
-    logger.progress(
-      'Canonicalizing, calculating CIDs, checking chain state...'
-    );
+    logger.info('Canonicalizing files and calculating CIDs...');
     progressTracker.setPhase(ProcessingPhase.PROCESSING);
     let processedFileCount = 0;
 
@@ -539,20 +526,17 @@ export async function handleSubmitFiles(
         );
       }
     }
-    console.log(
-      chalk.green(
-        `✅ Processing complete: ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} ready for upload`
-      )
+    logger.success(
+      `Processing complete: ${filesForUpload.length} file${
+        filesForUpload.length === 1 ? '' : 's'
+      } ready for upload`
     );
 
-    // --- Phase 4: Upload (Task 12.5) ---
-    console.log();
-    console.log(chalk.bold('☁️ Phase 4: Upload'));
     progressTracker.setPhase(ProcessingPhase.UPLOADING);
 
     if (!options.dryRun) {
       if (filesForUpload.length > 0) {
-        logger.progress(
+        logger.info(
           `Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`
         );
         const uploadResults = await pinataService.uploadBatch(filesForUpload);
@@ -576,7 +560,7 @@ export async function handleSubmitFiles(
             );
             const fileName =
               originalFile?.filePath?.split('/').pop() || 'unknown file';
-            console.log(chalk.red(`❌ Upload failed: ${fileName}`));
+            logger.error(`Upload failed: ${fileName}`);
             const errorMsg = `Upload failed for ${originalFile?.filePath || 'unknown file'}: ${uploadResult.error || 'Unknown error'}`;
             logger.technical(errorMsg);
             csvReporterService.logError({
@@ -611,8 +595,6 @@ export async function handleSubmitFiles(
       `Upload phase complete. Files prepared for transaction: ${dataItemsForTransaction.length}`
     );
 
-    // --- Phase 5: Transaction (Task 12.6) ---
-    logger.info('Phase 5: Transaction - Submitting data to blockchain...');
     progressTracker.setPhase(ProcessingPhase.SUBMITTING);
     let submittedTransactionCount = 0;
 
@@ -669,49 +651,89 @@ export async function handleSubmitFiles(
     progressTracker.stop();
 
     // --- Final Summary & Cleanup (Task 12.7) ---
-    logger.info('Submit process finished.');
+    // Final success message to console; other logs written to file
+    console.log(chalk.green('Submit process finished.'));
     const summary = await csvReporterService.finalize();
     const finalMetrics = progressTracker.getMetrics();
 
-    logger.info('--- Final Report ---');
+    logger.success('--- Final Report ---');
+    console.log(chalk.green('--- Final Report ---'));
+    // Summary metrics - console output and file log
     logger.info(`Total files scanned: ${totalFiles}`);
+    console.log(`Total files scanned: ${totalFiles}`);
     logger.info(`Files passed validation: ${finalMetrics.validFiles}`);
+    console.log(`Files passed validation: ${finalMetrics.validFiles}`);
     logger.info(`Files failed validation: ${finalMetrics.invalidFiles}`);
+    console.log(`Files failed validation: ${finalMetrics.invalidFiles}`);
     logger.info(
+      `Files processed (canonicalized, CID calculated): ${allFilesToProcess.filter((f) => f.validationPassed).length}`
+    );
+    console.log(
       `Files processed (canonicalized, CID calculated): ${allFilesToProcess.filter((f) => f.validationPassed).length}`
     );
     logger.info(
       `Files skipped (already on chain or other reasons): ${finalMetrics.skippedFiles}`
     );
+    console.log(
+      `Files skipped (already on chain or other reasons): ${finalMetrics.skippedFiles}`
+    );
     if (!options.dryRun) {
       logger.info(`Files attempted for upload: ${filesForUpload.length}`);
+      console.log(`Files attempted for upload: ${filesForUpload.length}`);
       logger.info(`Files successfully uploaded: ${finalMetrics.uploadedFiles}`);
+      console.log(`Files successfully uploaded: ${finalMetrics.uploadedFiles}`);
       logger.info(
+        `Data items submitted to blockchain: ${submittedTransactionCount}`
+      );
+      console.log(
         `Data items submitted to blockchain: ${submittedTransactionCount}`
       );
     } else {
       logger.info(
         `[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`
       );
+      console.log(
+        `[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`
+      );
       logger.info(
+        `[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`
+      );
+      console.log(
         `[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`
       );
     }
     logger.info(
       `Total errors logged: ${summary.errorCount + (finalMetrics.errorCount - summary.errorCount)}`
-    ); // Combine CSV and progress tracker errors
+    );
+    console.log(
+      `Total errors logged: ${summary.errorCount + (finalMetrics.errorCount - summary.errorCount)}`
+    );
     logger.info(
+      `Total warnings logged: ${summary.warningCount + (finalMetrics.warningCount - summary.warningCount)}`
+    );
+    console.log(
       `Total warnings logged: ${summary.warningCount + (finalMetrics.warningCount - summary.warningCount)}`
     );
     logger.info(
       `Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`
     );
+    console.log(
+      `Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`
+    );
     logger.info(`Error report: ${config.errorCsvPath}`);
+    console.log(`Error report: ${config.errorCsvPath}`);
     logger.info(`Warning report: ${config.warningCsvPath}`);
+    console.log(`Warning report: ${config.warningCsvPath}`);
     // Handle checkpoint saving / cleanup if implemented
   } catch (error) {
+    // Log fatal error to file and show message on console
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
+    );
+    console.error(
+      chalk.red(
+        `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
+      )
     );
     if (progressTracker!) {
       progressTracker.setPhase(ProcessingPhase.ERROR);

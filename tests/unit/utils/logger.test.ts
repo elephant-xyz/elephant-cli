@@ -37,41 +37,23 @@ describe('logger', () => {
     consoleInfoSpy.mockRestore();
   });
 
-  it('should log an info message with blue color', () => {
-    const message = 'This is an info message.';
-    logger.info(message);
-    expect(chalk.blue).toHaveBeenCalledWith(message);
-    expect(consoleInfoSpy).toHaveBeenCalledWith(`blue(${message})`);
-  });
-
-  it('should log a success message with green color', () => {
-    const message = 'Operation successful.';
-    logger.success(message);
-    expect(chalk.green).toHaveBeenCalledWith(message);
-    expect(consoleLogSpy).toHaveBeenCalledWith(`green(${message})`);
-  });
-
-  it('should log an error message with red color', () => {
-    const message = 'An error occurred.';
-    logger.error(message);
-    expect(chalk.red).toHaveBeenCalledWith(message);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(`red(${message})`);
-  });
-
-  it('should log a warning message with yellow color', () => {
-    const message = 'This is a warning.';
-    logger.warn(message);
-    expect(chalk.yellow).toHaveBeenCalledWith(message);
-    expect(consoleWarnSpy).toHaveBeenCalledWith(`yellow(${message})`);
-  });
-
-  it('should log a plain message without color', () => {
-    const message = 'Plain log message.';
-    logger.log(message); // Assuming logger.log is intended to be console.log without chalk
+  it('should not output anything to console in test environment', () => {
+    const msg = 'Test message';
+    logger.info(msg);
+    logger.success(msg);
+    logger.error(msg);
+    logger.warn(msg);
+    logger.log(msg);
+    logger.debug(msg);
+    logger.technical(msg);
+    logger.progress(msg);
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
     expect(chalk.blue).not.toHaveBeenCalled();
     expect(chalk.green).not.toHaveBeenCalled();
     expect(chalk.red).not.toHaveBeenCalled();
     expect(chalk.yellow).not.toHaveBeenCalled();
-    expect(consoleLogSpy).toHaveBeenCalledWith(message);
   });
 });
