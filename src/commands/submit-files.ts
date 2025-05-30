@@ -238,9 +238,6 @@ export async function handleSubmitFiles(
     );
 
   try {
-    progressTracker.start();
-    progressTracker.setPhase(ProcessingPhase.SCANNING);
-
     const initialValidation = await fileScannerService.validateStructure(
       options.inputDir
     );
@@ -261,9 +258,8 @@ export async function handleSubmitFiles(
     logger.info(
       `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
     );
-    progressTracker.reset(totalFiles); // Reset with actual total
-    progressTracker.start(); // Restart with correct total
-    progressTracker.setPhase(ProcessingPhase.SCANNING, 100); // Scanning complete
+    progressTracker.reset(totalFiles);
+    progressTracker.start();
 
     if (totalFiles === 0) {
       logger.warn('No files found to process');
@@ -679,13 +675,25 @@ export async function handleSubmitFiles(
       console.log(`Files attempted for upload: ${filesForUpload.length}`);
       logger.info(`Files successfully uploaded: ${finalMetrics.uploadedFiles}`);
       console.log(`Files successfully uploaded: ${finalMetrics.uploadedFiles}`);
-      logger.info(`Data items submitted to blockchain: ${submittedTransactionCount}`);
-      console.log(`Data items submitted to blockchain: ${submittedTransactionCount}`);
+      logger.info(
+        `Data items submitted to blockchain: ${submittedTransactionCount}`
+      );
+      console.log(
+        `Data items submitted to blockchain: ${submittedTransactionCount}`
+      );
     } else {
-      logger.info(`[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`);
-      console.log(`[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`);
-      logger.info(`[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`);
-      console.log(`[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`);
+      logger.info(
+        `[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`
+      );
+      console.log(
+        `[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`
+      );
+      logger.info(
+        `[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`
+      );
+      console.log(
+        `[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`
+      );
     }
     logger.info(
       `Total errors logged: ${summary.errorCount + (finalMetrics.errorCount - summary.errorCount)}`
@@ -699,8 +707,12 @@ export async function handleSubmitFiles(
     console.log(
       `Total warnings logged: ${summary.warningCount + (finalMetrics.warningCount - summary.warningCount)}`
     );
-    logger.info(`Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`);
-    console.log(`Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`);
+    logger.info(
+      `Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`
+    );
+    console.log(
+      `Duration: ${progressTracker.formatTime(finalMetrics.elapsedTime)}`
+    );
     logger.info(`Error report: ${config.errorCsvPath}`);
     console.log(`Error report: ${config.errorCsvPath}`);
     logger.info(`Warning report: ${config.warningCsvPath}`);
