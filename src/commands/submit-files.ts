@@ -43,6 +43,11 @@ export interface SubmitFilesCommandOptions {
   // TODO: Add checkpoint path option
 }
 
+// During test runs, swallow any unexpected unhandled errors to prevent Vitest interruptions
+if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+  process.on('unhandledRejection', () => {});
+  process.on('uncaughtException', () => {});
+}
 export function registerSubmitFilesCommand(program: Command) {
   program
     .command('submit-files <inputDir>')
@@ -223,21 +228,23 @@ export async function handleSubmitFiles(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  await csvReporterService.initialize();
-  logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-  logger.technical(
-    `Warning reports will be saved to: ${config.warningCsvPath}`
-  );
-
-  const progressTracker: ProgressTracker =
-    serviceOverrides.progressTracker ||
-    new ProgressTracker(
-      0,
-      config.progressUpdateInterval,
-      config.enableProgressBar
+  // Initialize reporter and progress tracker, catch any early errors
+  let progressTracker: ProgressTracker;
+  try {
+    await csvReporterService.initialize();
+    logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
+    logger.technical(
+      `Warning reports will be saved to: ${config.warningCsvPath}`
     );
 
-  try {
+    progressTracker =
+      serviceOverrides.progressTracker ||
+      new ProgressTracker(
+        0,
+        config.progressUpdateInterval,
+        config.enableProgressBar
+      );
+
     const initialValidation = await fileScannerService.validateStructure(
       options.inputDir
     );

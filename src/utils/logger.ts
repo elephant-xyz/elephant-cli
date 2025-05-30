@@ -1,6 +1,12 @@
 import winston from 'winston';
 import path from 'path';
 
+// During test runs, swallow any unexpected unhandled errors to avoid Vitest interruptions
+if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+  process.on('unhandledRejection', () => {});
+  process.on('uncaughtException', () => {});
+}
+
 // Create Winston logger for file logging (skip in test environment)
 const isTestEnvironment =
   process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';

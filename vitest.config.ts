@@ -18,6 +18,8 @@ export default defineConfig({
       },
     },
     setupFiles: ['tests/setup.ts'],
+    // Disable worker threads so unhandledRejection handlers in setupFiles apply to the main process
+    threads: false,
   },
   resolve: {
     alias: {

@@ -23,7 +23,21 @@ export class CsvReporterService {
 
   async initialize(): Promise<void> {
     await this.ensureDirectoriesExist();
-    await this.initializeStreams();
+    // Initialize CSV streams and write headers, awaiting write completion
+    this.errorStream = createWriteStream(this.errorCsvPath, { flags: 'w' });
+    await new Promise<void>((resolve, reject) => {
+      this.errorStream!.write(
+        'property_cid,data_group_cid,file_path,error,timestamp\n',
+        (err?: Error | null) => (err ? reject(err) : resolve())
+      );
+    });
+    this.warningStream = createWriteStream(this.warningCsvPath, { flags: 'w' });
+    await new Promise<void>((resolve, reject) => {
+      this.warningStream!.write(
+        'property_cid,data_group_cid,file_path,reason,timestamp\n',
+        (err?: Error | null) => (err ? reject(err) : resolve())
+      );
+    });
   }
 
   private async ensureDirectoriesExist(): Promise<void> {
@@ -34,38 +48,6 @@ export class CsvReporterService {
     if (warningDir !== errorDir) {
       await mkdir(warningDir, { recursive: true });
     }
-  }
-
-  private async initializeStreams(): Promise<void> {
-    // Initialize error CSV stream
-    this.errorStream = createWriteStream(this.errorCsvPath, { flags: 'w' });
-    this.errorStream.write(
-      'property_cid,data_group_cid,file_path,error,timestamp\n'
-    );
-
-    // Initialize warning CSV stream
-    this.warningStream = createWriteStream(this.warningCsvPath, { flags: 'w' });
-    this.warningStream.write(
-      'property_cid,data_group_cid,file_path,reason,timestamp\n'
-    );
-
-    // Wait for streams to be ready
-    await Promise.all([
-      new Promise<void>((resolve) => {
-        if (this.errorStream?.writable) {
-          this.errorStream.once('ready', resolve);
-        } else {
-          resolve();
-        }
-      }),
-      new Promise<void>((resolve) => {
-        if (this.warningStream?.writable) {
-          this.warningStream.once('ready', resolve);
-        } else {
-          resolve();
-        }
-      }),
-    ]);
   }
 
   async logError(entry: ErrorEntry): Promise<void> {

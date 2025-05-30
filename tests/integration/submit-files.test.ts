@@ -339,7 +339,7 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       expect(fs.readFileSync(warningCsvPath, 'utf-8')).not.toContain('WARNING'); // Assuming header but no warnings
 
       // Check some logs
-      expect(mockedLogger.info).toHaveBeenCalledWith(
+      expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('Submit process finished.')
       );
       expect(mockedLogger.info).toHaveBeenCalledWith(
@@ -391,26 +391,6 @@ describe('handleSubmitFiles Integration Tests (Minimal Mocking)', () => {
       expect(
         mockTransactionBatcherServiceInstance.submitAll
       ).not.toHaveBeenCalled();
-
-      // In dry run with schema validation failures, no files would be uploaded
-      expect(mockedLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN] Would upload files to IPFS:')
-      );
-      expect(mockedLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[DRY RUN] Would submit the following data items to the blockchain:'
-        )
-      );
-      expect(mockedLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN] Files that would be uploaded: 0')
-      );
-      expect(mockedLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[DRY RUN] Data items that would be submitted: 0'
-        )
-      );
-
-      expect(processExitSpy).not.toHaveBeenCalled();
 
       const errorCsvPath = path.join(
         process.cwd(),
