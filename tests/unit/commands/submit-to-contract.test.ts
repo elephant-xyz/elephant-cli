@@ -28,7 +28,8 @@ describe('SubmitToContractCommand', () => {
   const mockOptions: SubmitToContractCommandOptions = {
     rpcUrl: 'https://test-rpc.com',
     contractAddress: '0x1234567890123456789012345678901234567890',
-    privateKey: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    privateKey:
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     csvFile: 'test-input.csv',
     transactionBatchSize: 2,
     dryRun: false,
@@ -123,13 +124,26 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
 
     // Verify all items were submitted
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll).mock.calls;
+    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
+      .mock.calls;
     expect(submitAllCalls).toHaveLength(1);
     expect(submitAllCalls[0][0]).toHaveLength(3);
     expect(submitAllCalls[0][0]).toEqual([
-      { propertyCid: 'property1', dataGroupCID: 'dataGroup1', dataCID: 'QmCid1' },
-      { propertyCid: 'property2', dataGroupCID: 'dataGroup2', dataCID: 'QmCid2' },
-      { propertyCid: 'property3', dataGroupCID: 'dataGroup3', dataCID: 'QmCid3' },
+      {
+        propertyCid: 'property1',
+        dataGroupCID: 'dataGroup1',
+        dataCID: 'QmCid1',
+      },
+      {
+        propertyCid: 'property2',
+        dataGroupCID: 'dataGroup2',
+        dataCID: 'QmCid2',
+      },
+      {
+        propertyCid: 'property3',
+        dataGroupCID: 'dataGroup3',
+        dataCID: 'QmCid3',
+      },
     ]);
   });
 
@@ -152,7 +166,9 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     expect(mockTransactionBatcherService.submitAll).not.toHaveBeenCalled();
 
     // Should group items into batches for display
-    expect(mockTransactionBatcherService.groupItemsIntoBatches).toHaveBeenCalled();
+    expect(
+      mockTransactionBatcherService.groupItemsIntoBatches
+    ).toHaveBeenCalled();
   });
 
   it('should skip items that already exist on chain', async () => {
@@ -181,11 +197,20 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     );
 
     // Should only submit property1 and property3
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll).mock.calls;
+    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
+      .mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
     expect(submitAllCalls[0][0]).toEqual([
-      { propertyCid: 'property1', dataGroupCID: 'dataGroup1', dataCID: 'QmCid1' },
-      { propertyCid: 'property3', dataGroupCID: 'dataGroup3', dataCID: 'QmCid3' },
+      {
+        propertyCid: 'property1',
+        dataGroupCID: 'dataGroup1',
+        dataCID: 'QmCid1',
+      },
+      {
+        propertyCid: 'property3',
+        dataGroupCID: 'dataGroup3',
+        dataCID: 'QmCid3',
+      },
     ]);
   });
 
@@ -215,11 +240,20 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     );
 
     // Should only submit property1 and property2
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll).mock.calls;
+    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
+      .mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
     expect(submitAllCalls[0][0]).toEqual([
-      { propertyCid: 'property1', dataGroupCID: 'dataGroup1', dataCID: 'QmCid1' },
-      { propertyCid: 'property2', dataGroupCID: 'dataGroup2', dataCID: 'QmCid2' },
+      {
+        propertyCid: 'property1',
+        dataGroupCID: 'dataGroup1',
+        dataCID: 'QmCid1',
+      },
+      {
+        propertyCid: 'property2',
+        dataGroupCID: 'dataGroup2',
+        dataCID: 'QmCid2',
+      },
     ]);
   });
 
@@ -309,16 +343,27 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
         propertyCid: 'property1',
-        reason: expect.stringContaining('Error checking submission eligibility'),
+        reason: expect.stringContaining(
+          'Error checking submission eligibility'
+        ),
       })
     );
 
     // Should still process property2 and property3
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll).mock.calls;
+    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
+      .mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
     expect(submitAllCalls[0][0]).toEqual([
-      { propertyCid: 'property2', dataGroupCID: 'dataGroup2', dataCID: 'QmCid2' },
-      { propertyCid: 'property3', dataGroupCID: 'dataGroup3', dataCID: 'QmCid3' },
+      {
+        propertyCid: 'property2',
+        dataGroupCID: 'dataGroup2',
+        dataCID: 'QmCid2',
+      },
+      {
+        propertyCid: 'property3',
+        dataGroupCID: 'dataGroup3',
+        dataCID: 'QmCid3',
+      },
     ]);
   });
 });

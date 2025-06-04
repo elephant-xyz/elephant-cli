@@ -40,7 +40,8 @@ describe('ValidateAndUploadCommand', () => {
   const mockOptions: ValidateAndUploadCommandOptions = {
     rpcUrl: 'https://test-rpc.com',
     contractAddress: '0x1234567890123456789012345678901234567890',
-    privateKey: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    privateKey:
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     pinataJwt: 'test-jwt',
     inputDir: '/test/input',
     outputCsv: 'test-output.csv',
@@ -70,7 +71,9 @@ describe('ValidateAndUploadCommand', () => {
 
     // Create mock services
     mockFileScannerService = {
-      validateStructure: vi.fn().mockResolvedValue({ isValid: true, errors: [] }),
+      validateStructure: vi
+        .fn()
+        .mockResolvedValue({ isValid: true, errors: [] }),
       countTotalFiles: vi.fn().mockResolvedValue(2),
       scanDirectory: vi.fn().mockImplementation(async function* () {
         yield [
@@ -227,7 +230,9 @@ describe('ValidateAndUploadCommand', () => {
     // Verify CSV output
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       'test-output.csv',
-      expect.stringContaining('propertyCid,dataGroupCid,dataCid,filePath,uploadedAt')
+      expect.stringContaining(
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      )
     );
   });
 

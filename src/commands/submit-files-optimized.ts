@@ -93,7 +93,8 @@ export function registerSubmitFilesCommand(program: Command) {
     )
     .action(async (inputDir, options) => {
       // Resolve environment variables for required options if not provided directly
-      options.privateKey = options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      options.privateKey =
+        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
       if (!options.privateKey) {
@@ -110,8 +111,10 @@ export function registerSubmitFilesCommand(program: Command) {
       }
 
       // Parse numeric options
-      options.maxConcurrentUploads = parseInt(options.maxConcurrentUploads, 10) || 50;
-      options.transactionBatchSize = parseInt(options.transactionBatchSize, 10) || 200;
+      options.maxConcurrentUploads =
+        parseInt(options.maxConcurrentUploads, 10) || 50;
+      options.transactionBatchSize =
+        parseInt(options.transactionBatchSize, 10) || 200;
       options.fromBlock = parseInt(options.fromBlock, 10) || DEFAULT_FROM_BLOCK;
 
       // Construct full options object including resolved inputDir
@@ -217,18 +220,20 @@ async function processFile(
     }
 
     // Canonicalize and calculate CID
-    const canonicalJson = services.jsonCanonicalizerService.canonicalize(jsonData);
+    const canonicalJson =
+      services.jsonCanonicalizerService.canonicalize(jsonData);
     const calculatedCid = await services.cidCalculatorService.calculateCidV0(
       Buffer.from(canonicalJson, 'utf-8')
     );
 
     // Check if already submitted
-    const hasUserSubmitted = await services.chainStateService.hasUserSubmittedData(
-      userAddress,
-      fileEntry.propertyCid,
-      fileEntry.dataGroupCid,
-      calculatedCid
-    );
+    const hasUserSubmitted =
+      await services.chainStateService.hasUserSubmittedData(
+        userAddress,
+        fileEntry.propertyCid,
+        fileEntry.dataGroupCid,
+        calculatedCid
+      );
 
     if (hasUserSubmitted) {
       const reason = `Data already submitted by user (CID: ${calculatedCid})`;
@@ -377,11 +382,13 @@ export async function handleSubmitFiles(
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
   let progressTracker: SimpleProgress | undefined;
-  
+
   try {
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-    logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
+    logger.technical(
+      `Warning reports will be saved to: ${config.warningCsvPath}`
+    );
 
     // Perform validation and file counting before initializing the main progress bar.
     logger.info('Validating directory structure...');
@@ -399,9 +406,13 @@ export async function handleSubmitFiles(
     logger.success('Directory structure valid');
 
     logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(options.inputDir);
-    logger.info(`Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`);
-    
+    const totalFiles = await fileScannerService.countTotalFiles(
+      options.inputDir
+    );
+    logger.info(
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+    );
+
     if (totalFiles === 0) {
       logger.warn('No files found to process');
       await csvReporterService.finalize();
@@ -409,7 +420,8 @@ export async function handleSubmitFiles(
     }
 
     // Initialize progressTracker with the actual total number of files.
-    progressTracker = serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
+    progressTracker =
+      serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
     progressTracker.setPhase('Initializing'); // Initial phase after knowing total
     progressTracker.start();
 
@@ -417,7 +429,7 @@ export async function handleSubmitFiles(
     progressTracker.setPhase('Checking Assignments');
     let assignedCids: Set<string> = new Set();
     let assignmentFilteringEnabled = false;
-    
+
     if (options.dryRun) {
       logger.info('[DRY RUN] Skipping assignment check');
     } else {
@@ -432,10 +444,14 @@ export async function handleSubmitFiles(
           `Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`
         );
         if (assignedCount === 0) {
-          logger.warn('No CIDs assigned to your address; all files will be skipped.');
+          logger.warn(
+            'No CIDs assigned to your address; all files will be skipped.'
+          );
         }
       } catch (error) {
-        logger.warn('Could not fetch assignments; proceeding without assignment filtering');
+        logger.warn(
+          'Could not fetch assignments; proceeding without assignment filtering'
+        );
         logger.debug(
           `Assignment check failed: ${error instanceof Error ? error.message : String(error)}`
         );
@@ -446,7 +462,7 @@ export async function handleSubmitFiles(
     progressTracker.setPhase('Processing Files');
     const filesForUpload: ProcessedFile[] = [];
     const concurrencyLimit = pLimit(options.maxConcurrentUploads || 50);
-    
+
     const services = {
       schemaCacheService,
       jsonValidatorService,
@@ -466,16 +482,22 @@ export async function handleSubmitFiles(
       // Create promises for all files in the batch
       const batchPromises = fileBatch.map((fileEntry) =>
         concurrencyLimit(() =>
-          processFile(fileEntry, services, userAddress, assignedCids, assignmentFilteringEnabled)
+          processFile(
+            fileEntry,
+            services,
+            userAddress,
+            assignedCids,
+            assignmentFilteringEnabled
+          )
         )
       );
-      
+
       processingPromises.push(...batchPromises);
     }
 
     // Wait for all processing to complete
     const processingResults = await Promise.all(processingPromises);
-    
+
     // Collect successful files for upload
     for (const result of processingResults) {
       if (result.status === 'success' && result.file) {
@@ -492,8 +514,10 @@ export async function handleSubmitFiles(
     const dataItemsForTransaction: DataItem[] = [];
 
     if (!options.dryRun && filesForUpload.length > 0) {
-      logger.info(`Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`);
-      
+      logger.info(
+        `Uploading ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'} to IPFS...`
+      );
+
       const uploadResults = await pinataService.uploadBatch(filesForUpload);
 
       uploadResults.forEach((uploadResult) => {
@@ -552,7 +576,9 @@ export async function handleSubmitFiles(
         logger.error(errorMsg);
       }
     } else if (options.dryRun && dataItemsForTransaction.length > 0) {
-      logger.info('[DRY RUN] Would submit the following data items to the blockchain:');
+      logger.info(
+        '[DRY RUN] Would submit the following data items to the blockchain:'
+      );
       const batches = transactionBatcherService.groupItemsIntoBatches(
         dataItemsForTransaction
       );
@@ -573,21 +599,24 @@ export async function handleSubmitFiles(
     console.log(`  Files processed:        ${finalMetrics.processed}`);
     console.log(`  Files skipped:          ${finalMetrics.skipped}`);
     console.log(`  Errors:                 ${finalMetrics.errors}`);
-    
+
     if (!options.dryRun) {
-      console.log(`  Files uploaded:         ${dataItemsForTransaction.length}`);
+      console.log(
+        `  Files uploaded:         ${dataItemsForTransaction.length}`
+      );
       console.log(`  Transactions submitted: ${submittedTransactionCount}`);
     } else {
       console.log(`  [DRY RUN] Would upload: ${filesForUpload.length}`);
-      console.log(`  [DRY RUN] Would submit: ${dataItemsForTransaction.length}`);
+      console.log(
+        `  [DRY RUN] Would submit: ${dataItemsForTransaction.length}`
+      );
     }
-    
+
     const elapsed = Date.now() - finalMetrics.startTime;
     const seconds = Math.floor(elapsed / 1000);
     console.log(`  Duration:               ${seconds}s`);
     console.log(`\n  Error report:   ${config.errorCsvPath}`);
     console.log(`  Warning report: ${config.warningCsvPath}`);
-
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`

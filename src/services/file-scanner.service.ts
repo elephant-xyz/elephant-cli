@@ -235,7 +235,8 @@ export class FileScannerService {
               continue;
             }
             const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
-            if (this.isValidCid(dataGroupCid)) { // Ensure it's a valid CID before adding
+            if (this.isValidCid(dataGroupCid)) {
+              // Ensure it's a valid CID before adding
               dataGroupCids.add(dataGroupCid);
             }
           }

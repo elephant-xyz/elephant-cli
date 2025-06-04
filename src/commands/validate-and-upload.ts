@@ -97,13 +97,10 @@ export function registerValidateAndUploadCommand(program: Command) {
       'Target maximum concurrent local file processing tasks (default: 50). This may be automatically capped at 75% of the OS maximum open files limit if detectable (e.g., via ulimit -n). Actual IPFS uploads are managed by Pinata service limits.',
       undefined
     )
-    .option(
-      '--dry-run',
-      'Perform validation without uploading to IPFS.',
-      false
-    )
+    .option('--dry-run', 'Perform validation without uploading to IPFS.', false)
     .action(async (inputDir, options) => {
-      options.privateKey = options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      options.privateKey =
+        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
       if (!options.privateKey) {
@@ -119,7 +116,8 @@ export function registerValidateAndUploadCommand(program: Command) {
         process.exit(1);
       }
 
-      options.maxConcurrentUploads = parseInt(options.maxConcurrentUploads, 10) || undefined;
+      options.maxConcurrentUploads =
+        parseInt(options.maxConcurrentUploads, 10) || undefined;
       options.fromBlock = parseInt(options.fromBlock, 10) || DEFAULT_FROM_BLOCK;
 
       const commandOptions: ValidateAndUploadCommandOptions = {
@@ -167,16 +165,25 @@ export async function handleValidateAndUpload(
 
   let calculatedOsCap: number | undefined = undefined;
   try {
-    const ulimitOutput = execSync('ulimit -n', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    const ulimitOutput = execSync('ulimit -n', {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
     const osMaxFiles = parseInt(ulimitOutput, 10);
     if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
       calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
-      logger.info(`System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`);
+      logger.info(
+        `System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
+      );
     } else {
-      logger.warn(`Could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`);
+      logger.warn(
+        `Could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
+      );
     }
   } catch (error) {
-    logger.warn(`Failed to check OS open file limit (e.g., 'ulimit' command not available). OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.warn(
+      `Failed to check OS open file limit (e.g., 'ulimit' command not available). OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   if (userSpecifiedConcurrency !== undefined) {
@@ -205,11 +212,15 @@ export async function handleValidateAndUpload(
   }
 
   if (effectiveConcurrency === null) {
-    logger.error('Error: Effective concurrency is null. This should not happen.');
+    logger.error(
+      'Error: Effective concurrency is null. This should not happen.'
+    );
     process.exit(1);
   }
 
-  logger.technical(`Effective max concurrent local processing tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`);
+  logger.technical(
+    `Effective max concurrent local processing tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`
+  );
 
   try {
     const stats = await fsPromises.stat(options.inputDir);
@@ -247,11 +258,7 @@ export async function handleValidateAndUpload(
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
   const pinataService =
     serviceOverrides.pinataService ??
-    new PinataService(
-      options.pinataJwt,
-      undefined,
-      18 
-    );
+    new PinataService(options.pinataJwt, undefined, 18);
 
   const wallet = new Wallet(options.privateKey);
   const userAddress = wallet.address;
@@ -267,7 +274,9 @@ export async function handleValidateAndUpload(
   try {
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-    logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
+    logger.technical(
+      `Warning reports will be saved to: ${config.warningCsvPath}`
+    );
 
     logger.info('Validating directory structure...');
     const initialValidation = await fileScannerService.validateStructure(
@@ -284,8 +293,12 @@ export async function handleValidateAndUpload(
     logger.success('Directory structure valid');
 
     logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(options.inputDir);
-    logger.info(`Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`);
+    const totalFiles = await fileScannerService.countTotalFiles(
+      options.inputDir
+    );
+    logger.info(
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+    );
 
     if (totalFiles === 0) {
       logger.warn('No files found to process');
@@ -293,7 +306,8 @@ export async function handleValidateAndUpload(
       return;
     }
 
-    progressTracker = serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
+    progressTracker =
+      serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
     progressTracker.setPhase('Initializing');
     progressTracker.start();
 
@@ -315,10 +329,14 @@ export async function handleValidateAndUpload(
           `Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`
         );
         if (assignedCount === 0) {
-          logger.warn('No CIDs assigned to your address; all files will be skipped.');
+          logger.warn(
+            'No CIDs assigned to your address; all files will be skipped.'
+          );
         }
       } catch (error) {
-        logger.warn('Could not fetch assignments; proceeding without assignment filtering');
+        logger.warn(
+          'Could not fetch assignments; proceeding without assignment filtering'
+        );
         logger.debug(
           `Assignment check failed: ${error instanceof Error ? error.message : String(error)}`
         );
@@ -329,9 +347,13 @@ export async function handleValidateAndUpload(
     progressTracker.setPhase('Pre-fetching Schemas');
     logger.info('Discovering all unique schema CIDs...');
     try {
-      const allDataGroupCids = await fileScannerService.getAllDataGroupCids(options.inputDir);
+      const allDataGroupCids = await fileScannerService.getAllDataGroupCids(
+        options.inputDir
+      );
       const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
-      logger.info(`Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`);
+      logger.info(
+        `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
+      );
 
       if (uniqueSchemaCidsArray.length > 0) {
         const schemaProgress = new SimpleProgress(uniqueSchemaCidsArray.length);
@@ -340,18 +362,22 @@ export async function handleValidateAndUpload(
         let failedCount = 0;
 
         // Consider potential for overwhelming IPFS gateway if many unique schemas.
-        
+
         // Let's do them sequentially to avoid overwhelming the gateway and for clearer logging here.
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
             const schema = await schemaCacheService.getSchema(schemaCid);
             if (schema) {
-              logger.debug(`Successfully pre-fetched and cached schema ${schemaCid}`);
+              logger.debug(
+                `Successfully pre-fetched and cached schema ${schemaCid}`
+              );
               prefetchedCount++;
               fetchSuccess = true;
             } else {
-              logger.warn(`Could not pre-fetch schema ${schemaCid}. It will be attempted again during file processing.`);
+              logger.warn(
+                `Could not pre-fetch schema ${schemaCid}. It will be attempted again during file processing.`
+              );
               failedCount++;
             }
           } catch (error) {
@@ -360,13 +386,17 @@ export async function handleValidateAndUpload(
             );
             failedCount++;
           }
-          schemaProgress.increment(fetchSuccess ? 'processed' : 'errors'); 
+          schemaProgress.increment(fetchSuccess ? 'processed' : 'errors');
         }
         schemaProgress.stop();
-        logger.info(`Schema pre-fetching complete: ${prefetchedCount} successful, ${failedCount} failed/not found.`);
+        logger.info(
+          `Schema pre-fetching complete: ${prefetchedCount} successful, ${failedCount} failed/not found.`
+        );
       }
     } catch (error) {
-      logger.error(`Failed to discover or pre-fetch schemas: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(
+        `Failed to discover or pre-fetch schemas: ${error instanceof Error ? error.message : String(error)}`
+      );
       // Decide if this is a fatal error. For now, log and continue, as individual file processing will still attempt schema loading.
     }
 
@@ -418,16 +448,21 @@ export async function handleValidateAndUpload(
     console.log(`  Total files scanned:    ${totalFiles}`);
     console.log(`  Files skipped (assignment): ${finalMetrics.skipped || 0}`);
     console.log(`  Processing/upload errors: ${finalMetrics.errors || 0}`);
-    
+
     if (!options.dryRun) {
-      console.log(`  Successfully processed (validated & uploaded):  ${finalMetrics.processed || 0}`);
+      console.log(
+        `  Successfully processed (validated & uploaded):  ${finalMetrics.processed || 0}`
+      );
     } else {
-      console.log(`  [DRY RUN] Files processed (validated): ${finalMetrics.processed || 0}`);
+      console.log(
+        `  [DRY RUN] Files processed (validated): ${finalMetrics.processed || 0}`
+      );
     }
-    
-    const totalHandled = (finalMetrics.skipped || 0) + 
-                         (finalMetrics.errors || 0) + 
-                         (finalMetrics.processed || 0);
+
+    const totalHandled =
+      (finalMetrics.skipped || 0) +
+      (finalMetrics.errors || 0) +
+      (finalMetrics.processed || 0);
 
     console.log(`  Total files handled:    ${totalHandled}`);
 
@@ -439,18 +474,18 @@ export async function handleValidateAndUpload(
     console.log(`  Upload results: ${options.outputCsv}`);
 
     if (uploadRecords.length > 0) {
-      const csvHeader = 'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
+      const csvHeader =
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
       const csvContent = uploadRecords
         .map(
           (record) =>
             `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
         )
         .join('\n');
-      
+
       writeFileSync(options.outputCsv, csvHeader + csvContent);
       logger.success(`Upload results saved to: ${options.outputCsv}`);
     }
-
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
@@ -500,10 +535,16 @@ async function processFileAndGetUploadPromise(
 
   let jsonData;
   try {
-    const fileContentStr = await fsPromises.readFile(fileEntry.filePath, 'utf-8');
+    const fileContentStr = await fsPromises.readFile(
+      fileEntry.filePath,
+      'utf-8'
+    );
     jsonData = JSON.parse(fileContentStr);
   } catch (readOrParseError) {
-    const errorMsg = readOrParseError instanceof Error ? readOrParseError.message : String(readOrParseError);
+    const errorMsg =
+      readOrParseError instanceof Error
+        ? readOrParseError.message
+        : String(readOrParseError);
     await services.csvReporterService.logError({
       propertyCid: fileEntry.propertyCid,
       dataGroupCid: fileEntry.dataGroupCid,
@@ -549,7 +590,8 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
-    const canonicalJson = services.jsonCanonicalizerService.canonicalize(jsonData);
+    const canonicalJson =
+      services.jsonCanonicalizerService.canonicalize(jsonData);
     const calculatedCid = await services.cidCalculatorService.calculateCidV0(
       Buffer.from(canonicalJson, 'utf-8')
     );
@@ -564,7 +606,9 @@ async function processFileAndGetUploadPromise(
     };
 
     if (options.dryRun) {
-      logger.info(`[DRY RUN] Would upload ${processedFile.filePath} (Calculated CID: ${processedFile.calculatedCid})`);
+      logger.info(
+        `[DRY RUN] Would upload ${processedFile.filePath} (Calculated CID: ${processedFile.calculatedCid})`
+      );
       uploadRecords.push({
         propertyCid: processedFile.propertyCid,
         dataGroupCid: processedFile.dataGroupCid,
@@ -575,9 +619,15 @@ async function processFileAndGetUploadPromise(
       services.progressTracker.increment('processed');
       return Promise.resolve();
     } else {
-      return services.pinataService.uploadBatch([processedFile])
-        .then(uploadResults => {
-          if (uploadResults && uploadResults[0] && uploadResults[0].success && uploadResults[0].cid) {
+      return services.pinataService
+        .uploadBatch([processedFile])
+        .then((uploadResults) => {
+          if (
+            uploadResults &&
+            uploadResults[0] &&
+            uploadResults[0].success &&
+            uploadResults[0].cid
+          ) {
             const ipfsCid = uploadResults[0].cid;
             uploadRecords.push({
               propertyCid: processedFile.propertyCid,
@@ -587,9 +637,14 @@ async function processFileAndGetUploadPromise(
               uploadedAt: new Date().toISOString(),
             });
             services.progressTracker.increment('processed');
-            logger.debug(`Successfully uploaded ${processedFile.filePath} to IPFS. CID: ${ipfsCid}`);
+            logger.debug(
+              `Successfully uploaded ${processedFile.filePath} to IPFS. CID: ${ipfsCid}`
+            );
           } else {
-            const errorDetail = uploadResults && uploadResults[0] ? uploadResults[0].error : 'Unknown upload error';
+            const errorDetail =
+              uploadResults && uploadResults[0]
+                ? uploadResults[0].error
+                : 'Unknown upload error';
             const errorMsg = `Upload failed for ${processedFile.filePath}: ${errorDetail}`;
             logger.error(errorMsg);
             services.csvReporterService.logError({
@@ -602,9 +657,14 @@ async function processFileAndGetUploadPromise(
             services.progressTracker.increment('errors');
           }
         })
-        .catch(uploadError => {
-          const errorMsg = uploadError instanceof Error ? uploadError.message : String(uploadError);
-          logger.error(`Upload exception for ${processedFile.filePath}: ${errorMsg}`);
+        .catch((uploadError) => {
+          const errorMsg =
+            uploadError instanceof Error
+              ? uploadError.message
+              : String(uploadError);
+          logger.error(
+            `Upload exception for ${processedFile.filePath}: ${errorMsg}`
+          );
           services.csvReporterService.logError({
             propertyCid: processedFile.propertyCid,
             dataGroupCid: processedFile.dataGroupCid,
@@ -616,7 +676,10 @@ async function processFileAndGetUploadPromise(
         });
     }
   } catch (processingError) {
-    const errorMsg = processingError instanceof Error ? processingError.message : String(processingError);
+    const errorMsg =
+      processingError instanceof Error
+        ? processingError.message
+        : String(processingError);
     await services.csvReporterService.logError({
       propertyCid: fileEntry.propertyCid,
       dataGroupCid: fileEntry.dataGroupCid,

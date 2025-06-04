@@ -70,7 +70,8 @@ export function registerSubmitToContractCommand(program: Command) {
       false
     )
     .action(async (csvFile, options) => {
-      options.privateKey = options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      options.privateKey =
+        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
 
       if (!options.privateKey) {
         logger.error(
@@ -79,7 +80,8 @@ export function registerSubmitToContractCommand(program: Command) {
         process.exit(1);
       }
 
-      options.transactionBatchSize = parseInt(options.transactionBatchSize, 10) || 200;
+      options.transactionBatchSize =
+        parseInt(options.transactionBatchSize, 10) || 200;
 
       const commandOptions: SubmitToContractCommandOptions = {
         ...options,
@@ -226,7 +228,9 @@ export async function handleSubmitToContract(
   try {
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
-    logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
+    logger.technical(
+      `Warning reports will be saved to: ${config.warningCsvPath}`
+    );
 
     // Read and parse CSV file
     let csvContent: string;
@@ -250,9 +254,12 @@ export async function handleSubmitToContract(
       return;
     }
 
-    logger.info(`Found ${records.length} record${records.length === 1 ? '' : 's'} in CSV file`);
+    logger.info(
+      `Found ${records.length} record${records.length === 1 ? '' : 's'} in CSV file`
+    );
 
-    progressTracker = serviceOverrides.progressTracker || new SimpleProgress(records.length);
+    progressTracker =
+      serviceOverrides.progressTracker || new SimpleProgress(records.length);
     progressTracker.setPhase('Checking Eligibility');
     progressTracker.start();
 
@@ -288,7 +295,9 @@ export async function handleSubmitToContract(
     );
 
     if (skippedItems.length > 0) {
-      logger.warn(`${skippedItems.length} item${skippedItems.length === 1 ? '' : 's'} skipped`);
+      logger.warn(
+        `${skippedItems.length} item${skippedItems.length === 1 ? '' : 's'} skipped`
+      );
     }
 
     // Submit transactions
@@ -320,14 +329,18 @@ export async function handleSubmitToContract(
         });
       }
     } else if (options.dryRun && dataItemsForTransaction.length > 0) {
-      logger.info('[DRY RUN] Would submit the following data items to the blockchain:');
+      logger.info(
+        '[DRY RUN] Would submit the following data items to the blockchain:'
+      );
       const batches = transactionBatcherService.groupItemsIntoBatches(
         dataItemsForTransaction
       );
       batches.forEach((batch, index) => {
         logger.info(`  Batch ${index + 1}: ${batch.length} items`);
         batch.slice(0, 3).forEach((item) => {
-          logger.info(`    - Property: ${item.propertyCid}, DataGroup: ${item.dataGroupCID}, Data: ${item.dataCID}`);
+          logger.info(
+            `    - Property: ${item.propertyCid}, DataGroup: ${item.dataGroupCID}, Data: ${item.dataCID}`
+          );
         });
         if (batch.length > 3) {
           logger.info(`    ... and ${batch.length - 3} more items`);
@@ -351,8 +364,12 @@ export async function handleSubmitToContract(
       console.log(`  Transactions submitted: ${submittedTransactionCount}`);
       console.log(`  Total items submitted:  ${totalItemsSubmitted}`);
     } else {
-      console.log(`  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`);
-      console.log(`  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`);
+      console.log(
+        `  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`
+      );
+      console.log(
+        `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
+      );
     }
 
     const elapsed = Date.now() - finalMetrics.startTime;
@@ -360,7 +377,6 @@ export async function handleSubmitToContract(
     console.log(`  Duration:               ${seconds}s`);
     console.log(`\n  Error report:   ${config.errorCsvPath}`);
     console.log(`  Warning report: ${config.warningCsvPath}`);
-
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`

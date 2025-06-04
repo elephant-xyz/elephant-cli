@@ -28,7 +28,10 @@ export class SimpleProgress {
     };
 
     this.bar = new cliProgress.SingleBar({
-      format: '{phase} |' + chalk.cyan('{bar}') + '| {percentage}% | {processed}/{total} | Errors: {errors} | Skipped: {skipped} | {duration}s | ETA: {eta_formatted}',
+      format:
+        '{phase} |' +
+        chalk.cyan('{bar}') +
+        '| {percentage}% | {processed}/{total} | Errors: {errors} | Skipped: {skipped} | {duration}s | ETA: {eta_formatted}',
       barCompleteChar: '█',
       barIncompleteChar: '░',
       hideCursor: true,
@@ -54,7 +57,9 @@ export class SimpleProgress {
     this.update();
   }
 
-  increment(type: 'processed' | 'errors' | 'warnings' | 'skipped' = 'processed'): void {
+  increment(
+    type: 'processed' | 'errors' | 'warnings' | 'skipped' = 'processed'
+  ): void {
     this.metrics[type]++;
     if (type !== 'processed') {
       this.metrics.processed++;
@@ -77,7 +82,7 @@ export class SimpleProgress {
   private getPayload(): any {
     const elapsed = Date.now() - this.metrics.startTime;
     const duration = this.formatDuration(elapsed);
-    
+
     return {
       phase: this.metrics.phase.padEnd(15),
       processed: this.metrics.processed,

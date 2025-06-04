@@ -1,6 +1,9 @@
 import { BlockchainService } from './blockchain.service.js';
 import { OracleAssignment } from '../types/index.js';
-import { DEFAULT_CONTRACT_ABI, DEFAULT_FROM_BLOCK } from '../utils/constants.js';
+import {
+  DEFAULT_CONTRACT_ABI,
+  DEFAULT_FROM_BLOCK,
+} from '../utils/constants.js';
 import { logger } from '../utils/logger.js';
 
 export class AssignmentCheckerService {

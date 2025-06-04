@@ -12,9 +12,7 @@ describe('JsonCanonicalizerService', () => {
 
     it('should canonicalize nested objects', () => {
       const obj = { c: { y: 2, x: 1 }, a: 'foo' };
-      expect(service.canonicalize(obj)).toBe(
-        '{"a":"foo","c":{"x":1,"y":2}}'
-      );
+      expect(service.canonicalize(obj)).toBe('{"a":"foo","c":{"x":1,"y":2}}');
     });
 
     it('should handle arrays', () => {
@@ -114,9 +112,7 @@ describe('JsonCanonicalizerService', () => {
 
     it('should throw for invalid JSON string', () => {
       const invalidJsonString = '{"b": 1, "a": "hello"'; // Missing closing brace
-      expect(() =>
-        service.parseAndCanonicalize(invalidJsonString)
-      ).toThrow(
+      expect(() => service.parseAndCanonicalize(invalidJsonString)).toThrow(
         "Failed to parse or canonicalize JSON string: Expected ',' or '}' after property value in JSON at position 21 (line 1 column 22)"
       );
     });
@@ -155,15 +151,11 @@ describe('JsonCanonicalizerService', () => {
 
   describe('areEquivalent', () => {
     it('should return true for equivalent JSON objects', () => {
-      expect(service.areEquivalent({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(
-        true
-      );
+      expect(service.areEquivalent({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
     });
 
     it('should return false for non-equivalent JSON objects', () => {
-      expect(service.areEquivalent({ a: 1, b: 2 }, { a: 1, b: 3 })).toBe(
-        false
-      );
+      expect(service.areEquivalent({ a: 1, b: 2 }, { a: 1, b: 3 })).toBe(false);
     });
 
     it('should return false if one object causes canonicalization error', () => {
