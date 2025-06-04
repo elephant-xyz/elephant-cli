@@ -1,7 +1,8 @@
-import { JsonRpcProvider, Contract } from 'ethers';
+import { JsonRpcProvider, Contract, Log } from 'ethers';
 import { EventDecoderService } from './event-decoder.service.js';
 import { OracleAssignment, ABI } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { DEFAULT_BLOCK_RANGE } from '../utils/constants.js';
 
 export class BlockchainService {
   private provider: JsonRpcProvider;
@@ -23,11 +24,11 @@ export class BlockchainService {
     fromBlock: number,
     toBlock?: number
   ): Promise<OracleAssignment[]> {
-    const MAX_BLOCK_RANGE = 2000; // As suggested by the RPC error message
+    const MAX_BLOCK_RANGE = DEFAULT_BLOCK_RANGE;
     const finalToBlock = toBlock || (await this.getCurrentBlock());
 
     const filter = this.contract.filters.OracleAssigned(null, oracleAddress);
-    let allEventsRaw: any[] = [];
+    let allEventsRaw: Log[] = [];
 
     logger.info(
       `Fetching OracleAssigned events for ${oracleAddress} from block ${fromBlock} to ${finalToBlock} in chunks of ${MAX_BLOCK_RANGE} blocks.`

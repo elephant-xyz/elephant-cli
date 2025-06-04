@@ -1,6 +1,4 @@
 // Default ABI for the OracleAssigned event
-// This is a minimal ABI just for the event we are interested in.
-// A more complete ABI might be loaded from a file if specified by the user.
 export const DEFAULT_CONTRACT_ABI = [
   {
     anonymous: false,
@@ -22,3 +20,6 @@ export const DEFAULT_CONTRACT_ABI = [
     type: 'event',
   },
 ];
+
+export const DEFAULT_BLOCK_RANGE = 2000;
+export const BLOCKS_PER_DAY = 42_200;
