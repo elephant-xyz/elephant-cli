@@ -79,7 +79,7 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     spinner.succeed(`Current block number: ${currentBlock}`);
 
     const parsedFromBlock =
-      fromBlock === 'latest' ? currentBlock : parseInt(fromBlock, 10);
+      fromBlock === 'latest' ? currentBlock - 42_200 : parseInt(fromBlock, 10);
     const parsedToBlock =
       toBlockOpt === 'latest' ? currentBlock : parseInt(toBlockOpt, 10);
 
