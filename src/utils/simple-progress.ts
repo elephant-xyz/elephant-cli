@@ -28,9 +28,9 @@ export class SimpleProgress {
     };
 
     this.bar = new cliProgress.SingleBar({
-      format: '{phase} |' + chalk.cyan('{bar}') + '| {percentage}% | {processed}/{total} | Errors: {errors} | Skipped: {skipped} | {duration}',
-      barCompleteChar: '\u2588',
-      barIncompleteChar: '\u2591',
+      format: '{phase} |' + chalk.cyan('{bar}') + '| {percentage}% | {processed}/{total} | Errors: {errors} | Skipped: {skipped} | {duration}s | ETA: {eta_formatted}',
+      barCompleteChar: '█',
+      barIncompleteChar: '░',
       hideCursor: true,
     });
   }

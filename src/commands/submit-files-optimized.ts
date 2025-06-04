@@ -376,23 +376,19 @@ export async function handleSubmitFiles(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  let progressTracker: SimpleProgress;
+  let progressTracker: SimpleProgress | undefined;
   
   try {
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
     logger.technical(`Warning reports will be saved to: ${config.warningCsvPath}`);
 
-    // Validate directory structure
-    progressTracker = serviceOverrides.progressTracker || new SimpleProgress(0);
-    progressTracker.setPhase('Validating');
-    progressTracker.start();
-
+    // Perform validation and file counting before initializing the main progress bar.
+    logger.info('Validating directory structure...');
     const initialValidation = await fileScannerService.validateStructure(
       options.inputDir
     );
     if (!initialValidation.isValid) {
-      progressTracker.stop();
       console.log(chalk.red('❌ Directory structure is invalid:'));
       initialValidation.errors.forEach((err) =>
         console.log(chalk.red(`   • ${err}`))
@@ -402,22 +398,23 @@ export async function handleSubmitFiles(
     }
     logger.success('Directory structure valid');
 
-    // Count total files
-    progressTracker.setPhase('Scanning');
+    logger.info('Scanning to count total files...');
     const totalFiles = await fileScannerService.countTotalFiles(options.inputDir);
     logger.info(`Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`);
     
-    progressTracker.updateTotal(totalFiles);
-
     if (totalFiles === 0) {
       logger.warn('No files found to process');
-      progressTracker.stop();
       await csvReporterService.finalize();
       return;
     }
 
+    // Initialize progressTracker with the actual total number of files.
+    progressTracker = serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
+    progressTracker.setPhase('Initializing'); // Initial phase after knowing total
+    progressTracker.start();
+
     // Check assigned CIDs
-    progressTracker.setPhase('Checking');
+    progressTracker.setPhase('Checking Assignments');
     let assignedCids: Set<string> = new Set();
     let assignmentFilteringEnabled = false;
     
@@ -446,7 +443,7 @@ export async function handleSubmitFiles(
     }
 
     // Process files in parallel batches
-    progressTracker.setPhase('Processing');
+    progressTracker.setPhase('Processing Files');
     const filesForUpload: ProcessedFile[] = [];
     const concurrencyLimit = pLimit(options.maxConcurrentUploads || 50);
     
@@ -491,7 +488,7 @@ export async function handleSubmitFiles(
     );
 
     // Upload files to IPFS
-    progressTracker.setPhase('Uploading');
+    progressTracker.setPhase('Uploading Files');
     const dataItemsForTransaction: DataItem[] = [];
 
     if (!options.dryRun && filesForUpload.length > 0) {
@@ -536,7 +533,7 @@ export async function handleSubmitFiles(
     }
 
     // Submit transactions
-    progressTracker.setPhase('Submitting');
+    progressTracker.setPhase('Submitting Transactions');
     let submittedTransactionCount = 0;
 
     if (!options.dryRun && dataItemsForTransaction.length > 0) {
@@ -600,7 +597,7 @@ export async function handleSubmitFiles(
         `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
       )
     );
-    if (progressTracker!) {
+    if (progressTracker) {
       progressTracker.stop();
     }
     await csvReporterService.finalize();
