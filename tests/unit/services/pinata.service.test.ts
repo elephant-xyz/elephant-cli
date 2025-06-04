@@ -146,11 +146,12 @@ describe('PinataService', () => {
       // Mock fetch to simulate successful upload even with empty data
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          IpfsHash: 'bafyEmptyDataHash',
-          PinSize: 0,
-          Timestamp: new Date().toISOString(),
-        }),
+        json: () =>
+          Promise.resolve({
+            IpfsHash: 'bafyEmptyDataHash',
+            PinSize: 0,
+            Timestamp: new Date().toISOString(),
+          }),
       });
 
       // @ts-ignore

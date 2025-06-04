@@ -1,7 +1,6 @@
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
-import { log } from 'console';
 
 export interface PinMetadata {
   name?: string;

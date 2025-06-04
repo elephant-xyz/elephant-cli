@@ -70,14 +70,16 @@ describe('ValidateAndUploadCommand', () => {
       isDirectory: () => true,
     } as any);
 
-    vi.mocked(fs.promises.readFile).mockImplementation(async (filePath: any) => {
-      if (filePath.includes('property1')) {
-        return JSON.stringify({ name: 'Test Property 1' });
-      } else if (filePath.includes('property2')) {
-        return JSON.stringify({ name: 'Test Property 2' });
+    vi.mocked(fs.promises.readFile).mockImplementation(
+      async (filePath: any) => {
+        if (filePath.includes('property1')) {
+          return JSON.stringify({ name: 'Test Property 1' });
+        } else if (filePath.includes('property2')) {
+          return JSON.stringify({ name: 'Test Property 2' });
+        }
+        return '';
       }
-      return '';
-    });
+    );
 
     // Create mock services
     mockFileScannerService = {

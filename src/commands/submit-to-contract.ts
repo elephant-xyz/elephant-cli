@@ -251,9 +251,9 @@ export async function handleSubmitToContract(
 
     if (records.length === 0) {
       logger.warn('No records found in CSV file');
-      
+
       // Show final report even with 0 records
-      const finalReport = await csvReporterService.finalize();
+      await csvReporterService.finalize();
       const endTime = Date.now();
       const duration = endTime - startTime;
       const seconds = (duration / 1000).toFixed(1);
@@ -271,9 +271,7 @@ export async function handleSubmitToContract(
         console.log(
           `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
         );
-        console.log(
-          `  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`
-        );
+        console.log(`  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`);
       }
 
       console.log(`  Duration:               ${seconds}s`);
@@ -379,7 +377,7 @@ export async function handleSubmitToContract(
     progressTracker.stop();
 
     // Final summary
-    const summary = await csvReporterService.finalize();
+    await csvReporterService.finalize();
     const finalMetrics = progressTracker.getMetrics();
 
     console.log(chalk.green('\n✅ Contract submission process finished\n'));

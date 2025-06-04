@@ -224,7 +224,6 @@ export class FileScannerService {
           continue;
         }
 
-        const propertyCid = propertyDir.name; // Not used here, but part of structure
         const propertyDirPath = join(directoryPath, propertyDir.name);
 
         try {

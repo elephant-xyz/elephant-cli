@@ -29,14 +29,14 @@ export default defineConfig({
   esbuild: {
     loader: 'ts',
     include: /\.[cm]?ts$/,
-    exclude: []
+    exclude: [],
   },
   optimizeDeps: {
     esbuildOptions: {
       loader: {
         '.cts': 'ts',
-        '.cjs': 'js'
-      }
-    }
+        '.cjs': 'js',
+      },
+    },
   },
 });

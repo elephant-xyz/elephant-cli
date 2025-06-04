@@ -1,9 +1,8 @@
 import { Command } from 'commander';
-import { promises as fsPromises, readFileSync, writeFileSync } from 'fs';
+import { promises as fsPromises, writeFileSync } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
-import { Readable } from 'stream';
 import { execSync } from 'child_process';
 import {
   DEFAULT_RPC_URL,
@@ -20,12 +19,10 @@ import {
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
-import { ChainStateService } from '../services/chain-state.service.js';
 import { PinataService } from '../services/pinata.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
-import { DataItem } from '../types/contract.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { AssignmentCheckerService } from '../services/assignment-checker.service.js';
 import { Wallet } from 'ethers';
@@ -41,13 +38,6 @@ export interface ValidateAndUploadCommandOptions {
   maxConcurrentUploads?: number;
   fromBlock?: number;
   dryRun: boolean;
-}
-
-interface FileProcessingResult {
-  status: 'success' | 'skipped' | 'error';
-  file?: ProcessedFile;
-  error?: string;
-  reason?: string;
 }
 
 interface UploadRecord {
@@ -440,7 +430,7 @@ export async function handleValidateAndUpload(
 
     progressTracker.stop();
 
-    const summary = await csvReporterService.finalize();
+    await csvReporterService.finalize();
     const finalMetrics = progressTracker.getMetrics();
 
     console.log(chalk.green('\n✅ Validation and upload process finished\n'));

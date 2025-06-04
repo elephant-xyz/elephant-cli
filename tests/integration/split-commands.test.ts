@@ -81,7 +81,9 @@ describe('Split Commands Integration Tests', () => {
         'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
       );
       // CSV should only contain headers since schema downloads fail with fake CIDs
-      expect(csvContent.trim()).toBe('propertyCid,dataGroupCid,dataCid,filePath,uploadedAt');
+      expect(csvContent.trim()).toBe(
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      );
     });
 
     it('should handle invalid directory structure', async () => {
