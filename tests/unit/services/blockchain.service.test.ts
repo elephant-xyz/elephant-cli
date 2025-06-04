@@ -16,19 +16,41 @@ vi.mock('../../../src/services/event-decoder.service', () => {
 });
 
 // 2. Mock ethers (used directly by BlockchainService for JsonRpcProvider and Contract)
-const mockJsonRpcProviderInstance = {
-  getBlockNumber: vi.fn<() => Promise<number>>(),
-};
-const mockContractInstance = {
+
+// Define simplified interfaces for mocks
+interface MockProvider {
+  getBlockNumber: ReturnType<typeof vi.fn<[], Promise<number>>>;
+  // Add other provider methods if needed by the service and not part of runner
+}
+
+interface MockContract {
   filters: {
-    OracleAssigned: vi.fn<(...args: any[]) => object>(),
+    OracleAssigned: ReturnType<typeof vi.fn<any[], object>>;
+    // Add other filter types if used
+  };
+  queryFilter: ReturnType<typeof vi.fn<any[], Promise<any[]>>>;
+  getAddress: ReturnType<typeof vi.fn<[], Promise<string>>>;
+  resolveName: ReturnType<typeof vi.fn<[], Promise<string | null>>>;
+  runner: MockProvider | null; // Runner can be a provider or null
+  interface: any; // Simplified for now
+  // Add other contract methods if needed
+}
+
+const mockJsonRpcProviderInstance: MockProvider = {
+  getBlockNumber: vi.fn((): Promise<number> => Promise.resolve(100)), // Default for tests
+};
+
+const mockContractInstance: MockContract = {
+  filters: {
+    OracleAssigned: vi.fn((..._args: any[]): object => ({})),
   },
-  queryFilter: vi.fn<(...args: any[]) => Promise<any[]>>(),
-  getAddress: vi.fn<() => Promise<string>>(), // Added to satisfy Contract type if needed
-  resolveName: vi.fn<() => Promise<string | null>>(), // Added
-  runner: mockJsonRpcProviderInstance, // Added
+  queryFilter: vi.fn((..._args: any[]): Promise<any[]> => Promise.resolve([])),
+  getAddress: vi.fn(
+    (): Promise<string> => Promise.resolve('mockContractAddress')
+  ),
+  resolveName: vi.fn((): Promise<string | null> => Promise.resolve(null)),
+  runner: mockJsonRpcProviderInstance, // Link runner to the provider instance
   interface: {
-    // Added basic interface mock
     getEvent: vi.fn(() => ({
       topicHash: 'mockTopicHashForOracleAssigned',
     })),
@@ -199,6 +221,193 @@ describe('BlockchainService', () => {
       );
       expect(events).toEqual([]);
       expect(mockParseOracleAssignedEvent).not.toHaveBeenCalled();
+    });
+
+    // New tests for pagination
+    it('should fetch events in a single chunk if range is within MAX_BLOCK_RANGE', async () => {
+      const smallToBlock = fromBlock + 500; // Well within MAX_BLOCK_RANGE
+      (mockContractInstance.filters.OracleAssigned as any).mockReturnValue(
+        'eventFilterObject'
+      );
+      mockContractInstance.queryFilter.mockResolvedValue(mockRawEvents as any);
+
+      await blockchainService.getOracleAssignedEvents(
+        elephantAddress,
+        fromBlock,
+        smallToBlock
+      );
+
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledTimes(1);
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledWith(
+        'eventFilterObject',
+        fromBlock,
+        smallToBlock
+      );
+      expect(mockParseOracleAssignedEvent).toHaveBeenCalledTimes(
+        mockRawEvents.length
+      );
+    });
+
+    it('should fetch events in multiple chunks if range exceeds MAX_BLOCK_RANGE', async () => {
+      const MAX_BLOCK_RANGE = 2000; // Same as in BlockchainService
+      const largeFromBlock = 0;
+      const largeToBlock = largeFromBlock + MAX_BLOCK_RANGE * 2.5; // e.g., 0 to 4999 for MAX_BLOCK_RANGE = 2000 (should be 3 chunks)
+
+      const mockEventsChunk1: Partial<EventLog>[] = [
+        { transactionHash: 'txHashChunk1' } as any,
+      ];
+      const mockEventsChunk2: Partial<EventLog>[] = [
+        { transactionHash: 'txHashChunk2' } as any,
+      ];
+      const mockEventsChunk3: Partial<EventLog>[] = [
+        { transactionHash: 'txHashChunk3' } as any,
+      ];
+
+      (mockContractInstance.filters.OracleAssigned as any).mockReturnValue(
+        'eventFilterObject'
+      );
+      mockContractInstance.queryFilter
+        .mockResolvedValueOnce(mockEventsChunk1 as any)
+        .mockResolvedValueOnce(mockEventsChunk2 as any)
+        .mockResolvedValueOnce(mockEventsChunk3 as any);
+
+      mockParseOracleAssignedEvent.mockImplementation((rawEvent: any) => ({
+        cid: `parsed-${rawEvent.transactionHash}`,
+        elephant: elephantAddress,
+        blockNumber: rawEvent.blockNumber || 0, // Ensure blockNumber is present
+        transactionHash: rawEvent.transactionHash,
+      }));
+
+      const events = await blockchainService.getOracleAssignedEvents(
+        elephantAddress,
+        largeFromBlock,
+        largeToBlock
+      );
+
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledTimes(3);
+      // Chunk 1
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        1,
+        'eventFilterObject',
+        largeFromBlock,
+        largeFromBlock + MAX_BLOCK_RANGE - 1
+      );
+      // Chunk 2
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        2,
+        'eventFilterObject',
+        largeFromBlock + MAX_BLOCK_RANGE,
+        largeFromBlock + MAX_BLOCK_RANGE * 2 - 1
+      );
+      // Chunk 3
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        3,
+        'eventFilterObject',
+        largeFromBlock + MAX_BLOCK_RANGE * 2,
+        largeToBlock
+      );
+
+      expect(mockParseOracleAssignedEvent).toHaveBeenCalledTimes(
+        mockEventsChunk1.length +
+          mockEventsChunk2.length +
+          mockEventsChunk3.length
+      );
+      expect(events).toHaveLength(3);
+      expect(events[0].cid).toBe('parsed-txHashChunk1');
+      expect(events[1].cid).toBe('parsed-txHashChunk2');
+      expect(events[2].cid).toBe('parsed-txHashChunk3');
+    });
+
+    it('should use current block number if toBlock is not provided', async () => {
+      const currentBlock = 5000;
+      mockJsonRpcProviderInstance.getBlockNumber.mockResolvedValue(
+        currentBlock
+      );
+      (mockContractInstance.filters.OracleAssigned as any).mockReturnValue(
+        'eventFilterObject'
+      );
+      mockContractInstance.queryFilter.mockResolvedValue([]); // No events for simplicity
+
+      await blockchainService.getOracleAssignedEvents(
+        elephantAddress,
+        fromBlock
+      );
+
+      expect(mockJsonRpcProviderInstance.getBlockNumber).toHaveBeenCalled();
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledWith(
+        'eventFilterObject',
+        fromBlock,
+        // This will be chunked if (currentBlock - fromBlock) > MAX_BLOCK_RANGE.
+        // For this test, let's assume fromBlock=0, currentBlock=5000, MAX_BLOCK_RANGE=2000
+        // First call will be (filter, 0, 1999)
+        // Second call (filter, 2000, 3999)
+        // Third call (filter, 4000, 5000)
+        expect.anything() // First call's toBlock
+      );
+      // More detailed checks on chunking with currentBlock:
+      // Re-calculate based on fromBlock=0, currentBlock=5000, MAX_BLOCK_RANGE=2000
+      // Chunk 1: 0 to 1999
+      // Chunk 2: 2000 to 3999
+      // Chunk 3: 4000 to 5000
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        1,
+        'eventFilterObject',
+        fromBlock, // 0
+        fromBlock + 2000 - 1 // 1999
+      );
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        2,
+        'eventFilterObject',
+        fromBlock + 2000, // 2000
+        fromBlock + 2000 * 2 - 1 // 3999
+      );
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        3,
+        'eventFilterObject',
+        fromBlock + 2000 * 2, // 4000
+        currentBlock // 5000
+      );
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledTimes(3);
+    });
+
+    it('should rethrow error if queryFilter fails during chunk fetching', async () => {
+      const MAX_BLOCK_RANGE = 2000;
+      const errorFromBlock = 0;
+      const errorToBlock = errorFromBlock + MAX_BLOCK_RANGE * 1.5; // Two chunks
+      const testError = new Error('RPC down');
+
+      (mockContractInstance.filters.OracleAssigned as any).mockReturnValue(
+        'eventFilterObject'
+      );
+      mockContractInstance.queryFilter
+        .mockResolvedValueOnce([{ transactionHash: 'txHashChunk1' } as any]) // First chunk succeeds
+        .mockRejectedValueOnce(testError); // Second chunk fails
+
+      await expect(
+        blockchainService.getOracleAssignedEvents(
+          elephantAddress,
+          errorFromBlock,
+          errorToBlock
+        )
+      ).rejects.toThrow(testError);
+
+      expect(mockContractInstance.queryFilter).toHaveBeenCalledTimes(2);
+      // Chunk 1 attempt
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        1,
+        'eventFilterObject',
+        errorFromBlock,
+        errorFromBlock + MAX_BLOCK_RANGE - 1
+      );
+      // Chunk 2 attempt (which fails)
+      expect(mockContractInstance.queryFilter).toHaveBeenNthCalledWith(
+        2,
+        'eventFilterObject',
+        errorFromBlock + MAX_BLOCK_RANGE,
+        errorToBlock
+      );
+      // mockParseOracleAssignedEvent should NOT have been called because the error occurs before parsing
+      expect(mockParseOracleAssignedEvent).toHaveBeenCalledTimes(0);
     });
   });
 });

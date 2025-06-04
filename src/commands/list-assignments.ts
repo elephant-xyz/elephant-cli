@@ -6,7 +6,7 @@ import {
   DownloadResult,
   OracleAssignment,
 } from '../types/index.js';
-import { DEFAULT_CONTRACT_ABI } from '../utils/constants.js';
+import { DEFAULT_CONTRACT_ABI, BLOCKS_PER_DAY } from '../utils/constants.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
 import {
@@ -79,7 +79,9 @@ export async function listAssignments(options: CommandOptions): Promise<void> {
     spinner.succeed(`Current block number: ${currentBlock}`);
 
     const parsedFromBlock =
-      fromBlock === 'latest' ? currentBlock : parseInt(fromBlock, 10);
+      fromBlock === 'latest'
+        ? currentBlock - BLOCKS_PER_DAY
+        : parseInt(fromBlock, 10);
     const parsedToBlock =
       toBlockOpt === 'latest' ? currentBlock : parseInt(toBlockOpt, 10);
 

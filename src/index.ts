@@ -31,7 +31,7 @@ program
   )
   .option('-r, --rpc <url>', 'RPC URL', DEFAULT_RPC_URL)
   .option('-g, --gateway <url>', 'IPFS gateway URL', DEFAULT_IPFS_GATEWAY)
-  .option('-f, --from-block <number>', 'Starting block number', '0')
+  .option('-f, --from-block <number>', 'Starting block number', 'latest')
   .option('-d, --download-dir <path>', 'Download directory', './downloads')
   .action(listAssignments);
 

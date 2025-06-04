@@ -1,7 +1,8 @@
-import { JsonRpcProvider, Contract } from 'ethers';
+import { JsonRpcProvider, Contract, Log } from 'ethers';
 import { EventDecoderService } from './event-decoder.service.js';
 import { OracleAssignment, ABI } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { DEFAULT_BLOCK_RANGE } from '../utils/constants.js';
 
 export class BlockchainService {
   private provider: JsonRpcProvider;
@@ -23,20 +24,47 @@ export class BlockchainService {
     fromBlock: number,
     toBlock?: number
   ): Promise<OracleAssignment[]> {
-    // Define the filter for the OracleAssigned event, filtering by the indexed elephant address
-    // The event is: event OracleAssigned(bytes32 propertyHash, address indexed elephant);
-    // In ethers.js v6, contract.filters.EventName(arg1, arg2, ...) is used.
-    // For an indexed address, you pass the address directly.
-    // If an argument is not indexed or you don't want to filter by it, use null.
-    const filter = this.contract.filters.OracleAssigned(null, oracleAddress);
+    const MAX_BLOCK_RANGE = DEFAULT_BLOCK_RANGE;
+    const finalToBlock = toBlock || (await this.getCurrentBlock());
 
-    const eventsRaw = await this.contract.queryFilter(
-      filter,
-      fromBlock,
-      toBlock
+    const filter = this.contract.filters.OracleAssigned(null, oracleAddress);
+    let allEventsRaw: Log[] = [];
+
+    logger.info(
+      `Fetching OracleAssigned events for ${oracleAddress} from block ${fromBlock} to ${finalToBlock} in chunks of ${MAX_BLOCK_RANGE} blocks.`
     );
 
-    const parsedEvents = eventsRaw.map((event) => {
+    for (
+      let currentFromBlock = fromBlock;
+      currentFromBlock <= finalToBlock;
+      currentFromBlock += MAX_BLOCK_RANGE
+    ) {
+      const currentToBlock = Math.min(
+        currentFromBlock + MAX_BLOCK_RANGE - 1,
+        finalToBlock
+      );
+      logger.debug(`Querying chunk: ${currentFromBlock} - ${currentToBlock}`);
+      try {
+        const eventsChunkRaw = await this.contract.queryFilter(
+          filter,
+          currentFromBlock,
+          currentToBlock
+        );
+        allEventsRaw = allEventsRaw.concat(eventsChunkRaw);
+        logger.debug(
+          `Fetched ${eventsChunkRaw.length} events in chunk ${currentFromBlock} - ${currentToBlock}. Total raw events: ${allEventsRaw.length}`
+        );
+      } catch (error) {
+        logger.error(
+          `Error fetching events for block range ${currentFromBlock}-${currentToBlock}: ${error}`
+        );
+        // Decide if you want to throw, or continue and try to get other chunks
+        // For now, let's rethrow to indicate a failure in fetching part of the logs
+        throw error;
+      }
+    }
+
+    const parsedEvents = allEventsRaw.map((event) => {
       try {
         return this.eventDecoder.parseOracleAssignedEvent(event);
       } catch (error) {
