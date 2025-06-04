@@ -17,7 +17,7 @@ export class PinataService {
   constructor(
     pinataJwt: string,
     _pinataSecretApiKey?: string,
-    maxConcurrentUploads = 10
+    maxConcurrentUploads = 18
   ) {
     if (!pinataJwt) {
       throw new Error('Pinata JWT is required for authentication.');
@@ -68,7 +68,7 @@ export class PinataService {
     fileBuffer: Buffer,
     metadata: PinMetadata,
     originalFileInfo: ProcessedFile,
-    retries: number = 3
+    retries: number = 10
   ): Promise<UploadResult> {
     let lastError: Error | undefined;
 
