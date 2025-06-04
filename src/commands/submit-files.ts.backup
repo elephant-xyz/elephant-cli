@@ -22,7 +22,7 @@ import { ChainStateService } from '../services/chain-state.service.js';
 import { PinataService } from '../services/pinata.service.js';
 import { TransactionBatcherService } from '../services/transaction-batcher.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
-import { ProgressTracker, ProcessingPhase } from '../utils/progress-tracker.js';
+import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile } from '../types/submit.types.js';
 import { DataItem } from '../types/contract.types.js';
 import { IPFSService } from '../services/ipfs.service.js'; // For schema downloads
@@ -136,7 +136,7 @@ export interface SubmitFilesServiceOverrides {
   pinataService?: PinataService;
   transactionBatcherService?: TransactionBatcherService;
   csvReporterService?: CsvReporterService;
-  progressTracker?: ProgressTracker;
+  progressTracker?: SimpleProgress;
   assignmentCheckerService?: AssignmentCheckerService;
 }
 
@@ -230,7 +230,7 @@ export async function handleSubmitFiles(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  let progressTracker: ProgressTracker;
+  let progressTracker: SimpleProgress;
   try {
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
@@ -238,13 +238,14 @@ export async function handleSubmitFiles(
       `Warning reports will be saved to: ${config.warningCsvPath}`
     );
 
+    // Count total files first for progress tracking
+    const totalFiles = await fileScannerService.countTotalFiles(
+      options.inputDir
+    );
+    
     progressTracker =
       serviceOverrides.progressTracker ||
-      new ProgressTracker(
-        0,
-        config.progressUpdateInterval,
-        config.enableProgressBar
-      );
+      new SimpleProgress(totalFiles);
 
     const initialValidation = await fileScannerService.validateStructure(
       options.inputDir

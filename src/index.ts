@@ -10,7 +10,7 @@ import {
   DEFAULT_IPFS_GATEWAY,
 } from './config/constants.js';
 import { listAssignments } from './commands/list-assignments.js';
-import { registerSubmitFilesCommand } from './commands/submit-files.js';
+import { registerSubmitFilesCommand } from './commands/submit-files-optimized.js';
 
 const program = new Command();
 

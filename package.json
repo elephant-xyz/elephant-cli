@@ -43,6 +43,7 @@
     "ipfs-unixfs": "^11.2.1",
     "multiformats": "^13.3.6",
     "ora": "^8.2.0",
+    "p-limit": "^6.2.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
