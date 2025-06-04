@@ -224,6 +224,7 @@ export async function handleSubmitToContract(
   logger.technical(`User wallet address: ${userAddress}`);
 
   let progressTracker: SimpleProgress | undefined;
+  const startTime = Date.now();
 
   try {
     await csvReporterService.initialize();
@@ -237,9 +238,9 @@ export async function handleSubmitToContract(
     try {
       csvContent = readFileSync(options.csvFile, 'utf-8');
     } catch (error) {
-      logger.error(
-        `Error reading CSV file ${options.csvFile}: ${error instanceof Error ? error.message : String(error)}`
-      );
+      const errorMessage = `Error reading CSV file ${options.csvFile}: ${error instanceof Error ? error.message : String(error)}`;
+      logger.error(errorMessage);
+      console.error(errorMessage);
       process.exit(1);
     }
 
@@ -250,7 +251,34 @@ export async function handleSubmitToContract(
 
     if (records.length === 0) {
       logger.warn('No records found in CSV file');
-      await csvReporterService.finalize();
+      
+      // Show final report even with 0 records
+      const finalReport = await csvReporterService.finalize();
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      const seconds = (duration / 1000).toFixed(1);
+
+      console.log(chalk.green('\n✅ Contract submission process finished\n'));
+      console.log(chalk.bold('📊 Final Report:'));
+      console.log(`  Total records in CSV:   0`);
+      console.log(`  Items eligible:         0`);
+      console.log(`  Items skipped:          0`);
+
+      if (!options.dryRun) {
+        console.log(`  Transactions submitted: 0`);
+        console.log(`  Total items submitted:  0`);
+      } else {
+        console.log(
+          `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
+        );
+        console.log(
+          `  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`
+        );
+      }
+
+      console.log(`  Duration:               ${seconds}s`);
+      console.log(`\n  Error report:   ${config.errorCsvPath}`);
+      console.log(`  Warning report: ${config.warningCsvPath}`);
       return;
     }
 

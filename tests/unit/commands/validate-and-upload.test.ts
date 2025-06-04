@@ -23,6 +23,7 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
   promises: {
     stat: vi.fn(),
+    readFile: vi.fn(),
   },
 }));
 
@@ -68,6 +69,15 @@ describe('ValidateAndUploadCommand', () => {
     vi.mocked(fsPromises.stat).mockResolvedValue({
       isDirectory: () => true,
     } as any);
+
+    vi.mocked(fs.promises.readFile).mockImplementation(async (filePath: any) => {
+      if (filePath.includes('property1')) {
+        return JSON.stringify({ name: 'Test Property 1' });
+      } else if (filePath.includes('property2')) {
+        return JSON.stringify({ name: 'Test Property 2' });
+      }
+      return '';
+    });
 
     // Create mock services
     mockFileScannerService = {
@@ -207,8 +217,9 @@ describe('ValidateAndUploadCommand', () => {
     expect(mockJsonCanonicalizerService.canonicalize).toHaveBeenCalledTimes(2);
     expect(mockCidCalculatorService.calculateCidV0).toHaveBeenCalledTimes(2);
 
-    // Verify upload
-    expect(mockPinataService.uploadBatch).toHaveBeenCalledWith([
+    // Verify upload - files are uploaded individually
+    expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(2);
+    expect(mockPinataService.uploadBatch).toHaveBeenNthCalledWith(1, [
       {
         propertyCid: 'property1',
         dataGroupCid: 'dataGroup1',
@@ -217,6 +228,8 @@ describe('ValidateAndUploadCommand', () => {
         calculatedCid: 'QmTestCid12345',
         validationPassed: true,
       },
+    ]);
+    expect(mockPinataService.uploadBatch).toHaveBeenNthCalledWith(2, [
       {
         propertyCid: 'property2',
         dataGroupCid: 'dataGroup2',
@@ -339,20 +352,24 @@ describe('ValidateAndUploadCommand', () => {
   });
 
   it('should handle upload failures', async () => {
-    mockPinataService.uploadBatch = vi.fn().mockResolvedValue([
-      {
-        success: true,
-        cid: 'QmUploadedCid1',
-        propertyCid: 'property1',
-        dataGroupCid: 'dataGroup1',
-      },
-      {
-        success: false,
-        error: 'Network error',
-        propertyCid: 'property2',
-        dataGroupCid: 'dataGroup2',
-      },
-    ]);
+    mockPinataService.uploadBatch = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          success: true,
+          cid: 'QmUploadedCid1',
+          propertyCid: 'property1',
+          dataGroupCid: 'dataGroup1',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          success: false,
+          error: 'Network error',
+          propertyCid: 'property2',
+          dataGroupCid: 'dataGroup2',
+        },
+      ]);
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,

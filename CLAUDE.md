@@ -142,6 +142,13 @@ npm run dev
 
 # Clean build artifacts
 npm run clean
+
+# Run tests
+npm test
+
+# Run specific test files
+npm test tests/unit/commands/validate-and-upload.test.ts
+npm test tests/integration/split-commands.test.ts
 ```
 
 ## File Structure Context
@@ -150,7 +157,6 @@ npm run clean
 - `src/commands/list-assignments.ts` - List assignments command
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
-- `src/commands/submit-files-optimized.ts` - Legacy combined command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic

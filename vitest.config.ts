@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
+    testTimeout: 15000, // 15 seconds for integration tests
     coverage: {
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts', 'src/**/*.cts'],

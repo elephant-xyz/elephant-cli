@@ -473,19 +473,17 @@ export async function handleValidateAndUpload(
     console.log(`  Warning report: ${config.warningCsvPath}`);
     console.log(`  Upload results: ${options.outputCsv}`);
 
-    if (uploadRecords.length > 0) {
-      const csvHeader =
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
-      const csvContent = uploadRecords
-        .map(
-          (record) =>
-            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
-        )
-        .join('\n');
+    // Always create CSV file, even if empty
+    const csvHeader = 'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
+    const csvContent = uploadRecords
+      .map(
+        (record) =>
+          `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
+      )
+      .join('\n');
 
-      writeFileSync(options.outputCsv, csvHeader + csvContent);
-      logger.success(`Upload results saved to: ${options.outputCsv}`);
-    }
+    writeFileSync(options.outputCsv, csvHeader + csvContent);
+    logger.success(`Upload results saved to: ${options.outputCsv}`);
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
