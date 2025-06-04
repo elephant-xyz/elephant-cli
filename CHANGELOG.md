@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.1...v1.2.2) (2025-06-04)
+
+
+### Bug Fixes
+
+* **blockchain:** paginate OracleAssigned event queries ([#14](https://github.com/elephant-xyz/elephant-cli/issues/14)) ([0de3546](https://github.com/elephant-xyz/elephant-cli/commit/0de354699545c70e475bfc328bb827b963a0a23e))
+
 ## [1.2.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.0...v1.2.1) (2025-05-30)
 
 
