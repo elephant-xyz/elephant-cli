@@ -463,13 +463,13 @@ export async function handleSubmitFiles(
     progressTracker.setPhase(ProcessingPhase.PROCESSING);
     let processedFileCountForThisStage = 0; // Counter for current phase items
 
-    for (const processedEntry of allFilesToProcess) { // allFilesToProcess contains only those that passed validation
-      // Update queues for processing phase (example, can be refined)
-      progressTracker.updateQueues(
-          allFilesToProcess.length - processedFileCountForThisStage,
-          0,0
-      );
-
+    const processSingleFileForProcessingStage = async (
+      processedEntry: ProcessedFile
+    ): Promise<{
+      status: 'ready_for_upload' | 'skipped' | 'error';
+      data?: ProcessedFile;
+      error?: string;
+    }> => {
       try {
         const fileContentStr = readFileSync(processedEntry.filePath, 'utf-8');
         const jsonData = JSON.parse(fileContentStr);
@@ -500,7 +500,8 @@ export async function handleSubmitFiles(
           });
           progressTracker.incrementSkipped();
           progressTracker.incrementWarnings();
-          progressTracker.incrementProcessed(); // Terminal: Skipped
+          progressTracker.incrementProcessed();
+          return { status: 'skipped' };
         } else {
           const existingDataCid = await chainStateService.getCurrentDataCid(
             processedEntry.propertyCid,
@@ -518,9 +519,10 @@ export async function handleSubmitFiles(
             });
             progressTracker.incrementSkipped();
             progressTracker.incrementWarnings();
-            progressTracker.incrementProcessed(); // Terminal: Skipped
+            progressTracker.incrementProcessed();
+            return { status: 'skipped' };
           } else {
-            filesForUpload.push(processedEntry); // Ready for upload
+            return { status: 'ready_for_upload', data: processedEntry };
           }
         }
       } catch (error) {
@@ -534,16 +536,43 @@ export async function handleSubmitFiles(
           timestamp: new Date().toISOString(),
         });
         progressTracker.incrementErrors();
-        progressTracker.incrementProcessed(); // Terminal: Error in processing
+        progressTracker.incrementProcessed();
+        return { status: 'error', error: errorMsg };
       }
-      processedFileCountForThisStage++;
-      if (allFilesToProcess.length > 0) {
-        progressTracker.setPhase(
-          ProcessingPhase.PROCESSING,
-          (processedFileCountForThisStage / allFilesToProcess.length) * 100
-        );
+    };
+
+    const processingConcurrency = config.maxConcurrentUploads > 0 ? config.maxConcurrentUploads : 1;
+
+    for (let i = 0; i < allFilesToProcess.length; i += processingConcurrency) {
+      const batchToProcess = allFilesToProcess.slice(i, i + processingConcurrency);
+      
+      progressTracker.updateQueues(
+        allFilesToProcess.length - processedFileCountForThisStage - batchToProcess.length,
+        batchToProcess.length,
+        0
+      );
+
+      const batchProcessingPromises = batchToProcess.map(async (entry) => {
+        const result = await processSingleFileForProcessingStage(entry);
+        processedFileCountForThisStage++;
+        if (allFilesToProcess.length > 0) {
+          progressTracker.setPhase(
+            ProcessingPhase.PROCESSING,
+            (processedFileCountForThisStage / allFilesToProcess.length) * 100
+          );
+        }
+        return result;
+      });
+
+      const batchResults = await Promise.all(batchProcessingPromises);
+
+      for (const result of batchResults) {
+        if (result.status === 'ready_for_upload' && result.data) {
+          filesForUpload.push(result.data);
+        }
       }
     }
+
     logger.success(
       `Processing complete: ${filesForUpload.length} file${
         filesForUpload.length === 1 ? '' : 's'
@@ -726,7 +755,7 @@ export async function handleSubmitFiles(
       console.log(
         `[DRY RUN] Files that would be uploaded: ${filesForUpload.length}`
       );
-      logger.info(
+      console.log(
         `[DRY RUN] Data items that would be submitted: ${dataItemsForTransaction.length}`
       );
       console.log(
