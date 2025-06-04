@@ -6,7 +6,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
     coverage: {
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.ts', 'src/**/*.cts'],
       exclude: ['src/**/*.d.ts', 'src/index.ts'],
       thresholds: {
         global: {
@@ -18,8 +18,6 @@ export default defineConfig({
       },
     },
     setupFiles: ['tests/setup.ts'],
-    // Disable worker threads so unhandledRejection handlers in setupFiles apply to the main process
-    threads: false,
   },
   resolve: {
     alias: {

@@ -16,7 +16,7 @@ import {
   JSONSchema,
 } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
-import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.js';
+import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
 import { ChainStateService } from '../services/chain-state.service.js';
 import { PinataService } from '../services/pinata.service.js';
@@ -28,6 +28,7 @@ import { DataItem } from '../types/contract.types.js';
 import { IPFSService } from '../services/ipfs.service.js'; // For schema downloads
 import { AssignmentCheckerService } from '../services/assignment-checker.service.js';
 import { Wallet } from 'ethers';
+import { DEFAULT_FROM_BLOCK } from '../utils/constants.js';
 
 // Define command options interface
 export interface SubmitFilesCommandOptions {
@@ -38,6 +39,7 @@ export interface SubmitFilesCommandOptions {
   inputDir: string;
   maxConcurrentUploads?: number;
   transactionBatchSize?: number;
+  fromBlock?: number;
   // ... other config overrides
   dryRun: boolean;
   // TODO: Add checkpoint path option
@@ -61,6 +63,11 @@ export function registerSubmitFilesCommand(program: Command) {
     .option(
       '-k, --private-key <key>',
       'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)'
+    )
+    .option(
+      '--from-block <number>',
+      'Starting block number',
+      DEFAULT_FROM_BLOCK.toString()
     )
     .option(
       '--rpc-url <url>',
@@ -287,7 +294,7 @@ export async function handleSubmitFiles(
     } else {
       try {
         assignedCids =
-          await assignmentCheckerService.fetchAssignedCids(userAddress);
+          await assignmentCheckerService.fetchAssignedCids(userAddress, options.fromBlock);
         assignmentFilteringEnabled = true;
         const assignedCount = assignedCids.size;
         logger.debug(
@@ -450,8 +457,7 @@ export async function handleSubmitFiles(
         const fileContentStr = readFileSync(processedEntry.filePath, 'utf-8');
         const jsonData = JSON.parse(fileContentStr);
 
-        const canonicalJson =
-          await jsonCanonicalizerService.canonicalize(jsonData);
+        const canonicalJson = jsonCanonicalizerService.canonicalize(jsonData);
         processedEntry.canonicalJson = canonicalJson;
 
         const calculatedCid = await cidCalculatorService.calculateCidV0(

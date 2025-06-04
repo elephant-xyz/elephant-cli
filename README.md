@@ -36,7 +36,7 @@ npx @elephant-xyz/cli list-assignments --oracle 0xYourElephantAddress
 - `-c, --contract <address>` - Smart contract address (default: 0x79D5046e34D4A56D357E12636A18da6eaEfe0586)
 - `-r, --rpc <url>` - RPC URL (default: https://rpc.therpc.io/polygon)
 - `-g, --gateway <url>` - IPFS gateway URL (default: https://gateway.pinata.cloud/ipfs/)
-- `-f, --from-block <number>` - Starting block number (default: 0)
+- `-f, --from-block <number>` - Starting block number (default: queries assignments from approximately the last 24 hours if not specified)
 - `-d, --download-dir <path>` - Download directory (default: ./downloads)
 
 ### Basic Usage - Submit Files
