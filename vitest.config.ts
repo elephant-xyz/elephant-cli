@@ -20,8 +20,22 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
   },
   resolve: {
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.cts', '.mts', '.cjs', '.mjs'],
     alias: {
       '@': '/src',
     },
+  },
+  esbuild: {
+    loader: 'ts',
+    include: /\.[cm]?ts$/,
+    exclude: []
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        '.cts': 'ts',
+        '.cjs': 'js'
+      }
+    }
   },
 });

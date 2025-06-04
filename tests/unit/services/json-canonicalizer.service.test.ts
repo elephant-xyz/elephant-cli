@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import JsonCanonicalizerService from '../../../src/services/json-canonicalizer.service.cts';
+import { JsonCanonicalizerService } from '../../../src/services/json-canonicalizer.service.cjs';
 
 describe('JsonCanonicalizerService', () => {
   const service = new JsonCanonicalizerService();
