@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const canonicalizeLib = require('canonicalize');
 
-class JsonCanonicalizerService {
+export class JsonCanonicalizerService {
   /**
    * Canonicalize a JSON object according to RFC 8785
    * Returns the canonical JSON string representation
@@ -89,5 +89,3 @@ class JsonCanonicalizerService {
     }
   }
 }
-
-export = JsonCanonicalizerService; 
