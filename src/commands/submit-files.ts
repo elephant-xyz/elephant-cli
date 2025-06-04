@@ -194,10 +194,6 @@ export async function handleSubmitFiles(
     serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
   const cidCalculatorService =
     serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
-  // Note: ChainStateService needs the main contract ABI, not just submit ABI.
-  // Assuming ELEPHANT_CONTRACT_ABI is the correct one for general interactions if needed,
-  // or pass SUBMIT_CONTRACT_ABI_FRAGMENTS if it's only for submit contract.
-  // For now, using SUBMIT_CONTRACT_ABI_FRAGMENTS for both as ChainStateService primarily uses submitContract.
   const chainStateService =
     serviceOverrides.chainStateService ??
     new ChainStateService(
@@ -226,7 +222,6 @@ export async function handleSubmitFiles(
     serviceOverrides.csvReporterService ??
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
 
-  // Derive wallet address from private key to check assignments
   const wallet = new Wallet(options.privateKey);
   const userAddress = wallet.address;
   logger.technical(`User wallet address: ${userAddress}`);
@@ -235,7 +230,6 @@ export async function handleSubmitFiles(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  // Initialize reporter and progress tracker, catch any early errors
   let progressTracker: ProgressTracker;
   try {
     await csvReporterService.initialize();
@@ -272,7 +266,7 @@ export async function handleSubmitFiles(
     logger.info(
       `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
     );
-    progressTracker.reset(totalFiles);
+    progressTracker.reset(totalFiles); // totalFiles for the overall progress bar
     progressTracker.start();
 
     if (totalFiles === 0) {
@@ -283,10 +277,7 @@ export async function handleSubmitFiles(
       return;
     }
 
-    // --- Phase 1.5: Assignment Check ---
-
     logger.info('Checking assigned CIDs for your address...');
-
     let assignedCids: Set<string> = new Set();
     let assignmentFilteringEnabled = false;
     if (options.dryRun) {
@@ -329,93 +320,69 @@ export async function handleSubmitFiles(
     const dataItemsForTransaction: DataItem[] = [];
 
     progressTracker.setPhase(ProcessingPhase.VALIDATION);
-    let validatedFileCount = 0;
+    let validatedFileCount = 0; // Tracks files attempted in validation phase
 
-    for await (const fileBatch of fileScannerService.scanDirectory(
-      options.inputDir,
-      config.fileScanBatchSize
-    )) {
-      for (const fileEntry of fileBatch) {
-        progressTracker.updateQueues(
-          totalFiles - validatedFileCount, // Approx validation queue
-          0, // No upload queue with semaphore
-          0 // Transaction queue not yet active
-        );
+    // Moved file processing logic into its own async function for parallelism
+    const processFileEntryValidation = async (
+      fileEntry: Awaited<ReturnType<FileScannerService['scanDirectory']>> extends AsyncIterableIterator<infer U> ? U extends Array<infer V> ? V : never : never
+    ): Promise<{
+      status: 'valid' | 'skipped_assignment' | 'invalid_schema' | 'validation_failed' | 'error';
+      data?: ProcessedFile;
+      error?: string;
+    }> => {
+      if (
+        assignmentFilteringEnabled &&
+        !assignedCids.has(fileEntry.propertyCid)
+      ) {
+        const warningMsg = `File skipped - propertyCid ${fileEntry.propertyCid} is not assigned to your address`;
+        logger.warn(warningMsg);
+        await csvReporterService.logWarning({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          reason: warningMsg,
+          timestamp: new Date().toISOString(),
+        });
+        progressTracker.incrementSkipped();
+        progressTracker.incrementWarnings();
+        progressTracker.incrementProcessed(); // Terminal: Skipped
+        return { status: 'skipped_assignment' };
+      }
 
-        // Check if this file's propertyCid is assigned to the user
-        if (
-          assignmentFilteringEnabled &&
-          !assignedCids.has(fileEntry.propertyCid)
-        ) {
-          const warningMsg = `File skipped - propertyCid ${fileEntry.propertyCid} is not assigned to your address`;
-          logger.warn(warningMsg);
-          await csvReporterService.logWarning({
+      try {
+        const fileContentStr = readFileSync(fileEntry.filePath, 'utf-8');
+        const jsonData = JSON.parse(fileContentStr);
+
+        const schemaCid = fileEntry.dataGroupCid;
+        if (!schemaCid || typeof schemaCid !== 'string') {
+          throw new Error(`Schema CID not found or invalid for ${fileEntry.filePath}`);
+        }
+
+        const schema = await schemaCacheService.getSchema(schemaCid);
+        if (!schema) {
+          const errMsg = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
+          logger.warn(errMsg); // Changed from throw to allow logging and continuing
+          await csvReporterService.logError({
             propertyCid: fileEntry.propertyCid,
             dataGroupCid: fileEntry.dataGroupCid,
             filePath: fileEntry.filePath,
-            reason: warningMsg,
+            error: errMsg,
             timestamp: new Date().toISOString(),
           });
-          progressTracker.incrementSkipped();
-          progressTracker.incrementWarnings();
-          validatedFileCount++;
-          progressTracker.incrementProcessed();
-          progressTracker.setPhase(
-            ProcessingPhase.VALIDATION,
-            (validatedFileCount / totalFiles) * 100
-          );
-          continue; // Skip this file
+          progressTracker.incrementInvalid();
+          progressTracker.incrementErrors();
+          progressTracker.incrementProcessed(); // Terminal: Error in validation
+          return { status: 'invalid_schema', error: errMsg };
         }
 
-        try {
-          const fileContentStr = readFileSync(fileEntry.filePath, 'utf-8');
-          const jsonData = JSON.parse(fileContentStr);
+        const validationResult = await jsonValidatorService.validate(
+          jsonData,
+          schema as JSONSchema
+        );
 
-          const schemaCid = fileEntry.dataGroupCid;
-          if (!schemaCid || typeof schemaCid !== 'string') {
-            throw new Error(`Schema CID not found or invalid`);
-          }
-
-          const schema = await schemaCacheService.getSchema(schemaCid);
-          if (!schema) {
-            throw new Error(
-              `Could not load schema ${schemaCid} for ${fileEntry.filePath}`
-            );
-          }
-
-          const validationResult = await jsonValidatorService.validate(
-            jsonData,
-            schema as JSONSchema
-          );
-
-          if (!validationResult.valid) {
-            const errorMsg = `Validation failed, ${jsonValidatorService.getErrorMessage(validationResult.errors || [])}`;
-            logger.warn(errorMsg);
-            await csvReporterService.logError({
-              propertyCid: fileEntry.propertyCid,
-              dataGroupCid: fileEntry.dataGroupCid,
-              filePath: fileEntry.filePath,
-              error: errorMsg,
-              timestamp: new Date().toISOString(),
-            });
-            progressTracker.incrementInvalid();
-            progressTracker.incrementErrors();
-          } else {
-            // Store for next phase
-            allFilesToProcess.push({
-              propertyCid: fileEntry.propertyCid,
-              dataGroupCid: fileEntry.dataGroupCid,
-              filePath: fileEntry.filePath,
-              canonicalJson: '', // Will be filled in processing phase
-              calculatedCid: '', // Will be filled in processing phase
-              validationPassed: true,
-            });
-            progressTracker.incrementValid();
-          }
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : String(error);
-          logger.error(errorMsg);
+        if (!validationResult.valid) {
+          const errorMsg = `Validation failed for ${fileEntry.filePath}, ${jsonValidatorService.getErrorMessage(validationResult.errors || [])}`;
+          logger.warn(errorMsg);
           await csvReporterService.logError({
             propertyCid: fileEntry.propertyCid,
             dataGroupCid: fileEntry.dataGroupCid,
@@ -425,32 +392,82 @@ export async function handleSubmitFiles(
           });
           progressTracker.incrementInvalid();
           progressTracker.incrementErrors();
+          progressTracker.incrementProcessed(); // Terminal: Validation failed
+          return { status: 'validation_failed', error: errorMsg };
+        } else {
+          progressTracker.incrementValid(); // Valid for this phase
+          return {
+            status: 'valid',
+            data: {
+              propertyCid: fileEntry.propertyCid,
+              dataGroupCid: fileEntry.dataGroupCid,
+              filePath: fileEntry.filePath,
+              canonicalJson: '',
+              calculatedCid: '',
+              validationPassed: true,
+            },
+          };
         }
-        validatedFileCount++;
-        progressTracker.incrementProcessed();
-        progressTracker.setPhase(
-          ProcessingPhase.VALIDATION,
-          (validatedFileCount / totalFiles) * 100
-        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error(`Error during validation of ${fileEntry.filePath}: ${errorMsg}`);
+        await csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          error: errorMsg,
+          timestamp: new Date().toISOString(),
+        });
+        progressTracker.incrementInvalid();
+        progressTracker.incrementErrors();
+        progressTracker.incrementProcessed(); // Terminal: Error in validation
+        return { status: 'error', error: errorMsg };
       }
+    };
+
+    for await (const fileBatch of fileScannerService.scanDirectory(
+      options.inputDir,
+      config.fileScanBatchSize
+    )) {
+      progressTracker.updateQueues(
+        totalFiles - validatedFileCount, // Approx validation queue
+        0, 0 // Other queues not active yet
+      );
+
+      const batchProcessingResults = await Promise.all(
+        fileBatch.map(fileEntry => processFileEntryValidation(fileEntry))
+      );
+
+      for (const result of batchProcessingResults) {
+        validatedFileCount++; // Increment for each file attempted in this batch
+        if (result.status === 'valid' && result.data) {
+          allFilesToProcess.push(result.data);
+        }
+        // Note: incrementProcessed is called *inside* processFileEntryValidation for terminal states.
+        // For 'valid' status, incrementProcessed will be called later when its final fate is known.
+      }
+      progressTracker.setPhase(
+        ProcessingPhase.VALIDATION,
+        totalFiles > 0 ? (validatedFileCount / totalFiles) * 100 : 0
+      );
     }
-    const validFiles = progressTracker.getMetrics().validFiles;
-    const invalidFiles = progressTracker.getMetrics().invalidFiles;
+
+    const validFiles = progressTracker.getMetrics().validFiles; // This is # files that passed validation
+    const filesPassedValidationStage = allFilesToProcess.length;
     logger.success(
-      `Validation complete: ${validFiles} valid, ${invalidFiles} invalid`
+      `Validation complete: ${filesPassedValidationStage} file(s) passed, ${validatedFileCount - filesPassedValidationStage} file(s) failed or skipped.`
     );
+
 
     logger.info('Canonicalizing files and calculating CIDs...');
     progressTracker.setPhase(ProcessingPhase.PROCESSING);
-    let processedFileCount = 0;
+    let processedFileCountForThisStage = 0; // Counter for current phase items
 
-    for (const processedEntry of allFilesToProcess) {
-      if (!processedEntry.validationPassed) continue; // Skip files that failed validation
-
+    for (const processedEntry of allFilesToProcess) { // allFilesToProcess contains only those that passed validation
+      // Update queues for processing phase (example, can be refined)
       progressTracker.updateQueues(
-        0, // Validation queue done
-        0, // No upload queue with semaphore
-        0 // Transaction queue not yet active
+          allFilesToProcess.length - processedFileCountForThisStage,
+          0,0
       );
 
       try {
@@ -465,7 +482,6 @@ export async function handleSubmitFiles(
         );
         processedEntry.calculatedCid = calculatedCid;
 
-        // Check if user has already submitted this exact data
         const hasUserSubmitted = await chainStateService.hasUserSubmittedData(
           userAddress,
           processedEntry.propertyCid,
@@ -473,7 +489,7 @@ export async function handleSubmitFiles(
           calculatedCid
         );
         if (hasUserSubmitted) {
-          const warningMsg = `Data already submitted by user for ${processedEntry.filePath} (CID: ${calculatedCid}). Skipping upload and submission.`;
+          const warningMsg = `Data already submitted by user for ${processedEntry.filePath} (CID: ${calculatedCid}). Skipping.`;
           logger.warn(warningMsg);
           await csvReporterService.logWarning({
             propertyCid: processedEntry.propertyCid,
@@ -484,14 +500,14 @@ export async function handleSubmitFiles(
           });
           progressTracker.incrementSkipped();
           progressTracker.incrementWarnings();
+          progressTracker.incrementProcessed(); // Terminal: Skipped
         } else {
-          // Check chain state for existing data
           const existingDataCid = await chainStateService.getCurrentDataCid(
             processedEntry.propertyCid,
             processedEntry.dataGroupCid
           );
           if (existingDataCid === calculatedCid) {
-            const warningMsg = `Data CID ${calculatedCid} for ${processedEntry.filePath} already exists on chain. Skipping upload and submission.`;
+            const warningMsg = `Data CID ${calculatedCid} for ${processedEntry.filePath} already exists on chain. Skipping.`;
             logger.warn(warningMsg);
             await csvReporterService.logWarning({
               propertyCid: processedEntry.propertyCid,
@@ -502,10 +518,9 @@ export async function handleSubmitFiles(
             });
             progressTracker.incrementSkipped();
             progressTracker.incrementWarnings();
-            // Do not add to filesForUpload or dataItemsForTransaction
+            progressTracker.incrementProcessed(); // Terminal: Skipped
           } else {
-            // File is ready for upload - passed all checks
-            filesForUpload.push(processedEntry); // Add to upload list
+            filesForUpload.push(processedEntry); // Ready for upload
           }
         }
       } catch (error) {
@@ -519,16 +534,13 @@ export async function handleSubmitFiles(
           timestamp: new Date().toISOString(),
         });
         progressTracker.incrementErrors();
+        progressTracker.incrementProcessed(); // Terminal: Error in processing
       }
-      processedFileCount++;
-      // Note: progressTracker.incrementProcessed() was already called during validation.
-      // Here we are updating the phase progress based on the subset of valid files being processed.
-      if (allFilesToProcess.filter((f) => f.validationPassed).length > 0) {
+      processedFileCountForThisStage++;
+      if (allFilesToProcess.length > 0) {
         progressTracker.setPhase(
           ProcessingPhase.PROCESSING,
-          (processedFileCount /
-            allFilesToProcess.filter((f) => f.validationPassed).length) *
-            100
+          (processedFileCountForThisStage / allFilesToProcess.length) * 100
         );
       }
     }
@@ -547,55 +559,65 @@ export async function handleSubmitFiles(
         );
         const uploadResults = await pinataService.uploadBatch(filesForUpload);
 
-        // Process results directly since uploadBatch now returns all results
         uploadResults.forEach((uploadResult) => {
           if (uploadResult.success && uploadResult.cid) {
-            // Successfully uploaded
             progressTracker.incrementUploaded();
             dataItemsForTransaction.push({
               propertyCid: uploadResult.propertyCid,
               dataGroupCID: uploadResult.dataGroupCid,
               dataCID: uploadResult.cid,
             });
-          } else {
-            // Upload failed
+            // Find the original file to mark as processed for the overall progress
             const originalFile = filesForUpload.find(
               (f) =>
                 f.propertyCid === uploadResult.propertyCid &&
                 f.dataGroupCid === uploadResult.dataGroupCid
             );
-            const fileName =
-              originalFile?.filePath?.split('/').pop() || 'unknown file';
+            if (originalFile) {
+                 progressTracker.incrementProcessed(); // Terminal: Successfully uploaded and queued for submission
+            }
+          } else {
+            const originalFile = filesForUpload.find(
+              (f) =>
+                f.propertyCid === uploadResult.propertyCid &&
+                f.dataGroupCid === uploadResult.dataGroupCid
+            );
+            const fileName = originalFile?.filePath?.split('/').pop() || 'unknown file';
             logger.error(`Upload failed: ${fileName}`);
             const errorMsg = `Upload failed for ${originalFile?.filePath || 'unknown file'}: ${uploadResult.error || 'Unknown error'}`;
             logger.technical(errorMsg);
             csvReporterService.logError({
-              propertyCid: uploadResult.propertyCid,
-              dataGroupCid: uploadResult.dataGroupCid,
-              filePath: originalFile?.filePath || 'unknown',
-              error: errorMsg,
-              timestamp: new Date().toISOString(),
+                propertyCid: uploadResult.propertyCid,
+                dataGroupCid: uploadResult.dataGroupCid,
+                filePath: originalFile?.filePath || 'unknown',
+                error: errorMsg,
+                timestamp: new Date().toISOString(),
             });
             progressTracker.incrementErrors();
+            if (originalFile) {
+                progressTracker.incrementProcessed(); // Terminal: Upload failed
+            }
           }
         });
-
+        // Set phase to 100% only after all attempted uploads are handled.
+        // Individual progress during batch upload is handled by incrementUploaded.
         progressTracker.setPhase(ProcessingPhase.UPLOADING, 100);
       } else {
         logger.info('No new files to upload.');
+        progressTracker.setPhase(ProcessingPhase.UPLOADING, 100); // No files, phase is complete
       }
     } else {
       logger.info('[DRY RUN] Would upload files to IPFS:');
       filesForUpload.forEach((f) => {
         logger.info(`  - ${f.filePath} (Calculated CID: ${f.calculatedCid})`);
-        // In a dry run, we assume upload would be successful and use calculatedCid for transaction list
         dataItemsForTransaction.push({
           propertyCid: f.propertyCid,
           dataGroupCID: f.dataGroupCid,
           dataCID: f.calculatedCid,
         });
+        progressTracker.incrementProcessed(); // Terminal: Dry run assumed success for upload
       });
-      progressTracker.setPhase(ProcessingPhase.UPLOADING, 100); // Mark as complete for dry run
+      progressTracker.setPhase(ProcessingPhase.UPLOADING, 100);
     }
     logger.info(
       `Upload phase complete. Files prepared for transaction: ${dataItemsForTransaction.length}`
@@ -614,6 +636,8 @@ export async function handleSubmitFiles(
               `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
             );
             submittedTransactionCount += batchResult.itemsSubmitted;
+            // Note: incrementProcessed for overall progress was already done when items were added to dataItemsForTransaction.
+            // The submission phase progress tracks batch submission itself.
             progressTracker.setPhase(
               ProcessingPhase.SUBMITTING,
               (submittedTransactionCount / dataItemsForTransaction.length) * 100
@@ -623,12 +647,12 @@ export async function handleSubmitFiles(
         } catch (error) {
           const errorMsg = `Error during transaction submission: ${error instanceof Error ? error.message : String(error)}`;
           logger.error(errorMsg);
-          // Note: CsvReporterService doesn't have a generic error log, only file-specific.
-          // This error is critical and affects multiple files.
-          // Consider adding a general error log or handling it appropriately.
+          // If submission fails, the files involved were already counted by incrementProcessed
+          // when they were successfully uploaded / prepared for dry run.
+          // We log the error and mark the phase as error.
           progressTracker.incrementErrors(
-            dataItemsForTransaction.length - submittedTransactionCount
-          ); // Mark remaining as errors
+            dataItemsForTransaction.length - submittedTransactionCount 
+          );
           progressTracker.setPhase(ProcessingPhase.ERROR);
         }
       } else {
@@ -649,7 +673,8 @@ export async function handleSubmitFiles(
           )
         );
       });
-      progressTracker.setPhase(ProcessingPhase.SUBMITTING, 100); // Mark as complete for dry run
+      // incrementProcessed already called for these items during dry-run upload prep
+      progressTracker.setPhase(ProcessingPhase.SUBMITTING, 100);
     }
     logger.info('Transaction phase complete.');
 
