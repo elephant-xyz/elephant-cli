@@ -249,6 +249,8 @@ export async function handleValidateAndUpload(
     serviceOverrides.pinataService ??
     new PinataService(
       options.pinataJwt,
+      undefined,
+      18 
     );
 
   const wallet = new Wallet(options.privateKey);

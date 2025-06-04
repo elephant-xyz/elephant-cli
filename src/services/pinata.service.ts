@@ -1,6 +1,7 @@
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
+import { log } from 'console';
 
 export interface PinMetadata {
   name?: string;
@@ -164,11 +165,11 @@ export class PinataService {
     if (files.length === 0) {
       return [];
     }
-    logger.info(`Uploading ${files.length} files to IPFS.`);
 
     // Use semaphore to limit concurrent uploads
     const uploadPromises = files.map(async (file) => {
       return await this.semaphore.runExclusive(async () => {
+        logger.debug(`Uploading ${file.filePath} to IPFS.`);
         return await this.processUpload(file);
       });
     });
