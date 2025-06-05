@@ -229,6 +229,10 @@ export async function handleValidateAndUpload(
     maxConcurrentUploads: undefined,
   });
 
+  // Keep a reference to csvReporterService to use in the final catch block
+  let csvReporterServiceInstance: CsvReporterService | undefined =
+    serviceOverrides.csvReporterService;
+
   const fileScannerService =
     serviceOverrides.fileScannerService ?? new FileScannerService();
   const ipfsServiceForSchemas =
@@ -243,9 +247,12 @@ export async function handleValidateAndUpload(
     serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
   const cidCalculatorService =
     serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
-  const csvReporterService =
-    serviceOverrides.csvReporterService ??
-    new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
+  
+  // csvReporterService is initialized later, inside the main try block
+  // const csvReporterService =
+  //   serviceOverrides.csvReporterService ??
+  //   new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
+
   const pinataService =
     serviceOverrides.pinataService ??
     new PinataService(options.pinataJwt, undefined, 18);
@@ -258,10 +265,20 @@ export async function handleValidateAndUpload(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  let progressTracker: SimpleProgress | undefined;
+  let progressTracker: SimpleProgress | undefined = serviceOverrides.progressTracker;
   const uploadRecords: UploadRecord[] = [];
 
   try {
+    // Initialize csvReporterServiceInstance if not overridden
+    if (!csvReporterServiceInstance) {
+      csvReporterServiceInstance = new CsvReporterService(
+        config.errorCsvPath,
+        config.warningCsvPath
+      );
+    }
+    // Assign to the const that the rest of the try block uses
+    const csvReporterService = csvReporterServiceInstance;
+
     await csvReporterService.initialize();
     logger.technical(`Error reports will be saved to: ${config.errorCsvPath}`);
     logger.technical(
@@ -292,12 +309,16 @@ export async function handleValidateAndUpload(
 
     if (totalFiles === 0) {
       logger.warn('No files found to process');
-      await csvReporterService.finalize();
+      if (csvReporterServiceInstance) {
+         await csvReporterServiceInstance.finalize();
+      }
       return;
     }
 
-    progressTracker =
-      serviceOverrides.progressTracker || new SimpleProgress(totalFiles);
+    if (!progressTracker) { 
+        progressTracker = new SimpleProgress(totalFiles);
+    }
+    
     progressTracker.setPhase('Initializing');
     progressTracker.start();
 
@@ -393,13 +414,13 @@ export async function handleValidateAndUpload(
     progressTracker.setPhase('Processing Files');
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
-    const services = {
+    const servicesForProcessing = { // Renamed to avoid conflict with outer scope services
       schemaCacheService,
       jsonValidatorService,
       jsonCanonicalizerService,
       cidCalculatorService,
-      csvReporterService,
-      progressTracker,
+      csvReporterService, // This is the initialized one from the try block
+      progressTracker,    // This is the initialized one
       pinataService,
     };
 
@@ -414,7 +435,7 @@ export async function handleValidateAndUpload(
           localProcessingSemaphore.runExclusive(async () =>
             processFileAndGetUploadPromise(
               fileEntry,
-              services,
+              servicesForProcessing, // Use renamed services object
               userAddress,
               assignedCids,
               assignmentFilteringEnabled,
@@ -428,14 +449,27 @@ export async function handleValidateAndUpload(
 
     await Promise.all(allOperationPromises);
 
-    progressTracker.stop();
+    if (progressTracker) {
+        progressTracker.stop();
+    }
 
-    await csvReporterService.finalize();
-    const finalMetrics = progressTracker.getMetrics();
+    try {
+      await csvReporterService.finalize();
+    } catch (finalizeError) {
+      const errMsg = finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
+      // Use console.error directly here as logger might be part of an issue
+      console.error(chalk.red(`Error during csvReporterService.finalize(): ${errMsg}`));
+      throw new Error(`CSV Finalization failed: ${errMsg}`); // Re-throw to be caught by main handler
+    }
+    
+    const finalMetrics = progressTracker 
+      ? progressTracker.getMetrics() 
+      : { startTime: Date.now(), errors: 0, processed: 0, skipped: 0, total: totalFiles };
+
 
     console.log(chalk.green('\n✅ Validation and upload process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));
-    console.log(`  Total files scanned:    ${totalFiles}`);
+    console.log(`  Total files scanned:    ${finalMetrics.total || totalFiles}`); // Use total from metrics or scanned
     console.log(`  Files skipped (assignment): ${finalMetrics.skipped || 0}`);
     console.log(`  Processing/upload errors: ${finalMetrics.errors || 0}`);
 
@@ -463,30 +497,49 @@ export async function handleValidateAndUpload(
     console.log(`  Warning report: ${config.warningCsvPath}`);
     console.log(`  Upload results: ${options.outputCsv}`);
 
-    // Always create CSV file, even if empty
-    const csvHeader = 'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
-    const csvContent = uploadRecords
-      .map(
-        (record) =>
-          `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
-      )
-      .join('\n');
+    try {
+        const csvHeader = 'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
+        const csvContent = uploadRecords
+          .map(
+            (record) =>
+              `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
+          )
+          .join('\n');
+    
+        writeFileSync(options.outputCsv, csvHeader + csvContent);
+        logger.success(`Upload results saved to: ${options.outputCsv}`);
+    } catch (writeCsvError) {
+        const errMsg = writeCsvError instanceof Error ? writeCsvError.message : String(writeCsvError);
+        console.error(chalk.red(`Error writing main CSV output to ${options.outputCsv}: ${errMsg}`));
+        throw new Error(`Main CSV output failed: ${errMsg}`); // Re-throw
+    }
 
-    writeFileSync(options.outputCsv, csvHeader + csvContent);
-    logger.success(`Upload results saved to: ${options.outputCsv}`);
   } catch (error) {
-    logger.error(
-      `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
-    );
-    console.error(
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error( // Use console.error directly for critical path
       chalk.red(
-        `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
+        `CRITICAL_ERROR_VALIDATE_AND_UPLOAD: ${errorMessage}`
       )
     );
+    if (error instanceof Error && error.stack) {
+      console.error(chalk.grey(error.stack));
+    }
+
     if (progressTracker) {
       progressTracker.stop();
     }
-    await csvReporterService.finalize();
+
+    if (csvReporterServiceInstance) {
+      try {
+        await csvReporterServiceInstance.finalize();
+        console.error(chalk.yellow('CSV error/warning reports finalized during error handling.'));
+      } catch (finalizeErrorInCatch) {
+        const finalErrMsg = finalizeErrorInCatch instanceof Error ? finalizeErrorInCatch.message : String(finalizeErrorInCatch);
+        console.error(chalk.magenta(`Failed to finalize CSV reports during error handling: ${finalErrMsg}`));
+      }
+    } else {
+        console.error(chalk.magenta('CSVReporterService instance was not available in error handler for finalization.'));
+    }
     process.exit(1);
   }
 }
