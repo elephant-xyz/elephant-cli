@@ -81,10 +81,10 @@ npx @elephant-xyz/cli submit-to-contract upload-results.csv \
 - `-k, --private-key <key>`: (Required) Private key for checking assignments. Can also be set via `ELEPHANT_PRIVATE_KEY` environment variable.
 - `-j, --pinata-jwt <jwt>`: (Required) Pinata JWT for IPFS uploads. Can also be set via `PINATA_JWT` environment variable.
 - `-o, --output-csv <path>`: Output CSV file path. (Default: `upload-results.csv`)
-- `--from-block <number>`: Starting block number for assignment check. (Default: latest - 100000)
+- `--from-block <number>`: Starting block number for assignment check. (Default: `72310501`)
 - `--rpc-url <url>`: RPC URL for the blockchain network. (Default: `https://rpc.therpc.io/polygon`)
 - `--contract-address <address>`: Address of the submit smart contract. (Default: `0x79D5046e34D4A56D357E12636A18da6eaEfe0586`)
-- `--max-concurrent-uploads <number>`: Maximum concurrent IPFS uploads. (Default: 50)
+- `--max-concurrent-uploads <number>`: Target maximum concurrent local file processing tasks. If not specified, defaults to an OS-derived limit (Unix-like systems) or a CPU-based heuristic (Windows), with a fallback of 10. Actual IPFS uploads are managed by Pinata service limits.
 - `--dry-run`: Perform validation without uploading to IPFS.
 
 ### Command Options - Submit to Contract
@@ -96,17 +96,6 @@ npx @elephant-xyz/cli submit-to-contract upload-results.csv \
 - `--transaction-batch-size <number>`: Number of items per blockchain transaction. (Default: 200)
 - `--dry-run`: Perform all checks without submitting transactions.
 
-### Legacy Submit Files Command
-
-The original combined command is still available:
-
-```bash
-elephant-cli submit-files ./path/to/data-directory \
-  --private-key "0xYourPrivateKey" \
-  --pinata-jwt "YourPinataJWT"
-```
-
-See the options in the previous version of this documentation for details.
 
 ### Environment Variables
 

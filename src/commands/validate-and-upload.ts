@@ -4,6 +4,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import { execSync } from 'child_process';
+import * as os from 'os';
 import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
@@ -84,7 +85,7 @@ export function registerValidateAndUploadCommand(program: Command) {
     )
     .option(
       '--max-concurrent-uploads <number>',
-      'Target maximum concurrent local file processing tasks (default: 50). This may be automatically capped at 75% of the OS maximum open files limit if detectable (e.g., via ulimit -n). Actual IPFS uploads are managed by Pinata service limits.',
+      "Target maximum concurrent local file processing tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10. User-specified values may also be capped by these OS-dependent limits. Actual IPFS uploads are managed by Pinata service limits.",
       undefined
     )
     .option('--dry-run', 'Perform validation without uploading to IPFS.', false)
@@ -148,32 +149,50 @@ export async function handleValidateAndUpload(
   logger.technical(`RPC URL: ${options.rpcUrl}`);
   logger.technical(`Contract: ${options.contractAddress}`);
 
-  const FALLBACK_LOCAL_CONCURRENCY = 10; // Fallback if no other value is determined
+  const FALLBACK_LOCAL_CONCURRENCY = 10;
+  const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
   let effectiveConcurrency: number;
   let concurrencyLogReason = '';
-  const userSpecifiedConcurrency = options.maxConcurrentUploads; // This is number | undefined
+  const userSpecifiedConcurrency = options.maxConcurrentUploads;
 
   let calculatedOsCap: number | undefined = undefined;
-  try {
-    const ulimitOutput = execSync('ulimit -n', {
-      encoding: 'utf8',
-      stdio: 'pipe',
-    }).trim();
-    const osMaxFiles = parseInt(ulimitOutput, 10);
-    if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
-      calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
-      logger.info(
-        `System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
-      );
-    } else {
+
+  if (process.platform !== 'win32') {
+    try {
+      const ulimitOutput = execSync('ulimit -n', {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }).trim();
+      const osMaxFiles = parseInt(ulimitOutput, 10);
+      if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
+        calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
+        logger.info(
+          `Unix-like system detected. System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
+        );
+      } else {
+        logger.warn(
+          `Unix-like system detected, but could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
+        );
+      }
+    } catch (error) {
       logger.warn(
-        `Could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
+        `Unix-like system detected, but failed to check OS open file limit via 'ulimit -n'. OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  } catch (error) {
-    logger.warn(
-      `Failed to check OS open file limit (e.g., 'ulimit' command not available). OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
+  } else {
+    logger.info(
+      "Windows system detected. 'ulimit -n' based concurrency capping is not applicable."
     );
+    if (userSpecifiedConcurrency === undefined) {
+      const numCpus = os.cpus().length;
+      calculatedOsCap = Math.max(
+        1,
+        numCpus * WINDOWS_DEFAULT_CONCURRENCY_FACTOR
+      );
+      logger.info(
+        `Using CPU count (${numCpus}) * ${WINDOWS_DEFAULT_CONCURRENCY_FACTOR} as a heuristic for concurrency cap on Windows: ${calculatedOsCap}. This will be used if no user value is provided.`
+      );
+    }
   }
 
   if (userSpecifiedConcurrency !== undefined) {
@@ -181,31 +200,36 @@ export async function handleValidateAndUpload(
     if (calculatedOsCap !== undefined) {
       if (userSpecifiedConcurrency > calculatedOsCap) {
         effectiveConcurrency = calculatedOsCap;
-        concurrencyLogReason += ` Capped by OS limit to ${effectiveConcurrency}.`;
+        concurrencyLogReason += ` Capped by OS/heuristic limit to ${effectiveConcurrency}.`;
       } else {
         effectiveConcurrency = userSpecifiedConcurrency;
-        concurrencyLogReason += ` Within OS limit of ${calculatedOsCap}.`;
+        concurrencyLogReason += ` Within OS/heuristic limit of ${calculatedOsCap}.`;
       }
     } else {
       effectiveConcurrency = userSpecifiedConcurrency;
-      concurrencyLogReason += ` OS limit not determined, using user value.`;
+      concurrencyLogReason += ` OS/heuristic limit not determined or applicable, using user value.`;
     }
   } else {
     // User did not specify concurrency
     if (calculatedOsCap !== undefined) {
       effectiveConcurrency = calculatedOsCap;
-      concurrencyLogReason = `Derived from OS limit (${effectiveConcurrency}), as no user value was provided.`;
+      concurrencyLogReason = `Derived from OS/heuristic limit (${effectiveConcurrency}), as no user value was provided.`;
     } else {
       effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS limit could not be determined.`;
+      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS/heuristic limit could not be determined.`;
     }
   }
 
-  if (effectiveConcurrency === null) {
+  if (
+    effectiveConcurrency === undefined ||
+    effectiveConcurrency === null ||
+    effectiveConcurrency <= 0
+  ) {
     logger.error(
-      'Error: Effective concurrency is null. This should not happen.'
+      `Error: Effective concurrency is invalid (${effectiveConcurrency}). This should not happen. Defaulting to ${FALLBACK_LOCAL_CONCURRENCY}.`
     );
-    process.exit(1);
+    effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
+    concurrencyLogReason += ` Corrected to fallback due to invalid calculation.`;
   }
 
   logger.technical(
@@ -247,7 +271,7 @@ export async function handleValidateAndUpload(
     serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
   const cidCalculatorService =
     serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
-  
+
   // csvReporterService is initialized later, inside the main try block
   // const csvReporterService =
   //   serviceOverrides.csvReporterService ??
@@ -265,7 +289,8 @@ export async function handleValidateAndUpload(
     serviceOverrides.assignmentCheckerService ??
     new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
 
-  let progressTracker: SimpleProgress | undefined = serviceOverrides.progressTracker;
+  let progressTracker: SimpleProgress | undefined =
+    serviceOverrides.progressTracker;
   const uploadRecords: UploadRecord[] = [];
 
   try {
@@ -310,15 +335,15 @@ export async function handleValidateAndUpload(
     if (totalFiles === 0) {
       logger.warn('No files found to process');
       if (csvReporterServiceInstance) {
-         await csvReporterServiceInstance.finalize();
+        await csvReporterServiceInstance.finalize();
       }
       return;
     }
 
-    if (!progressTracker) { 
-        progressTracker = new SimpleProgress(totalFiles);
+    if (!progressTracker) {
+      progressTracker = new SimpleProgress(totalFiles);
     }
-    
+
     progressTracker.setPhase('Initializing');
     progressTracker.start();
 
@@ -414,13 +439,14 @@ export async function handleValidateAndUpload(
     progressTracker.setPhase('Processing Files');
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
-    const servicesForProcessing = { // Renamed to avoid conflict with outer scope services
+    const servicesForProcessing = {
+      // Renamed to avoid conflict with outer scope services
       schemaCacheService,
       jsonValidatorService,
       jsonCanonicalizerService,
       cidCalculatorService,
       csvReporterService, // This is the initialized one from the try block
-      progressTracker,    // This is the initialized one
+      progressTracker, // This is the initialized one
       pinataService,
     };
 
@@ -450,26 +476,38 @@ export async function handleValidateAndUpload(
     await Promise.all(allOperationPromises);
 
     if (progressTracker) {
-        progressTracker.stop();
+      progressTracker.stop();
     }
 
     try {
       await csvReporterService.finalize();
     } catch (finalizeError) {
-      const errMsg = finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
+      const errMsg =
+        finalizeError instanceof Error
+          ? finalizeError.message
+          : String(finalizeError);
       // Use console.error directly here as logger might be part of an issue
-      console.error(chalk.red(`Error during csvReporterService.finalize(): ${errMsg}`));
+      console.error(
+        chalk.red(`Error during csvReporterService.finalize(): ${errMsg}`)
+      );
       throw new Error(`CSV Finalization failed: ${errMsg}`); // Re-throw to be caught by main handler
     }
-    
-    const finalMetrics = progressTracker 
-      ? progressTracker.getMetrics() 
-      : { startTime: Date.now(), errors: 0, processed: 0, skipped: 0, total: totalFiles };
 
+    const finalMetrics = progressTracker
+      ? progressTracker.getMetrics()
+      : {
+          startTime: Date.now(),
+          errors: 0,
+          processed: 0,
+          skipped: 0,
+          total: totalFiles,
+        };
 
     console.log(chalk.green('\n✅ Validation and upload process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));
-    console.log(`  Total files scanned:    ${finalMetrics.total || totalFiles}`); // Use total from metrics or scanned
+    console.log(
+      `  Total files scanned:    ${finalMetrics.total || totalFiles}`
+    ); // Use total from metrics or scanned
     console.log(`  Files skipped (assignment): ${finalMetrics.skipped || 0}`);
     console.log(`  Processing/upload errors: ${finalMetrics.errors || 0}`);
 
@@ -498,28 +536,34 @@ export async function handleValidateAndUpload(
     console.log(`  Upload results: ${options.outputCsv}`);
 
     try {
-        const csvHeader = 'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
-        const csvContent = uploadRecords
-          .map(
-            (record) =>
-              `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
-          )
-          .join('\n');
-    
-        writeFileSync(options.outputCsv, csvHeader + csvContent);
-        logger.success(`Upload results saved to: ${options.outputCsv}`);
-    } catch (writeCsvError) {
-        const errMsg = writeCsvError instanceof Error ? writeCsvError.message : String(writeCsvError);
-        console.error(chalk.red(`Error writing main CSV output to ${options.outputCsv}: ${errMsg}`));
-        throw new Error(`Main CSV output failed: ${errMsg}`); // Re-throw
-    }
+      const csvHeader =
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
+      const csvContent = uploadRecords
+        .map(
+          (record) =>
+            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
+        )
+        .join('\n');
 
+      writeFileSync(options.outputCsv, csvHeader + csvContent);
+      logger.success(`Upload results saved to: ${options.outputCsv}`);
+    } catch (writeCsvError) {
+      const errMsg =
+        writeCsvError instanceof Error
+          ? writeCsvError.message
+          : String(writeCsvError);
+      console.error(
+        chalk.red(
+          `Error writing main CSV output to ${options.outputCsv}: ${errMsg}`
+        )
+      );
+      throw new Error(`Main CSV output failed: ${errMsg}`); // Re-throw
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error( // Use console.error directly for critical path
-      chalk.red(
-        `CRITICAL_ERROR_VALIDATE_AND_UPLOAD: ${errorMessage}`
-      )
+    console.error(
+      // Use console.error directly for critical path
+      chalk.red(`CRITICAL_ERROR_VALIDATE_AND_UPLOAD: ${errorMessage}`)
     );
     if (error instanceof Error && error.stack) {
       console.error(chalk.grey(error.stack));
@@ -532,13 +576,28 @@ export async function handleValidateAndUpload(
     if (csvReporterServiceInstance) {
       try {
         await csvReporterServiceInstance.finalize();
-        console.error(chalk.yellow('CSV error/warning reports finalized during error handling.'));
+        console.error(
+          chalk.yellow(
+            'CSV error/warning reports finalized during error handling.'
+          )
+        );
       } catch (finalizeErrorInCatch) {
-        const finalErrMsg = finalizeErrorInCatch instanceof Error ? finalizeErrorInCatch.message : String(finalizeErrorInCatch);
-        console.error(chalk.magenta(`Failed to finalize CSV reports during error handling: ${finalErrMsg}`));
+        const finalErrMsg =
+          finalizeErrorInCatch instanceof Error
+            ? finalizeErrorInCatch.message
+            : String(finalizeErrorInCatch);
+        console.error(
+          chalk.magenta(
+            `Failed to finalize CSV reports during error handling: ${finalErrMsg}`
+          )
+        );
       }
     } else {
-        console.error(chalk.magenta('CSVReporterService instance was not available in error handler for finalization.'));
+      console.error(
+        chalk.magenta(
+          'CSVReporterService instance was not available in error handler for finalization.'
+        )
+      );
     }
     process.exit(1);
   }
