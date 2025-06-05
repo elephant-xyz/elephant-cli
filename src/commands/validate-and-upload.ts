@@ -341,13 +341,16 @@ export async function handleValidateAndUpload(
     }
 
     if (!progressTracker) {
-      progressTracker = new SimpleProgress(totalFiles);
+      // Initialize with 0 total, phase name will be set right after.
+      // The first main phase with a specific count will be 'Processing Files'.
+      progressTracker = new SimpleProgress(0, 'Initializing');
     }
 
-    progressTracker.setPhase('Initializing');
+    // progressTracker.setPhase('Initializing'); // Set in constructor
     progressTracker.start();
 
-    progressTracker.setPhase('Checking Assignments');
+    // Phase 1: Checking Assignments (1 step)
+    progressTracker.setPhase('Checking Assignments', 1); // Treat as a single step for overall progress
     let assignedCids: Set<string> = new Set();
     let assignmentFilteringEnabled = false;
 
@@ -379,8 +382,8 @@ export async function handleValidateAndUpload(
       }
     }
 
-    // Pre-fetch all unique schemas
-    progressTracker.setPhase('Pre-fetching Schemas');
+    // Phase 2: Pre-fetching Schemas (1 step for the main progress bar)
+    progressTracker.setPhase('Pre-fetching Schemas', 1); // Treat as a single step for overall progress
     logger.info('Discovering all unique schema CIDs...');
     try {
       const allDataGroupCids = await fileScannerService.getAllDataGroupCids(
@@ -392,7 +395,7 @@ export async function handleValidateAndUpload(
       );
 
       if (uniqueSchemaCidsArray.length > 0) {
-        const schemaProgress = new SimpleProgress(uniqueSchemaCidsArray.length);
+        const schemaProgress = new SimpleProgress(uniqueSchemaCidsArray.length, 'Fetching Schemas');
         schemaProgress.start();
         let prefetchedCount = 0;
         let failedCount = 0;
@@ -436,7 +439,8 @@ export async function handleValidateAndUpload(
       // Decide if this is a fatal error. For now, log and continue, as individual file processing will still attempt schema loading.
     }
 
-    progressTracker.setPhase('Processing Files');
+    // Phase 3: Processing Files (totalFiles steps)
+    progressTracker.setPhase('Processing Files', totalFiles);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
     const servicesForProcessing = {
@@ -496,12 +500,12 @@ export async function handleValidateAndUpload(
     const finalMetrics = progressTracker
       ? progressTracker.getMetrics()
       : {
-          startTime: Date.now(),
-          errors: 0,
-          processed: 0,
-          skipped: 0,
-          total: totalFiles,
-        };
+        startTime: Date.now(),
+        errors: 0,
+        processed: 0,
+        skipped: 0,
+        total: totalFiles,
+      };
 
     console.log(chalk.green('\n✅ Validation and upload process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));

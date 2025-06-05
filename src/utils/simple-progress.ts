@@ -16,14 +16,14 @@ export class SimpleProgress {
   private metrics: SimpleProgressMetrics;
   private isRunning: boolean = false;
 
-  constructor(total: number) {
+  constructor(initialPhaseTotal: number, initialPhaseName: string = 'Initializing') {
     this.metrics = {
       processed: 0,
-      total,
+      total: initialPhaseTotal,
       errors: 0,
       warnings: 0,
       skipped: 0,
-      phase: 'Initializing',
+      phase: initialPhaseName,
       startTime: Date.now(),
     };
 
@@ -52,9 +52,16 @@ export class SimpleProgress {
     }
   }
 
-  setPhase(phase: string): void {
+  setPhase(phase: string, phaseTotal: number): void {
     this.metrics.phase = phase;
-    this.update();
+    this.metrics.total = phaseTotal;
+    this.metrics.processed = 0;
+    this.metrics.startTime = Date.now();
+
+    if (this.isRunning) {
+      this.bar.setTotal(phaseTotal);
+      this.bar.update(this.metrics.processed, this.getPayload());
+    }
   }
 
   increment(
@@ -64,12 +71,6 @@ export class SimpleProgress {
     if (type !== 'processed') {
       this.metrics.processed++;
     }
-    this.update();
-  }
-
-  updateTotal(total: number): void {
-    this.metrics.total = total;
-    this.bar.setTotal(total);
     this.update();
   }
 

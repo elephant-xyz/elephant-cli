@@ -285,8 +285,7 @@ export async function handleSubmitToContract(
     );
 
     progressTracker =
-      serviceOverrides.progressTracker || new SimpleProgress(records.length);
-    progressTracker.setPhase('Checking Eligibility');
+      serviceOverrides.progressTracker || new SimpleProgress(records.length, 'Checking Eligibility');
     progressTracker.start();
 
     // Check eligibility for each record
@@ -327,7 +326,7 @@ export async function handleSubmitToContract(
     }
 
     // Submit transactions
-    progressTracker.setPhase('Submitting Transactions');
+    progressTracker.setPhase('Submitting Transactions', dataItemsForTransaction.length);
     let submittedTransactionCount = 0;
     let totalItemsSubmitted = 0;
 
