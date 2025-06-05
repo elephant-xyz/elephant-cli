@@ -20,7 +20,7 @@ export class AssignmentCheckerService {
    */
   async fetchAssignedCids(
     elephantAddress: string,
-    fromBlock: number = 0,
+    fromBlock: number = 72310501,
     toBlock: number | 'latest' = 'latest'
   ): Promise<Set<string>> {
     logger.technical(

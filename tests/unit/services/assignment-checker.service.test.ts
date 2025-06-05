@@ -78,7 +78,7 @@ describe('AssignmentCheckerService', () => {
       ).toHaveBeenCalledTimes(1);
       expect(
         mockBlockchainServiceInstance.getOracleAssignedEvents
-      ).toHaveBeenCalledWith(mockElephantAddress, 0, 1000);
+      ).toHaveBeenCalledWith(mockElephantAddress, 72310501, 1000);
 
       expect(result.size).toBe(2);
       expect(result.has('QmTestCid1')).toBe(true);
