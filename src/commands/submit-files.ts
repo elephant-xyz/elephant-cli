@@ -45,8 +45,8 @@ export interface SubmitFilesCommandOptions {
 
 // During test runs, swallow any unexpected unhandled errors to prevent Vitest interruptions
 if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
-  process.on('unhandledRejection', () => {});
-  process.on('uncaughtException', () => {});
+  process.on('unhandledRejection', () => { });
+  process.on('uncaughtException', () => { });
 }
 export function registerSubmitFilesCommand(program: Command) {
   program
@@ -71,7 +71,7 @@ export function registerSubmitFilesCommand(program: Command) {
       '--contract-address <address>',
       'Address of the submit smart contract.',
       process.env.SUBMIT_CONTRACT_ADDRESS ||
-        DEFAULT_CONTRACT_ADDRESS /* Placeholder - update if different */
+      DEFAULT_CONTRACT_ADDRESS /* Placeholder - update if different */
     )
     .option(
       '--max-concurrent-uploads <number>',
@@ -296,8 +296,7 @@ export async function handleSubmitFiles(
           )}`
         );
         logger.success(
-          `Found ${assignedCount} assigned CID${
-            assignedCount === 1 ? '' : 's'
+          `Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'
           } for your address`
         );
         if (assignedCount === 0) {
@@ -310,8 +309,7 @@ export async function handleSubmitFiles(
           'Could not fetch assignments; proceeding without assignment filtering'
         );
         logger.debug(
-          `Assignment check failed: ${
-            error instanceof Error ? error.message : String(error)
+          `Assignment check failed: ${error instanceof Error ? error.message : String(error)
           }`
         );
       }
@@ -522,13 +520,12 @@ export async function handleSubmitFiles(
           ProcessingPhase.PROCESSING,
           (processedFileCount /
             allFilesToProcess.filter((f) => f.validationPassed).length) *
-            100
+          100
         );
       }
     }
     logger.success(
-      `Processing complete: ${filesForUpload.length} file${
-        filesForUpload.length === 1 ? '' : 's'
+      `Processing complete: ${filesForUpload.length} file${filesForUpload.length === 1 ? '' : 's'
       } ready for upload`
     );
 
