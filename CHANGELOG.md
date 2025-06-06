@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.4...v1.3.0) (2025-06-06)
+
+
+### Features
+
+* split submit-files into 2 comands: validate-and-upload and submit-to-contract ([#15](https://github.com/elephant-xyz/elephant-cli/issues/15)) ([31b2ae3](https://github.com/elephant-xyz/elephant-cli/commit/31b2ae37c765996953df5a7386cc325a1f32a21e))
+
 ## [1.2.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.3...v1.2.4) (2025-06-05)
 
 
