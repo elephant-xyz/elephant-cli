@@ -147,7 +147,7 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${path.join(outputDir, 'test-input.csv')} ` +
           `--private-key ${privateKey} ` +
-          `--dry-run` +
+          `--dry-run ` +
           `--rpc ${RPC_URL}`
       );
 
@@ -213,7 +213,7 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
           `--private-key ${privateKey} ` +
           `--pinata-jwt ${pinataJwt} ` +
           `--output-csv ${workflowCsvPath} ` +
-          `--dry-run` +
+          `--dry-run ` +
           `--rpc ${RPC_URL}`
       );
 
