@@ -269,13 +269,11 @@ describe('ValidateAndUploadCommand', () => {
     });
 
     mockWalletService = {
-      getWallet: vi
-        .fn()
-        .mockReturnValue({
-          address: '0xUserAddress',
-          provider: {},
-          privateKey: 'testKey',
-        }),
+      getWallet: vi.fn().mockReturnValue({
+        address: '0xUserAddress',
+        provider: {},
+        privateKey: 'testKey',
+      }),
     } as WalletService;
   });
 
@@ -528,12 +526,10 @@ describe('ValidateAndUploadCommand', () => {
       scanDirectory: async function* () {
         yield* [];
       },
-      validateStructure: vi
-        .fn()
-        .mockResolvedValue({
-          isValid: false,
-          message: 'Custom invalid structure message',
-        }),
+      validateStructure: vi.fn().mockResolvedValue({
+        isValid: false,
+        message: 'Custom invalid structure message',
+      }),
       countTotalFiles: vi.fn().mockResolvedValue(0),
     } as any;
 

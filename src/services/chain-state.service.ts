@@ -1,10 +1,7 @@
 import { Contract, JsonRpcProvider, ZeroHash, getAddress, Log } from 'ethers';
 import { BlockchainService } from './blockchain.service.js';
 import { ABI } from '../types/index.js';
-import {
-  SUBMIT_CONTRACT_ABI_FRAGMENTS,
-  SUBMIT_CONTRACT_METHODS,
-} from '../config/constants.js';
+import { SUBMIT_CONTRACT_ABI_FRAGMENTS } from '../config/constants.js';
 import {
   isValidCID,
   extractHashFromCID,
@@ -12,11 +9,6 @@ import {
 } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
 import { DEFAULT_BLOCK_RANGE, DEFAULT_FROM_BLOCK } from '../utils/constants.js';
-
-interface DataQuery {
-  propertyCid: string;
-  dataGroupCid: string;
-}
 
 export class ChainStateService extends BlockchainService {
   private submitContract: Contract;
@@ -115,12 +107,11 @@ export class ChainStateService extends BlockchainService {
         return null;
       }
     } else {
+      logger.warn(
+        `Cache miss for consensus data for property ${propertyCid}, group ${dataGroupCid}. Falling back to direct contract call.`
+      );
       return null;
     }
-
-    logger.warn(
-      `Cache miss for consensus data for property ${propertyCid}, group ${dataGroupCid}. Falling back to direct contract call.`
-    );
   }
 
   /**
