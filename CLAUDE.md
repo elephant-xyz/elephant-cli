@@ -35,6 +35,38 @@ const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
 2. **Concurrent Downloads**: Uses a queue system with max 3 concurrent downloads
 3. **Error Handling**: Specific error messages for RPC, IPFS, and validation failures
 
+### Gas Price Handling
+
+The `submit-to-contract` command includes a `--gas-price` option that accepts a numeric value in Gwei (e.g., `35.5`) or the string `'auto'`.
+
+1.  **CLI Input**: The option is defined in `src/commands/submit-to-contract.ts` with a default of `30`. Input is validated to be a number or `'auto'`.
+
+2.  **Service Layer**: The `gasPrice` value is passed to the `TransactionBatcherService` constructor.
+
+3.  **Transaction Creation**: Inside `TransactionBatcherService.submitBatch`, the `gasPrice` is used to construct the transaction options:
+    *   If `gasPrice` is a number, it's converted to Wei and set as the `gasPrice` in the transaction overrides. This forces a legacy-style transaction with a fixed gas price.
+    *   If `gasPrice` is `'auto'`, no gas-related options are set in the overrides, allowing `ethers.js` to automatically determine the optimal gas price from the RPC provider (usually using EIP-1559 fee mechanism if available).
+
+```typescript
+// src/services/transaction-batcher.service.ts
+const txOptions: Overrides = {
+  gasLimit:
+    estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)),
+};
+
+if (this.gasPrice !== 'auto') {
+  txOptions.gasPrice = ethers.parseUnits(
+    this.gasPrice.toString(),
+    'gwei'
+  );
+}
+//...
+const txResponse: TransactionResponse = await this.contract.submitBatch(
+  preparedBatch,
+  txOptions
+);
+```
+
 ### Testing Information
 
 - **Test Elephant Address**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
@@ -138,6 +170,7 @@ npm run dev
 # Test the CLI - Submit to contract  
 ./bin/elephant-cli submit-to-contract results.csv \
   --private-key "0x..." \
+  --gas-price 50 \
   --dry-run
 
 # Clean build artifacts

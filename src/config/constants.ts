@@ -101,5 +101,36 @@ export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
     ],
     "name": "DataSubmitted",
     "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "propertyHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "dataGroupHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "dataHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "oracles",
+        "type": "address[]"
+      }
+    ],
+    "name": "ConsensusReached",
+    "type": "event"
   }
 ] as const;

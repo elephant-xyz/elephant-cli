@@ -94,6 +94,7 @@ npx @elephant-xyz/cli submit-to-contract upload-results.csv \
 - `--rpc-url <url>`: RPC URL for the blockchain network. (Default: `https://rpc.therpc.io/polygon`)
 - `--contract-address <address>`: Address of the submit smart contract. (Default: `0x79D5046e34D4A56D357E12636A18da6eaEfe0586`)
 - `--transaction-batch-size <number>`: Number of items per blockchain transaction. (Default: 200)
+- `--gas-price <value>`: Gas price in Gwei for transactions. Can be a number (e.g., 50) or 'auto' to let the provider determine the price. (Default: 30)
 - `--dry-run`: Perform all checks without submitting transactions.
 
 
@@ -254,20 +255,20 @@ npx @elephant-xyz/cli submit-to-contract my-uploads.csv \
   --private-key "0xabc123..."
 ```
 
-### Example 5: Dry Run Mode for Testing
+### Example 5: Submit to Blockchain with Custom Gas Price
 
-#### Test validation without uploading:
-```bash
-npx @elephant-xyz/cli validate-and-upload ./test-data \
-  --private-key "0xdef456..." \
-  --dry-run
-```
+To override the default gas price, use the `--gas-price` option. This is useful during times of high network congestion.
 
-#### Test submission without sending transactions:
 ```bash
-npx @elephant-xyz/cli submit-to-contract test-uploads.csv \
-  --private-key "0xdef456..." \
-  --dry-run
+# Submit with a gas price of 50 Gwei
+npx @elephant-xyz/cli submit-to-contract my-uploads.csv \
+  --private-key "0xabc123..." \
+  --gas-price 50
+
+# Let the RPC provider automatically determine the best gas price
+npx @elephant-xyz/cli submit-to-contract my-uploads.csv \
+  --private-key "0xabc123..." \
+  --gas-price auto
 ```
 
 ### Example 6: Using Legacy Combined Command

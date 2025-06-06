@@ -21,6 +21,7 @@ interface DataQuery {
 export class ChainStateService extends BlockchainService {
   private submitContract: Contract;
   private userSubmissionsCache: Map<string, Set<string>> = new Map();
+  private consensusDataCache: Map<string, string> = new Map();
 
   constructor(
     rpcUrl: string,
@@ -38,6 +39,46 @@ export class ChainStateService extends BlockchainService {
     );
   }
 
+  async prepopulateConsensusCache(): Promise<void> {
+    if (this.consensusDataCache.size > 0) {
+      logger.debug(
+        'Consensus cache is already populated for all requested queries.'
+      );
+      return;
+    }
+
+    logger.technical(
+      `Pre-populating consensus cache for all items.`
+    );
+
+    const eventFilter = this.submitContract.filters.ConsensusReached(
+      null,
+      null,
+    );
+
+    const finalToBlock = await this.getCurrentBlock();
+    const events = await this._queryEventsInChunks(
+      eventFilter,
+      DEFAULT_FROM_BLOCK,
+      finalToBlock
+    );
+    logger.technical(
+      `Found ${events.length} potentially relevant ConsensusReached events.`
+    );
+
+    for (const event of events) {
+      const args = (event as any).args;
+      if (args && args.propertyHash && args.dataGroupHash && args.dataHash) {
+        const cacheKey = `${args.propertyHash}-${args.dataGroupHash}`;
+        this.consensusDataCache.set(cacheKey, args.dataHash);
+      }
+    }
+
+    logger.debug(
+      `Consensus cache populated. ${this.consensusDataCache.size} items found.`
+    );
+  }
+
   /**
    * Gets the current data CID for a given property and data group.
    * @param propertyCid The property CID.
@@ -48,54 +89,43 @@ export class ChainStateService extends BlockchainService {
     propertyCid: string,
     dataGroupCid: string
   ): Promise<string | null> {
-    try {
-      // Convert CIDs to hashes for contract call
-      const propertyHash = extractHashFromCID(propertyCid);
-      const dataGroupHash = extractHashFromCID(dataGroupCid);
+    const propertyHash = extractHashFromCID(propertyCid);
+    const dataGroupHash = extractHashFromCID(dataGroupCid);
+    const cacheKey = `${propertyHash}-${dataGroupHash}`;
 
-      const returnedHash: string = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.GET_CURRENT_FIELD_DATA_HASH
-      ](propertyHash, dataGroupHash);
-
+    if (this.consensusDataCache.has(cacheKey)) {
+      const dataHash = this.consensusDataCache.get(cacheKey)!;
+      logger.debug(
+        `Cache hit for consensus data for property ${propertyCid}, group ${dataGroupCid}.`
+      );
       if (
-        !returnedHash ||
-        returnedHash === '0x' ||
-        returnedHash === ZeroHash ||
-        returnedHash ===
+        !dataHash ||
+        dataHash === '0x' ||
+        dataHash === ZeroHash ||
+        dataHash ===
         '0x0000000000000000000000000000000000000000000000000000000000000000'
       ) {
-        logger.debug(
-          `No data hash found on-chain for property ${propertyCid}, group ${dataGroupCid}`
-        );
         return null;
       }
-
-      // Convert hash back to CID
-      const cidString = deriveCIDFromHash(returnedHash);
-
+      const cidString = deriveCIDFromHash(dataHash);
       if (isValidCID(cidString)) {
         return cidString;
       } else {
         logger.warn(
-          `Invalid data CID derived from hash: ${cidString} (raw hash: ${returnedHash}) for property ${propertyCid}, group ${dataGroupCid}`
+          `Invalid data CID derived from cached hash: ${cidString} (raw hash: ${dataHash}) for property ${propertyCid}, group ${dataGroupCid}`
         );
         return null;
       }
-    } catch (error: unknown) {
-      if (error instanceof AggregateError) {
-        logger.error(
-          `Error fetching current data CID for ${propertyCid}/${dataGroupCid}: ${error.errors.map((e) => e.message).join(', ')}`
-        );
-        return null;
-      }
-      logger.error(
-        `Error fetching current data CID for ${propertyCid}/${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`
-      );
+    }
+    else {
       return null;
     }
+
+    logger.warn(
+      `Cache miss for consensus data for property ${propertyCid}, group ${dataGroupCid}. Falling back to direct contract call.`
+    );
+
   }
-
-
 
   /**
    * Checks if a specific user has already submitted data for the given CIDs combination
@@ -168,37 +198,13 @@ export class ChainStateService extends BlockchainService {
       null, // dataGroupHash
       normalizedUserAddress // submitter
     );
-    const MAX_BLOCK_RANGE = DEFAULT_BLOCK_RANGE;
     const finalToBlock = await this.getCurrentBlock();
-    let events: Log[] = [];
-
-    logger.technical(
-      `Querying DataSubmitted events for user: ${normalizedUserAddress} from block ${DEFAULT_FROM_BLOCK} to ${finalToBlock} in chunks of ${MAX_BLOCK_RANGE} blocks.`
+    const events = await this._queryEventsInChunks(
+      eventFilter,
+      DEFAULT_FROM_BLOCK,
+      finalToBlock
     );
-    for (
-      let currentFromBlock = DEFAULT_FROM_BLOCK;
-      currentFromBlock <= finalToBlock;
-      currentFromBlock += MAX_BLOCK_RANGE
-    ) {
-      const currentToBlock = Math.min(
-        currentFromBlock + MAX_BLOCK_RANGE - 1,
-        finalToBlock
-      );
-      logger.debug(`Querying chunk: ${currentFromBlock} - ${currentToBlock}`);
-      try {
-        const eventsChunkRaw = await this.submitContract.queryFilter(
-          eventFilter,
-          currentFromBlock,
-          currentToBlock
-        );
-        events = events.concat(eventsChunkRaw);
-      } catch (error) {
-        logger.error(
-          `Error fetching events for block range ${currentFromBlock}-${currentToBlock}: ${error}`
-        );
-        throw error;
-      }
-    }
+
     logger.technical(
       `Found ${events.length} total DataSubmitted events for ${normalizedUserAddress}.`
     );
@@ -225,5 +231,43 @@ export class ChainStateService extends BlockchainService {
     );
 
     return userSubmissions;
+  }
+
+  private async _queryEventsInChunks(
+    eventFilter: any,
+    fromBlock: number,
+    toBlock: number
+  ): Promise<Log[]> {
+    const MAX_BLOCK_RANGE = DEFAULT_BLOCK_RANGE;
+    let events: Log[] = [];
+
+    logger.technical(
+      `Querying events from block ${fromBlock} to ${toBlock} in chunks of ${MAX_BLOCK_RANGE} blocks.`
+    );
+    for (
+      let currentFromBlock = fromBlock;
+      currentFromBlock <= toBlock;
+      currentFromBlock += MAX_BLOCK_RANGE
+    ) {
+      const currentToBlock = Math.min(
+        currentFromBlock + MAX_BLOCK_RANGE - 1,
+        toBlock
+      );
+      logger.debug(`Querying chunk: ${currentFromBlock} - ${currentToBlock}`);
+      try {
+        const eventsChunkRaw = await this.submitContract.queryFilter(
+          eventFilter,
+          currentFromBlock,
+          currentToBlock
+        );
+        events = events.concat(eventsChunkRaw);
+      } catch (error) {
+        logger.error(
+          `Error fetching events for block range ${currentFromBlock}-${currentToBlock}: ${error}`
+        );
+        throw error;
+      }
+    }
+    return events;
   }
 }

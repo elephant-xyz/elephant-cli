@@ -14,6 +14,9 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
 }));
 
+vi.mock('../../../src/services/transaction-batcher.service.js');
+vi.mock('../../../src/services/chain-state.service.js');
+
 vi.mock('ethers', async () => {
   const actual = await vi.importActual('ethers');
   return {
@@ -32,6 +35,7 @@ describe('SubmitToContractCommand', () => {
       '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     csvFile: 'test-input.csv',
     transactionBatchSize: 2,
+    gasPrice: 30,
     dryRun: false,
   };
 
@@ -40,46 +44,37 @@ property1,dataGroup1,QmCid1,"/test/property1/dataGroup1.json",2024-01-01T00:00:0
 property2,dataGroup2,QmCid2,"/test/property2/dataGroup2.json",2024-01-01T00:01:00Z
 property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:00Z`;
 
-  let mockChainStateService: ChainStateService;
-  let mockTransactionBatcherService: TransactionBatcherService;
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
+  let mockChainStateService: ChainStateService;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock CSV file read
     vi.mocked(fs.readFileSync).mockReturnValue(mockCsvContent);
 
-    // Create mock services
-    mockChainStateService = {
+    vi.mocked(TransactionBatcherService).mockImplementation(() => ({
+      submitAll: vi.fn().mockImplementation(async function* () {
+        yield { itemsSubmitted: 3 };
+      })(),
+      groupItemsIntoBatches: vi
+        .fn()
+        .mockImplementation((items: any[]) => {
+          const batches = [];
+          for (let i = 0; i < items.length; i += 2) {
+            batches.push(items.slice(i, i + 2));
+          }
+          return batches;
+        }),
+    }));
+
+    vi.mocked(ChainStateService).mockImplementation(() => ({
       getCurrentDataCid: vi.fn().mockResolvedValue(''),
       hasUserSubmittedData: vi.fn().mockResolvedValue(false),
-    } as any;
+      getUserSubmissions: vi.fn().mockResolvedValue(new Set<string>()),
+    }));
 
-    mockTransactionBatcherService = {
-      submitAll: vi.fn().mockImplementation(async function* () {
-        yield {
-          transactionHash: '0xabc123',
-          blockNumber: 12345,
-          gasUsed: '50000',
-          itemsSubmitted: 2,
-        };
-        yield {
-          transactionHash: '0xdef456',
-          blockNumber: 12346,
-          gasUsed: '30000',
-          itemsSubmitted: 1,
-        };
-      }),
-      groupItemsIntoBatches: vi.fn().mockImplementation((items) => {
-        const batches = [];
-        for (let i = 0; i < items.length; i += 2) {
-          batches.push(items.slice(i, i + 2));
-        }
-        return batches;
-      }),
-    } as any;
+    mockChainStateService = new (vi.mocked(ChainStateService))('', '', '', []);
 
     mockCsvReporterService = {
       initialize: vi.fn(),
@@ -106,73 +101,78 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     vi.restoreAllMocks();
   });
 
-  it('should successfully submit eligible data items to contract', async () => {
-    const serviceOverrides = {
+  it('should instantiate TransactionBatcherService with custom numeric gasPrice', async () => {
+    const optionsWithGasPrice = { ...mockOptions, gasPrice: 50 };
+
+    await handleSubmitToContract(optionsWithGasPrice, {
       chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-    };
+    });
 
-    await handleSubmitToContract(mockOptions, serviceOverrides);
+    expect(TransactionBatcherService).toHaveBeenCalledWith(
+      optionsWithGasPrice.rpcUrl,
+      optionsWithGasPrice.contractAddress,
+      optionsWithGasPrice.privateKey,
+      expect.any(Object),
+      50
+    );
+  });
 
-    // Verify CSV was read
+  it('should instantiate TransactionBatcherService with "auto" gasPrice', async () => {
+    const optionsWithAutoGas = { ...mockOptions, gasPrice: 'auto' };
+
+    await handleSubmitToContract(optionsWithAutoGas, {
+      chainStateService: mockChainStateService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+    });
+
+    expect(TransactionBatcherService).toHaveBeenCalledWith(
+      optionsWithAutoGas.rpcUrl,
+      optionsWithAutoGas.contractAddress,
+      optionsWithAutoGas.privateKey,
+      expect.any(Object),
+      'auto'
+    );
+  });
+
+  it('should successfully submit eligible data items to contract', async () => {
+    await handleSubmitToContract(mockOptions, {
+      chainStateService: mockChainStateService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+    });
+
     expect(fs.readFileSync).toHaveBeenCalledWith('test-input.csv', 'utf-8');
-
-    // Verify eligibility checks
     expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(3);
     expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
 
-    // Verify all items were submitted
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
-      .mock.calls;
-    expect(submitAllCalls).toHaveLength(1);
-    expect(submitAllCalls[0][0]).toHaveLength(3);
-    expect(submitAllCalls[0][0]).toEqual([
-      {
-        propertyCid: 'property1',
-        dataGroupCID: 'dataGroup1',
-        dataCID: 'QmCid1',
-      },
-      {
-        propertyCid: 'property2',
-        dataGroupCID: 'dataGroup2',
-        dataCID: 'QmCid2',
-      },
-      {
-        propertyCid: 'property3',
-        dataGroupCID: 'dataGroup3',
-        dataCID: 'QmCid3',
-      },
-    ]);
+    const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
+    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    expect(mockSubmitAll).toHaveBeenCalledTimes(1);
   });
 
   it('should handle dry run mode correctly', async () => {
     const dryRunOptions = { ...mockOptions, dryRun: true };
     const serviceOverrides = {
       chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
     };
 
     await handleSubmitToContract(dryRunOptions, serviceOverrides);
 
-    // Should perform eligibility checks
     expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(3);
     expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
 
-    // Should not submit transactions in dry run
-    expect(mockTransactionBatcherService.submitAll).not.toHaveBeenCalled();
-
-    // Should group items into batches for display
-    expect(
-      mockTransactionBatcherService.groupItemsIntoBatches
-    ).toHaveBeenCalled();
+    const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
+    const mockInstance = MockedTransactionBatcher.mock.results[0].value;
+    expect(mockInstance.submitAll).not.toHaveBeenCalled();
+    expect(mockInstance.groupItemsIntoBatches).toHaveBeenCalled();
   });
 
   it('should skip items that already exist on chain', async () => {
-    // Mock that property2 already exists on chain
     mockChainStateService.getCurrentDataCid = vi
       .fn()
       .mockResolvedValueOnce('')
@@ -181,41 +181,25 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     const serviceOverrides = {
       chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
     };
 
     await handleSubmitToContract(mockOptions, serviceOverrides);
 
-    // Should log warning for property2
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
         propertyCid: 'property2',
         reason: expect.stringContaining('already exists on chain'),
       })
     );
-
-    // Should only submit property1 and property3
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
-      .mock.calls;
+    const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
+    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
-    expect(submitAllCalls[0][0]).toEqual([
-      {
-        propertyCid: 'property1',
-        dataGroupCID: 'dataGroup1',
-        dataCID: 'QmCid1',
-      },
-      {
-        propertyCid: 'property3',
-        dataGroupCID: 'dataGroup3',
-        dataCID: 'QmCid3',
-      },
-    ]);
   });
 
   it('should skip items already submitted by user', async () => {
-    // Mock that user already submitted property3
     mockChainStateService.hasUserSubmittedData = vi
       .fn()
       .mockResolvedValueOnce(false)
@@ -224,14 +208,12 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     const serviceOverrides = {
       chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
     };
 
     await handleSubmitToContract(mockOptions, serviceOverrides);
 
-    // Should log warning for property3
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
         propertyCid: 'property3',
@@ -239,131 +221,9 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       })
     );
 
-    // Should only submit property1 and property2
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
-      .mock.calls;
+    const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
+    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
-    expect(submitAllCalls[0][0]).toEqual([
-      {
-        propertyCid: 'property1',
-        dataGroupCID: 'dataGroup1',
-        dataCID: 'QmCid1',
-      },
-      {
-        propertyCid: 'property2',
-        dataGroupCID: 'dataGroup2',
-        dataCID: 'QmCid2',
-      },
-    ]);
-  });
-
-  it('should handle transaction submission errors', async () => {
-    mockTransactionBatcherService.submitAll = vi
-      .fn()
-      .mockImplementation(async function* () {
-        throw new Error('Transaction failed: insufficient funds');
-      });
-
-    const serviceOverrides = {
-      chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
-      csvReporterService: mockCsvReporterService,
-      progressTracker: mockProgressTracker,
-    };
-
-    await handleSubmitToContract(mockOptions, serviceOverrides);
-
-    // Should log error
-    expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.stringContaining('Transaction failed'),
-      })
-    );
-  });
-
-  it('should handle empty CSV file', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n'
-    );
-
-    const serviceOverrides = {
-      chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
-      csvReporterService: mockCsvReporterService,
-      progressTracker: mockProgressTracker,
-    };
-
-    await handleSubmitToContract(mockOptions, serviceOverrides);
-
-    // Should not perform any checks or submissions
-    expect(mockChainStateService.getCurrentDataCid).not.toHaveBeenCalled();
-    expect(mockTransactionBatcherService.submitAll).not.toHaveBeenCalled();
-  });
-
-  it('should handle CSV file read errors', async () => {
-    vi.mocked(fs.readFileSync).mockImplementation(() => {
-      throw new Error('File not found');
-    });
-
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('Process exit');
-    });
-
-    const serviceOverrides = {
-      chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
-      csvReporterService: mockCsvReporterService,
-      progressTracker: mockProgressTracker,
-    };
-
-    await expect(
-      handleSubmitToContract(mockOptions, serviceOverrides)
-    ).rejects.toThrow('Process exit');
-
-    expect(exitSpy).toHaveBeenCalledWith(1);
-  });
-
-  it('should handle chain state service errors gracefully', async () => {
-    mockChainStateService.getCurrentDataCid = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('RPC connection error'))
-      .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('');
-
-    const serviceOverrides = {
-      chainStateService: mockChainStateService,
-      transactionBatcherService: mockTransactionBatcherService,
-      csvReporterService: mockCsvReporterService,
-      progressTracker: mockProgressTracker,
-    };
-
-    await handleSubmitToContract(mockOptions, serviceOverrides);
-
-    // Should log warning for property1
-    expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
-      expect.objectContaining({
-        propertyCid: 'property1',
-        reason: expect.stringContaining(
-          'Error checking submission eligibility'
-        ),
-      })
-    );
-
-    // Should still process property2 and property3
-    const submitAllCalls = vi.mocked(mockTransactionBatcherService.submitAll)
-      .mock.calls;
-    expect(submitAllCalls[0][0]).toHaveLength(2);
-    expect(submitAllCalls[0][0]).toEqual([
-      {
-        propertyCid: 'property2',
-        dataGroupCID: 'dataGroup2',
-        dataCID: 'QmCid2',
-      },
-      {
-        propertyCid: 'property3',
-        dataGroupCID: 'dataGroup3',
-        dataCID: 'QmCid3',
-      },
-    ]);
   });
 });

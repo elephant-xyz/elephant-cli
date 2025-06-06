@@ -23,6 +23,7 @@ export interface SubmitToContractCommandOptions {
   privateKey: string;
   csvFile: string;
   transactionBatchSize?: number;
+  gasPrice: string | number;
   dryRun: boolean;
 }
 
@@ -65,11 +66,31 @@ export function registerSubmitToContractCommand(program: Command) {
       'Number of items per blockchain transaction (default: 200)'
     )
     .option(
+      '--gas-price <value>',
+      "Gas price in Gwei ('auto' or a number, default: 30)",
+      '30'
+    )
+    .option(
       '--dry-run',
       'Perform all checks without submitting transactions.',
       false
     )
     .action(async (csvFile, options) => {
+      if (
+        options.gasPrice !== 'auto' &&
+        (isNaN(parseFloat(options.gasPrice)) || !isFinite(options.gasPrice))
+      ) {
+        logger.error(
+          'Error: Invalid gas-price. Must be a number or "auto".'
+        );
+        process.exit(1);
+      }
+
+      const gasPrice =
+        options.gasPrice === 'auto'
+          ? 'auto'
+          : parseFloat(options.gasPrice);
+
       options.privateKey =
         options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
 
@@ -86,6 +107,7 @@ export function registerSubmitToContractCommand(program: Command) {
       const commandOptions: SubmitToContractCommandOptions = {
         ...options,
         csvFile: path.resolve(csvFile),
+        gasPrice,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -193,6 +215,7 @@ export async function handleSubmitToContract(
   logger.technical(`RPC URL: ${options.rpcUrl}`);
   logger.technical(`Contract: ${options.contractAddress}`);
   logger.technical(`Transaction batch size: ${options.transactionBatchSize}`);
+  logger.technical(`Gas price: ${options.gasPrice}`);
 
   const config = createSubmitConfig({
     transactionBatchSize: options.transactionBatchSize,
@@ -213,7 +236,8 @@ export async function handleSubmitToContract(
       options.rpcUrl,
       options.contractAddress,
       options.privateKey,
-      config
+      config,
+      options.gasPrice
     );
   const csvReporterService =
     serviceOverrides.csvReporterService ??
@@ -285,13 +309,20 @@ export async function handleSubmitToContract(
     );
 
     progressTracker =
-      serviceOverrides.progressTracker || new SimpleProgress(records.length, 'Checking Eligibility');
+      serviceOverrides.progressTracker ||
+      new SimpleProgress(1, 'Indexing on-chain data');
     progressTracker.start();
+
+    logger.info('Pre-populating on-chain consensus data cache...');
+    await chainStateService.prepopulateConsensusCache();
+    logger.success('Consensus data cache populated.');
+
 
     // Check eligibility for each record
     const dataItemsForTransaction: DataItem[] = [];
     const skippedItems: { record: CsvRecord; reason: string }[] = [];
 
+    progressTracker.setPhase('Checking Eligibility', records.length);
     await chainStateService.getUserSubmissions(userAddress);
 
     const processingPromises = records.map((record) =>
