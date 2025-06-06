@@ -1,3 +1,17 @@
+## [1.2.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.3...v1.2.4) (2025-06-05)
+
+
+### Bug Fixes
+
+* list assignments not from 0 block when submitting ([#19](https://github.com/elephant-xyz/elephant-cli/issues/19)) ([e303463](https://github.com/elephant-xyz/elephant-cli/commit/e303463d56db2ee6ad368e4fa253a9031d995b93))
+
+## [1.2.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.2...v1.2.3) (2025-06-05)
+
+
+### Bug Fixes
+
+* add ethers as runtime dep ([#17](https://github.com/elephant-xyz/elephant-cli/issues/17)) ([92ad052](https://github.com/elephant-xyz/elephant-cli/commit/92ad052cc6e375ee92964378f6bfa39bf2a743ec))
+
 ## [1.2.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.1...v1.2.2) (2025-06-04)
 
 
