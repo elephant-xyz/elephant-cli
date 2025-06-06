@@ -47,13 +47,11 @@ export class ChainStateService extends BlockchainService {
       return;
     }
 
-    logger.technical(
-      `Pre-populating consensus cache for all items.`
-    );
+    logger.technical(`Pre-populating consensus cache for all items.`);
 
     const eventFilter = this.submitContract.filters.ConsensusReached(
       null,
-      null,
+      null
     );
 
     const finalToBlock = await this.getCurrentBlock();
@@ -103,7 +101,7 @@ export class ChainStateService extends BlockchainService {
         dataHash === '0x' ||
         dataHash === ZeroHash ||
         dataHash ===
-        '0x0000000000000000000000000000000000000000000000000000000000000000'
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
       ) {
         return null;
       }
@@ -116,15 +114,13 @@ export class ChainStateService extends BlockchainService {
         );
         return null;
       }
-    }
-    else {
+    } else {
       return null;
     }
 
     logger.warn(
       `Cache miss for consensus data for property ${propertyCid}, group ${dataGroupCid}. Falling back to direct contract call.`
     );
-
   }
 
   /**
@@ -151,11 +147,13 @@ export class ChainStateService extends BlockchainService {
 
     // Check if we have already fetched events for this user.
     if (this.userSubmissionsCache.has(normalizedUserAddress)) {
-      const submittedDataHashes =
-        this.userSubmissionsCache.get(normalizedUserAddress)!;
+      const submittedDataHashes = this.userSubmissionsCache.get(
+        normalizedUserAddress
+      )!;
       const hasSubmitted = submittedDataHashes.has(submissionKey);
       logger.debug(
-        `Cache hit for user ${normalizedUserAddress}. User ${hasSubmitted ? 'HAS' : 'HAS NOT'
+        `Cache hit for user ${normalizedUserAddress}. User ${
+          hasSubmitted ? 'HAS' : 'HAS NOT'
         } submitted data for key ${submissionKey}.`
       );
       return hasSubmitted;
@@ -166,18 +164,22 @@ export class ChainStateService extends BlockchainService {
     );
 
     try {
-      const userSubmissions = await this.getUserSubmissions(normalizedUserAddress);
+      const userSubmissions = await this.getUserSubmissions(
+        normalizedUserAddress
+      );
       const hasSubmitted = userSubmissions.has(submissionKey);
 
       logger.technical(
-        `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'
+        `User ${normalizedUserAddress} has${
+          hasSubmitted ? '' : ' not'
         } submitted data for ${propertyCid}/${dataGroupCid}/${dataCid} (after event query & cache population)`
       );
 
       return hasSubmitted;
     } catch (error) {
       logger.error(
-        `Error querying DataSubmitted events for user ${normalizedUserAddress}: ${error instanceof Error ? error.message : String(error)
+        `Error querying DataSubmitted events for user ${normalizedUserAddress}: ${
+          error instanceof Error ? error.message : String(error)
         }`
       );
       // Do not populate cache for user on error.

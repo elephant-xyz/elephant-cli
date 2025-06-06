@@ -119,9 +119,11 @@ describe('ChainStateService', () => {
     const expectedDataCidWithDot = `.${expectedDataCid}`;
 
     it('should return CID from cache when available', async () => {
-      const mockHash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const mockHash =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       // Simulate cache populated with data
-      const cacheKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       chainStateService['consensusDataCache'].set(cacheKey, mockHash);
       mockIsValidCID.mockReturnValue(true);
 
@@ -149,7 +151,8 @@ describe('ChainStateService', () => {
     });
 
     it('should return null when cached hash is empty or zero', async () => {
-      const cacheKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       chainStateService['consensusDataCache'].set(cacheKey, ZeroHash);
 
       const result = await chainStateService.getCurrentDataCid(
@@ -161,8 +164,10 @@ describe('ChainStateService', () => {
     });
 
     it('should return null and log warning when derived CID is invalid', async () => {
-      const mockHash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-      const cacheKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const mockHash =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       chainStateService['consensusDataCache'].set(cacheKey, mockHash);
       mockIsValidCID.mockReturnValue(false);
 
@@ -178,7 +183,6 @@ describe('ChainStateService', () => {
     });
   });
 
-
   describe('hasUserSubmittedData', () => {
     const userAddress = '0x1234567890123456789012345678901234567890';
     const propertyCid = 'propQm123';
@@ -187,9 +191,13 @@ describe('ChainStateService', () => {
     const normalizedUserAddress = getAddress(userAddress);
 
     it('should return true if user has submitted data (from cache)', async () => {
-      const submissionKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const submissionKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const userSubmissions = new Set([submissionKey]);
-      chainStateService['userSubmissionsCache'].set(normalizedUserAddress, userSubmissions);
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -203,7 +211,10 @@ describe('ChainStateService', () => {
 
     it('should return false if user has not submitted data (from cache)', async () => {
       const userSubmissions = new Set<string>(); // Empty set - no submissions
-      chainStateService['userSubmissionsCache'].set(normalizedUserAddress, userSubmissions);
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -218,9 +229,11 @@ describe('ChainStateService', () => {
     it('should query events when no cache exists and return false for no submissions', async () => {
       // Ensure no cache exists
       chainStateService['userSubmissionsCache'].clear();
-      
+
       // Mock getUserSubmissions to return empty set
-      vi.spyOn(chainStateService, 'getUserSubmissions').mockResolvedValue(new Set<string>());
+      vi.spyOn(chainStateService, 'getUserSubmissions').mockResolvedValue(
+        new Set<string>()
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -230,14 +243,18 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBe(false);
-      expect(chainStateService.getUserSubmissions).toHaveBeenCalledWith(normalizedUserAddress);
+      expect(chainStateService.getUserSubmissions).toHaveBeenCalledWith(
+        normalizedUserAddress
+      );
     });
 
     it('should return false and log error on getUserSubmissions failure', async () => {
       chainStateService['userSubmissionsCache'].clear();
-      
+
       const error = new Error('Event query failed');
-      vi.spyOn(chainStateService, 'getUserSubmissions').mockRejectedValue(error);
+      vi.spyOn(chainStateService, 'getUserSubmissions').mockRejectedValue(
+        error
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         userAddress,
@@ -251,9 +268,13 @@ describe('ChainStateService', () => {
 
     it('should handle address normalization correctly', async () => {
       const lowercaseAddress = userAddress.toLowerCase();
-      const submissionKey = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const submissionKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const userSubmissions = new Set([submissionKey]);
-      chainStateService['userSubmissionsCache'].set(normalizedUserAddress, userSubmissions);
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
+      );
 
       const result = await chainStateService.hasUserSubmittedData(
         lowercaseAddress,

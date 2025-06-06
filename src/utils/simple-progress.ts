@@ -16,7 +16,10 @@ export class SimpleProgress {
   private metrics: SimpleProgressMetrics;
   private isRunning: boolean = false;
 
-  constructor(initialPhaseTotal: number, initialPhaseName: string = 'Initializing') {
+  constructor(
+    initialPhaseTotal: number,
+    initialPhaseName: string = 'Initializing'
+  ) {
     this.metrics = {
       processed: 0,
       total: initialPhaseTotal,
@@ -74,7 +77,10 @@ export class SimpleProgress {
     this.update();
   }
 
-  increase(type: 'processed' | 'errors' | 'warnings' | 'skipped' = 'processed', amount: number = 1): void {
+  increase(
+    type: 'processed' | 'errors' | 'warnings' | 'skipped' = 'processed',
+    amount: number = 1
+  ): void {
     this.metrics[type] += amount;
     if (type !== 'processed') {
       this.metrics.processed += amount;

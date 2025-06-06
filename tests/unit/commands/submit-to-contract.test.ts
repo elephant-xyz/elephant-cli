@@ -62,15 +62,13 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       submitAll: vi.fn().mockImplementation(async function* () {
         yield { itemsSubmitted: 3, transactionHash: '0x123' };
       }),
-      groupItemsIntoBatches: vi
-        .fn()
-        .mockImplementation((items: any[]) => {
-          const batches = [];
-          for (let i = 0; i < items.length; i += 2) {
-            batches.push(items.slice(i, i + 2));
-          }
-          return batches;
-        }),
+      groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        const batches = [];
+        for (let i = 0; i < items.length; i += 2) {
+          batches.push(items.slice(i, i + 2));
+        }
+        return batches;
+      }),
     }));
 
     vi.mocked(ChainStateService).mockImplementation(() => ({
@@ -156,7 +154,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
 
     const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
-    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    const mockSubmitAll =
+      MockedTransactionBatcher.mock.results[0].value.submitAll;
     expect(mockSubmitAll).toHaveBeenCalledTimes(1);
   });
 
@@ -201,7 +200,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       })
     );
     const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
-    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    const mockSubmitAll =
+      MockedTransactionBatcher.mock.results[0].value.submitAll;
     const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
   });
@@ -229,7 +229,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     );
 
     const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
-    const mockSubmitAll = MockedTransactionBatcher.mock.results[0].value.submitAll;
+    const mockSubmitAll =
+      MockedTransactionBatcher.mock.results[0].value.submitAll;
     const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
   });

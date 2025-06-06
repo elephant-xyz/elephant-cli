@@ -80,16 +80,12 @@ export function registerSubmitToContractCommand(program: Command) {
         options.gasPrice !== 'auto' &&
         (isNaN(parseFloat(options.gasPrice)) || !isFinite(options.gasPrice))
       ) {
-        logger.error(
-          'Error: Invalid gas-price. Must be a number or "auto".'
-        );
+        logger.error('Error: Invalid gas-price. Must be a number or "auto".');
         process.exit(1);
       }
 
       const gasPrice =
-        options.gasPrice === 'auto'
-          ? 'auto'
-          : parseFloat(options.gasPrice);
+        options.gasPrice === 'auto' ? 'auto' : parseFloat(options.gasPrice);
 
       options.privateKey =
         options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
@@ -317,7 +313,6 @@ export async function handleSubmitToContract(
     await chainStateService.prepopulateConsensusCache();
     logger.success('Consensus data cache populated.');
 
-
     // Check eligibility for each record
     const dataItemsForTransaction: DataItem[] = [];
     const skippedItems: { record: CsvRecord; reason: string }[] = [];
@@ -359,7 +354,10 @@ export async function handleSubmitToContract(
     }
 
     // Submit transactions
-    progressTracker.setPhase('Submitting Transactions', dataItemsForTransaction.length);
+    progressTracker.setPhase(
+      'Submitting Transactions',
+      dataItemsForTransaction.length
+    );
     let submittedTransactionCount = 0;
     let totalItemsSubmitted = 0;
 

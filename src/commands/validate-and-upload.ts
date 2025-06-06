@@ -395,7 +395,10 @@ export async function handleValidateAndUpload(
       );
 
       if (uniqueSchemaCidsArray.length > 0) {
-        const schemaProgress = new SimpleProgress(uniqueSchemaCidsArray.length, 'Fetching Schemas');
+        const schemaProgress = new SimpleProgress(
+          uniqueSchemaCidsArray.length,
+          'Fetching Schemas'
+        );
         schemaProgress.start();
         let prefetchedCount = 0;
         let failedCount = 0;
@@ -500,12 +503,12 @@ export async function handleValidateAndUpload(
     const finalMetrics = progressTracker
       ? progressTracker.getMetrics()
       : {
-        startTime: Date.now(),
-        errors: 0,
-        processed: 0,
-        skipped: 0,
-        total: totalFiles,
-      };
+          startTime: Date.now(),
+          errors: 0,
+          processed: 0,
+          skipped: 0,
+          total: totalFiles,
+        };
 
     console.log(chalk.green('\n✅ Validation and upload process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));

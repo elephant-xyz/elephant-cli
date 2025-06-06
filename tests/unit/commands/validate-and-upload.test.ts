@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  MockInstance,
+} from 'vitest';
 import { promises as fsPromises } from 'fs';
 import * as fs from 'fs';
 import path from 'path';
@@ -11,7 +19,10 @@ import {
 } from '../../../src/commands/validate-and-upload.js';
 import { FileScannerService } from '../../../src/services/file-scanner.service.js';
 import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
-import { JsonValidatorService, ValidationError } from '../../../src/services/json-validator.service.js';
+import {
+  JsonValidatorService,
+  ValidationError,
+} from '../../../src/services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../../../src/services/json-canonicalizer.service.cjs';
 import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { PinataService } from '../../../src/services/pinata.service.js';
@@ -25,12 +36,13 @@ import { ProgressTracker } from '../../../src/utils/progress-tracker.js';
 
 // Define local WalletService interface HERE, before it's used.
 interface WalletService {
-  getWallet: () => { address: string; provider: any; privateKey: string; };
+  getWallet: () => { address: string; provider: any; privateKey: string };
 }
 
 // Mock built-in modules first
 vi.mock('child_process', async () => {
-  const actual = await vi.importActual<typeof import('child_process')>('child_process');
+  const actual =
+    await vi.importActual<typeof import('child_process')>('child_process');
   return {
     ...actual,
     execSync: vi.fn(),
@@ -42,8 +54,16 @@ vi.mock('os', async () => {
   return {
     ...actual,
     cpus: vi.fn(() => [
-      { model: 'Mocked CPU', speed: 2500, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } },
-      { model: 'Mocked CPU', speed: 2500, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } }
+      {
+        model: 'Mocked CPU',
+        speed: 2500,
+        times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 },
+      },
+      {
+        model: 'Mocked CPU',
+        speed: 2500,
+        times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 },
+      },
     ]),
   };
 });
@@ -112,11 +132,13 @@ describe('ValidateAndUploadCommand', () => {
     vi.clearAllMocks();
 
     // Initialize logger spies
-    loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => { });
-    loggerWarnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => { });
-    loggerInfoSpy = vi.spyOn(logger, 'info').mockImplementation(() => { });
-    loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
-    loggerSuccessSpy = vi.spyOn(logger, 'success').mockImplementation(() => { });
+    loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    loggerWarnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    loggerInfoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    loggerTechnicalSpy = vi
+      .spyOn(logger, 'technical')
+      .mockImplementation(() => {});
+    loggerSuccessSpy = vi.spyOn(logger, 'success').mockImplementation(() => {});
 
     vi.mocked(fsPromises.stat).mockResolvedValue({
       isDirectory: () => true,
@@ -176,19 +198,24 @@ describe('ValidateAndUploadCommand', () => {
     } as any;
 
     mockPinataService = {
-      uploadBatch: vi.fn()
-        .mockResolvedValueOnce([{
-          success: true,
-          cid: 'QmUploadedCid1',
-          propertyCid: 'property1',
-          dataGroupCid: 'dataGroup1',
-        }])
-        .mockResolvedValueOnce([{
-          success: true,
-          cid: 'QmUploadedCid2',
-          propertyCid: 'property2',
-          dataGroupCid: 'dataGroup2',
-        }]),
+      uploadBatch: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'QmUploadedCid1',
+            propertyCid: 'property1',
+            dataGroupCid: 'dataGroup1',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'QmUploadedCid2',
+            propertyCid: 'property2',
+            dataGroupCid: 'dataGroup2',
+          },
+        ]),
     } as any;
 
     mockCsvReporterService = {
@@ -242,7 +269,13 @@ describe('ValidateAndUploadCommand', () => {
     });
 
     mockWalletService = {
-      getWallet: vi.fn().mockReturnValue({ address: '0xUserAddress', provider: {}, privateKey: 'testKey' })
+      getWallet: vi
+        .fn()
+        .mockReturnValue({
+          address: '0xUserAddress',
+          provider: {},
+          privateKey: 'testKey',
+        }),
     } as WalletService;
   });
 
@@ -334,7 +367,9 @@ describe('ValidateAndUploadCommand', () => {
   });
 
   it('should skip files not assigned to user', async () => {
-    vi.mocked(mockAssignmentCheckerService.fetchAssignedCids).mockResolvedValue(new Set(['property1']));
+    vi.mocked(mockAssignmentCheckerService.fetchAssignedCids).mockResolvedValue(
+      new Set(['property1'])
+    );
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
@@ -369,16 +404,20 @@ describe('ValidateAndUploadCommand', () => {
     vi.mocked(mockJsonValidatorService.validate)
       .mockResolvedValueOnce({
         valid: false,
-        errors: [{
-          path: 'instance.field',
-          message: 'is required',
-          keyword: 'required',
-          params: { missingProperty: 'field' }
-        } as ValidationError]
+        errors: [
+          {
+            path: 'instance.field',
+            message: 'is required',
+            keyword: 'required',
+            params: { missingProperty: 'field' },
+          } as ValidationError,
+        ],
       })
       .mockResolvedValueOnce({ valid: true });
 
-    vi.mocked(mockJsonValidatorService.getErrorMessage).mockReturnValue('instance.field: is required');
+    vi.mocked(mockJsonValidatorService.getErrorMessage).mockReturnValue(
+      'instance.field: is required'
+    );
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
@@ -398,7 +437,9 @@ describe('ValidateAndUploadCommand', () => {
     expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
       expect.objectContaining({
         propertyCid: 'property1',
-        error: expect.stringContaining('Validation failed: instance.field: is required'),
+        error: expect.stringContaining(
+          'Validation failed: instance.field: is required'
+        ),
       })
     );
 
@@ -410,22 +451,40 @@ describe('ValidateAndUploadCommand', () => {
 
   it('should handle upload failures', async () => {
     const mockFiles: FileEntry[] = [
-      { propertyCid: 'property1', dataGroupCid: 'dataGroup1', filePath: '/test/input/property1/dataGroup1.json' },
-      { propertyCid: 'property2', dataGroupCid: 'dataGroup2', filePath: '/test/input/property2/dataGroup2.json' },
-    ];
-    vi.mocked(mockFileScannerService.scanDirectory).mockImplementation(async function* () { yield mockFiles; });
-    vi.mocked(mockFileScannerService.countTotalFiles).mockResolvedValue(mockFiles.length);
-
-    vi.mocked(mockPinataService.uploadBatch)
-      .mockResolvedValueOnce([{
-        success: true,
-        cid: 'QmUploadedCid1',
+      {
         propertyCid: 'property1',
         dataGroupCid: 'dataGroup1',
-      }])
+        filePath: '/test/input/property1/dataGroup1.json',
+      },
+      {
+        propertyCid: 'property2',
+        dataGroupCid: 'dataGroup2',
+        filePath: '/test/input/property2/dataGroup2.json',
+      },
+    ];
+    vi.mocked(mockFileScannerService.scanDirectory).mockImplementation(
+      async function* () {
+        yield mockFiles;
+      }
+    );
+    vi.mocked(mockFileScannerService.countTotalFiles).mockResolvedValue(
+      mockFiles.length
+    );
+
+    vi.mocked(mockPinataService.uploadBatch)
+      .mockResolvedValueOnce([
+        {
+          success: true,
+          cid: 'QmUploadedCid1',
+          propertyCid: 'property1',
+          dataGroupCid: 'dataGroup1',
+        },
+      ])
       .mockRejectedValueOnce(new Error('Pinata upload failed intentionally'));
 
-    const writeFileSyncSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => { });
+    const writeFileSyncSpy = vi
+      .spyOn(fs, 'writeFileSync')
+      .mockImplementation(() => {});
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
@@ -442,13 +501,18 @@ describe('ValidateAndUploadCommand', () => {
 
     await handleValidateAndUpload(mockOptions, serviceOverrides);
 
-
-    const mainCsvCall = writeFileSyncSpy.mock.calls.find(call => call[0] === mockOptions.outputCsv);
+    const mainCsvCall = writeFileSyncSpy.mock.calls.find(
+      (call) => call[0] === mockOptions.outputCsv
+    );
     expect(mainCsvCall).toBeDefined();
     if (mainCsvCall) {
       const csvContent = mainCsvCall[1] as string;
-      expect(csvContent).toContain('property1,dataGroup1,QmUploadedCid1,"/test/input/property1/dataGroup1.json",');
-      expect(csvContent).not.toContain('property2,dataGroup2,Qm[A-Za-z0-9]{44},');
+      expect(csvContent).toContain(
+        'property1,dataGroup1,QmUploadedCid1,"/test/input/property1/dataGroup1.json",'
+      );
+      expect(csvContent).not.toContain(
+        'property2,dataGroup2,Qm[A-Za-z0-9]{44},'
+      );
     }
 
     writeFileSyncSpy.mockRestore();
@@ -461,8 +525,15 @@ describe('ValidateAndUploadCommand', () => {
     }) as any);
 
     const specificMockFileScannerService = {
-      scanDirectory: async function* () { yield* []; },
-      validateStructure: vi.fn().mockResolvedValue({ isValid: false, message: 'Custom invalid structure message' }),
+      scanDirectory: async function* () {
+        yield* [];
+      },
+      validateStructure: vi
+        .fn()
+        .mockResolvedValue({
+          isValid: false,
+          message: 'Custom invalid structure message',
+        }),
       countTotalFiles: vi.fn().mockResolvedValue(0),
     } as any;
 
@@ -481,10 +552,15 @@ describe('ValidateAndUploadCommand', () => {
     };
 
     await expect(
-      handleValidateAndUpload({ ...mockOptions, inputDir: '/invalid/structure' }, serviceOverrides)
+      handleValidateAndUpload(
+        { ...mockOptions, inputDir: '/invalid/structure' },
+        serviceOverrides
+      )
     ).rejects.toThrowError(EXIT_ERROR_MESSAGE);
 
-    expect(specificMockFileScannerService.validateStructure).toHaveBeenCalledWith('/invalid/structure');
+    expect(
+      specificMockFileScannerService.validateStructure
+    ).toHaveBeenCalledWith('/invalid/structure');
     expect(loggerWarnSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
@@ -502,11 +578,22 @@ describe('ValidateAndUploadCommand', () => {
       vi.mocked(execSync).mockReset();
       vi.mocked(cpus).mockReset();
 
-      vi.mocked(fsPromises.stat).mockResolvedValue({ isDirectory: () => true } as any);
-      vi.mocked(mockFileScannerService.validateStructure).mockResolvedValue({ isValid: true, errors: [] });
+      vi.mocked(fsPromises.stat).mockResolvedValue({
+        isDirectory: () => true,
+      } as any);
+      vi.mocked(mockFileScannerService.validateStructure).mockResolvedValue({
+        isValid: true,
+        errors: [],
+      });
       vi.mocked(mockFileScannerService.countTotalFiles).mockResolvedValue(0);
-      vi.mocked(mockFileScannerService.scanDirectory).mockImplementation(async function* () { yield []; });
-      vi.mocked(mockFileScannerService.getAllDataGroupCids).mockResolvedValue(new Set());
+      vi.mocked(mockFileScannerService.scanDirectory).mockImplementation(
+        async function* () {
+          yield [];
+        }
+      );
+      vi.mocked(mockFileScannerService.getAllDataGroupCids).mockResolvedValue(
+        new Set()
+      );
 
       vi.mocked(mockCsvReporterService.initialize).mockResolvedValue(undefined);
       vi.mocked(mockCsvReporterService.finalize).mockResolvedValue({
@@ -544,87 +631,164 @@ describe('ValidateAndUploadCommand', () => {
     it('should use ulimit on Unix-like systems if available', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' });
       vi.mocked(execSync).mockReturnValue('2048');
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: undefined }, getMinimalOverrides());
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: undefined },
+        getMinimalOverrides()
+      );
 
       expect(execSync).toHaveBeenCalledWith('ulimit -n', expect.any(Object));
       const expectedCap = Math.floor(2048 * 0.75);
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: ${expectedCap}`));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: ${expectedCap}`
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use fallback on Unix-like systems if ulimit fails', async () => {
       Object.defineProperty(process, 'platform', { value: 'darwin' });
-      vi.mocked(execSync).mockImplementation(() => { throw new Error('ulimit failed'); });
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      vi.mocked(execSync).mockImplementation(() => {
+        throw new Error('ulimit failed');
+      });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: undefined }, getMinimalOverrides());
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: undefined },
+        getMinimalOverrides()
+      );
 
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: ${FALLBACK_CONCURRENCY}`));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: ${FALLBACK_CONCURRENCY}`
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use CPU count heuristic on Windows if no user value is provided', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' });
       vi.mocked(cpus).mockReturnValue(new Array(4) as any);
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: undefined }, getMinimalOverrides());
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: undefined },
+        getMinimalOverrides()
+      );
 
       expect(cpus).toHaveBeenCalled();
       const expectedCap = 4 * WINDOWS_DEFAULT_FACTOR;
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: ${expectedCap}`));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: ${expectedCap}`
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use user-specified concurrency if provided, capped by OS/heuristic limit (Unix)', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' });
       vi.mocked(execSync).mockReturnValue('100');
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: 150 }, getMinimalOverrides());
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: 75`));
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: 150 },
+        getMinimalOverrides()
+      );
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: 75`
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use user-specified concurrency if provided and within OS/heuristic limit (Windows)', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' });
       vi.mocked(cpus).mockReturnValue(new Array(8) as any);
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: 20 }, getMinimalOverrides());
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: 20`));
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: 20 },
+        getMinimalOverrides()
+      );
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: 20`
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use user-specified concurrency on Windows if OS heuristic is not used (e.g. user value provided and less than heuristic)', async () => {
       // Correctly mock process.platform as a property
-      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        configurable: true,
+      });
       vi.mocked(os.cpus).mockReturnValue(new Array(8) as any); // Mock 8 CPUs for heuristic
 
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: 5 }, getMinimalOverrides());
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: 5 },
+        getMinimalOverrides()
+      );
 
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining('Effective max concurrent local processing tasks: 5'));
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining('User specified: 5'));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Effective max concurrent local processing tasks: 5'
+        )
+      );
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining('User specified: 5')
+      );
       // Corrected assertion: OS/heuristic limit is not applicable here because user specified a value.
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining('OS/heuristic limit not determined or applicable'));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'OS/heuristic limit not determined or applicable'
+        )
+      );
       loggerTechnicalSpy.mockRestore();
     });
 
     it('should use FALLBACK_CONCURRENCY if user specifies nothing and all OS detection fails (e.g. ulimit errors on Unix)', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' });
-      vi.mocked(execSync).mockImplementation(() => { throw new Error('Command failed'); });
-      const loggerTechnicalSpy = vi.spyOn(logger, 'technical').mockImplementation(() => { });
+      vi.mocked(execSync).mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+      const loggerTechnicalSpy = vi
+        .spyOn(logger, 'technical')
+        .mockImplementation(() => {});
 
-      await handleValidateAndUpload({ ...mockOptions, maxConcurrentUploads: undefined }, getMinimalOverrides());
+      await handleValidateAndUpload(
+        { ...mockOptions, maxConcurrentUploads: undefined },
+        getMinimalOverrides()
+      );
 
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining(`Effective max concurrent local processing tasks: ${FALLBACK_CONCURRENCY}`));
-      expect(loggerTechnicalSpy).toHaveBeenCalledWith(expect.stringContaining('Using fallback value'));
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Effective max concurrent local processing tasks: ${FALLBACK_CONCURRENCY}`
+        )
+      );
+      expect(loggerTechnicalSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Using fallback value')
+      );
       loggerTechnicalSpy.mockRestore();
     });
-
   });
 });

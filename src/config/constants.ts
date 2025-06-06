@@ -72,65 +72,65 @@ export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
     type: 'function',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "propertyHash",
-        "type": "bytes32"
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'propertyHash',
+        type: 'bytes32',
       },
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "dataGroupHash",
-        "type": "bytes32"
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'dataGroupHash',
+        type: 'bytes32',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "submitter",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'submitter',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "dataHash",
-        "type": "bytes32"
-      }
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'dataHash',
+        type: 'bytes32',
+      },
     ],
-    "name": "DataSubmitted",
-    "type": "event"
+    name: 'DataSubmitted',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "propertyHash",
-        "type": "bytes32"
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'propertyHash',
+        type: 'bytes32',
       },
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "dataGroupHash",
-        "type": "bytes32"
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'dataGroupHash',
+        type: 'bytes32',
       },
       {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "dataHash",
-        "type": "bytes32"
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'dataHash',
+        type: 'bytes32',
       },
       {
-        "indexed": false,
-        "internalType": "address[]",
-        "name": "oracles",
-        "type": "address[]"
-      }
+        indexed: false,
+        internalType: 'address[]',
+        name: 'oracles',
+        type: 'address[]',
+      },
     ],
-    "name": "ConsensusReached",
-    "type": "event"
-  }
+    name: 'ConsensusReached',
+    type: 'event',
+  },
 ] as const;
