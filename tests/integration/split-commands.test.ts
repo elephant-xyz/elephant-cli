@@ -54,12 +54,14 @@ describe('Split Commands Integration Tests', () => {
   describe('validate-and-upload command', () => {
     it('should validate files and generate CSV in dry-run mode', async () => {
       const privateKey = '0x' + '1'.repeat(64); // Dummy private key
+      const pinataJwt = 'dummy-jwt'; // Dummy Pinata JWT
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-        `--private-key ${privateKey} ` +
-        `--output-csv ${csvOutputPath} ` +
-        `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--pinata-jwt ${pinataJwt} ` +
+          `--output-csv ${csvOutputPath} ` +
+          `--dry-run`
       );
 
       expect(stderr).toBe('');
@@ -96,12 +98,14 @@ describe('Split Commands Integration Tests', () => {
       );
 
       const privateKey = '0x' + '1'.repeat(64);
+      const pinataJwt = 'dummy-jwt';
 
       try {
         await execAsync(
           `node ${cliPath} validate-and-upload ${invalidDir} ` +
-          `--private-key ${privateKey} ` +
-          `--dry-run`
+            `--private-key ${privateKey} ` +
+            `--pinata-jwt ${pinataJwt} ` +
+            `--dry-run`
         );
         expect.fail('Command should have failed');
       } catch (error: any) {
@@ -140,8 +144,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${path.join(outputDir, 'test-input.csv')} ` +
-        `--private-key ${privateKey} ` +
-        `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--dry-run`
       );
 
       // Check that the command completed successfully
@@ -158,8 +162,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       try {
         await execAsync(
           `node ${cliPath} submit-to-contract ${missingCsv} ` +
-          `--private-key ${privateKey} ` +
-          `--dry-run`
+            `--private-key ${privateKey} ` +
+            `--dry-run`
         );
         expect.fail('Command should have failed');
       } catch (error: any) {
@@ -182,8 +186,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${emptyCsvPath} ` +
-        `--private-key ${privateKey} ` +
-        `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--dry-run`
       );
 
       expect(stderr).toBe('');
@@ -197,14 +201,16 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
   describe('End-to-end workflow', () => {
     it('should complete full workflow: validate-and-upload then submit-to-contract', async () => {
       const privateKey = '0x' + '1'.repeat(64);
+      const pinataJwt = 'dummy-jwt';
       const workflowCsvPath = path.join(outputDir, 'workflow-results.csv');
 
       // Step 1: Run validate-and-upload
       const { stdout: stdout1 } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-        `--private-key ${privateKey} ` +
-        `--output-csv ${workflowCsvPath} ` +
-        `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--pinata-jwt ${pinataJwt} ` +
+          `--output-csv ${workflowCsvPath} ` +
+          `--dry-run`
       );
 
       expect(stdout1).toContain('Validation and upload process finished');
@@ -219,8 +225,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       // Step 2: Run submit-to-contract with the generated CSV
       const { stdout: stdout2 } = await execAsync(
         `node ${cliPath} submit-to-contract ${workflowCsvPath} ` +
-        `--private-key ${privateKey} ` +
-        `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--dry-run`
       );
 
       expect(stdout2).toContain('Contract submission process finished');
