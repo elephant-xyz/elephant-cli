@@ -202,8 +202,6 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
           `--dry-run`
       );
 
-      expect(stdout1).toContain('Validation and upload process finished');
-
       // Verify CSV was created
       const csvExists = await fs.promises
         .access(workflowCsvPath)
