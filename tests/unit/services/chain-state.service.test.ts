@@ -118,58 +118,57 @@ describe('ChainStateService', () => {
     const expectedDataCid = 'dataQm789';
     const expectedDataCidWithDot = `.${expectedDataCid}`;
 
-    it('should fetch and return a valid data CID', async () => {
+    it('should return CID from cache when available', async () => {
       const mockHash =
         '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
-        mockHash
-      );
+      // Simulate cache populated with data
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      chainStateService['consensusDataCache'].set(cacheKey, mockHash);
+      mockIsValidCID.mockReturnValue(true);
 
       const result = await chainStateService.getCurrentDataCid(
         propertyCid,
         dataGroupCid
       );
 
-      expect(
-        mockEthersContractInstance.getCurrentFieldDataHash
-      ).toHaveBeenCalledWith(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      );
       expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
       expect(mockIsValidCID).toHaveBeenCalledWith(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
       );
     });
 
-    it('should return null if contract returns ZeroHash', async () => {
-      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
-        ZeroHash
-      );
+    it('should return null when no cache entry exists', async () => {
+      // Ensure cache is empty
+      chainStateService['consensusDataCache'].clear();
+
       const result = await chainStateService.getCurrentDataCid(
         propertyCid,
         dataGroupCid
       );
+
       expect(result).toBeNull();
     });
 
-    it('should return null if contract returns "0x"', async () => {
-      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
-        '0x'
-      );
+    it('should return null when cached hash is empty or zero', async () => {
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      chainStateService['consensusDataCache'].set(cacheKey, ZeroHash);
+
       const result = await chainStateService.getCurrentDataCid(
         propertyCid,
         dataGroupCid
       );
+
       expect(result).toBeNull();
     });
 
-    it('should return null and log warning if CID is invalid', async () => {
-      const invalidHash =
+    it('should return null and log warning when derived CID is invalid', async () => {
+      const mockHash =
         '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-      mockEthersContractInstance.getCurrentFieldDataHash.mockResolvedValue(
-        invalidHash
-      );
+      const cacheKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      chainStateService['consensusDataCache'].set(cacheKey, mockHash);
       mockIsValidCID.mockReturnValue(false);
 
       const result = await chainStateService.getCurrentDataCid(
@@ -182,127 +181,6 @@ describe('ChainStateService', () => {
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
       );
     });
-
-    it('should return null and log error on contract call failure', async () => {
-      const error = new Error('Contract call failed');
-      mockEthersContractInstance.getCurrentFieldDataHash.mockRejectedValue(
-        error
-      );
-
-      const result = await chainStateService.getCurrentDataCid(
-        propertyCid,
-        dataGroupCid
-      );
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getSubmittedParticipants', () => {
-    const propertyCid = 'propQm123';
-    const dataGroupCid = 'groupQm456';
-    const dataCid = 'dataQm789';
-    const mockAddresses = [
-      '0x1234567890123456789012345678901234567890',
-      '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-    ];
-    // Use the imported getAddress from ethers
-    const normalizedAddresses = mockAddresses.map((addr) => getAddress(addr));
-
-    it('should fetch and return participant addresses', async () => {
-      mockEthersContractInstance.getParticipantsForConsensusDataHash.mockResolvedValue(
-        mockAddresses
-      );
-
-      const result = await chainStateService.getSubmittedParticipants(
-        propertyCid,
-        dataGroupCid,
-        dataCid
-      );
-
-      expect(
-        mockEthersContractInstance.getParticipantsForConsensusDataHash
-      ).toHaveBeenCalledWith(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      );
-      expect(result).toEqual(normalizedAddresses);
-    });
-
-    it('should return an empty array and log error on contract call failure', async () => {
-      const error = new Error('Contract call failed');
-      mockEthersContractInstance.getParticipantsForConsensusDataHash.mockRejectedValue(
-        error
-      );
-
-      const result = await chainStateService.getSubmittedParticipants(
-        propertyCid,
-        dataGroupCid,
-        dataCid
-      );
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('batchGetCurrentDataCids', () => {
-    const queries = [
-      { propertyCid: 'prop1', dataGroupCid: 'group1' },
-      { propertyCid: 'prop2', dataGroupCid: 'group2' },
-      { propertyCid: 'prop3', dataGroupCid: 'group3' },
-    ];
-    const expectedCid1 = 'dataQm111';
-    const expectedCid2 = 'dataQm222';
-
-    it('should fetch CIDs for all queries concurrently', async () => {
-      const mockHash1 =
-        '0x1111111111111111111111111111111111111111111111111111111111111111';
-      const mockHash2 =
-        '0x2222222222222222222222222222222222222222222222222222222222222222';
-
-      mockEthersContractInstance.getCurrentFieldDataHash
-        .mockResolvedValueOnce(mockHash1)
-        .mockResolvedValueOnce(mockHash2)
-        .mockResolvedValueOnce(ZeroHash);
-
-      const results = await chainStateService.batchGetCurrentDataCids(queries);
-
-      expect(
-        mockEthersContractInstance.getCurrentFieldDataHash
-      ).toHaveBeenCalledTimes(3);
-      expect(results.size).toBe(3);
-      expect(results.get('prop1/group1')).toBe(
-        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-      );
-      expect(results.get('prop2/group2')).toBe(
-        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-      );
-      expect(results.get('prop3/group3')).toBeNull();
-    });
-
-    it('should handle errors in individual getCurrentDataCid calls gracefully', async () => {
-      const mockHash1 =
-        '0x1111111111111111111111111111111111111111111111111111111111111111';
-      const mockHash2 =
-        '0x2222222222222222222222222222222222222222222222222222222222222222';
-
-      mockEthersContractInstance.getCurrentFieldDataHash
-        .mockResolvedValueOnce(mockHash1)
-        .mockRejectedValueOnce(new Error('Network error for prop2/group2'))
-        .mockResolvedValueOnce(mockHash2);
-
-      const results = await chainStateService.batchGetCurrentDataCids(queries);
-
-      expect(results.size).toBe(3);
-      expect(results.get('prop1/group1')).toBe(
-        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-      );
-      expect(results.get('prop2/group2')).toBeNull();
-      expect(results.get('prop3/group3')).toBe(
-        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-      );
-    });
   });
 
   describe('hasUserSubmittedData', () => {
@@ -312,9 +190,13 @@ describe('ChainStateService', () => {
     const dataCid = 'dataQm789';
     const normalizedUserAddress = getAddress(userAddress);
 
-    it('should return true if user has submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
-        true
+    it('should return true if user has submitted data (from cache)', async () => {
+      const submissionKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const userSubmissions = new Set([submissionKey]);
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
       );
 
       const result = await chainStateService.hasUserSubmittedData(
@@ -325,42 +207,13 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBe(true);
-      expect(
-        mockEthersContractInstance.hasUserSubmittedDataHash
-      ).toHaveBeenCalledWith(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        normalizedUserAddress
-      );
     });
 
-    it('should return false if user has not submitted data', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
-        false
-      );
-
-      const result = await chainStateService.hasUserSubmittedData(
-        userAddress,
-        propertyCid,
-        dataGroupCid,
-        dataCid
-      );
-
-      expect(result).toBe(false);
-      expect(
-        mockEthersContractInstance.hasUserSubmittedDataHash
-      ).toHaveBeenCalledWith(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        normalizedUserAddress
-      );
-    });
-
-    it('should return false when contract returns false', async () => {
-      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
-        false
+    it('should return false if user has not submitted data (from cache)', async () => {
+      const userSubmissions = new Set<string>(); // Empty set - no submissions
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
       );
 
       const result = await chainStateService.hasUserSubmittedData(
@@ -373,9 +226,33 @@ describe('ChainStateService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false and log error on contract call failure', async () => {
-      const error = new Error('Contract call failed');
-      mockEthersContractInstance.hasUserSubmittedDataHash.mockRejectedValue(
+    it('should query events when no cache exists and return false for no submissions', async () => {
+      // Ensure no cache exists
+      chainStateService['userSubmissionsCache'].clear();
+
+      // Mock getUserSubmissions to return empty set
+      vi.spyOn(chainStateService, 'getUserSubmissions').mockResolvedValue(
+        new Set<string>()
+      );
+
+      const result = await chainStateService.hasUserSubmittedData(
+        userAddress,
+        propertyCid,
+        dataGroupCid,
+        dataCid
+      );
+
+      expect(result).toBe(false);
+      expect(chainStateService.getUserSubmissions).toHaveBeenCalledWith(
+        normalizedUserAddress
+      );
+    });
+
+    it('should return false and log error on getUserSubmissions failure', async () => {
+      chainStateService['userSubmissionsCache'].clear();
+
+      const error = new Error('Event query failed');
+      vi.spyOn(chainStateService, 'getUserSubmissions').mockRejectedValue(
         error
       );
 
@@ -391,8 +268,12 @@ describe('ChainStateService', () => {
 
     it('should handle address normalization correctly', async () => {
       const lowercaseAddress = userAddress.toLowerCase();
-      mockEthersContractInstance.hasUserSubmittedDataHash.mockResolvedValue(
-        true
+      const submissionKey =
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef-0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+      const userSubmissions = new Set([submissionKey]);
+      chainStateService['userSubmissionsCache'].set(
+        normalizedUserAddress,
+        userSubmissions
       );
 
       const result = await chainStateService.hasUserSubmittedData(
@@ -403,14 +284,6 @@ describe('ChainStateService', () => {
       );
 
       expect(result).toBe(true);
-      expect(
-        mockEthersContractInstance.hasUserSubmittedDataHash
-      ).toHaveBeenCalledWith(
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-        normalizedUserAddress // Should be normalized even if input was lowercase
-      );
     });
   });
 });

@@ -9,6 +9,9 @@ The Elephant Network CLI is a TypeScript-based command-line tool that:
 - Queries the Polygon blockchain for OracleAssigned events
 - Decodes IPFS CIDs from blockchain event data
 - Downloads assigned files from IPFS gateways
+- Validates JSON data against schemas
+- Uploads validated data to IPFS via Pinata
+- Submits data hashes to smart contracts
 - Provides progress tracking and error handling
 
 ## Key Technical Details
@@ -32,11 +35,65 @@ const cid = decoded.startsWith('.') ? decoded.substring(1) : decoded;
 2. **Concurrent Downloads**: Uses a queue system with max 3 concurrent downloads
 3. **Error Handling**: Specific error messages for RPC, IPFS, and validation failures
 
+### Gas Price Handling
+
+The `submit-to-contract` command includes a `--gas-price` option that accepts a numeric value in Gwei (e.g., `35.5`) or the string `'auto'`.
+
+1.  **CLI Input**: The option is defined in `src/commands/submit-to-contract.ts` with a default of `30`. Input is validated to be a number or `'auto'`.
+
+2.  **Service Layer**: The `gasPrice` value is passed to the `TransactionBatcherService` constructor.
+
+3.  **Transaction Creation**: Inside `TransactionBatcherService.submitBatch`, the `gasPrice` is used to construct the transaction options:
+    *   If `gasPrice` is a number, it's converted to Wei and set as the `gasPrice` in the transaction overrides. This forces a legacy-style transaction with a fixed gas price.
+    *   If `gasPrice` is `'auto'`, no gas-related options are set in the overrides, allowing `ethers.js` to automatically determine the optimal gas price from the RPC provider (usually using EIP-1559 fee mechanism if available).
+
+```typescript
+// src/services/transaction-batcher.service.ts
+const txOptions: Overrides = {
+  gasLimit:
+    estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)),
+};
+
+if (this.gasPrice !== 'auto') {
+  txOptions.gasPrice = ethers.parseUnits(
+    this.gasPrice.toString(),
+    'gwei'
+  );
+}
+//...
+const txResponse: TransactionResponse = await this.contract.submitBatch(
+  preparedBatch,
+  txOptions
+);
+```
+
 ### Testing Information
 
 - **Test Elephant Address**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
 - **Test Block with Event**: `71875870`
 - **Test CID**: `QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU`
+
+## New Split Workflow Commands
+
+The file submission process has been split into two commands for better control:
+
+### validate-and-upload Command
+
+This command:
+1. Validates file structure in the input directory
+2. Confirms file assignments to the user
+3. Uses filenames as Schema CIDs to validate JSON data
+4. Canonicalizes validated data
+5. Uploads canonicalized files to IPFS via Pinata
+6. Generates a CSV file with upload results
+
+### submit-to-contract Command
+
+This command:
+1. Reads the CSV file from validate-and-upload
+2. Verifies consensus data differs from submission
+3. Checks user hasn't previously submitted same data
+4. Submits data hashes to the smart contract in batches
 
 ## Common Tasks for AI Assistants
 
@@ -100,20 +157,45 @@ npm run build
 # Development mode (auto-rebuild)
 npm run dev
 
-# Test the CLI
-./bin/elephant-cli list-assignments --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
+# Test the CLI - List assignments
+./bin/elephant-cli list-assignments --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
+
+# Test the CLI - Validate and upload
+./bin/elephant-cli validate-and-upload ./test-data \
+  --private-key "0x..." \
+  --pinata-jwt "..." \
+  --output-csv results.csv \
+  --dry-run
+
+# Test the CLI - Submit to contract  
+./bin/elephant-cli submit-to-contract results.csv \
+  --private-key "0x..." \
+  --gas-price 50 \
+  --dry-run
 
 # Clean build artifacts
 npm run clean
+
+# Run tests
+npm test
+
+# Run specific test files
+npm test tests/unit/commands/validate-and-upload.test.ts
+npm test tests/integration/split-commands.test.ts
 ```
 
 ## File Structure Context
 
 - `src/index.ts` - CLI entry point and command definitions
-- `src/commands/list-assignments.ts` - Main command logic
+- `src/commands/list-assignments.ts` - List assignments command
+- `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
+- `src/commands/submit-to-contract.ts` - Submit to blockchain command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
+- `src/services/pinata.service.ts` - Pinata upload service
+- `src/services/chain-state.service.ts` - Chain state queries
+- `src/services/transaction-batcher.service.ts` - Batch transaction handling
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations

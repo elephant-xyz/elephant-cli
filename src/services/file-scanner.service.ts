@@ -210,4 +210,48 @@ export class FileScannerService {
 
     return totalFiles;
   }
+
+  async getAllDataGroupCids(directoryPath: string): Promise<Set<string>> {
+    const dataGroupCids = new Set<string>();
+
+    try {
+      const propertyDirs = await readdir(directoryPath, {
+        withFileTypes: true,
+      });
+
+      for (const propertyDir of propertyDirs) {
+        if (!propertyDir.isDirectory()) {
+          continue;
+        }
+
+        const propertyDirPath = join(directoryPath, propertyDir.name);
+
+        try {
+          const files = await readdir(propertyDirPath, { withFileTypes: true });
+
+          for (const file of files) {
+            if (!file.isFile() || !file.name.endsWith('.json')) {
+              continue;
+            }
+            const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
+            if (this.isValidCid(dataGroupCid)) {
+              // Ensure it's a valid CID before adding
+              dataGroupCids.add(dataGroupCid);
+            }
+          }
+        } catch (error) {
+          // Log or handle error for a specific property directory, but continue
+          console.warn(
+            `Warning: Could not scan property directory ${propertyDirPath} for data group CIDs: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+    } catch (error) {
+      // Handle error for the root directoryPath
+      throw new Error(
+        `Failed to scan directory ${directoryPath} for data group CIDs: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    return dataGroupCids;
+  }
 }

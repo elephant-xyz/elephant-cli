@@ -23,3 +23,4 @@ export const DEFAULT_CONTRACT_ABI = [
 
 export const DEFAULT_BLOCK_RANGE = 2000;
 export const BLOCKS_PER_DAY = 42_200;
+export const DEFAULT_FROM_BLOCK = 72310501;

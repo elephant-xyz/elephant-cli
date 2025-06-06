@@ -46,11 +46,11 @@ jobs:
       - name: Check code formatting
         run: npm run format:check
 
-      - name: Run tests with coverage
-        run: npm run test:coverage
-
       - name: Build project
         run: npm run build
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
 
   security-scan:
     name: Security Scan
@@ -189,3 +189,4 @@ jobs:
         run: npm publish --registry=https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

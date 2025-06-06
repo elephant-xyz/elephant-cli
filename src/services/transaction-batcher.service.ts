@@ -4,6 +4,7 @@ import {
   Contract,
   TransactionResponse,
   TransactionReceipt,
+  Overrides,
 } from 'ethers';
 import { DataItem, BatchSubmissionResult } from '../types/contract.types.js';
 import {
@@ -22,12 +23,14 @@ export class TransactionBatcherService {
   private contract: Contract;
   private config: SubmitConfig;
   private nonce: number | undefined;
+  private gasPrice: string | number;
 
   constructor(
     rpcUrl: string,
     submitContractAddress: string,
     privateKey: string,
-    configOverrides: Partial<SubmitConfig> = {}
+    configOverrides: Partial<SubmitConfig> = {},
+    gasPrice: string | number = 'auto'
   ) {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     this.wallet = new Wallet(privateKey, provider);
@@ -37,6 +40,7 @@ export class TransactionBatcherService {
       this.wallet
     );
     this.config = { ...DEFAULT_SUBMIT_CONFIG, ...configOverrides };
+    this.gasPrice = gasPrice;
 
     logger.technical(
       `TransactionBatcherService initialized for address: ${this.wallet.address}`
@@ -44,6 +48,7 @@ export class TransactionBatcherService {
     logger.technical(
       `Interacting with submit contract at: ${submitContractAddress}`
     );
+    logger.technical(`Gas price setting: ${this.gasPrice}`);
   }
 
   /**
@@ -135,11 +140,20 @@ export class TransactionBatcherService {
           ].estimateGas(preparedBatch);
         logger.info(`Estimated gas for batch: ${estimatedGas.toString()}`);
 
-        const txOptions = {
+        const txOptions: Overrides = {
           gasLimit:
             estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)), // Add 20% buffer
-          // nonce: currentNonce - 1, // Use the nonce fetched for this attempt
         };
+
+        if (this.gasPrice !== 'auto') {
+          txOptions.gasPrice = ethers.parseUnits(
+            this.gasPrice.toString(),
+            'gwei'
+          );
+          logger.info(`Using fixed gas price: ${this.gasPrice} Gwei`);
+        } else {
+          logger.info('Using automatic gas price from provider.');
+        }
 
         const txResponse: TransactionResponse = await this.contract[
           SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA
@@ -148,9 +162,7 @@ export class TransactionBatcherService {
           `Transaction sent: ${txResponse.hash}, waiting for confirmation...`
         );
 
-        const receipt: TransactionReceipt | null = await txResponse.wait(
-          this.config.chainQueryTimeout
-        ); // Wait for 1 confirmation by default
+        const receipt: TransactionReceipt | null = await txResponse.wait(1);
 
         if (!receipt) {
           throw new Error(

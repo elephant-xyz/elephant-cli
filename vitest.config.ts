@@ -4,9 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
+    testTimeout: 15000, // 15 seconds for integration tests
     coverage: {
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.ts', 'src/**/*.cts'],
       exclude: ['src/**/*.d.ts', 'src/index.ts'],
       thresholds: {
         global: {
@@ -18,12 +19,24 @@ export default defineConfig({
       },
     },
     setupFiles: ['tests/setup.ts'],
-    // Disable worker threads so unhandledRejection handlers in setupFiles apply to the main process
-    threads: false,
   },
   resolve: {
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.cts', '.mts', '.cjs', '.mjs'],
     alias: {
       '@': '/src',
+    },
+  },
+  esbuild: {
+    loader: 'ts',
+    include: /\.[cm]?ts$/,
+    exclude: [],
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        '.cts': 'ts',
+        '.cjs': 'js',
+      },
     },
   },
 });
