@@ -292,6 +292,8 @@ export async function handleSubmitToContract(
     const dataItemsForTransaction: DataItem[] = [];
     const skippedItems: { record: CsvRecord; reason: string }[] = [];
 
+    await chainStateService.getUserSubmissions(userAddress);
+
     const processingPromises = records.map((record) =>
       processRecord(
         record,
@@ -340,11 +342,13 @@ export async function handleSubmitToContract(
           );
           submittedTransactionCount++;
           totalItemsSubmitted += batchResult.itemsSubmitted;
+          progressTracker.increase('processed', batchResult.itemsSubmitted);
         }
         logger.success('All transaction batches submitted successfully.');
       } catch (error) {
         const errorMsg = `Error during transaction submission: ${error instanceof Error ? error.message : String(error)}`;
         logger.error(errorMsg);
+        progressTracker.increment('errors');
         await csvReporterService.logError({
           propertyCid: 'N/A',
           dataGroupCid: 'N/A',

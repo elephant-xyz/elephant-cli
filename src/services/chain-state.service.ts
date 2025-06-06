@@ -1,4 +1,4 @@
-import { Contract, JsonRpcProvider, ZeroHash, getAddress } from 'ethers';
+import { Contract, JsonRpcProvider, ZeroHash, getAddress, Log } from 'ethers';
 import { BlockchainService } from './blockchain.service.js';
 import { ABI } from '../types/index.js';
 import {
@@ -11,6 +11,7 @@ import {
   deriveCIDFromHash,
 } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
+import { DEFAULT_BLOCK_RANGE, DEFAULT_FROM_BLOCK } from '../utils/constants.js';
 
 interface DataQuery {
   propertyCid: string;
@@ -19,6 +20,7 @@ interface DataQuery {
 
 export class ChainStateService extends BlockchainService {
   private submitContract: Contract;
+  private userSubmissionsCache: Map<string, Set<string>> = new Map();
 
   constructor(
     rpcUrl: string,
@@ -60,7 +62,7 @@ export class ChainStateService extends BlockchainService {
         returnedHash === '0x' ||
         returnedHash === ZeroHash ||
         returnedHash ===
-          '0x0000000000000000000000000000000000000000000000000000000000000000'
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
       ) {
         logger.debug(
           `No data hash found on-chain for property ${propertyCid}, group ${dataGroupCid}`
@@ -79,7 +81,13 @@ export class ChainStateService extends BlockchainService {
         );
         return null;
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      if (error instanceof AggregateError) {
+        logger.error(
+          `Error fetching current data CID for ${propertyCid}/${dataGroupCid}: ${error.errors.map((e) => e.message).join(', ')}`
+        );
+        return null;
+      }
       logger.error(
         `Error fetching current data CID for ${propertyCid}/${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -87,78 +95,16 @@ export class ChainStateService extends BlockchainService {
     }
   }
 
-  /**
-   * Gets the list of participants who have submitted data for a given CIDs combination.
-   * @param propertyCid The property CID.
-   * @param dataGroupCid The data group CID.
-   * @param dataCid The data CID.
-   * @returns An array of participant addresses.
-   */
-  async getSubmittedParticipants(
-    propertyCid: string,
-    dataGroupCid: string,
-    dataCid: string
-  ): Promise<string[]> {
-    try {
-      // Convert CIDs to hashes for contract call
-      const propertyHash = extractHashFromCID(propertyCid);
-      const dataGroupHash = extractHashFromCID(dataGroupCid);
-      const dataHash = extractHashFromCID(dataCid);
 
-      const participants: string[] = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.GET_PARTICIPANTS_FOR_CONSENSUS_DATA_HASH
-      ](propertyHash, dataGroupHash, dataHash);
-      logger.technical(
-        `Fetched submitted participants for ${propertyCid}/${dataGroupCid}/${dataCid}. Submitted participants: ${participants.join(', ')}`
-      );
-
-      return participants.map((addr) => getAddress(addr));
-    } catch (error) {
-      logger.error(
-        `Error fetching submitted participants for ${propertyCid}/${dataGroupCid}/${dataCid}: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return [];
-    }
-  }
 
   /**
-   * Batch gets current data CIDs for multiple items.
-   * @param items Array of DataQuery objects.
-   * @returns A map where keys are combined CIDs (propertyCid/dataGroupCid) and values are data CIDs.
-   */
-  async batchGetCurrentDataCids(
-    items: DataQuery[]
-  ): Promise<Map<string, string | null>> {
-    const results = new Map<string, string | null>();
-
-    const promises = items.map(async (item) => {
-      const dataCid = await this.getCurrentDataCid(
-        item.propertyCid,
-        item.dataGroupCid
-      );
-      const key = `${item.propertyCid}/${item.dataGroupCid}`;
-      results.set(key, dataCid);
-    });
-
-    try {
-      await Promise.all(promises);
-    } catch (error) {
-      logger.error(
-        `Error in batchGetCurrentDataCids: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return results;
-    }
-
-    return results;
-  }
-
-  /**
-   * Checks if a specific user has already submitted data for the given CIDs combination.
+   * Checks if a specific user has already submitted data for the given CIDs combination
+   * by querying all historical 'DataSubmitted' events for that user once and caching the results.
    * @param userAddress The user's wallet address.
    * @param propertyCid The property CID.
    * @param dataGroupCid The data group CID.
    * @param dataCid The data CID.
-   * @returns True if the user has already submitted this data.
+   * @returns True if the user has already submitted this data according to event logs, false otherwise or on error.
    */
   async hasUserSubmittedData(
     userAddress: string,
@@ -166,30 +112,118 @@ export class ChainStateService extends BlockchainService {
     dataGroupCid: string,
     dataCid: string
   ): Promise<boolean> {
-    try {
-      // Convert CIDs to hashes for contract call
-      const propertyHash = extractHashFromCID(propertyCid);
-      const dataGroupHash = extractHashFromCID(dataGroupCid);
-      const dataHash = extractHashFromCID(dataCid);
-      const normalizedUserAddress = getAddress(userAddress);
+    const propertyHash = extractHashFromCID(propertyCid);
+    const dataGroupHash = extractHashFromCID(dataGroupCid);
+    const dataHashToFind = extractHashFromCID(dataCid);
+    const normalizedUserAddress = getAddress(userAddress);
 
-      const hasSubmitted: boolean = await this.submitContract[
-        SUBMIT_CONTRACT_METHODS.HAS_USER_SUBMITTED_DATA_HASH
-      ](propertyHash, dataGroupHash, dataHash, normalizedUserAddress);
+    const submissionKey = `${propertyHash}-${dataGroupHash}-${dataHashToFind}`;
 
-      logger.technical(
-        `Hash values - propertyHash: ${propertyHash}, dataGroupHash: ${dataGroupHash}, dataHash: ${dataHash}, userAddress: ${normalizedUserAddress}`
+    // Check if we have already fetched events for this user.
+    if (this.userSubmissionsCache.has(normalizedUserAddress)) {
+      const submittedDataHashes =
+        this.userSubmissionsCache.get(normalizedUserAddress)!;
+      const hasSubmitted = submittedDataHashes.has(submissionKey);
+      logger.debug(
+        `Cache hit for user ${normalizedUserAddress}. User ${hasSubmitted ? 'HAS' : 'HAS NOT'
+        } submitted data for key ${submissionKey}.`
       );
+      return hasSubmitted;
+    }
+
+    logger.debug(
+      `Cache miss for user ${normalizedUserAddress}. Querying all DataSubmitted events for this user.`
+    );
+
+    try {
+      const userSubmissions = await this.getUserSubmissions(normalizedUserAddress);
+      const hasSubmitted = userSubmissions.has(submissionKey);
+
       logger.technical(
-        `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'} submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}`
+        `User ${normalizedUserAddress} has${hasSubmitted ? '' : ' not'
+        } submitted data for ${propertyCid}/${dataGroupCid}/${dataCid} (after event query & cache population)`
       );
 
       return hasSubmitted;
     } catch (error) {
       logger.error(
-        `Error checking if user ${userAddress} has submitted data for ${propertyCid}/${dataGroupCid}/${dataCid}: ${error instanceof Error ? error.message : String(error)}`
+        `Error querying DataSubmitted events for user ${normalizedUserAddress}: ${error instanceof Error ? error.message : String(error)
+        }`
       );
-      return false; // Default to false to allow submission if check fails
+      // Do not populate cache for user on error.
+      return false; // Default to false on error.
     }
+  }
+
+  async getUserSubmissions(userAddress: string): Promise<Set<string>> {
+    const normalizedUserAddress = getAddress(userAddress);
+    if (this.userSubmissionsCache.has(normalizedUserAddress)) {
+      return this.userSubmissionsCache.get(normalizedUserAddress)!;
+    }
+    // Event: DataSubmitted(bytes32 indexed propertyHash, bytes32 indexed dataGroupHash, address indexed submitter, bytes32 dataHash)
+    // We filter by submitter address only. The indexed parameters are propertyHash, dataGroupHash, submitter.
+    // We pass null for the filters we want to ignore.
+    const eventFilter = this.submitContract.filters.DataSubmitted(
+      null, // propertyHash
+      null, // dataGroupHash
+      normalizedUserAddress // submitter
+    );
+    const MAX_BLOCK_RANGE = DEFAULT_BLOCK_RANGE;
+    const finalToBlock = await this.getCurrentBlock();
+    let events: Log[] = [];
+
+    logger.technical(
+      `Querying DataSubmitted events for user: ${normalizedUserAddress} from block ${DEFAULT_FROM_BLOCK} to ${finalToBlock} in chunks of ${MAX_BLOCK_RANGE} blocks.`
+    );
+    for (
+      let currentFromBlock = DEFAULT_FROM_BLOCK;
+      currentFromBlock <= finalToBlock;
+      currentFromBlock += MAX_BLOCK_RANGE
+    ) {
+      const currentToBlock = Math.min(
+        currentFromBlock + MAX_BLOCK_RANGE - 1,
+        finalToBlock
+      );
+      logger.debug(`Querying chunk: ${currentFromBlock} - ${currentToBlock}`);
+      try {
+        const eventsChunkRaw = await this.submitContract.queryFilter(
+          eventFilter,
+          currentFromBlock,
+          currentToBlock
+        );
+        events = events.concat(eventsChunkRaw);
+      } catch (error) {
+        logger.error(
+          `Error fetching events for block range ${currentFromBlock}-${currentToBlock}: ${error}`
+        );
+        throw error;
+      }
+    }
+    logger.technical(
+      `Found ${events.length} total DataSubmitted events for ${normalizedUserAddress}.`
+    );
+
+    const userSubmissions = new Set<string>();
+    for (const event of events) {
+      const args = (event as any).args;
+      if (args && args.propertyHash && args.dataGroupHash && args.dataHash) {
+        userSubmissions.add(
+          `${args.propertyHash}-${args.dataGroupHash}-${args.dataHash}`
+        );
+      } else {
+        logger.warn(
+          `Event for ${normalizedUserAddress} found but missing required hash arguments: ${JSON.stringify(
+            args
+          )}`
+        );
+      }
+    }
+
+    this.userSubmissionsCache.set(normalizedUserAddress, userSubmissions);
+    logger.debug(
+      `Cached ${userSubmissions.size} unique submissions for user ${normalizedUserAddress}.`
+    );
+
+    return userSubmissions;
   }
 }

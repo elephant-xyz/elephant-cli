@@ -63,7 +63,7 @@ export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
 
   // Timeout configuration
   uploadTimeout: 30 * 1000, // 30 seconds
-  chainQueryTimeout: 10 * 1000, // 10 seconds
+  chainQueryTimeout: 60 * 1000, // 60 seconds
 
   // Output configuration
   errorCsvPath: './submit_errors.csv',

@@ -138,7 +138,6 @@ export class TransactionBatcherService {
         const txOptions = {
           gasLimit:
             estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)), // Add 20% buffer
-          // nonce: currentNonce - 1, // Use the nonce fetched for this attempt
         };
 
         const txResponse: TransactionResponse = await this.contract[
@@ -149,8 +148,9 @@ export class TransactionBatcherService {
         );
 
         const receipt: TransactionReceipt | null = await txResponse.wait(
+          1, // Wait for 1 confirmation by default
           this.config.chainQueryTimeout
-        ); // Wait for 1 confirmation by default
+        );
 
         if (!receipt) {
           throw new Error(

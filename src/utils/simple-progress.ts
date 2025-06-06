@@ -74,6 +74,14 @@ export class SimpleProgress {
     this.update();
   }
 
+  increase(type: 'processed' | 'errors' | 'warnings' | 'skipped' = 'processed', amount: number = 1): void {
+    this.metrics[type] += amount;
+    if (type !== 'processed') {
+      this.metrics.processed += amount;
+    }
+    this.update();
+  }
+
   private update(): void {
     if (this.isRunning) {
       this.bar.update(this.metrics.processed, this.getPayload());
