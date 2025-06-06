@@ -1,6 +1,6 @@
 export const DEFAULT_CONTRACT_ADDRESS =
   '0xD28285598597a5a213AebD116E9A093Ed44b127e';
-export const DEFAULT_RPC_URL = 'https://rpc.ankr.com/polygon';
+export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
 export const DEFAULT_IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
 export const MAX_CONCURRENT_DOWNLOADS = 25;
 export const BLOCKS_PER_QUERY = 10000;
