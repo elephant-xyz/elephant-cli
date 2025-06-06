@@ -51,12 +51,17 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
   beforeEach(() => {
     vi.clearAllMocks();
 
+    // Mock process.exit to prevent actual process termination
+    vi.spyOn(process, 'exit').mockImplementation((code) => {
+      throw new Error(`process.exit(${code})`);
+    });
+
     vi.mocked(fs.readFileSync).mockReturnValue(mockCsvContent);
 
     vi.mocked(TransactionBatcherService).mockImplementation(() => ({
       submitAll: vi.fn().mockImplementation(async function* () {
-        yield { itemsSubmitted: 3 };
-      })(),
+        yield { itemsSubmitted: 3, transactionHash: '0x123' };
+      }),
       groupItemsIntoBatches: vi
         .fn()
         .mockImplementation((items: any[]) => {
@@ -72,6 +77,7 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       getCurrentDataCid: vi.fn().mockResolvedValue(''),
       hasUserSubmittedData: vi.fn().mockResolvedValue(false),
       getUserSubmissions: vi.fn().mockResolvedValue(new Set<string>()),
+      prepopulateConsensusCache: vi.fn().mockResolvedValue(undefined),
     }));
 
     mockChainStateService = new (vi.mocked(ChainStateService))('', '', '', []);
@@ -88,6 +94,7 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       start: vi.fn(),
       stop: vi.fn(),
       increment: vi.fn(),
+      increase: vi.fn(),
       getMetrics: vi.fn().mockReturnValue({
         processed: 3,
         skipped: 0,

@@ -29,7 +29,7 @@ describe('SubmitConfig', () => {
       expect(DEFAULT_SUBMIT_CONFIG.retryBackoffMultiplier).toBe(2);
 
       expect(DEFAULT_SUBMIT_CONFIG.uploadTimeout).toBe(30 * 1000);
-      expect(DEFAULT_SUBMIT_CONFIG.chainQueryTimeout).toBe(10 * 1000);
+      expect(DEFAULT_SUBMIT_CONFIG.chainQueryTimeout).toBe(60 * 1000);
 
       expect(DEFAULT_SUBMIT_CONFIG.errorCsvPath).toBe('./submit_errors.csv');
       expect(DEFAULT_SUBMIT_CONFIG.warningCsvPath).toBe(

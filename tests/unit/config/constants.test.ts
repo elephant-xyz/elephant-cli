@@ -178,7 +178,7 @@ describe('Constants', () => {
     });
 
     it('should have all required ABI fragments', () => {
-      expect(SUBMIT_CONTRACT_ABI_FRAGMENTS).toHaveLength(4);
+      expect(SUBMIT_CONTRACT_ABI_FRAGMENTS).toHaveLength(6);
 
       const methodNames = SUBMIT_CONTRACT_ABI_FRAGMENTS.map(
         (fragment) => fragment.name

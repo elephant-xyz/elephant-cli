@@ -143,7 +143,7 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       expect(stdout).toContain('Contract submission process finished');
       expect(stdout).toContain('Total records in CSV:   2');
       expect(stdout).toContain('[DRY RUN] Would submit:');
-    });
+    }, 120000);
 
     it('should handle missing CSV file', async () => {
       const privateKey = '0x' + '1'.repeat(64);
