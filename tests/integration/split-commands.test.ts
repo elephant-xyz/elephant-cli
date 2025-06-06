@@ -57,10 +57,15 @@ describe('Split Commands Integration Tests', () => {
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-          `--private-key ${privateKey} ` +
-          `--output-csv ${csvOutputPath} ` +
-          `--dry-run`
+        `--private-key ${privateKey} ` +
+        `--output-csv ${csvOutputPath} ` +
+        `--dry-run`
       );
+
+      expect(stderr).toBe('');
+      expect(stdout).toContain('Validation and upload process finished');
+      // Since we're in dry run and schemas can't be fetched, expect errors
+      expect(stdout).toContain('Processing/upload errors: 2');
 
       // Check that CSV was created
       const csvExists = await fs.promises
@@ -95,8 +100,8 @@ describe('Split Commands Integration Tests', () => {
       try {
         await execAsync(
           `node ${cliPath} validate-and-upload ${invalidDir} ` +
-            `--private-key ${privateKey} ` +
-            `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--dry-run`
         );
         expect.fail('Command should have failed');
       } catch (error: any) {
@@ -135,8 +140,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${path.join(outputDir, 'test-input.csv')} ` +
-          `--private-key ${privateKey} ` +
-          `--dry-run`
+        `--private-key ${privateKey} ` +
+        `--dry-run`
       );
 
       // Check that the command completed successfully
@@ -153,8 +158,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       try {
         await execAsync(
           `node ${cliPath} submit-to-contract ${missingCsv} ` +
-            `--private-key ${privateKey} ` +
-            `--dry-run`
+          `--private-key ${privateKey} ` +
+          `--dry-run`
         );
         expect.fail('Command should have failed');
       } catch (error: any) {
@@ -177,8 +182,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${emptyCsvPath} ` +
-          `--private-key ${privateKey} ` +
-          `--dry-run`
+        `--private-key ${privateKey} ` +
+        `--dry-run`
       );
 
       expect(stderr).toBe('');
@@ -197,10 +202,12 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       // Step 1: Run validate-and-upload
       const { stdout: stdout1 } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-          `--private-key ${privateKey} ` +
-          `--output-csv ${workflowCsvPath} ` +
-          `--dry-run`
+        `--private-key ${privateKey} ` +
+        `--output-csv ${workflowCsvPath} ` +
+        `--dry-run`
       );
+
+      expect(stdout1).toContain('Validation and upload process finished');
 
       // Verify CSV was created
       const csvExists = await fs.promises
@@ -212,8 +219,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       // Step 2: Run submit-to-contract with the generated CSV
       const { stdout: stdout2 } = await execAsync(
         `node ${cliPath} submit-to-contract ${workflowCsvPath} ` +
-          `--private-key ${privateKey} ` +
-          `--dry-run`
+        `--private-key ${privateKey} ` +
+        `--dry-run`
       );
 
       expect(stdout2).toContain('Contract submission process finished');
