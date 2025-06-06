@@ -4,9 +4,11 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import 'dotenv/config';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const RPC_URL = process.env.RPC_URL || 'https://rpc.therpc.io/polygon';
 
 describe('Split Commands Integration Tests', () => {
   const testDataDir = path.join(__dirname, 'test-data');
@@ -145,7 +147,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${path.join(outputDir, 'test-input.csv')} ` +
           `--private-key ${privateKey} ` +
-          `--dry-run`
+          `--dry-run` +
+          `--rpc ${RPC_URL}`
       );
 
       // Check that the command completed successfully
@@ -210,7 +213,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
           `--private-key ${privateKey} ` +
           `--pinata-jwt ${pinataJwt} ` +
           `--output-csv ${workflowCsvPath} ` +
-          `--dry-run`
+          `--dry-run` +
+          `--rpc ${RPC_URL}`
       );
 
       expect(stdout1).toContain('Validation and upload process finished');
