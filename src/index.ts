@@ -5,9 +5,9 @@ import { Command } from 'commander';
 // Load environment variables from .env file in current working directory
 config({ path: '.env' });
 import {
-  DEFAULT_CONTRACT_ADDRESS,
   DEFAULT_RPC_URL,
   DEFAULT_IPFS_GATEWAY,
+  DEFAULT_ASSIGNMENTS_CONTRACT_ADDRESS,
 } from './config/constants.js';
 import { listAssignments } from './commands/list-assignments.js';
 // import { registerSubmitFilesCommand } from './commands/submit-files-optimized.js';
@@ -29,7 +29,7 @@ program
   .option(
     '-c, --contract <address>',
     'Smart contract address',
-    DEFAULT_CONTRACT_ADDRESS
+    DEFAULT_ASSIGNMENTS_CONTRACT_ADDRESS
   )
   .option('-r, --rpc <url>', 'RPC URL', DEFAULT_RPC_URL)
   .option('-g, --gateway <url>', 'IPFS gateway URL', DEFAULT_IPFS_GATEWAY)
