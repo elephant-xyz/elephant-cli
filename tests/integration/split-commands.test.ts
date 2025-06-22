@@ -60,7 +60,6 @@ describe('Split Commands Integration Tests', () => {
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-          `--private-key ${privateKey} ` +
           `--pinata-jwt ${pinataJwt} ` +
           `--output-csv ${csvOutputPath} ` +
           `--dry-run`
@@ -105,7 +104,6 @@ describe('Split Commands Integration Tests', () => {
       try {
         await execAsync(
           `node ${cliPath} validate-and-upload ${invalidDir} ` +
-            `--private-key ${privateKey} ` +
             `--pinata-jwt ${pinataJwt} ` +
             `--dry-run`
         );
@@ -212,7 +210,6 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       // Step 1: Run validate-and-upload
       const { stdout: stdout1 } = await execAsync(
         `node ${cliPath} validate-and-upload ${testDataDir} ` +
-          `--private-key ${privateKey} ` +
           `--pinata-jwt ${pinataJwt} ` +
           `--output-csv ${workflowCsvPath} ` +
           `--dry-run `

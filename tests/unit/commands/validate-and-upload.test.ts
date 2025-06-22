@@ -28,7 +28,6 @@ import { CidCalculatorService } from '../../../src/services/cid-calculator.servi
 import { PinataService } from '../../../src/services/pinata.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
-import { AssignmentCheckerService } from '../../../src/services/assignment-checker.service.js';
 import { IPFSService } from '../../../src/services/ipfs.service.js';
 import { ReportSummary, FileEntry } from '../../../src/types/submit.types.js';
 import { DEFAULT_IPFS_GATEWAY } from '../../../src/config/constants.js';
@@ -99,15 +98,10 @@ vi.stubGlobal('process', { ...process, exit: mockExit });
 
 describe('ValidateAndUploadCommand', () => {
   const mockOptions: ValidateAndUploadCommandOptions = {
-    rpcUrl: 'https://test-rpc.com',
-    contractAddress: '0x1234567890123456789012345678901234567890',
-    privateKey:
-      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     pinataJwt: 'test-jwt',
     inputDir: '/test/input',
     outputCsv: 'test-output.csv',
     maxConcurrentUploads: 5,
-    fromBlock: 1000,
     dryRun: false,
   };
 
@@ -119,7 +113,6 @@ describe('ValidateAndUploadCommand', () => {
   let mockPinataService: PinataService;
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
-  let mockAssignmentCheckerService: AssignmentCheckerService;
   let mockIpfsService: IPFSService;
   let mockWalletService: WalletService;
   let loggerErrorSpy: MockInstance;
@@ -251,12 +244,6 @@ describe('ValidateAndUploadCommand', () => {
       }),
     } as any;
 
-    mockAssignmentCheckerService = {
-      fetchAssignedCids: vi
-        .fn()
-        .mockResolvedValue(new Set(['property1', 'property2'])),
-    } as any;
-
     mockIpfsService = {} as any;
 
     vi.mocked(fs.readFileSync).mockImplementation((filePath: any) => {
@@ -292,7 +279,6 @@ describe('ValidateAndUploadCommand', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
     };
 
     await handleValidateAndUpload(mockOptions, serviceOverrides);
@@ -302,11 +288,6 @@ describe('ValidateAndUploadCommand', () => {
     );
     expect(mockFileScannerService.countTotalFiles).toHaveBeenCalledWith(
       '/test/input'
-    );
-
-    expect(mockAssignmentCheckerService.fetchAssignedCids).toHaveBeenCalledWith(
-      '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0',
-      1000
     );
 
     expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
@@ -351,7 +332,6 @@ describe('ValidateAndUploadCommand', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
     };
 
     await handleValidateAndUpload(dryRunOptions, serviceOverrides);
@@ -361,40 +341,6 @@ describe('ValidateAndUploadCommand', () => {
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       'test-output.csv',
       expect.stringContaining('QmTestCid12345')
-    );
-  });
-
-  it('should skip files not assigned to user', async () => {
-    vi.mocked(mockAssignmentCheckerService.fetchAssignedCids).mockResolvedValue(
-      new Set(['property1'])
-    );
-
-    const serviceOverrides = {
-      fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
-      schemaCacheService: mockSchemaCacheService,
-      jsonValidatorService: mockJsonValidatorService,
-      jsonCanonicalizerService: mockJsonCanonicalizerService,
-      cidCalculatorService: mockCidCalculatorService,
-      pinataService: mockPinataService,
-      csvReporterService: mockCsvReporterService,
-      progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
-    };
-
-    await handleValidateAndUpload(mockOptions, serviceOverrides);
-
-    expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(1);
-    expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(1);
-    expect(mockPinataService.uploadBatch).toHaveBeenCalledWith([
-      expect.objectContaining({ propertyCid: 'property1' }),
-    ]);
-
-    expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
-      expect.objectContaining({
-        propertyCid: 'property2',
-        reason: expect.stringContaining('not assigned to your address'),
-      })
     );
   });
 
@@ -427,7 +373,6 @@ describe('ValidateAndUploadCommand', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
     };
 
     await handleValidateAndUpload(mockOptions, serviceOverrides);
@@ -494,7 +439,6 @@ describe('ValidateAndUploadCommand', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
     };
 
     await handleValidateAndUpload(mockOptions, serviceOverrides);
@@ -543,8 +487,6 @@ describe('ValidateAndUploadCommand', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      assignmentCheckerService: mockAssignmentCheckerService,
-      ...(mockOptions.privateKey ? { walletService: mockWalletService } : {}),
     };
 
     await expect(
@@ -619,7 +561,6 @@ describe('ValidateAndUploadCommand', () => {
       jsonCanonicalizerService: mockJsonCanonicalizerService,
       cidCalculatorService: mockCidCalculatorService,
       pinataService: mockPinataService,
-      assignmentCheckerService: mockAssignmentCheckerService,
       ipfsServiceForSchemas: mockIpfsService,
       progressTracker: mockProgressTracker,
     });

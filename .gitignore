@@ -62,3 +62,7 @@ test_data
 mapped_33901
 upload-results.csv
 output_33901.csv
+demo_data/
+tmp/
+tests/integration/test-data/
+tests/integration/test-output/

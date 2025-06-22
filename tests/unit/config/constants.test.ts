@@ -15,7 +15,7 @@ describe('Constants', () => {
   describe('existing constants', () => {
     it('should have valid contract address', () => {
       expect(DEFAULT_CONTRACT_ADDRESS).toBe(
-        '0xD28285598597a5a213AebD116E9A093Ed44b127e'
+        '0x525E59e4DE2B51f52B9e30745a513E407652AB7c'
       );
       expect(DEFAULT_CONTRACT_ADDRESS).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });

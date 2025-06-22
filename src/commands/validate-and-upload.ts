@@ -5,11 +5,7 @@ import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import { execSync } from 'child_process';
 import * as os from 'os';
-import {
-  DEFAULT_RPC_URL,
-  DEFAULT_CONTRACT_ADDRESS,
-  DEFAULT_IPFS_GATEWAY,
-} from '../config/constants.js';
+import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
@@ -25,19 +21,12 @@ import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
-import { AssignmentCheckerService } from '../services/assignment-checker.service.js';
-import { Wallet } from 'ethers';
-import { DEFAULT_FROM_BLOCK } from '../utils/constants.js';
 
 export interface ValidateAndUploadCommandOptions {
-  rpcUrl: string;
-  contractAddress: string;
-  privateKey: string;
   pinataJwt: string;
   inputDir: string;
   outputCsv: string;
   maxConcurrentUploads?: number;
-  fromBlock?: number;
   dryRun: boolean;
 }
 
@@ -60,28 +49,9 @@ export function registerValidateAndUploadCommand(program: Command) {
       'Pinata JWT for IPFS uploads. (Or set PINATA_JWT env var)'
     )
     .option(
-      '-k, --private-key <key>',
-      'Private key for checking assignments. (Or set ELEPHANT_PRIVATE_KEY env var)'
-    )
-    .option(
       '-o, --output-csv <path>',
       'Output CSV file path',
       'upload-results.csv'
-    )
-    .option(
-      '--from-block <number>',
-      'Starting block number for assignment check',
-      DEFAULT_FROM_BLOCK.toString()
-    )
-    .option(
-      '--rpc-url <url>',
-      'RPC URL for the blockchain network.',
-      process.env.RPC_URL || DEFAULT_RPC_URL
-    )
-    .option(
-      '--contract-address <address>',
-      'Address of the submit smart contract.',
-      process.env.SUBMIT_CONTRACT_ADDRESS || DEFAULT_CONTRACT_ADDRESS
     )
     .option(
       '--max-concurrent-uploads <number>',
@@ -90,16 +60,8 @@ export function registerValidateAndUploadCommand(program: Command) {
     )
     .option('--dry-run', 'Perform validation without uploading to IPFS.', false)
     .action(async (inputDir, options) => {
-      options.privateKey =
-        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
-      if (!options.privateKey) {
-        logger.error(
-          'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.'
-        );
-        process.exit(1);
-      }
       if (!options.pinataJwt && !options.dryRun) {
         logger.error(
           'Error: Pinata JWT is required for uploads. Provide via --pinata-jwt or PINATA_JWT env var.'
@@ -109,7 +71,6 @@ export function registerValidateAndUploadCommand(program: Command) {
 
       options.maxConcurrentUploads =
         parseInt(options.maxConcurrentUploads, 10) || undefined;
-      options.fromBlock = parseInt(options.fromBlock, 10) || DEFAULT_FROM_BLOCK;
 
       const commandOptions: ValidateAndUploadCommandOptions = {
         ...options,
@@ -130,7 +91,6 @@ export interface ValidateAndUploadServiceOverrides {
   pinataService?: PinataService;
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
-  assignmentCheckerService?: AssignmentCheckerService;
 }
 
 export async function handleValidateAndUpload(
@@ -146,8 +106,6 @@ export async function handleValidateAndUpload(
 
   logger.technical(`Input directory: ${options.inputDir}`);
   logger.technical(`Output CSV: ${options.outputCsv}`);
-  logger.technical(`RPC URL: ${options.rpcUrl}`);
-  logger.technical(`Contract: ${options.contractAddress}`);
 
   const FALLBACK_LOCAL_CONCURRENCY = 10;
   const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
@@ -281,14 +239,6 @@ export async function handleValidateAndUpload(
     serviceOverrides.pinataService ??
     new PinataService(options.pinataJwt, undefined, 18);
 
-  const wallet = new Wallet(options.privateKey);
-  const userAddress = wallet.address;
-  logger.technical(`User wallet address: ${userAddress}`);
-
-  const assignmentCheckerService =
-    serviceOverrides.assignmentCheckerService ??
-    new AssignmentCheckerService(options.rpcUrl, options.contractAddress);
-
   let progressTracker: SimpleProgress | undefined =
     serviceOverrides.progressTracker;
   const uploadRecords: UploadRecord[] = [];
@@ -349,40 +299,7 @@ export async function handleValidateAndUpload(
     // progressTracker.setPhase('Initializing'); // Set in constructor
     progressTracker.start();
 
-    // Phase 1: Checking Assignments (1 step)
-    progressTracker.setPhase('Checking Assignments', 1); // Treat as a single step for overall progress
-    let assignedCids: Set<string> = new Set();
-    let assignmentFilteringEnabled = false;
-
-    if (options.dryRun) {
-      logger.info('[DRY RUN] Skipping assignment check');
-    } else {
-      try {
-        assignedCids = await assignmentCheckerService.fetchAssignedCids(
-          userAddress,
-          options.fromBlock
-        );
-        assignmentFilteringEnabled = true;
-        const assignedCount = assignedCids.size;
-        logger.success(
-          `Found ${assignedCount} assigned CID${assignedCount === 1 ? '' : 's'} for your address`
-        );
-        if (assignedCount === 0) {
-          logger.warn(
-            'No CIDs assigned to your address; all files will be skipped.'
-          );
-        }
-      } catch (error) {
-        logger.warn(
-          'Could not fetch assignments; proceeding without assignment filtering'
-        );
-        logger.debug(
-          `Assignment check failed: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    }
-
-    // Phase 2: Pre-fetching Schemas (1 step for the main progress bar)
+    // Phase 1: Pre-fetching Schemas (1 step for the main progress bar)
     progressTracker.setPhase('Pre-fetching Schemas', 1); // Treat as a single step for overall progress
     logger.info('Discovering all unique schema CIDs...');
     try {
@@ -442,7 +359,7 @@ export async function handleValidateAndUpload(
       // Decide if this is a fatal error. For now, log and continue, as individual file processing will still attempt schema loading.
     }
 
-    // Phase 3: Processing Files (totalFiles steps)
+    // Phase 2: Processing Files (totalFiles steps)
     progressTracker.setPhase('Processing Files', totalFiles);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
@@ -469,9 +386,6 @@ export async function handleValidateAndUpload(
             processFileAndGetUploadPromise(
               fileEntry,
               servicesForProcessing, // Use renamed services object
-              userAddress,
-              assignedCids,
-              assignmentFilteringEnabled,
               options,
               uploadRecords
             )
@@ -515,7 +429,7 @@ export async function handleValidateAndUpload(
     console.log(
       `  Total files scanned:    ${finalMetrics.total || totalFiles}`
     ); // Use total from metrics or scanned
-    console.log(`  Files skipped (assignment): ${finalMetrics.skipped || 0}`);
+    console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
     console.log(`  Processing/upload errors: ${finalMetrics.errors || 0}`);
 
     if (!options.dryRun) {
@@ -621,25 +535,9 @@ async function processFileAndGetUploadPromise(
     progressTracker: SimpleProgress;
     pinataService: PinataService;
   },
-  userAddress: string,
-  assignedCids: Set<string>,
-  assignmentFilteringEnabled: boolean,
   options: ValidateAndUploadCommandOptions,
   uploadRecords: UploadRecord[]
 ): Promise<void> {
-  if (assignmentFilteringEnabled && !assignedCids.has(fileEntry.propertyCid)) {
-    const reason = `File skipped - propertyCid ${fileEntry.propertyCid} is not assigned to your address ${userAddress}`;
-    await services.csvReporterService.logWarning({
-      propertyCid: fileEntry.propertyCid,
-      dataGroupCid: fileEntry.dataGroupCid,
-      filePath: fileEntry.filePath,
-      reason,
-      timestamp: new Date().toISOString(),
-    });
-    services.progressTracker.increment('skipped');
-    return;
-  }
-
   let jsonData;
   try {
     const fileContentStr = await fsPromises.readFile(
