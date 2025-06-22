@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.3.0...v1.3.1) (2025-06-22)
+
+
+### Bug Fixes
+
+* remove assignement check from the submit commands ([#23](https://github.com/elephant-xyz/elephant-cli/issues/23)) ([e7e8c6a](https://github.com/elephant-xyz/elephant-cli/commit/e7e8c6a80baa1beb27b914c7337d87882abafc81))
+
 # [1.3.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.2.4...v1.3.0) (2025-06-06)
 
 
