@@ -244,7 +244,6 @@ describe('ValidateAndUploadCommand', () => {
       }),
     } as any;
 
-
     mockIpfsService = {} as any;
 
     vi.mocked(fs.readFileSync).mockImplementation((filePath: any) => {
@@ -290,7 +289,6 @@ describe('ValidateAndUploadCommand', () => {
     expect(mockFileScannerService.countTotalFiles).toHaveBeenCalledWith(
       '/test/input'
     );
-
 
     expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
@@ -345,7 +343,6 @@ describe('ValidateAndUploadCommand', () => {
       expect.stringContaining('QmTestCid12345')
     );
   });
-
 
   it('should handle validation errors', async () => {
     vi.mocked(mockJsonValidatorService.validate)

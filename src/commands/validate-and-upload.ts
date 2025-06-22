@@ -5,11 +5,7 @@ import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import { execSync } from 'child_process';
 import * as os from 'os';
-import {
-  DEFAULT_RPC_URL,
-  DEFAULT_CONTRACT_ADDRESS,
-  DEFAULT_IPFS_GATEWAY,
-} from '../config/constants.js';
+import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
@@ -542,7 +538,6 @@ async function processFileAndGetUploadPromise(
   options: ValidateAndUploadCommandOptions,
   uploadRecords: UploadRecord[]
 ): Promise<void> {
-
   let jsonData;
   try {
     const fileContentStr = await fsPromises.readFile(
