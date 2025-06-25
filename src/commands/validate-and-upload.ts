@@ -326,20 +326,10 @@ export async function handleValidateAndUpload(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
-            const schema = await schemaCacheService.getSchema(schemaCid);
-            if (schema) {
-              logger.debug(
-                `Successfully pre-fetched and cached schema ${schemaCid}`
-              );
-              prefetchedCount++;
-              fetchSuccess = true;
-            } else {
-              logger.warn(
-                `Could not pre-fetch schema ${schemaCid}. It will be attempted again during file processing.`
-              );
-              failedCount++;
-            }
+            await schemaCacheService.getSchema(schemaCid);
+            prefetchedCount++;
           } catch (error) {
+            fetchSuccess = false;
             logger.warn(
               `Error pre-fetching schema ${schemaCid}: ${error instanceof Error ? error.message : String(error)}. It will be attempted again during file processing.`
             );
@@ -577,9 +567,9 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
-    const validationResult = await services.jsonValidatorService.validate(
+    const validationResult = services.jsonValidatorService.validate(
       jsonData,
-      schema as JSONSchema
+      schema
     );
 
     if (!validationResult.valid) {
