@@ -20,7 +20,7 @@ export class JsonValidatorService {
   private validators: Map<string, ValidateFunction> = new Map();
 
   constructor() {
-    this.ajv = new Ajv();
+    this.ajv = new Ajv({ allErrors: true });
     addFormats(this.ajv);
     this.ajv.addFormat('cid', {
       type: 'string',
