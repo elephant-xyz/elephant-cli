@@ -1,6 +1,4 @@
 import { IPFSService } from './ipfs.service.js';
-import { Ajv, ValidateFunction } from 'ajv';
-import { CID } from 'multiformats';
 
 export interface JSONSchema {
   $schema?: string;
@@ -12,9 +10,8 @@ export interface JSONSchema {
 }
 
 export class SchemaCacheService {
-  private cache: Map<string, ValidateFunction>;
+  private cache: Map<string, JSONSchema>;
   private readonly maxSize: number;
-  private readonly ajv: Ajv;
 
   constructor(
     private ipfsService: IPFSService,
@@ -22,29 +19,17 @@ export class SchemaCacheService {
   ) {
     this.cache = new Map();
     this.maxSize = maxSize;
-    this.ajv = new Ajv();
-    this.ajv.addFormat('cid', {
-      type: 'string',
-      validate: (value: string) => {
-        try {
-          CID.parse(value);
-        } catch (error) {
-          return false;
-        }
-        return true;
-      },
-    });
   }
 
   has(cid: string): boolean {
     return this.cache.has(cid);
   }
 
-  get(cid: string): ValidateFunction | undefined {
+  get(cid: string): JSONSchema | undefined {
     return this.cache.get(cid);
   }
 
-  private put(cid: string, schema: ValidateFunction): void {
+  private put(cid: string, schema: JSONSchema): void {
     // Simple eviction: clear cache when it gets too big
     if (this.cache.size >= this.maxSize) {
       this.cache.clear();
@@ -53,36 +38,24 @@ export class SchemaCacheService {
     this.cache.set(cid, schema);
   }
 
-  async getSchema(dataGroupCid: string): Promise<ValidateFunction> {
+  async getSchema(dataGroupCid: string): Promise<JSONSchema> {
     // Check cache first
     const cached = this.get(dataGroupCid);
     if (cached) {
       return cached;
     }
 
-    // Download from IPFS
     try {
       const schemaBuffer = await this.ipfsService.fetchContent(dataGroupCid);
       const schemaText = schemaBuffer.toString('utf-8');
       const schema: JSONSchema = JSON.parse(schemaText);
 
-      // Validate it's a JSON schema
       if (typeof schema !== 'object' || schema === null) {
         throw new Error(`Invalid JSON schema: not an object`);
       }
-      let validate;
-      try {
-        validate = this.ajv.compile(schema);
-      } catch (error) {
-        throw new Error(
-          `Failed to compile schema ${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+      this.put(dataGroupCid, schema);
 
-      // Store in cache
-      this.put(dataGroupCid, validate);
-
-      return validate;
+      return schema;
     } catch (error) {
       throw new Error(
         `Failed to download or parse schema ${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`

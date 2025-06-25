@@ -61,7 +61,7 @@ describe('SchemaCacheService', () => {
       const result = await schemaCacheService.getSchema('test-cid');
 
       expect(mockFetchContent).toHaveBeenCalledWith('test-cid');
-      expect(result).toEqual(schema);
+      expect(result.schema).toEqual(schema);
       expect(schemaCacheService.has('test-cid')).toBe(true);
     });
 
@@ -78,8 +78,8 @@ describe('SchemaCacheService', () => {
       // Second request should use cache
       const result2 = await schemaCacheService.getSchema('test-cid');
       expect(mockFetchContent).toHaveBeenCalledTimes(1); // No additional calls
-      expect(result2).toEqual(schema);
-      expect(result1).toEqual(result2);
+      expect(result2.schema).toEqual(schema);
+      expect(result1.schema).toEqual(result2.schema);
     });
 
     it('should handle JSON parsing errors', async () => {

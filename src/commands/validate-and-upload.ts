@@ -9,10 +9,7 @@ import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
-import {
-  SchemaCacheService,
-  JSONSchema,
-} from '../services/schema-cache.service.js';
+import { SchemaCacheService } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
