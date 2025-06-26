@@ -2,6 +2,7 @@ import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
 import { JSONSchema } from './schema-cache.service.js';
+import { IPFSService } from './ipfs.service.js';
 
 export interface ValidationError {
   path: string;
@@ -18,15 +19,26 @@ export interface ValidationResult {
 export class JsonValidatorService {
   private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
+  private ipfsService: IPFSService;
 
-  constructor() {
+  constructor(ipfsService: IPFSService) {
+    this.ipfsService = ipfsService;
     this.ajv = new Ajv({ allErrors: true });
     addFormats(this.ajv);
+    this.ajv.addKeyword({
+      keyword: 'cid',
+      type: 'string',
+      validate: (cid: string): boolean => {
+        return true;
+      },
+      schema: false,
+    });
     this.ajv.addFormat('cid', {
       type: 'string',
       validate: (value: string) => {
         try {
-          CID.parse(value);
+          const cid = CID.parse(value);
+          const embededSchema = this.ipfsService.fetchContent(cid);
         } catch (error) {
           return false;
         }
