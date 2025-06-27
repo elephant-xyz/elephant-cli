@@ -1,4 +1,4 @@
-import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
+import { ValidateFunction, ErrorObject, Ajv, KeywordDefinition } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
 import { JSONSchema } from './schema-cache.service.js';
@@ -20,43 +20,91 @@ export class JsonValidatorService {
   private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
   private ipfsService: IPFSService;
+  private schemaCache: Map<string, JSONSchema> = new Map();
 
   constructor(ipfsService: IPFSService) {
     this.ipfsService = ipfsService;
-    this.ajv = new Ajv({ allErrors: true });
-    addFormats(this.ajv);
-    this.ajv.addKeyword({
+    this.ajv = new Ajv({ allErrors: true, loadSchema: this.loadSchemaFromCID.bind(this) });
+    addFormats.default(this.ajv);
+    this.setupCIDCustomizations();
+  }
+
+  private setupCIDCustomizations(): void {
+    // Custom keyword for 'cid' type that embeds schema from IPFS
+    const cidKeyword: KeywordDefinition = {
       keyword: 'cid',
-      type: 'string',
-      validate: (cid: string): boolean => {
-        return true;
-      },
-      schema: false,
-    });
+      type: 'object',
+      schemaType: 'string',
+      async: true,
+      compile: (cidValue: string) => {
+        return async (data: any): Promise<boolean> => {
+          try {
+            const schema = await this.loadSchemaFromCID(cidValue);
+            const validator = this.ajv.compile(schema);
+            return validator(data) as boolean;
+          } catch (error) {
+            return false;
+          }
+        };
+      }
+    };
+
+    this.ajv.addKeyword(cidKeyword);
+
+    // Enhanced CID format validation
     this.ajv.addFormat('cid', {
       type: 'string',
-      validate: (value: string) => {
+      validate: (value: string): boolean => {
         try {
-          const cid = CID.parse(value);
-          const embededSchema = this.ipfsService.fetchContent(cid);
-        } catch (error) {
+          CID.parse(value);
+          return true;
+        } catch {
           return false;
         }
-        return true;
-      },
+      }
     });
+  }
+
+  private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
+    // Check cache first
+    if (this.schemaCache.has(cidStr)) {
+      return this.schemaCache.get(cidStr)!;
+    }
+
+    try {
+      // Validate CID format
+      const cid = CID.parse(cidStr);
+      
+      // Fetch schema content from IPFS
+      const buffer = await this.ipfsService.fetchContent(cidStr);
+      const schemaText = buffer.toString('utf-8');
+      const schema = JSON.parse(schemaText) as JSONSchema;
+
+      // Validate that it's a valid JSON schema
+      if (!await this.isValidSchema(schema)) {
+        throw new Error(`Invalid JSON schema fetched from CID: ${cidStr}`);
+      }
+
+      // Cache the schema
+      this.schemaCache.set(cidStr, schema);
+      
+      return schema;
+    } catch (error) {
+      throw new Error(`Failed to load schema from CID ${cidStr}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
    * Validate JSON data against a schema
    */
-  validate(data: any, schema: JSONSchema): ValidationResult {
+  async validate(data: any, schema: JSONSchema): Promise<ValidationResult> {
     try {
       // Get or compile validator
-      const validator = this.getValidator(schema);
+      const validator = await this.getValidator(schema);
 
-      // Validate the data
-      const valid = validator(data);
+      // Validate the data (handle both sync and async validators)
+      const result = validator(data);
+      const valid = typeof result === 'object' && result !== null && 'then' in result ? await result : result;
 
       if (valid) {
         return { valid: true };
@@ -83,7 +131,7 @@ export class JsonValidatorService {
   /**
    * Get or compile a validator for a schema
    */
-  private getValidator(schema: JSONSchema): ValidateFunction {
+  private async getValidator(schema: JSONSchema): Promise<ValidateFunction> {
     // Create a cache key from the schema
     const cacheKey = JSON.stringify(schema);
 
@@ -91,7 +139,9 @@ export class JsonValidatorService {
     let validator = this.validators.get(cacheKey);
 
     if (!validator) {
-      validator = this.ajv.compile(schema);
+      // Handle async schema loading if needed
+      const processedSchema = await this.processSchemaReferences(schema);
+      validator = this.ajv.compile(processedSchema);
       this.validators.set(cacheKey, validator);
 
       if (!validator) {
@@ -103,6 +153,59 @@ export class JsonValidatorService {
       throw new Error('Failed to compile or retrieve validator');
     }
     return validator;
+  }
+
+  /**
+   * Process schema references and resolve CID-based schemas
+   */
+  private async processSchemaReferences(schema: JSONSchema): Promise<JSONSchema> {
+    // Deep clone to avoid modifying the original
+    const processedSchema = JSON.parse(JSON.stringify(schema));
+    
+    // Recursively process the schema to find and resolve CID references
+    await this.processSchemaNode(processedSchema);
+    
+    return processedSchema;
+  }
+
+  /**
+   * Recursively process schema nodes to resolve CID references
+   */
+  private async processSchemaNode(node: any): Promise<void> {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    // Handle CID type declarations
+    if (node.type === 'cid' && typeof node.cid === 'string') {
+      // Replace with embedded schema from IPFS
+      const embeddedSchema = await this.loadSchemaFromCID(node.cid);
+      Object.assign(node, embeddedSchema);
+      delete node.cid; // Remove the CID reference
+    }
+
+    // Handle CID format declarations  
+    if (node.type === 'string' && node.format === 'cid' && typeof node.value === 'string') {
+      // Replace with embedded schema from IPFS
+      const embeddedSchema = await this.loadSchemaFromCID(node.value);
+      Object.assign(node, embeddedSchema);
+      delete node.value; // Remove the CID reference
+      delete node.format; // Remove the format
+    }
+
+    // Recursively process all object properties
+    for (const key in node) {
+      if (node.hasOwnProperty(key)) {
+        await this.processSchemaNode(node[key]);
+      }
+    }
+
+    // Handle arrays
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        await this.processSchemaNode(item);
+      }
+    }
   }
 
   /**

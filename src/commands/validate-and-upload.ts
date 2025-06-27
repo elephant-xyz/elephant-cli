@@ -221,7 +221,7 @@ export async function handleValidateAndUpload(
     serviceOverrides.schemaCacheService ??
     new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
   const jsonValidatorService =
-    serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
+    serviceOverrides.jsonValidatorService ?? new JsonValidatorService(ipfsServiceForSchemas);
   const jsonCanonicalizerService =
     serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
   const cidCalculatorService =
@@ -564,7 +564,7 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
-    const validationResult = services.jsonValidatorService.validate(
+    const validationResult = await services.jsonValidatorService.validate(
       jsonData,
       schema
     );
