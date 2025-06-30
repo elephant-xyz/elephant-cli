@@ -82,7 +82,8 @@ export class PinataService {
         });
         const form = new FormData();
         form.append('file', file);
-        form.append('pinataOptions', JSON.stringify({ cidVersion: 0 }));
+        // Use CID v1 by default for all uploads
+        form.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
         const pinataMetadata = JSON.stringify({
           name: metadata.name,
           keyvalues: metadata.keyvalues || {},

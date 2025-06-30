@@ -145,6 +145,7 @@ Common issues to check:
 - **Max Concurrent Downloads**: 3
 - **Download Timeout**: 30 seconds
 - **Retry Count**: 1 retry on IPFS failure
+- **CID Version**: v1 (base32 encoding) for all uploads
 
 ## Development Commands
 

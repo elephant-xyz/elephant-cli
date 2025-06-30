@@ -18,6 +18,7 @@ import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
+import { IPLDConverterService } from '../services/ipld-converter.service.js';
 
 export interface ValidateAndUploadCommandOptions {
   pinataJwt: string;
@@ -88,6 +89,7 @@ export interface ValidateAndUploadServiceOverrides {
   pinataService?: PinataService;
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
+  ipldConverterService?: IPLDConverterService;
 }
 
 export async function handleValidateAndUpload(
@@ -237,6 +239,14 @@ export async function handleValidateAndUpload(
     serviceOverrides.pinataService ??
     new PinataService(options.pinataJwt, undefined, 18);
 
+  const ipldConverterService =
+    serviceOverrides.ipldConverterService ??
+    new IPLDConverterService(
+      options.inputDir,
+      pinataService,
+      cidCalculatorService
+    );
+
   let progressTracker: SimpleProgress | undefined =
     serviceOverrides.progressTracker;
   const uploadRecords: UploadRecord[] = [];
@@ -360,6 +370,7 @@ export async function handleValidateAndUpload(
       csvReporterService, // This is the initialized one from the try block
       progressTracker, // This is the initialized one
       pinataService,
+      ipldConverterService,
     };
 
     const allOperationPromises: Promise<void>[] = [];
@@ -522,6 +533,7 @@ async function processFileAndGetUploadPromise(
     csvReporterService: CsvReporterService;
     progressTracker: SimpleProgress;
     pinataService: PinataService;
+    ipldConverterService: IPLDConverterService;
   },
   options: ValidateAndUploadCommandOptions,
   uploadRecords: UploadRecord[]
@@ -583,9 +595,45 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
+    // Check if data contains file path links and convert them to IPLD format
+    let dataToUpload = jsonData;
+    if (services.ipldConverterService.hasIPLDLinks(jsonData)) {
+      logger.debug(
+        `Converting file path links to IPLD format for ${fileEntry.filePath}`
+      );
+      try {
+        const conversionResult =
+          await services.ipldConverterService.convertToIPLD(jsonData);
+        dataToUpload = conversionResult.convertedData;
+
+        if (conversionResult.hasLinks) {
+          logger.debug(
+            `Converted ${conversionResult.linkedCIDs.length} file paths to IPFS CIDs`
+          );
+        }
+      } catch (conversionError) {
+        const errorMsg =
+          conversionError instanceof Error
+            ? conversionError.message
+            : String(conversionError);
+        logger.error(
+          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+        );
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          error: `IPLD conversion error: ${errorMsg}`,
+          timestamp: new Date().toISOString(),
+        });
+        services.progressTracker.increment('errors');
+        return;
+      }
+    }
+
     const canonicalJson =
-      services.jsonCanonicalizerService.canonicalize(jsonData);
-    const calculatedCid = await services.cidCalculatorService.calculateCidV0(
+      services.jsonCanonicalizerService.canonicalize(dataToUpload);
+    const calculatedCid = await services.cidCalculatorService.calculateCidV1(
       Buffer.from(canonicalJson, 'utf-8')
     );
 

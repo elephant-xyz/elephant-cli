@@ -16,6 +16,17 @@ npm install -g @elephant-xyz/cli
 npx @elephant-xyz/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
+## Features
+
+- 📊 List and download elephant assignments from the blockchain
+- 📥 Download assigned files from IPFS with automatic retry
+- ✅ Validate JSON files against schemas before submission
+- 📤 Upload validated data to IPFS via Pinata
+- 🔗 Support for IPLD links - automatically convert file paths to IPFS CIDs
+- 📝 Submit data hashes to smart contracts in batches
+- 🔄 Two-step submission process for reliability
+- 📊 CSV output for tracking submissions
+
 ## Usage
 
 ### Basic Usage - List Assignments
@@ -233,6 +244,52 @@ The validator automatically fetches and applies the referenced schema from IPFS.
 ### CID Pointer Resolution
 
 Data can contain IPFS CID pointers that are automatically resolved during validation:
+
+```json
+{
+  "metadata": {
+    "/": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+  }
+}
+```
+
+### IPLD Link Support (File Path Resolution)
+
+The CLI now supports IPLD links with automatic file path to CID conversion. During the upload process, file paths in your JSON data are automatically converted to IPFS CIDs:
+
+```json
+// Before upload
+{
+  "title": "Main Document",
+  "metadata": {
+    "/": "./metadata.json"
+  },
+  "license": {
+    "/": "../shared/license.json"
+  }
+}
+
+// After upload
+{
+  "title": "Main Document", 
+  "metadata": {
+    "/": "QmMetadataCID..."
+  },
+  "license": {
+    "/": "QmLicenseCID..."
+  }
+}
+```
+
+This feature enables:
+- Modular data structures with linked components
+- Automatic upload of referenced files
+- IPLD compliant output with CID v1 format
+- Support for relative and absolute file paths
+
+See [docs/IPLD-LINKS.md](docs/IPLD-LINKS.md) for detailed documentation.
+
+### Full Validation Example
 
 ```json
 {

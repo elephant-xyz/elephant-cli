@@ -30,6 +30,8 @@
   "author": "Elephant XYZ",
   "license": "MIT",
   "dependencies": {
+    "@ipld/dag-cbor": "^9.2.4",
+    "@ipld/dag-json": "^10.2.5",
     "@ipld/dag-pb": "^4.1.5",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
