@@ -24,7 +24,10 @@ export class JsonValidatorService {
 
   constructor(ipfsService: IPFSService) {
     this.ipfsService = ipfsService;
-    this.ajv = new Ajv({ allErrors: true, loadSchema: this.loadSchemaFromCID.bind(this) });
+    this.ajv = new Ajv({
+      allErrors: true,
+      loadSchema: this.loadSchemaFromCID.bind(this),
+    });
     addFormats.default(this.ajv);
     this.setupCIDCustomizations();
   }
@@ -46,7 +49,7 @@ export class JsonValidatorService {
             return false;
           }
         };
-      }
+      },
     };
 
     this.ajv.addKeyword(cidKeyword);
@@ -61,7 +64,7 @@ export class JsonValidatorService {
         } catch {
           return false;
         }
-      }
+      },
     });
   }
 
@@ -74,23 +77,25 @@ export class JsonValidatorService {
     try {
       // Validate CID format
       const cid = CID.parse(cidStr);
-      
+
       // Fetch schema content from IPFS
       const buffer = await this.ipfsService.fetchContent(cidStr);
       const schemaText = buffer.toString('utf-8');
       const schema = JSON.parse(schemaText) as JSONSchema;
 
       // Validate that it's a valid JSON schema
-      if (!await this.isValidSchema(schema)) {
+      if (!(await this.isValidSchema(schema))) {
         throw new Error(`Invalid JSON schema fetched from CID: ${cidStr}`);
       }
 
       // Cache the schema
       this.schemaCache.set(cidStr, schema);
-      
+
       return schema;
     } catch (error) {
-      throw new Error(`Failed to load schema from CID ${cidStr}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to load schema from CID ${cidStr}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -104,7 +109,10 @@ export class JsonValidatorService {
 
       // Validate the data (handle both sync and async validators)
       const result = validator(data);
-      const valid = typeof result === 'object' && result !== null && 'then' in result ? await result : result;
+      const valid =
+        typeof result === 'object' && result !== null && 'then' in result
+          ? await result
+          : result;
 
       if (valid) {
         return { valid: true };
@@ -158,13 +166,15 @@ export class JsonValidatorService {
   /**
    * Process schema references and resolve CID-based schemas
    */
-  private async processSchemaReferences(schema: JSONSchema): Promise<JSONSchema> {
+  private async processSchemaReferences(
+    schema: JSONSchema
+  ): Promise<JSONSchema> {
     // Deep clone to avoid modifying the original
     const processedSchema = JSON.parse(JSON.stringify(schema));
-    
+
     // Recursively process the schema to find and resolve CID references
     await this.processSchemaNode(processedSchema);
-    
+
     return processedSchema;
   }
 
@@ -184,8 +194,12 @@ export class JsonValidatorService {
       delete node.cid; // Remove the CID reference
     }
 
-    // Handle CID format declarations  
-    if (node.type === 'string' && node.format === 'cid' && typeof node.value === 'string') {
+    // Handle CID format declarations
+    if (
+      node.type === 'string' &&
+      node.format === 'cid' &&
+      typeof node.value === 'string'
+    ) {
       // Replace with embedded schema from IPFS
       const embeddedSchema = await this.loadSchemaFromCID(node.value);
       Object.assign(node, embeddedSchema);
