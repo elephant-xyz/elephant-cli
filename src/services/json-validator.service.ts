@@ -37,27 +37,6 @@ export class JsonValidatorService {
   }
 
   private setupCIDCustomizations(): void {
-    // Custom keyword for 'cid' type that embeds schema from IPFS
-    const cidKeyword: KeywordDefinition = {
-      keyword: 'cid',
-      type: 'object',
-      schemaType: 'string',
-      async: true,
-      compile: (cidValue: string) => {
-        return async (data: any): Promise<boolean> => {
-          try {
-            const schema = await this.loadSchemaFromCID(cidValue);
-            const validator = this.ajv.compile(schema);
-            return validator(data) as boolean;
-          } catch (error) {
-            return false;
-          }
-        };
-      },
-    };
-
-    this.ajv.addKeyword(cidKeyword);
-
     // Enhanced CID format validation
     this.ajv.addFormat('cid', {
       type: 'string',
@@ -87,10 +66,8 @@ export class JsonValidatorService {
       const schemaText = buffer.toString('utf-8');
       const schema = JSON.parse(schemaText) as JSONSchema;
 
-      // Validate that it's a valid JSON schema
-      if (!(await this.isValidSchema(schema))) {
-        throw new Error(`Invalid JSON schema fetched from CID: ${cidStr}`);
-      }
+      // Don't validate here because the schema might contain nested CID references
+      // Validation will happen after all CID references are resolved
 
       // Cache the schema
       this.schemaCache.set(cidStr, schema);
@@ -111,8 +88,11 @@ export class JsonValidatorService {
       // Resolve CID pointers in data if present
       const resolvedData = await this.resolveCIDPointers(data);
       
+      // Also resolve any CID references in the schema
+      const resolvedSchema = await this.resolveCIDSchemas(schema);
+      
       // Get or compile validator
-      const validator = await this.getValidator(schema);
+      const validator = await this.getValidator(resolvedSchema);
 
       // Validate the data (handle both sync and async validators)
       const result = validator(resolvedData);
@@ -141,6 +121,40 @@ export class JsonValidatorService {
         ],
       };
     }
+  }
+
+  /**
+   * Resolve CID references in schemas
+   * Replaces { type: 'string', cid: '...' } with the actual schema from IPFS
+   */
+  private async resolveCIDSchemas(schema: any): Promise<any> {
+    if (!schema || typeof schema !== 'object') {
+      return schema;
+    }
+
+    // Check if this schema node has a 'cid' property (along with type)
+    if (schema.cid && typeof schema.cid === 'string' && schema.type) {
+      try {
+        // Load and return the schema from the CID
+        return await this.loadSchemaFromCID(schema.cid);
+      } catch (error) {
+        throw new Error(`Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Handle arrays
+    if (Array.isArray(schema)) {
+      return Promise.all(schema.map(item => this.resolveCIDSchemas(item)));
+    }
+
+    // Recursively process object properties
+    const resolved: any = {};
+    for (const key in schema) {
+      if (schema.hasOwnProperty(key)) {
+        resolved[key] = await this.resolveCIDSchemas(schema[key]);
+      }
+    }
+    return resolved;
   }
 
   /**
@@ -174,7 +188,9 @@ export class JsonValidatorService {
           
           // Try to parse as JSON
           try {
-            return JSON.parse(contentText);
+            const parsed = JSON.parse(contentText);
+            // Recursively resolve any nested CID pointers
+            return await this.resolveCIDPointers(parsed);
           } catch {
             // Return as string if not valid JSON
             return contentText;
@@ -191,7 +207,9 @@ export class JsonValidatorService {
             
             // Try to parse as JSON
             try {
-              return JSON.parse(fileContent);
+              const parsed = JSON.parse(fileContent);
+              // Recursively resolve any nested CID pointers
+              return await this.resolveCIDPointers(parsed);
             } catch {
               // Return as string if not valid JSON
               return fileContent;
