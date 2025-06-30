@@ -286,7 +286,10 @@ export class JsonValidatorService {
     const resolved: any = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        resolved[key] = await this.resolveCIDPointers(data[key], currentFilePath);
+        resolved[key] = await this.resolveCIDPointers(
+          data[key],
+          currentFilePath
+        );
       }
     }
     return resolved;
