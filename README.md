@@ -124,10 +124,11 @@ elephant-cli submit-files ./data-directory --dry-run
 - 🎯 Progress indicators and colored output
 - ⏱️ Execution time tracking
 - 📊 Summary statistics
-- ✅ File validation against JSON schemas
+- ✅ File validation against JSON schemas with advanced CID support
 - 📤 Batch IPFS uploads via Pinata
 - 🔗 Smart contract batch submissions
 - 📝 CSV reporting for upload results
+- 🔍 Automatic CID pointer resolution for IPFS-stored data
 
 ## Requirements
 
@@ -206,6 +207,51 @@ elephant-cli/
 ├── dist/                  # Built JavaScript files
 └── package.json
 ```
+
+## Advanced JSON Validation Features
+
+The CLI includes sophisticated JSON validation with IPFS integration:
+
+### CID-Referenced Schemas
+
+Schemas can reference other schemas stored in IPFS:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "string",
+      "cid": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+    }
+  }
+}
+```
+
+The validator automatically fetches and applies the referenced schema from IPFS.
+
+### CID Pointer Resolution
+
+Data can contain IPFS CID pointers that are automatically resolved during validation:
+
+```json
+{
+  "user": "Alice",
+  "profile": {
+    "/": "QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU"
+  }
+}
+```
+
+The validator fetches the content at the CID and validates it against the schema.
+
+### Features
+
+- **Automatic Resolution**: CID pointers (`{"/": "<cid>"}`) are resolved before validation
+- **Schema Caching**: Fetched schemas are cached for performance
+- **Recursive Support**: Works with nested structures and arrays
+- **CID Format Validation**: Built-in validation for IPFS CID strings
+- **Error Handling**: Graceful handling of IPFS fetch failures
 
 ## Examples
 

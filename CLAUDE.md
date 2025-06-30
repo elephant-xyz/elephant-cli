@@ -128,6 +128,7 @@ Common issues to check:
 2. **Queue System**: Prevents overwhelming IPFS gateways
 3. **Event Decoder**: Handles contract-specific data encoding
 4. **Validation**: Input validation before processing
+5. **JSON Validator with CID Support**: Advanced schema validation with IPFS integration
 
 ## Improvement Opportunities
 
@@ -196,6 +197,7 @@ npm test tests/integration/split-commands.test.ts
 - `src/services/pinata.service.ts` - Pinata upload service
 - `src/services/chain-state.service.ts` - Chain state queries
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
+- `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations
@@ -204,6 +206,59 @@ npm test tests/integration/split-commands.test.ts
 2. No caching of blockchain queries
 3. Single elephant address at a time
 4. No export formats (only console output)
+
+## JSON Validator with CID Support
+
+The `JsonValidatorService` provides advanced JSON schema validation with IPFS integration:
+
+### CID Schema References
+Schemas can reference other schemas stored in IPFS using CID:
+```json
+{
+  "type": "string",
+  "cid": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+}
+```
+
+### CID Pointer Resolution
+Data can contain CID pointers that are automatically resolved:
+```json
+{
+  "/": "QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU"
+}
+```
+
+### Features
+1. **Automatic CID Resolution**: When validating data containing `{"/": <cid>}`, the validator:
+   - Fetches the content from IPFS
+   - Replaces the pointer with actual content
+   - Validates against the schema
+
+2. **Schema CID References**: Schemas with `{"type": "string", "cid": <cid>}`:
+   - Fetch the schema from IPFS
+   - Use it for validation
+   - Cache for performance
+
+3. **Recursive Resolution**: Works with nested structures and arrays
+
+4. **CID Format Validation**: Validates CID strings using multiformats library
+
+### Example Flow
+```typescript
+// Schema references another schema via CID
+const schema = {
+  type: "string",
+  cid: "QmSchemaCID..."
+};
+
+// Data is a CID pointer
+const data = {
+  "/": "QmDataCID..."
+};
+
+// Both are fetched from IPFS and validated
+const result = await validator.validate(data, schema);
+```
 
 ## Security Considerations
 
