@@ -1,4 +1,4 @@
-import { ValidateFunction, ErrorObject, Ajv, KeywordDefinition } from 'ajv';
+import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
 import { promises as fsPromises } from 'fs';
@@ -59,7 +59,7 @@ export class JsonValidatorService {
 
     try {
       // Validate CID format
-      const cid = CID.parse(cidStr);
+      CID.parse(cidStr);
 
       // Fetch schema content from IPFS
       const buffer = await this.ipfsService.fetchContent(cidStr);
@@ -87,10 +87,10 @@ export class JsonValidatorService {
     try {
       // Resolve CID pointers in data if present
       const resolvedData = await this.resolveCIDPointers(data);
-      
+
       // Also resolve any CID references in the schema
       const resolvedSchema = await this.resolveCIDSchemas(schema);
-      
+
       // Get or compile validator
       const validator = await this.getValidator(resolvedSchema);
 
@@ -138,19 +138,21 @@ export class JsonValidatorService {
         // Load and return the schema from the CID
         return await this.loadSchemaFromCID(schema.cid);
       } catch (error) {
-        throw new Error(`Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
 
     // Handle arrays
     if (Array.isArray(schema)) {
-      return Promise.all(schema.map(item => this.resolveCIDSchemas(item)));
+      return Promise.all(schema.map((item) => this.resolveCIDSchemas(item)));
     }
 
     // Recursively process object properties
     const resolved: any = {};
     for (const key in schema) {
-      if (schema.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(schema, key)) {
         resolved[key] = await this.resolveCIDSchemas(schema[key]);
       }
     }
@@ -168,9 +170,20 @@ export class JsonValidatorService {
     }
 
     // Check if this is a pointer object
-    if (data['/'] && typeof data['/'] === 'string' && Object.keys(data).length === 1) {
+    if (
+      Object.prototype.hasOwnProperty.call(data, '/') &&
+      typeof data['/'] === 'string' &&
+      Object.keys(data).length === 1
+    ) {
       const pointerValue = data['/'];
-      
+
+      // Check for empty string
+      if (!pointerValue) {
+        throw new Error(
+          'Failed to resolve pointer - empty string is not a valid CID or file path'
+        );
+      }
+
       // Try to parse as CID first
       let isCID = false;
       try {
@@ -179,13 +192,14 @@ export class JsonValidatorService {
       } catch {
         // Not a valid CID
       }
-      
+
       if (isCID) {
         // It's a valid CID, fetch from IPFS
         try {
-          const contentBuffer = await this.ipfsService.fetchContent(pointerValue);
+          const contentBuffer =
+            await this.ipfsService.fetchContent(pointerValue);
           const contentText = contentBuffer.toString('utf-8');
-          
+
           // Try to parse as JSON
           try {
             const parsed = JSON.parse(contentText);
@@ -196,42 +210,62 @@ export class JsonValidatorService {
             return contentText;
           }
         } catch (error) {
-          throw new Error(`Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(
+            `Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       } else {
-        // Not a valid CID, try as relative file path
-        if (this.baseDirectory) {
-          try {
-            const filePath = path.join(this.baseDirectory, pointerValue);
-            const fileContent = await fsPromises.readFile(filePath, 'utf-8');
-            
-            // Try to parse as JSON
-            try {
-              const parsed = JSON.parse(fileContent);
-              // Recursively resolve any nested CID pointers
-              return await this.resolveCIDPointers(parsed);
-            } catch {
-              // Return as string if not valid JSON
-              return fileContent;
+        // Not a valid CID, try as file path
+        if (!this.baseDirectory && !pointerValue.startsWith('/')) {
+          throw new Error(
+            `Failed to resolve pointer - not a valid CID and no base directory provided for relative path: ${pointerValue}`
+          );
+        }
+
+        try {
+          let filePath: string;
+
+          // Handle absolute paths (starting with /)
+          if (pointerValue.startsWith('/')) {
+            filePath = pointerValue;
+          } else {
+            // Handle relative paths (starting with ./ or just names)
+            if (!this.baseDirectory) {
+              throw new Error(
+                `No base directory provided for relative path: ${pointerValue}`
+              );
             }
-          } catch (fileError) {
-            throw new Error(`Failed to resolve pointer - not a valid CID or accessible file path: ${pointerValue}`);
+            filePath = path.join(this.baseDirectory, pointerValue);
           }
-        } else {
-          throw new Error(`Failed to resolve pointer - not a valid CID and no base directory provided: ${pointerValue}`);
+
+          const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+
+          // Try to parse as JSON
+          try {
+            const parsed = JSON.parse(fileContent);
+            // Recursively resolve any nested CID pointers
+            return await this.resolveCIDPointers(parsed);
+          } catch {
+            // Return as string if not valid JSON
+            return fileContent;
+          }
+        } catch (fileError) {
+          throw new Error(
+            `Failed to resolve pointer - not a valid CID or accessible file path: ${pointerValue}`
+          );
         }
       }
     }
 
     // Recursively resolve CID pointers in arrays
     if (Array.isArray(data)) {
-      return Promise.all(data.map(item => this.resolveCIDPointers(item)));
+      return Promise.all(data.map((item) => this.resolveCIDPointers(item)));
     }
 
     // Recursively resolve CID pointers in objects
     const resolved: any = {};
     for (const key in data) {
-      if (data.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
         resolved[key] = await this.resolveCIDPointers(data[key]);
       }
     }
@@ -298,7 +332,7 @@ export class JsonValidatorService {
 
     // Recursively process all object properties
     for (const key in node) {
-      if (node.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(node, key)) {
         await this.processSchemaNode(node[key]);
       }
     }

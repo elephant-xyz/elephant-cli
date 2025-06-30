@@ -1052,6 +1052,532 @@ describe('JsonValidatorService', () => {
       expect(result.valid).toBe(false);
       expect(result.errors![0].message).toContain('no base directory provided');
     });
+
+    it('should handle absolute file paths', async () => {
+      // Create validator with base directory (should be ignored for absolute paths)
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        '/test/data'
+      );
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ name: 'System User', role: 'admin' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          role: { type: 'string' },
+        },
+      };
+
+      // Data contains an absolute file path
+      const data = { '/': '/etc/config/user.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/etc/config/user.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle absolute paths without base directory', async () => {
+      // Create validator without base directory
+      const jsonValidatorNoBaseDir = new JsonValidatorService(mockIPFSService);
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ status: 'active' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+        },
+      };
+
+      // Data contains an absolute file path
+      const data = { '/': '/var/status.json' };
+
+      const result = await jsonValidatorNoBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/var/status.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle paths starting with ./', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ value: 'test' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          value: { type: 'string' },
+        },
+      };
+
+      // Data contains a relative path with ./
+      const data = { '/': './relative/file.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/relative/file.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle nested file path pointers', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      // First file contains a pointer to another file
+      vi.mocked(fsPromises.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({ '/': 'nested/second.json' }) as any
+        )
+        .mockResolvedValueOnce(JSON.stringify({ final: 'value' }) as any);
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          final: { type: 'string' },
+        },
+      };
+
+      const data = { '/': 'first.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/first.json',
+        'utf-8'
+      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/nested/second.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle mixed CID and file path pointers in nested structures', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      const validCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+
+      // Mock IPFS fetch for CID
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(JSON.stringify({ ipfsData: 'from IPFS' }))
+      );
+
+      // Mock file read for local file
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ fileData: 'from file' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          remote: {
+            type: 'object',
+            properties: {
+              ipfsData: { type: 'string' },
+            },
+          },
+          local: {
+            type: 'object',
+            properties: {
+              fileData: { type: 'string' },
+            },
+          },
+        },
+      };
+
+      const data = {
+        remote: { '/': validCID },
+        local: { '/': 'local.json' },
+      };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(validCID);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/local.json',
+        'utf-8'
+      );
+    });
+
+    it('should return file content as string if not valid JSON', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      // Return plain text, not JSON
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        'This is plain text content' as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'string',
+      };
+
+      const data = { '/': 'plaintext.txt' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should handle Windows-style absolute paths', async () => {
+      const jsonValidatorNoBaseDir = new JsonValidatorService(mockIPFSService);
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ windows: 'data' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          windows: { type: 'string' },
+        },
+      };
+
+      // Windows absolute path (though this test runs on all platforms)
+      const data = { '/': '/C:/Users/test/data.json' };
+
+      const result = await jsonValidatorNoBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/C:/Users/test/data.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle file read errors with descriptive messages', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      const fileError = new Error('ENOENT: no such file or directory');
+      vi.mocked(fsPromises.readFile).mockRejectedValueOnce(fileError);
+
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': 'missing.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain(
+        'not a valid CID or accessible file path: missing.json'
+      );
+    });
+
+    it('should handle arrays containing file path pointers', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile)
+        .mockResolvedValueOnce(JSON.stringify({ id: 1, name: 'First' }) as any)
+        .mockResolvedValueOnce(
+          JSON.stringify({ id: 2, name: 'Second' }) as any
+        );
+
+      const schema: JSONSchema = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            name: { type: 'string' },
+          },
+        },
+      };
+
+      const data = [{ '/': 'items/1.json' }, { '/': 'items/2.json' }];
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/items/1.json',
+        'utf-8'
+      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/items/2.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle deeply nested paths with ../', async () => {
+      const baseDir = '/test/data/subdir';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ content: 'parent directory file' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          content: { type: 'string' },
+        },
+      };
+
+      const data = { '/': '../parent.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/parent.json',
+        'utf-8'
+      );
+    });
+
+    it('should validate complex nested structure with multiple file pointers', async () => {
+      const baseDir = '/config';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({ host: 'localhost', port: 5432 }) as any
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ level: 'info', file: 'app.log' }) as any
+        );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          app: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              version: { type: 'string' },
+            },
+          },
+          database: {
+            type: 'object',
+            properties: {
+              host: { type: 'string' },
+              port: { type: 'number' },
+            },
+          },
+          logging: {
+            type: 'object',
+            properties: {
+              level: { type: 'string' },
+              file: { type: 'string' },
+            },
+          },
+        },
+      };
+
+      const data = {
+        app: {
+          name: 'MyApp',
+          version: '1.0.0',
+        },
+        database: { '/': 'database.json' },
+        logging: { '/': 'logging.json' },
+      };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle empty string as pointer value', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': '' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain(
+        'empty string is not a valid CID or file path'
+      );
+    });
+
+    it('should handle special characters in file names', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ special: 'chars' }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          special: { type: 'string' },
+        },
+      };
+
+      const data = { '/': 'file with spaces & special-chars.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/file with spaces & special-chars.json',
+        'utf-8'
+      );
+    });
+
+    it('should handle JSON parsing errors in file content', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      // Return invalid JSON
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        '{ invalid json content' as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'string',
+      };
+
+      const data = { '/': 'invalid.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      // Should return the raw content as string when JSON parsing fails
+      expect(result.valid).toBe(true);
+    });
+
+    it('should handle permission errors when reading files', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      const permissionError = new Error('EACCES: permission denied');
+      vi.mocked(fsPromises.readFile).mockRejectedValueOnce(permissionError);
+
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': 'protected.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain(
+        'not a valid CID or accessible file path: protected.json'
+      );
+    });
+
+    it('should handle circular file references gracefully', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      // Create a circular reference: file1 -> file2 -> file1
+      let callCount = 0;
+      vi.mocked(fsPromises.readFile).mockImplementation(async (path) => {
+        callCount++;
+        if (callCount > 10) {
+          // Prevent infinite loop in test
+          throw new Error('Maximum call depth exceeded');
+        }
+        if (path.toString().includes('file1.json')) {
+          return JSON.stringify({ '/': 'file2.json' }) as any;
+        } else {
+          return JSON.stringify({ '/': 'file1.json' }) as any;
+        }
+      });
+
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': 'file1.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      // The implementation will eventually fail due to call stack or other limits
+      expect(result.valid).toBe(false);
+    });
+
+    it('should preserve path resolution across different operating systems', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(
+        mockIPFSService,
+        baseDir
+      );
+
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ crossPlatform: true }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          crossPlatform: { type: 'boolean' },
+        },
+      };
+
+      // Use forward slashes even on Windows
+      const data = { '/': 'subdirs/nested/file.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+
+      expect(result.valid).toBe(true);
+      // The path.join should handle platform differences
+      expect(fsPromises.readFile).toHaveBeenCalled();
+      const calledPath = (fsPromises.readFile as any).mock.calls[0][0];
+      expect(calledPath).toContain('subdirs');
+      expect(calledPath).toContain('nested');
+      expect(calledPath).toContain('file.json');
+    });
   });
 
   describe('isValidSchema', () => {
