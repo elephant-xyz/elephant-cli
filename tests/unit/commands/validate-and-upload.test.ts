@@ -188,6 +188,7 @@ describe('ValidateAndUploadCommand', () => {
 
     mockCidCalculatorService = {
       calculateCidV0: vi.fn().mockResolvedValue('QmTestCid12345'),
+      calculateCidAutoFormat: vi.fn().mockResolvedValue('QmTestCid12345'),
     } as any;
 
     mockPinataService = {
@@ -293,7 +294,7 @@ describe('ValidateAndUploadCommand', () => {
     expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
     expect(mockJsonCanonicalizerService.canonicalize).toHaveBeenCalledTimes(2);
-    expect(mockCidCalculatorService.calculateCidV0).toHaveBeenCalledTimes(2);
+    expect(mockCidCalculatorService.calculateCidAutoFormat).toHaveBeenCalledTimes(2);
 
     expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(2);
     expect(mockPinataService.uploadBatch).toHaveBeenNthCalledWith(1, [

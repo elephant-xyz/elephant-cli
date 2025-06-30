@@ -633,9 +633,10 @@ async function processFileAndGetUploadPromise(
 
     const canonicalJson =
       services.jsonCanonicalizerService.canonicalize(dataToUpload);
-    const calculatedCid = await services.cidCalculatorService.calculateCidV1(
-      Buffer.from(canonicalJson, 'utf-8')
-    );
+
+    // Use appropriate CID format based on content
+    const calculatedCid =
+      await services.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
 
     const processedFile: ProcessedFile = {
       propertyCid: fileEntry.propertyCid,

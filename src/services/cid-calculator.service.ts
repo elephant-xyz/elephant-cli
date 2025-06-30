@@ -130,6 +130,23 @@ export class CidCalculatorService {
   }
 
   /**
+   * Calculate CID for data, automatically choosing the appropriate format
+   * Uses DAG-JSON for data with IPLD links, UnixFS for everything else
+   */
+  async calculateCidAutoFormat(data: any): Promise<string> {
+    // Check if data contains IPLD links
+    if (this.hasIPLDLinks(data)) {
+      // Use DAG-JSON format for IPLD linked data
+      return this.calculateCidV1ForDagJson(data);
+    } else {
+      // Use UnixFS format for regular data
+      const jsonString = JSON.stringify(data);
+      const buffer = Buffer.from(jsonString, 'utf-8');
+      return this.calculateCidV1(buffer);
+    }
+  }
+
+  /**
    * Check if data contains IPLD links
    */
   hasIPLDLinks(data: any): boolean {

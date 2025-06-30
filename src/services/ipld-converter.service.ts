@@ -147,9 +147,9 @@ export class IPLDConverterService {
         const canonicalJson = JSON.stringify(dataToUpload);
         const buffer = Buffer.from(canonicalJson, 'utf-8');
 
-        // Calculate expected CID v1 (UnixFS format that Pinata will use)
+        // Calculate expected CID using appropriate format
         const expectedCid =
-          await this.cidCalculatorService.calculateCidV1(buffer);
+          await this.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
 
         // Create a ProcessedFile object for Pinata upload
         const processedFile = {

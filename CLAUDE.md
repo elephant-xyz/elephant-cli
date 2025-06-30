@@ -146,6 +146,7 @@ Common issues to check:
 - **Download Timeout**: 30 seconds
 - **Retry Count**: 1 retry on IPFS failure
 - **CID Version**: v1 (base32 encoding) for all uploads
+- **CID Codec**: DAG-JSON (0x0129) for IPLD linked data, DAG-PB (0x70) for regular files
 
 ## Development Commands
 

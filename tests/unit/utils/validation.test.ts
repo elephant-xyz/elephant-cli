@@ -204,10 +204,11 @@ describe('validation utils', () => {
   });
 
   describe('deriveCIDFromHash', () => {
-    it('should derive CID v1 from bytes32 hash', () => {
+    it('should derive CID v1 with DAG-JSON codec from bytes32 hash', () => {
       const hash =
         '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const result = deriveCIDFromHash(hash);
+      // Should return CID v1 with DAG-JSON codec
       expect(result).toBe(
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
       );

@@ -33,6 +33,12 @@ describe('IPLDConverterService', () => {
       calculateCidV0: vi
         .fn()
         .mockResolvedValue('QmMockCalculatedCID123456789012345678901234567'),
+      calculateCidV1: vi
+        .fn()
+        .mockResolvedValue('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'),
+      calculateCidAutoFormat: vi
+        .fn()
+        .mockResolvedValue('QmMockCalculatedCID123456789012345678901234567'),
     } as any;
 
     ipldConverterService = new IPLDConverterService(
@@ -230,8 +236,8 @@ describe('IPLDConverterService', () => {
       const result = await ipldConverterService.convertToIPLD(dataWithTextFile);
 
       expect(result.hasLinks).toBe(true);
-      expect(mockCidCalculatorService.calculateCidV0).toHaveBeenCalledWith(
-        Buffer.from('"This is plain text content"', 'utf-8')
+      expect(mockCidCalculatorService.calculateCidAutoFormat).toHaveBeenCalledWith(
+        'This is plain text content'
       );
     });
 
@@ -268,7 +274,7 @@ describe('IPLDConverterService', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs[0]).toBe(
-        'QmMockCalculatedCID123456789012345678901234567'
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
       );
       expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
     });

@@ -52,9 +52,9 @@ export const deriveCIDFromHash = (hash: string): string => {
     // sha256.code is 0x12, length is 32 bytes for SHA-256
     const multihash = createDigest(sha256.code, hashBytes);
 
-    // Create CID v1 from the multihash using dag-pb codec (0x70)
-    // This maintains compatibility with UnixFS format
-    const cid = CID.create(1, 0x70, multihash);
+    // Create CID v1 from the multihash using dag-json codec (0x0129)
+    // This is the proper codec for IPLD compliance
+    const cid = CID.create(1, 0x0129, multihash);
 
     return cid.toString();
   } catch (e: unknown) {

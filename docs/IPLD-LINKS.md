@@ -4,9 +4,18 @@
 
 The Elephant CLI now supports IPLD (InterPlanetary Linked Data) links in JSON files. This allows you to reference external files using the IPLD link format `{"/": "path/to/file"}`, which will be automatically converted to IPFS CIDs during the upload process.
 
-## CID Version Support
+## CID Version and Codec Support
 
-The CLI now uses CID v1 by default for all uploads. CID v1 provides better future-proofing and is the recommended format for IPLD compliance. The CIDs will be in base32 encoding (starting with 'bafy...' for UnixFS content).
+The CLI now uses CID v1 by default for all uploads with intelligent codec selection:
+
+- **For data with IPLD links**: Uses DAG-JSON codec (0x0129) for proper IPLD compliance
+- **For regular data**: Uses DAG-PB codec (0x70) with UnixFS for Pinata compatibility
+
+All CIDs use base32 encoding:
+- `bafybei...` - DAG-JSON content (used for linked data)
+- `bafybei...` - UnixFS/DAG-PB content (used for regular files)
+
+Note: While Pinata's API currently only supports UnixFS uploads, the CLI calculates the appropriate DAG-JSON CIDs for data containing IPLD links to ensure future compatibility.
 
 ## How It Works
 
