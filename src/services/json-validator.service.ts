@@ -186,25 +186,12 @@ export class JsonValidatorService {
       return;
     }
 
-    // Handle CID type declarations
-    if (node.type === 'cid' && typeof node.cid === 'string') {
+    // Handle CID schema references: {"type": "string", "cid": <cid_value>}
+    if (node.type === 'string' && typeof node.cid === 'string') {
       // Replace with embedded schema from IPFS
       const embeddedSchema = await this.loadSchemaFromCID(node.cid);
       Object.assign(node, embeddedSchema);
       delete node.cid; // Remove the CID reference
-    }
-
-    // Handle CID format declarations
-    if (
-      node.type === 'string' &&
-      node.format === 'cid' &&
-      typeof node.value === 'string'
-    ) {
-      // Replace with embedded schema from IPFS
-      const embeddedSchema = await this.loadSchemaFromCID(node.value);
-      Object.assign(node, embeddedSchema);
-      delete node.value; // Remove the CID reference
-      delete node.format; // Remove the format
     }
 
     // Recursively process all object properties
