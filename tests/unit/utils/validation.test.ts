@@ -41,7 +41,8 @@ vi.mock('multiformats/cid', () => ({
       toString: () => 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
     }),
     create: (version: number, codec: number, multihash: any) => ({
-      toString: () => 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+      toString: () =>
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
     }),
   },
 }));
@@ -207,14 +208,18 @@ describe('validation utils', () => {
       const hash =
         '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const result = deriveCIDFromHash(hash);
-      expect(result).toBe('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+      expect(result).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should handle hash without 0x prefix', () => {
       const hash =
         '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const result = deriveCIDFromHash(hash);
-      expect(result).toBe('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+      expect(result).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should throw error for invalid hash format', () => {
@@ -266,20 +271,27 @@ describe('validation utils', () => {
       const extractedHash = extractHashFromCID(originalCid);
       const derivedCid = deriveCIDFromHash(extractedHash);
       // Now returns CID v1
-      expect(derivedCid).toBe('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+      expect(derivedCid).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should extract the same SHA-256 hash from both CID v0 and v1 if they have the same content', () => {
       // Both CIDs should extract to their respective mock hashes
       const cidV0 = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
-      const cidV1 = 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
-      
+      const cidV1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+
       const hashV0 = extractHashFromCID(cidV0);
       const hashV1 = extractHashFromCID(cidV1);
-      
+
       // In this mock, they have different hashes (0x12 vs 0x13 filled)
-      expect(hashV0).toBe('0x1212121212121212121212121212121212121212121212121212121212121212');
-      expect(hashV1).toBe('0x1313131313131313131313131313131313131313131313131313131313131313');
+      expect(hashV0).toBe(
+        '0x1212121212121212121212121212121212121212121212121212121212121212'
+      );
+      expect(hashV1).toBe(
+        '0x1313131313131313131313131313131313131313131313131313131313131313'
+      );
     });
   });
 });

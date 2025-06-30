@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
-import { extractHashFromCID, deriveCIDFromHash } from '../../src/utils/validation.js';
+import {
+  extractHashFromCID,
+  deriveCIDFromHash,
+} from '../../src/utils/validation.js';
 import { CidCalculatorService } from '../../src/services/cid-calculator.service.js';
 
 describe('CID v1 submission flow', () => {
@@ -19,7 +22,7 @@ describe('CID v1 submission flow', () => {
 
     // Calculate CID v1
     const cidV1 = await cidCalculatorService.calculateCidV1(buffer);
-    
+
     // Verify it's a valid CID v1
     const parsedCid = CID.parse(cidV1);
     expect(parsedCid.version).toBe(1);
@@ -31,16 +34,20 @@ describe('CID v1 submission flow', () => {
 
     // Verify the extracted hash is correct
     const hashBytes = parsedCid.multihash.digest;
-    const expectedHash = '0x' + Array.from(hashBytes)
-      .map(byte => byte.toString(16).padStart(2, '0'))
-      .join('');
+    const expectedHash =
+      '0x' +
+      Array.from(hashBytes)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
     expect(extractedHash).toBe(expectedHash);
 
     // Test round-trip conversion
     const derivedCid = deriveCIDFromHash(extractedHash);
     const derivedParsedCid = CID.parse(derivedCid);
     expect(derivedParsedCid.version).toBe(1); // Should create CID v1
-    expect(derivedParsedCid.multihash.digest).toEqual(parsedCid.multihash.digest);
+    expect(derivedParsedCid.multihash.digest).toEqual(
+      parsedCid.multihash.digest
+    );
   });
 
   it('should extract the same hash from CID v0 and v1 with the same content', async () => {
@@ -67,9 +74,11 @@ describe('CID v1 submission flow', () => {
   it('should handle CID v1 in data submission format', () => {
     // Simulate the DataItem structure used in smart contract submission
     const dataItem = {
-      propertyCid: 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
-      dataGroupCID: 'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
-      dataCID: 'bafybeigvgzoolc3drupxhlevdp2ugqcrbcsqfmcek2zxiw5wctk3xjpjwy'
+      propertyCid:
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+      dataGroupCID:
+        'bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku',
+      dataCID: 'bafybeigvgzoolc3drupxhlevdp2ugqcrbcsqfmcek2zxiw5wctk3xjpjwy',
     };
 
     // Extract hashes for contract submission
