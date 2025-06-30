@@ -35,10 +35,19 @@ export class IPLDConverterService {
   /**
    * Convert data with file path links to IPLD DAG-JSON format
    * Uploads referenced files to IPFS and replaces paths with CIDs
+   * @param data The data to convert
+   * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    */
-  async convertToIPLD(data: any): Promise<IPLDConversionResult> {
+  async convertToIPLD(
+    data: any,
+    currentFilePath?: string
+  ): Promise<IPLDConversionResult> {
     const linkedCIDs: string[] = [];
-    const convertedData = await this.processDataForIPLD(data, linkedCIDs);
+    const convertedData = await this.processDataForIPLD(
+      data,
+      linkedCIDs,
+      currentFilePath
+    );
 
     return {
       originalData: data,
@@ -53,7 +62,8 @@ export class IPLDConverterService {
    */
   private async processDataForIPLD(
     data: any,
-    linkedCIDs: string[]
+    linkedCIDs: string[],
+    currentFilePath?: string
   ): Promise<any> {
     if (!data || typeof data !== 'object') {
       return data;
@@ -82,7 +92,10 @@ export class IPLDConverterService {
         return data;
       } else {
         // It's a file path, upload the file and convert to CID link
-        const cid = await this.uploadFileAndGetCID(pointerValue);
+        const cid = await this.uploadFileAndGetCID(
+          pointerValue,
+          currentFilePath
+        );
         linkedCIDs.push(cid);
 
         // Return proper IPLD link format
@@ -93,7 +106,9 @@ export class IPLDConverterService {
     // Handle arrays
     if (Array.isArray(data)) {
       return Promise.all(
-        data.map((item) => this.processDataForIPLD(item, linkedCIDs))
+        data.map((item) =>
+          this.processDataForIPLD(item, linkedCIDs, currentFilePath)
+        )
       );
     }
 
@@ -101,7 +116,11 @@ export class IPLDConverterService {
     const processed: any = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        processed[key] = await this.processDataForIPLD(data[key], linkedCIDs);
+        processed[key] = await this.processDataForIPLD(
+          data[key],
+          linkedCIDs,
+          currentFilePath
+        );
       }
     }
     return processed;
@@ -110,8 +129,13 @@ export class IPLDConverterService {
   /**
    * Upload a file to IPFS and return its CID
    * Uses CID v1 with DAG-JSON for IPLD compliance
+   * @param filePath The file path to upload
+   * @param currentFilePath Optional path of the file containing the reference (for relative path resolution)
    */
-  private async uploadFileAndGetCID(filePath: string): Promise<string> {
+  private async uploadFileAndGetCID(
+    filePath: string,
+    currentFilePath?: string
+  ): Promise<string> {
     try {
       let resolvedPath: string;
 
@@ -119,12 +143,17 @@ export class IPLDConverterService {
       if (filePath.startsWith('/')) {
         resolvedPath = filePath;
       } else {
-        if (!this.baseDirectory) {
-          throw new Error(
-            `No base directory provided for relative path: ${filePath}`
-          );
+        // For relative paths, resolve based on:
+        // 1. Directory of the current file (if provided)
+        // 2. Base directory (fallback)
+        if (currentFilePath) {
+          const currentDir = path.dirname(currentFilePath);
+          resolvedPath = path.join(currentDir, filePath);
+        } else if (this.baseDirectory) {
+          resolvedPath = path.join(this.baseDirectory, filePath);
+        } else {
+          throw new Error(`No context provided for relative path: ${filePath}`);
         }
-        resolvedPath = path.join(this.baseDirectory, filePath);
       }
 
       // Read the file
@@ -145,7 +174,6 @@ export class IPLDConverterService {
 
         // Convert data to canonical JSON for consistent CID
         const canonicalJson = JSON.stringify(dataToUpload);
-        const buffer = Buffer.from(canonicalJson, 'utf-8');
 
         // Calculate expected CID using appropriate format
         const expectedCid =

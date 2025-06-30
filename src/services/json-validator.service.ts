@@ -82,11 +82,18 @@ export class JsonValidatorService {
 
   /**
    * Validate JSON data against a schema
+   * @param data The data to validate
+   * @param schema The schema to validate against
+   * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    */
-  async validate(data: any, schema: JSONSchema): Promise<ValidationResult> {
+  async validate(
+    data: any,
+    schema: JSONSchema,
+    currentFilePath?: string
+  ): Promise<ValidationResult> {
     try {
       // Resolve CID pointers in data if present
-      const resolvedData = await this.resolveCIDPointers(data);
+      const resolvedData = await this.resolveCIDPointers(data, currentFilePath);
 
       // Also resolve any CID references in the schema
       const resolvedSchema = await this.resolveCIDSchemas(schema);
@@ -163,8 +170,13 @@ export class JsonValidatorService {
    * Resolve CID pointers in data
    * Handles {"/": <cid>} pattern by fetching content from IPFS
    * Handles {"/": <relative_file_path>} pattern by reading from local filesystem
+   * @param data The data to resolve pointers in
+   * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    */
-  private async resolveCIDPointers(data: any): Promise<any> {
+  private async resolveCIDPointers(
+    data: any,
+    currentFilePath?: string
+  ): Promise<any> {
     if (!data || typeof data !== 'object') {
       return data;
     }
@@ -204,7 +216,7 @@ export class JsonValidatorService {
           try {
             const parsed = JSON.parse(contentText);
             // Recursively resolve any nested CID pointers
-            return await this.resolveCIDPointers(parsed);
+            return await this.resolveCIDPointers(parsed, currentFilePath);
           } catch {
             // Return as string if not valid JSON
             return contentText;
@@ -229,13 +241,19 @@ export class JsonValidatorService {
           if (pointerValue.startsWith('/')) {
             filePath = pointerValue;
           } else {
-            // Handle relative paths (starting with ./ or just names)
-            if (!this.baseDirectory) {
+            // Handle relative paths
+            // First try relative to current file (if provided)
+            if (currentFilePath) {
+              const currentDir = path.dirname(currentFilePath);
+              filePath = path.join(currentDir, pointerValue);
+            } else if (this.baseDirectory) {
+              // Fallback to base directory
+              filePath = path.join(this.baseDirectory, pointerValue);
+            } else {
               throw new Error(
-                `No base directory provided for relative path: ${pointerValue}`
+                `No context provided for relative path: ${pointerValue}`
               );
             }
-            filePath = path.join(this.baseDirectory, pointerValue);
           }
 
           const fileContent = await fsPromises.readFile(filePath, 'utf-8');
@@ -244,7 +262,7 @@ export class JsonValidatorService {
           try {
             const parsed = JSON.parse(fileContent);
             // Recursively resolve any nested CID pointers
-            return await this.resolveCIDPointers(parsed);
+            return await this.resolveCIDPointers(parsed, currentFilePath);
           } catch {
             // Return as string if not valid JSON
             return fileContent;
@@ -259,14 +277,16 @@ export class JsonValidatorService {
 
     // Recursively resolve CID pointers in arrays
     if (Array.isArray(data)) {
-      return Promise.all(data.map((item) => this.resolveCIDPointers(item)));
+      return Promise.all(
+        data.map((item) => this.resolveCIDPointers(item, currentFilePath))
+      );
     }
 
     // Recursively resolve CID pointers in objects
     const resolved: any = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        resolved[key] = await this.resolveCIDPointers(data[key]);
+        resolved[key] = await this.resolveCIDPointers(data[key], currentFilePath);
       }
     }
     return resolved;

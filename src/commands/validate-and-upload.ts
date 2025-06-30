@@ -579,7 +579,8 @@ async function processFileAndGetUploadPromise(
 
     const validationResult = await services.jsonValidatorService.validate(
       jsonData,
-      schema
+      schema,
+      fileEntry.filePath
     );
 
     if (!validationResult.valid) {
@@ -603,7 +604,10 @@ async function processFileAndGetUploadPromise(
       );
       try {
         const conversionResult =
-          await services.ipldConverterService.convertToIPLD(jsonData);
+          await services.ipldConverterService.convertToIPLD(
+            jsonData,
+            fileEntry.filePath
+          );
         dataToUpload = conversionResult.convertedData;
 
         if (conversionResult.hasLinks) {

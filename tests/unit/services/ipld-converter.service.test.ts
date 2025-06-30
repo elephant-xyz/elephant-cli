@@ -226,6 +226,57 @@ describe('IPLDConverterService', () => {
       });
     });
 
+    it('should resolve relative paths based on current file location', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ content: 'sibling file' }) as any
+      );
+
+      const dataWithRelativePath = {
+        name: 'test',
+        sibling: { '/': './sibling.json' },
+      };
+
+      const currentFilePath = '/test/data/subdir/current.json';
+      const result = await ipldConverterService.convertToIPLD(
+        dataWithRelativePath,
+        currentFilePath
+      );
+
+      expect(result.hasLinks).toBe(true);
+      expect(result.linkedCIDs).toHaveLength(1);
+
+      // Should resolve relative to /test/data/subdir/
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/subdir/sibling.json',
+        'utf-8'
+      );
+    });
+
+    it('should resolve parent directory references correctly', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ content: 'parent file' }) as any
+      );
+
+      const dataWithParentPath = {
+        name: 'test',
+        parent: { '/': '../parent.json' },
+      };
+
+      const currentFilePath = '/test/data/subdir/current.json';
+      const result = await ipldConverterService.convertToIPLD(
+        dataWithParentPath,
+        currentFilePath
+      );
+
+      expect(result.hasLinks).toBe(true);
+
+      // Should resolve relative to /test/data/
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/parent.json',
+        'utf-8'
+      );
+    });
+
     it('should handle plain text files', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
         'This is plain text content' as any

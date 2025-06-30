@@ -230,6 +230,17 @@ Data can contain CID pointers that are automatically resolved:
 }
 ```
 
+### File Path Linking
+Data can reference local files using relative paths:
+```json
+{
+  "/": "./names.json"
+}
+```
+**Important**: File paths are resolved relative to the file containing the reference, not the data directory root. For example:
+- If `data/propertyA/file1.json` contains `{"/": "./file2.json"}`, it resolves to `data/propertyA/file2.json`
+- If `data/propertyA/file1.json` contains `{"/": "../propertyB/file3.json"}`, it resolves to `data/propertyB/file3.json`
+
 ### Features
 1. **Automatic CID Resolution**: When validating data containing `{"/": <cid>}`, the validator:
    - Fetches the content from IPFS
@@ -244,6 +255,8 @@ Data can contain CID pointers that are automatically resolved:
 3. **Recursive Resolution**: Works with nested structures and arrays
 
 4. **CID Format Validation**: Validates CID strings using multiformats library
+
+5. **File Path Resolution**: Relative file paths in IPLD links are resolved relative to the containing file's directory, not the data directory root
 
 ### Example Flow
 ```typescript
