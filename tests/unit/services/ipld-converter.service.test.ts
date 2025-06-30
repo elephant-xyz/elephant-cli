@@ -35,7 +35,9 @@ describe('IPLDConverterService', () => {
         .mockResolvedValue('QmMockCalculatedCID123456789012345678901234567'),
       calculateCidV1: vi
         .fn()
-        .mockResolvedValue('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'),
+        .mockResolvedValue(
+          'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+        ),
       calculateCidAutoFormat: vi
         .fn()
         .mockResolvedValue('QmMockCalculatedCID123456789012345678901234567'),
@@ -236,9 +238,9 @@ describe('IPLDConverterService', () => {
       const result = await ipldConverterService.convertToIPLD(dataWithTextFile);
 
       expect(result.hasLinks).toBe(true);
-      expect(mockCidCalculatorService.calculateCidAutoFormat).toHaveBeenCalledWith(
-        'This is plain text content'
-      );
+      expect(
+        mockCidCalculatorService.calculateCidAutoFormat
+      ).toHaveBeenCalledWith('This is plain text content');
     });
 
     it('should throw error for missing files', async () => {

@@ -30,23 +30,25 @@ export class FileScannerService {
       }
 
       // Check each entry
+      let validPropertyDirs = 0;
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          // Validate property CID directory name
-          if (!this.isValidCid(entry.name)) {
-            errors.push(`Invalid property CID directory name: ${entry.name}`);
-          } else {
+          // Only process directories with valid CID names
+          if (this.isValidCid(entry.name)) {
+            validPropertyDirs++;
             // Check files within the property directory
             const propertyDirPath = join(directoryPath, entry.name);
             const propertyValidation =
               await this.validatePropertyDirectory(propertyDirPath);
             errors.push(...propertyValidation.errors);
           }
-        } else {
-          errors.push(
-            `Found file ${entry.name} in root directory. Only directories (property CIDs) are allowed.`
-          );
+          // Ignore directories with non-CID names
         }
+        // Ignore files in root directory
+      }
+
+      if (validPropertyDirs === 0) {
+        errors.push('No valid property CID directories found');
       }
 
       return {
@@ -74,30 +76,29 @@ export class FileScannerService {
         return { isValid: false, errors };
       }
 
+      let validFiles = 0;
       for (const file of files) {
         if (file.isFile()) {
-          // Check if file has .json extension
-          if (extname(file.name) !== '.json') {
-            errors.push(
-              `File ${file.name} in ${propertyDirPath} must have .json extension`
-            );
-            continue;
-          }
+          // Only process files with .json extension
+          if (extname(file.name) === '.json') {
+            // Extract data group CID from filename (remove .json extension)
+            const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
 
-          // Extract data group CID from filename (remove .json extension)
-          const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
-
-          // Validate data group CID
-          if (!this.isValidCid(dataGroupCid)) {
-            errors.push(
-              `Invalid data group CID filename: ${file.name} in ${propertyDirPath}`
-            );
+            // Only count files with valid CID filenames
+            if (this.isValidCid(dataGroupCid)) {
+              validFiles++;
+            }
+            // Ignore JSON files with non-CID names
           }
-        } else if (file.isDirectory()) {
-          errors.push(
-            `Found subdirectory ${file.name} in property directory ${propertyDirPath}. Only JSON files are allowed.`
-          );
+          // Ignore non-JSON files
         }
+        // Ignore subdirectories
+      }
+
+      if (validFiles === 0) {
+        errors.push(
+          `No valid data group CID files found in ${propertyDirPath}`
+        );
       }
 
       return {
@@ -151,10 +152,16 @@ export class FileScannerService {
 
       for (const propertyDir of propertyDirs) {
         if (!propertyDir.isDirectory()) {
-          continue; // Skip non-directories (validation should catch these)
+          continue; // Skip non-directories
         }
 
         const propertyCid = propertyDir.name;
+
+        // Skip directories with non-CID names
+        if (!this.isValidCid(propertyCid)) {
+          continue;
+        }
+
         const propertyDirPath = join(directoryPath, propertyCid);
 
         try {
@@ -162,10 +169,16 @@ export class FileScannerService {
 
           for (const file of files) {
             if (!file.isFile() || !file.name.endsWith('.json')) {
-              continue; // Skip non-JSON files (validation should catch these)
+              continue; // Skip non-JSON files
             }
 
             const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
+
+            // Skip files with non-CID names
+            if (!this.isValidCid(dataGroupCid)) {
+              continue;
+            }
+
             const filePath = join(propertyDirPath, file.name);
 
             const fileEntry: FileEntry = {
@@ -221,6 +234,11 @@ export class FileScannerService {
 
       for (const propertyDir of propertyDirs) {
         if (!propertyDir.isDirectory()) {
+          continue;
+        }
+
+        // Skip directories with non-CID names
+        if (!this.isValidCid(propertyDir.name)) {
           continue;
         }
 
