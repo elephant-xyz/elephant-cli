@@ -104,11 +104,14 @@ export class JsonValidatorService {
    */
   async validate(data: any, schema: JSONSchema): Promise<ValidationResult> {
     try {
+      // Resolve CID pointers in data if present
+      const resolvedData = await this.resolveCIDPointers(data);
+      
       // Get or compile validator
       const validator = await this.getValidator(schema);
 
       // Validate the data (handle both sync and async validators)
-      const result = validator(data);
+      const result = validator(resolvedData);
       const valid =
         typeof result === 'object' && result !== null && 'then' in result
           ? await result
@@ -134,6 +137,53 @@ export class JsonValidatorService {
         ],
       };
     }
+  }
+
+  /**
+   * Resolve CID pointers in data
+   * Handles {"/": <cid>} pattern by fetching content from IPFS
+   */
+  private async resolveCIDPointers(data: any): Promise<any> {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    // Check if this is a CID pointer object
+    if (data['/'] && typeof data['/'] === 'string' && Object.keys(data).length === 1) {
+      try {
+        const cid = data['/'];
+        // Validate CID format
+        CID.parse(cid);
+        
+        // Fetch content from IPFS
+        const contentBuffer = await this.ipfsService.fetchContent(cid);
+        const contentText = contentBuffer.toString('utf-8');
+        
+        // Try to parse as JSON
+        try {
+          return JSON.parse(contentText);
+        } catch {
+          // Return as string if not valid JSON
+          return contentText;
+        }
+      } catch (error) {
+        throw new Error(`Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Recursively resolve CID pointers in arrays
+    if (Array.isArray(data)) {
+      return Promise.all(data.map(item => this.resolveCIDPointers(item)));
+    }
+
+    // Recursively resolve CID pointers in objects
+    const resolved: any = {};
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        resolved[key] = await this.resolveCIDPointers(data[key]);
+      }
+    }
+    return resolved;
   }
 
   /**

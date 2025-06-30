@@ -716,6 +716,198 @@ describe('JsonValidatorService', () => {
     });
   });
 
+  describe('CID pointer resolution', () => {
+    it('should resolve CID pointers in data', async () => {
+      const contentCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      
+      const actualContent = {
+        name: 'John Doe',
+        age: 30,
+        email: 'john@example.com'
+      };
+      
+      const schemaContent = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'number' },
+          email: { type: 'string', format: 'email' }
+        },
+        required: ['name', 'age']
+      };
+
+      // Mock IPFS to return the content and schema
+      vi.mocked(mockIPFSService.fetchContent)
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(actualContent))) // Content fetch
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaContent))); // Schema fetch
+
+      // Schema references another schema via CID
+      const schema: JSONSchema = {
+        type: 'string',
+        cid: schemaCID
+      };
+
+      // Data is a CID pointer
+      const data = { '/': contentCID };
+
+      const result = await jsonValidator.validate(data, schema);
+      
+      expect(result.valid).toBe(true);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(contentCID);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(schemaCID);
+    });
+
+    it('should fail when referenced content does not match schema', async () => {
+      const contentCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      
+      const invalidContent = {
+        name: 'John Doe',
+        age: 'thirty', // Invalid type
+        email: 'not-an-email'
+      };
+      
+      const schemaContent = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'number' },
+          email: { type: 'string', format: 'email' }
+        },
+        required: ['name', 'age']
+      };
+
+      vi.mocked(mockIPFSService.fetchContent)
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(invalidContent))) // Content fetch
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaContent))); // Schema fetch
+
+      const schema: JSONSchema = {
+        type: 'string',
+        cid: schemaCID
+      };
+
+      const data = { '/': contentCID };
+
+      const result = await jsonValidator.validate(data, schema);
+      expect(result.valid).toBe(false);
+    });
+
+    it('should validate string content from CID pointer', async () => {
+      const contentCID = 'QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB';
+      const textContent = 'Hello, this is plain text content';
+
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(textContent)
+      );
+
+      const schema: JSONSchema = {
+        type: 'string',
+        minLength: 10
+      };
+
+      const data = { '/': contentCID };
+
+      const result = await jsonValidator.validate(data, schema);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should resolve nested CID pointers', async () => {
+      const userCID = 'QmTzQ1qTvWQWoK9DBwp9vRssFyY1jCFyLEgcs1qeYNBrkK';
+      const profileCID = 'Qmbj6yDMMPSaXwYJWJfGoRAUtCfLtZZhM9fi2HEHVQ5Tde';
+      
+      const userData = {
+        name: 'Alice',
+        profile: { '/': profileCID }
+      };
+      
+      const profileData = {
+        bio: 'Software developer',
+        location: 'San Francisco'
+      };
+
+      // Clear any previous mocks
+      vi.clearAllMocks();
+      
+      // Set up fresh mocks
+      vi.mocked(mockIPFSService.fetchContent)
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(userData))) // User data fetch
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(profileData))); // Profile data fetch
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          profile: {
+            type: 'object',
+            properties: {
+              bio: { type: 'string' },
+              location: { type: 'string' }
+            }
+          }
+        }
+      };
+
+      const data = { '/': userCID };
+
+      const result = await jsonValidator.validate(data, schema);
+      expect(result.valid).toBe(true);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle arrays with CID pointers', async () => {
+      const cid1 = 'QmRhVwVfENfzsT9gWZnQY9C8w2cpNyuyUKUpc8mNGaW1MG';
+      const cid2 = 'QmSrPcBnqggGvvRgCi3LoLSLd6gtfbTVgfvktKKpJmtLGr';
+      
+      const content1 = { id: 1, value: 'first' };
+      const content2 = { id: 2, value: 'second' };
+
+      vi.mocked(mockIPFSService.fetchContent)
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(content1)))
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify(content2)));
+
+      const schema: JSONSchema = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            value: { type: 'string' }
+          },
+          required: ['id', 'value']
+        }
+      };
+
+      const data = [
+        { '/': cid1 },
+        { '/': cid2 }
+      ];
+
+      const result = await jsonValidator.validate(data, schema);
+      expect(result.valid).toBe(true);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle IPFS fetch errors for CID pointers', async () => {
+      const contentCID = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG';
+
+      vi.mocked(mockIPFSService.fetchContent).mockRejectedValueOnce(
+        new Error('IPFS gateway error')
+      );
+
+      const schema: JSONSchema = {
+        type: 'object'
+      };
+
+      const data = { '/': contentCID };
+
+      const result = await jsonValidator.validate(data, schema);
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain('Failed to resolve CID pointer');
+    });
+
+  });
+
   describe('isValidSchema', () => {
     it('should validate correct schemas', async () => {
       const schemas = [
