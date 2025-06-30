@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { JsonValidatorService } from '../../../src/services/json-validator.service';
 import { JSONSchema } from '../../../src/services/schema-cache.service';
 import { IPFSService } from '../../../src/services/ipfs.service';
+import { promises as fsPromises } from 'fs';
+
+vi.mock('fs', () => ({
+  promises: {
+    readFile: vi.fn()
+  }
+}));
 
 describe('JsonValidatorService', () => {
   let jsonValidator: JsonValidatorService;
@@ -16,6 +23,10 @@ describe('JsonValidatorService', () => {
     } as any;
 
     jsonValidator = new JsonValidatorService(mockIPFSService);
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
     vi.clearAllMocks();
   });
 
@@ -906,6 +917,124 @@ describe('JsonValidatorService', () => {
       expect(result.errors![0].message).toContain('Failed to resolve CID pointer');
     });
 
+  });
+
+  describe('relative file path resolution', () => {
+    it('should resolve relative file paths in data', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(mockIPFSService, baseDir);
+      
+      // Mock fs.readFile
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ name: 'John', age: 30 }) as any
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'number' }
+        }
+      };
+
+      // Data contains a relative file path
+      const data = { '/': 'user.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+      
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith('/test/data/user.json', 'utf-8');
+    });
+
+    it('should handle nested relative paths', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(mockIPFSService, baseDir);
+      
+      vi.mocked(fsPromises.readFile)
+        .mockResolvedValueOnce(JSON.stringify({ bio: 'Developer', location: 'NYC' }) as any);
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          profile: {
+            type: 'object',
+            properties: {
+              bio: { type: 'string' },
+              location: { type: 'string' }
+            }
+          }
+        }
+      };
+
+      const data = {
+        name: 'Alice',
+        profile: { '/': 'profiles/alice.json' }
+      };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+      
+      expect(result.valid).toBe(true);
+      expect(fsPromises.readFile).toHaveBeenCalledWith('/test/data/profiles/alice.json', 'utf-8');
+    });
+
+    it('should fail when file does not exist', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(mockIPFSService, baseDir);
+      
+      vi.mocked(fsPromises.readFile).mockRejectedValueOnce(
+        new Error('ENOENT: no such file or directory')
+      );
+
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': 'nonexistent.json' };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain('Failed to resolve pointer');
+    });
+
+    it('should prefer CID over file path when both are possible', async () => {
+      const baseDir = '/test/data';
+      const jsonValidatorWithBaseDir = new JsonValidatorService(mockIPFSService, baseDir);
+      
+      // Use a valid CID format
+      const validCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(JSON.stringify({ source: 'ipfs' }))
+      );
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          source: { type: 'string' }
+        }
+      };
+
+      const data = { '/': validCID };
+
+      const result = await jsonValidatorWithBaseDir.validate(data, schema);
+      
+      expect(result.valid).toBe(true);
+      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(validCID);
+      // File system should not be accessed for valid CIDs
+      expect(fsPromises.readFile).not.toHaveBeenCalled();
+    });
+
+    it('should fail when no base directory is provided for relative paths', async () => {
+      // Create validator without base directory
+      const jsonValidatorNoBaseDir = new JsonValidatorService(mockIPFSService);
+      
+      const schema: JSONSchema = { type: 'object' };
+      const data = { '/': 'user.json' }; // Not a valid CID
+
+      const result = await jsonValidatorNoBaseDir.validate(data, schema);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors![0].message).toContain('no base directory provided');
+    });
   });
 
   describe('isValidSchema', () => {

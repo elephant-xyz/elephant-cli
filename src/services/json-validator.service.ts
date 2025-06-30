@@ -1,6 +1,8 @@
 import { ValidateFunction, ErrorObject, Ajv, KeywordDefinition } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
+import { promises as fsPromises } from 'fs';
+import path from 'path';
 import { JSONSchema } from './schema-cache.service.js';
 import { IPFSService } from './ipfs.service.js';
 
@@ -21,9 +23,11 @@ export class JsonValidatorService {
   private validators: Map<string, ValidateFunction> = new Map();
   private ipfsService: IPFSService;
   private schemaCache: Map<string, JSONSchema> = new Map();
+  private baseDirectory?: string;
 
-  constructor(ipfsService: IPFSService) {
+  constructor(ipfsService: IPFSService, baseDirectory?: string) {
     this.ipfsService = ipfsService;
+    this.baseDirectory = baseDirectory;
     this.ajv = new Ajv({
       allErrors: true,
       loadSchema: this.loadSchemaFromCID.bind(this),
@@ -142,32 +146,62 @@ export class JsonValidatorService {
   /**
    * Resolve CID pointers in data
    * Handles {"/": <cid>} pattern by fetching content from IPFS
+   * Handles {"/": <relative_file_path>} pattern by reading from local filesystem
    */
   private async resolveCIDPointers(data: any): Promise<any> {
     if (!data || typeof data !== 'object') {
       return data;
     }
 
-    // Check if this is a CID pointer object
+    // Check if this is a pointer object
     if (data['/'] && typeof data['/'] === 'string' && Object.keys(data).length === 1) {
+      const pointerValue = data['/'];
+      
+      // Try to parse as CID first
+      let isCID = false;
       try {
-        const cid = data['/'];
-        // Validate CID format
-        CID.parse(cid);
-        
-        // Fetch content from IPFS
-        const contentBuffer = await this.ipfsService.fetchContent(cid);
-        const contentText = contentBuffer.toString('utf-8');
-        
-        // Try to parse as JSON
+        CID.parse(pointerValue);
+        isCID = true;
+      } catch {
+        // Not a valid CID
+      }
+      
+      if (isCID) {
+        // It's a valid CID, fetch from IPFS
         try {
-          return JSON.parse(contentText);
-        } catch {
-          // Return as string if not valid JSON
-          return contentText;
+          const contentBuffer = await this.ipfsService.fetchContent(pointerValue);
+          const contentText = contentBuffer.toString('utf-8');
+          
+          // Try to parse as JSON
+          try {
+            return JSON.parse(contentText);
+          } catch {
+            // Return as string if not valid JSON
+            return contentText;
+          }
+        } catch (error) {
+          throw new Error(`Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`);
         }
-      } catch (error) {
-        throw new Error(`Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        // Not a valid CID, try as relative file path
+        if (this.baseDirectory) {
+          try {
+            const filePath = path.join(this.baseDirectory, pointerValue);
+            const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+            
+            // Try to parse as JSON
+            try {
+              return JSON.parse(fileContent);
+            } catch {
+              // Return as string if not valid JSON
+              return fileContent;
+            }
+          } catch (fileError) {
+            throw new Error(`Failed to resolve pointer - not a valid CID or accessible file path: ${pointerValue}`);
+          }
+        } else {
+          throw new Error(`Failed to resolve pointer - not a valid CID and no base directory provided: ${pointerValue}`);
+        }
       }
     }
 
