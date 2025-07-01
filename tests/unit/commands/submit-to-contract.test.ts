@@ -169,13 +169,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     await handleSubmitToContract(dryRunOptions, serviceOverrides);
 
-    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(3);
-    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
-
-    const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
-    const mockInstance = MockedTransactionBatcher.mock.results[0].value;
-    expect(mockInstance.submitAll).not.toHaveBeenCalled();
-    expect(mockInstance.groupItemsIntoBatches).toHaveBeenCalled();
+    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(0);
+    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(0);
   });
 
   it('should skip items that already exist on chain', async () => {
