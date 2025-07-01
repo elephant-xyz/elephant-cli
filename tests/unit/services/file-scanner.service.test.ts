@@ -78,31 +78,37 @@ describe('FileScannerService', () => {
       expect(result.errors).toContain('Directory is empty');
     });
 
-    it('should reject files in root directory', async () => {
+    it('should ignore files in root directory', async () => {
       await writeFile(join(tempDir, 'invalid-file.json'), '{"test": "data"}');
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      // Should be invalid because no valid property directories found
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some((err) => err.includes('Found file'))).toBe(
-        true
-      );
+      expect(
+        result.errors.some((err) =>
+          err.includes('No valid property CID directories found')
+        )
+      ).toBe(true);
     });
 
-    it('should reject invalid property CID directory names', async () => {
+    it('should ignore invalid property CID directory names', async () => {
       await mkdir(join(tempDir, 'invalid-cid'));
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      // Should be invalid because no valid property directories found
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
       expect(
-        result.errors.some((err) => err.includes('Invalid property CID'))
+        result.errors.some((err) =>
+          err.includes('No valid property CID directories found')
+        )
       ).toBe(true);
     });
 
-    it('should reject non-JSON files in property directories', async () => {
+    it('should ignore non-JSON files in property directories', async () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -110,14 +116,17 @@ describe('FileScannerService', () => {
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      // Should be invalid because no valid data group CID files found
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some((err) => err.includes('.json extension'))).toBe(
-        true
-      );
+      expect(
+        result.errors.some((err) =>
+          err.includes('No valid data group CID files found')
+        )
+      ).toBe(true);
     });
 
-    it('should reject invalid data group CID filenames', async () => {
+    it('should ignore invalid data group CID filenames', async () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -128,14 +137,17 @@ describe('FileScannerService', () => {
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      // Should be invalid because no valid data group CID files found
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
       expect(
-        result.errors.some((err) => err.includes('Invalid data group CID'))
+        result.errors.some((err) =>
+          err.includes('No valid data group CID files found')
+        )
       ).toBe(true);
     });
 
-    it('should reject subdirectories in property directories', async () => {
+    it('should ignore subdirectories in property directories', async () => {
       const propertyCid = 'QmPropertyCid123456789012345678901234567890';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -143,11 +155,14 @@ describe('FileScannerService', () => {
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      // Should be invalid because no valid data group CID files found
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors.some((err) => err.includes('subdirectory'))).toBe(
-        true
-      );
+      expect(
+        result.errors.some((err) =>
+          err.includes('No valid data group CID files found')
+        )
+      ).toBe(true);
     });
 
     it('should reject empty property directories', async () => {
@@ -184,6 +199,36 @@ describe('FileScannerService', () => {
 
       const result = await fileScannerService.validateStructure(tempDir);
 
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should validate structure with mixed valid and invalid entries', async () => {
+      // Create a mix of valid and invalid entries
+      const validPropertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const validDataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+
+      // Valid property directory with valid data
+      const validPropertyDir = join(tempDir, validPropertyCid);
+      await mkdir(validPropertyDir);
+      await writeFile(
+        join(validPropertyDir, `${validDataGroupCid}.json`),
+        '{"test": "valid data"}'
+      );
+
+      // Invalid entries that should be ignored
+      await mkdir(join(tempDir, 'invalid-dir'));
+      await writeFile(join(tempDir, 'random-file.txt'), 'should be ignored');
+      await writeFile(
+        join(validPropertyDir, 'non-cid.json'),
+        '{"test": "ignored"}'
+      );
+      await writeFile(join(validPropertyDir, 'file.txt'), 'also ignored');
+      await mkdir(join(validPropertyDir, 'subdirectory'));
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      // Should be valid because there is at least one valid property with valid data
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });

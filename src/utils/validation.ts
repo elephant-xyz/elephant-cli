@@ -52,8 +52,9 @@ export const deriveCIDFromHash = (hash: string): string => {
     // sha256.code is 0x12, length is 32 bytes for SHA-256
     const multihash = createDigest(sha256.code, hashBytes);
 
-    // Create CID v0 from the multihash
-    const cid = CID.createV0(multihash);
+    // Create CID v1 from the multihash using dag-json codec (0x0129)
+    // This is the proper codec for IPLD compliance
+    const cid = CID.create(1, 0x0129, multihash);
 
     return cid.toString();
   } catch (e: unknown) {
@@ -66,14 +67,15 @@ export const extractHashFromCID = (cid: string): string => {
   try {
     const parsedCid = CID.parse(cid);
 
-    // Ensure it's CID v0 (which uses SHA-256 and dag-pb)
-    if (parsedCid.version !== 0) {
+    // Check if the multihash is SHA-256 (code 0x12)
+    if (parsedCid.multihash.code !== sha256.code) {
       throw new Error(
-        `Only CID v0 is supported, got version ${parsedCid.version}`
+        `Only SHA-256 hash is supported, got hash function code ${parsedCid.multihash.code}`
       );
     }
 
     // Extract the hash bytes from the multihash
+    // This works for both CID v0 and v1 as long as they use SHA-256
     const hashBytes = parsedCid.multihash.digest;
 
     // Convert to hex string with 0x prefix

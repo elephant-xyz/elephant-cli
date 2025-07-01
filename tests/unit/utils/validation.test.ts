@@ -16,6 +16,7 @@ vi.mock('multiformats/cid', () => ({
           valid: true,
           version: 0,
           multihash: {
+            code: 0x12, // SHA-256
             digest: new Uint8Array(32).fill(0x12), // Mock hash
           },
         };
@@ -29,6 +30,7 @@ vi.mock('multiformats/cid', () => ({
           valid: true,
           version: 1,
           multihash: {
+            code: 0x12, // SHA-256
             digest: new Uint8Array(32).fill(0x13), // Mock hash for v1
           },
         };
@@ -37,6 +39,10 @@ vi.mock('multiformats/cid', () => ({
     },
     createV0: (multihash: any) => ({
       toString: () => 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
+    }),
+    create: (version: number, codec: number, multihash: any) => ({
+      toString: () =>
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
     }),
   },
 }));
@@ -198,18 +204,23 @@ describe('validation utils', () => {
   });
 
   describe('deriveCIDFromHash', () => {
-    it('should derive CID v0 from bytes32 hash', () => {
+    it('should derive CID v1 with DAG-JSON codec from bytes32 hash', () => {
       const hash =
         '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const result = deriveCIDFromHash(hash);
-      expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+      // Should return CID v1 with DAG-JSON codec
+      expect(result).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should handle hash without 0x prefix', () => {
       const hash =
         '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
       const result = deriveCIDFromHash(hash);
-      expect(result).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+      expect(result).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should throw error for invalid hash format', () => {
@@ -234,10 +245,14 @@ describe('validation utils', () => {
       );
     });
 
-    it('should throw error for CID v1', () => {
+    it('should extract hash from CID v1', () => {
       const cidV1 =
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
-      expect(() => extractHashFromCID(cidV1)).toThrow('Invalid CID format');
+      const result = extractHashFromCID(cidV1);
+      // This should return the mocked hash for v1 (all 0x13 bytes)
+      expect(result).toBe(
+        '0x1313131313131313131313131313131313131313131313131313131313131313'
+      );
     });
 
     it('should throw error for invalid CID', () => {
@@ -256,8 +271,28 @@ describe('validation utils', () => {
       const originalCid = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
       const extractedHash = extractHashFromCID(originalCid);
       const derivedCid = deriveCIDFromHash(extractedHash);
-      // Both should return the mocked CID
-      expect(derivedCid).toBe('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU');
+      // Now returns CID v1
+      expect(derivedCid).toBe(
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
+    });
+
+    it('should extract the same SHA-256 hash from both CID v0 and v1 if they have the same content', () => {
+      // Both CIDs should extract to their respective mock hashes
+      const cidV0 = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const cidV1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+
+      const hashV0 = extractHashFromCID(cidV0);
+      const hashV1 = extractHashFromCID(cidV1);
+
+      // In this mock, they have different hashes (0x12 vs 0x13 filled)
+      expect(hashV0).toBe(
+        '0x1212121212121212121212121212121212121212121212121212121212121212'
+      );
+      expect(hashV1).toBe(
+        '0x1313131313131313131313131313131313131313131313131313131313131313'
+      );
     });
   });
 });

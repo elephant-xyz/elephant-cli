@@ -16,6 +16,17 @@ npm install -g @elephant-xyz/cli
 npx @elephant-xyz/cli list-assignments --oracle 0xYourElephantAddress
 ```
 
+## Features
+
+- 📊 List and download elephant assignments from the blockchain
+- 📥 Download assigned files from IPFS with automatic retry
+- ✅ Validate JSON files against schemas before submission
+- 📤 Upload validated data to IPFS via Pinata
+- 🔗 Support for IPLD links - automatically convert file paths to IPFS CIDs
+- 📝 Submit data hashes to smart contracts in batches
+- 🔄 Two-step submission process for reliability
+- 📊 CSV output for tracking submissions
+
 ## Usage
 
 ### Basic Usage - List Assignments
@@ -124,10 +135,11 @@ elephant-cli submit-files ./data-directory --dry-run
 - 🎯 Progress indicators and colored output
 - ⏱️ Execution time tracking
 - 📊 Summary statistics
-- ✅ File validation against JSON schemas
+- ✅ File validation against JSON schemas with advanced CID support
 - 📤 Batch IPFS uploads via Pinata
 - 🔗 Smart contract batch submissions
 - 📝 CSV reporting for upload results
+- 🔍 Automatic CID pointer resolution for IPFS-stored data
 
 ## Requirements
 
@@ -206,6 +218,97 @@ elephant-cli/
 ├── dist/                  # Built JavaScript files
 └── package.json
 ```
+
+## Advanced JSON Validation Features
+
+The CLI includes sophisticated JSON validation with IPFS integration:
+
+### CID-Referenced Schemas
+
+Schemas can reference other schemas stored in IPFS:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "string",
+      "cid": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+    }
+  }
+}
+```
+
+The validator automatically fetches and applies the referenced schema from IPFS.
+
+### CID Pointer Resolution
+
+Data can contain IPFS CID pointers that are automatically resolved during validation:
+
+```json
+{
+  "metadata": {
+    "/": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+  }
+}
+```
+
+### IPLD Link Support (File Path Resolution)
+
+The CLI now supports IPLD links with automatic file path to CID conversion. During the upload process, file paths in your JSON data are automatically converted to IPFS CIDs:
+
+```json
+// Before upload
+{
+  "title": "Main Document",
+  "metadata": {
+    "/": "./metadata.json"
+  },
+  "license": {
+    "/": "../shared/license.json"
+  }
+}
+
+// After upload
+{
+  "title": "Main Document", 
+  "metadata": {
+    "/": "QmMetadataCID..."
+  },
+  "license": {
+    "/": "QmLicenseCID..."
+  }
+}
+```
+
+This feature enables:
+- Modular data structures with linked components
+- Automatic upload of referenced files
+- IPLD compliant output with CID v1 format
+- Support for relative and absolute file paths
+
+See [docs/IPLD-LINKS.md](docs/IPLD-LINKS.md) for detailed documentation.
+
+### Full Validation Example
+
+```json
+{
+  "user": "Alice",
+  "profile": {
+    "/": "QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU"
+  }
+}
+```
+
+The validator fetches the content at the CID and validates it against the schema.
+
+### Features
+
+- **Automatic Resolution**: CID pointers (`{"/": "<cid>"}`) are resolved before validation
+- **Schema Caching**: Fetched schemas are cached for performance
+- **Recursive Support**: Works with nested structures and arrays
+- **CID Format Validation**: Built-in validation for IPFS CID strings
+- **Error Handling**: Graceful handling of IPFS fetch failures
 
 ## Examples
 

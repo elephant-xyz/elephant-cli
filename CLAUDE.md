@@ -113,6 +113,8 @@ Common issues to check:
 1. **CID Decoding**: Ensure the leading dot is removed
 2. **Block Ranges**: Recent blocks work; very old blocks may be pruned
 3. **IPFS Gateways**: Some gateways may be slow or unavailable
+4. **Log Files**: Check `elephant-cli.log` for detailed debugging information. The log shows blockchain queries, RPC calls, and other internal operations.
+5. **Timeout Issues**: The default `DEFAULT_FROM_BLOCK` (72310501) can cause timeouts as it requires querying millions of blocks. In tests, use mock services or skip blockchain queries in dry-run mode.
 
 ### Code Style
 
@@ -128,6 +130,7 @@ Common issues to check:
 2. **Queue System**: Prevents overwhelming IPFS gateways
 3. **Event Decoder**: Handles contract-specific data encoding
 4. **Validation**: Input validation before processing
+5. **JSON Validator with CID Support**: Advanced schema validation with IPFS integration
 
 ## Improvement Opportunities
 
@@ -144,6 +147,8 @@ Common issues to check:
 - **Max Concurrent Downloads**: 3
 - **Download Timeout**: 30 seconds
 - **Retry Count**: 1 retry on IPFS failure
+- **CID Version**: v1 (base32 encoding) for all uploads
+- **CID Codec**: DAG-JSON (0x0129) for IPLD linked data, DAG-PB (0x70) for regular files
 
 ## Development Commands
 
@@ -196,6 +201,7 @@ npm test tests/integration/split-commands.test.ts
 - `src/services/pinata.service.ts` - Pinata upload service
 - `src/services/chain-state.service.ts` - Chain state queries
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
+- `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations
@@ -204,6 +210,72 @@ npm test tests/integration/split-commands.test.ts
 2. No caching of blockchain queries
 3. Single elephant address at a time
 4. No export formats (only console output)
+
+## JSON Validator with CID Support
+
+The `JsonValidatorService` provides advanced JSON schema validation with IPFS integration:
+
+### CID Schema References
+Schemas can reference other schemas stored in IPFS using CID:
+```json
+{
+  "type": "string",
+  "cid": "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o"
+}
+```
+
+### CID Pointer Resolution
+Data can contain CID pointers that are automatically resolved:
+```json
+{
+  "/": "QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU"
+}
+```
+
+### File Path Linking
+Data can reference local files using relative paths:
+```json
+{
+  "/": "./names.json"
+}
+```
+**Important**: File paths are resolved relative to the file containing the reference, not the data directory root. For example:
+- If `data/propertyA/file1.json` contains `{"/": "./file2.json"}`, it resolves to `data/propertyA/file2.json`
+- If `data/propertyA/file1.json` contains `{"/": "../propertyB/file3.json"}`, it resolves to `data/propertyB/file3.json`
+
+### Features
+1. **Automatic CID Resolution**: When validating data containing `{"/": <cid>}`, the validator:
+   - Fetches the content from IPFS
+   - Replaces the pointer with actual content
+   - Validates against the schema
+
+2. **Schema CID References**: Schemas with `{"type": "string", "cid": <cid>}`:
+   - Fetch the schema from IPFS
+   - Use it for validation
+   - Cache for performance
+
+3. **Recursive Resolution**: Works with nested structures and arrays
+
+4. **CID Format Validation**: Validates CID strings using multiformats library
+
+5. **File Path Resolution**: Relative file paths in IPLD links are resolved relative to the containing file's directory, not the data directory root
+
+### Example Flow
+```typescript
+// Schema references another schema via CID
+const schema = {
+  type: "string",
+  cid: "QmSchemaCID..."
+};
+
+// Data is a CID pointer
+const data = {
+  "/": "QmDataCID..."
+};
+
+// Both are fetched from IPFS and validated
+const result = await validator.validate(data, schema);
+```
 
 ## Security Considerations
 

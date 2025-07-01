@@ -9,10 +9,7 @@ import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
-import {
-  SchemaCacheService,
-  JSONSchema,
-} from '../services/schema-cache.service.js';
+import { SchemaCacheService } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
@@ -21,6 +18,7 @@ import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
+import { IPLDConverterService } from '../services/ipld-converter.service.js';
 
 export interface ValidateAndUploadCommandOptions {
   pinataJwt: string;
@@ -91,6 +89,7 @@ export interface ValidateAndUploadServiceOverrides {
   pinataService?: PinataService;
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
+  ipldConverterService?: IPLDConverterService;
 }
 
 export async function handleValidateAndUpload(
@@ -224,7 +223,8 @@ export async function handleValidateAndUpload(
     serviceOverrides.schemaCacheService ??
     new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
   const jsonValidatorService =
-    serviceOverrides.jsonValidatorService ?? new JsonValidatorService();
+    serviceOverrides.jsonValidatorService ??
+    new JsonValidatorService(ipfsServiceForSchemas, options.inputDir);
   const jsonCanonicalizerService =
     serviceOverrides.jsonCanonicalizerService ?? new JsonCanonicalizerService();
   const cidCalculatorService =
@@ -238,6 +238,14 @@ export async function handleValidateAndUpload(
   const pinataService =
     serviceOverrides.pinataService ??
     new PinataService(options.pinataJwt, undefined, 18);
+
+  const ipldConverterService =
+    serviceOverrides.ipldConverterService ??
+    new IPLDConverterService(
+      options.inputDir,
+      pinataService,
+      cidCalculatorService
+    );
 
   let progressTracker: SimpleProgress | undefined =
     serviceOverrides.progressTracker;
@@ -326,19 +334,9 @@ export async function handleValidateAndUpload(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
-            const schema = await schemaCacheService.getSchema(schemaCid);
-            if (schema) {
-              logger.debug(
-                `Successfully pre-fetched and cached schema ${schemaCid}`
-              );
-              prefetchedCount++;
-              fetchSuccess = true;
-            } else {
-              logger.warn(
-                `Could not pre-fetch schema ${schemaCid}. It will be attempted again during file processing.`
-              );
-              failedCount++;
-            }
+            await schemaCacheService.getSchema(schemaCid);
+            prefetchedCount++;
+            fetchSuccess = true;
           } catch (error) {
             logger.warn(
               `Error pre-fetching schema ${schemaCid}: ${error instanceof Error ? error.message : String(error)}. It will be attempted again during file processing.`
@@ -372,6 +370,7 @@ export async function handleValidateAndUpload(
       csvReporterService, // This is the initialized one from the try block
       progressTracker, // This is the initialized one
       pinataService,
+      ipldConverterService,
     };
 
     const allOperationPromises: Promise<void>[] = [];
@@ -534,6 +533,7 @@ async function processFileAndGetUploadPromise(
     csvReporterService: CsvReporterService;
     progressTracker: SimpleProgress;
     pinataService: PinataService;
+    ipldConverterService: IPLDConverterService;
   },
   options: ValidateAndUploadCommandOptions,
   uploadRecords: UploadRecord[]
@@ -579,7 +579,8 @@ async function processFileAndGetUploadPromise(
 
     const validationResult = await services.jsonValidatorService.validate(
       jsonData,
-      schema as JSONSchema
+      schema,
+      fileEntry.filePath
     );
 
     if (!validationResult.valid) {
@@ -595,11 +596,51 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
+    // Check if data contains file path links and convert them to IPLD format
+    let dataToUpload = jsonData;
+    if (services.ipldConverterService.hasIPLDLinks(jsonData)) {
+      logger.debug(
+        `Converting file path links to IPLD format for ${fileEntry.filePath}`
+      );
+      try {
+        const conversionResult =
+          await services.ipldConverterService.convertToIPLD(
+            jsonData,
+            fileEntry.filePath
+          );
+        dataToUpload = conversionResult.convertedData;
+
+        if (conversionResult.hasLinks) {
+          logger.debug(
+            `Converted ${conversionResult.linkedCIDs.length} file paths to IPFS CIDs`
+          );
+        }
+      } catch (conversionError) {
+        const errorMsg =
+          conversionError instanceof Error
+            ? conversionError.message
+            : String(conversionError);
+        logger.error(
+          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+        );
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          error: `IPLD conversion error: ${errorMsg}`,
+          timestamp: new Date().toISOString(),
+        });
+        services.progressTracker.increment('errors');
+        return;
+      }
+    }
+
     const canonicalJson =
-      services.jsonCanonicalizerService.canonicalize(jsonData);
-    const calculatedCid = await services.cidCalculatorService.calculateCidV0(
-      Buffer.from(canonicalJson, 'utf-8')
-    );
+      services.jsonCanonicalizerService.canonicalize(dataToUpload);
+
+    // Use appropriate CID format based on content
+    const calculatedCid =
+      await services.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
 
     const processedFile: ProcessedFile = {
       propertyCid: fileEntry.propertyCid,

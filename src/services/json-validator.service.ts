@@ -1,5 +1,10 @@
-import type { ValidateFunction, ErrorObject } from 'ajv';
+import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
+import addFormats from 'ajv-formats';
+import { CID } from 'multiformats';
+import { promises as fsPromises } from 'fs';
+import path from 'path';
 import { JSONSchema } from './schema-cache.service.js';
+import { IPFSService } from './ipfs.service.js';
 
 export interface ValidationError {
   path: string;
@@ -14,52 +19,94 @@ export interface ValidationResult {
 }
 
 export class JsonValidatorService {
-  private ajv: any;
+  private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
+  private ipfsService: IPFSService;
+  private schemaCache: Map<string, JSONSchema> = new Map();
+  private baseDirectory?: string;
 
-  private ajvInitialized: Promise<void>;
-
-  constructor() {
-    // Initialize AJV dynamically to work with ES modules
-    this.ajvInitialized = this.initializeAjv();
+  constructor(ipfsService: IPFSService, baseDirectory?: string) {
+    this.ipfsService = ipfsService;
+    this.baseDirectory = baseDirectory;
+    this.ajv = new Ajv({
+      allErrors: true,
+      loadSchema: this.loadSchemaFromCID.bind(this),
+    });
+    addFormats.default(this.ajv);
+    this.setupCIDCustomizations();
   }
 
-  private async initializeAjv(): Promise<void> {
-    // Use dynamic import with createRequire for CommonJS compatibility
-    const { createRequire } = await import('module');
-    const require = createRequire(import.meta.url);
-
-    const Ajv = require('ajv/dist/2020');
-    const addFormats = require('ajv-formats');
-
-    // Initialize AJV with draft-07 support
-    const ajvInstance = new Ajv({
-      strict: false, // Allow draft-07 schemas
-      allErrors: true, // Report all errors, not just the first one
-      verbose: true, // Include data in errors
-      validateFormats: true, // This is the default with ajv-formats but good to be explicit
+  private setupCIDCustomizations(): void {
+    // Enhanced CID format validation
+    this.ajv.addFormat('cid', {
+      type: 'string',
+      validate: (value: string): boolean => {
+        try {
+          CID.parse(value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
     });
+  }
 
-    // Add format validators (date, time, email, etc.)
-    addFormats(ajvInstance);
-    this.ajv = ajvInstance;
+  private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
+    // Check cache first
+    if (this.schemaCache.has(cidStr)) {
+      return this.schemaCache.get(cidStr)!;
+    }
 
-    // Cache compiled validators for reuse
-    this.validators = new Map();
+    try {
+      // Validate CID format
+      CID.parse(cidStr);
+
+      // Fetch schema content from IPFS
+      const buffer = await this.ipfsService.fetchContent(cidStr);
+      const schemaText = buffer.toString('utf-8');
+      const schema = JSON.parse(schemaText) as JSONSchema;
+
+      // Don't validate here because the schema might contain nested CID references
+      // Validation will happen after all CID references are resolved
+
+      // Cache the schema
+      this.schemaCache.set(cidStr, schema);
+
+      return schema;
+    } catch (error) {
+      throw new Error(
+        `Failed to load schema from CID ${cidStr}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   /**
    * Validate JSON data against a schema
+   * @param data The data to validate
+   * @param schema The schema to validate against
+   * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    */
-  async validate(data: any, schema: JSONSchema): Promise<ValidationResult> {
-    await this.ajvInitialized; // Wait for AJV to be initialized
-
+  async validate(
+    data: any,
+    schema: JSONSchema,
+    currentFilePath?: string
+  ): Promise<ValidationResult> {
     try {
-      // Get or compile validator
-      const validator = this.getValidator(schema);
+      // Resolve CID pointers in data if present
+      const resolvedData = await this.resolveCIDPointers(data, currentFilePath);
 
-      // Validate the data
-      const valid = validator(data);
+      // Also resolve any CID references in the schema
+      const resolvedSchema = await this.resolveCIDSchemas(schema);
+
+      // Get or compile validator
+      const validator = await this.getValidator(resolvedSchema);
+
+      // Validate the data (handle both sync and async validators)
+      const result = validator(resolvedData);
+      const valid =
+        typeof result === 'object' && result !== null && 'then' in result
+          ? await result
+          : result;
 
       if (valid) {
         return { valid: true };
@@ -84,34 +131,176 @@ export class JsonValidatorService {
   }
 
   /**
-   * Validate a batch of JSON data against the same schema
+   * Resolve CID references in schemas
+   * Replaces { type: 'string', cid: '...' } with the actual schema from IPFS
    */
-  async validateBatch(
-    dataArray: any[],
-    schema: JSONSchema
-  ): Promise<ValidationResult[]> {
-    await this.ajvInitialized; // Wait for AJV to be initialized
+  private async resolveCIDSchemas(schema: any): Promise<any> {
+    if (!schema || typeof schema !== 'object') {
+      return schema;
+    }
 
-    // Get compiled validator for reuse across all items
-    const validator = this.getValidator(schema);
-
-    // Process all validations synchronously
-    return dataArray.map((data) => {
-      const valid = validator(data);
-
-      if (valid) {
-        return { valid: true };
-      } else {
-        const errors = this.transformErrors(validator.errors || []);
-        return { valid: false, errors };
+    // Check if this schema node has a 'cid' property (along with type)
+    if (schema.cid && typeof schema.cid === 'string' && schema.type) {
+      try {
+        // Load the schema from the CID
+        const loadedSchema = await this.loadSchemaFromCID(schema.cid);
+        // Recursively resolve any CID references within the loaded schema
+        return await this.resolveCIDSchemas(loadedSchema);
+      } catch (error) {
+        throw new Error(
+          `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
-    });
+    }
+
+    // Handle arrays
+    if (Array.isArray(schema)) {
+      return Promise.all(schema.map((item) => this.resolveCIDSchemas(item)));
+    }
+
+    // Recursively process object properties
+    const resolved: any = {};
+    for (const key in schema) {
+      if (Object.prototype.hasOwnProperty.call(schema, key)) {
+        resolved[key] = await this.resolveCIDSchemas(schema[key]);
+      }
+    }
+    return resolved;
+  }
+
+  /**
+   * Resolve CID pointers in data
+   * Handles {"/": <cid>} pattern by fetching content from IPFS
+   * Handles {"/": <relative_file_path>} pattern by reading from local filesystem
+   * @param data The data to resolve pointers in
+   * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
+   */
+  private async resolveCIDPointers(
+    data: any,
+    currentFilePath?: string
+  ): Promise<any> {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    // Check if this is a pointer object
+    if (
+      Object.prototype.hasOwnProperty.call(data, '/') &&
+      typeof data['/'] === 'string' &&
+      Object.keys(data).length === 1
+    ) {
+      const pointerValue = data['/'];
+
+      // Check for empty string
+      if (!pointerValue) {
+        throw new Error(
+          'Failed to resolve pointer - empty string is not a valid CID or file path'
+        );
+      }
+
+      // Try to parse as CID first
+      let isCID = false;
+      try {
+        CID.parse(pointerValue);
+        isCID = true;
+      } catch {
+        // Not a valid CID
+      }
+
+      if (isCID) {
+        // It's a valid CID, fetch from IPFS
+        try {
+          const contentBuffer =
+            await this.ipfsService.fetchContent(pointerValue);
+          const contentText = contentBuffer.toString('utf-8');
+
+          // Try to parse as JSON
+          try {
+            const parsed = JSON.parse(contentText);
+            // Recursively resolve any nested CID pointers
+            return await this.resolveCIDPointers(parsed, currentFilePath);
+          } catch {
+            // Return as string if not valid JSON
+            return contentText;
+          }
+        } catch (error) {
+          throw new Error(
+            `Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      } else {
+        // Not a valid CID, try as file path
+        if (!this.baseDirectory && !pointerValue.startsWith('/')) {
+          throw new Error(
+            `Failed to resolve pointer - not a valid CID and no base directory provided for relative path: ${pointerValue}`
+          );
+        }
+
+        try {
+          let filePath: string;
+
+          // Handle absolute paths (starting with /)
+          if (pointerValue.startsWith('/')) {
+            filePath = pointerValue;
+          } else {
+            // Handle relative paths
+            // First try relative to current file (if provided)
+            if (currentFilePath) {
+              const currentDir = path.dirname(currentFilePath);
+              filePath = path.join(currentDir, pointerValue);
+            } else if (this.baseDirectory) {
+              // Fallback to base directory
+              filePath = path.join(this.baseDirectory, pointerValue);
+            } else {
+              throw new Error(
+                `No context provided for relative path: ${pointerValue}`
+              );
+            }
+          }
+
+          const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+
+          // Try to parse as JSON
+          try {
+            const parsed = JSON.parse(fileContent);
+            // Recursively resolve any nested CID pointers
+            return await this.resolveCIDPointers(parsed, currentFilePath);
+          } catch {
+            // Return as string if not valid JSON
+            return fileContent;
+          }
+        } catch (fileError) {
+          throw new Error(
+            `Failed to resolve pointer - not a valid CID or accessible file path: ${pointerValue}`
+          );
+        }
+      }
+    }
+
+    // Recursively resolve CID pointers in arrays
+    if (Array.isArray(data)) {
+      return Promise.all(
+        data.map((item) => this.resolveCIDPointers(item, currentFilePath))
+      );
+    }
+
+    // Recursively resolve CID pointers in objects
+    const resolved: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        resolved[key] = await this.resolveCIDPointers(
+          data[key],
+          currentFilePath
+        );
+      }
+    }
+    return resolved;
   }
 
   /**
    * Get or compile a validator for a schema
    */
-  private getValidator(schema: JSONSchema): ValidateFunction {
+  private async getValidator(schema: JSONSchema): Promise<ValidateFunction> {
     // Create a cache key from the schema
     const cacheKey = JSON.stringify(schema);
 
@@ -119,12 +308,8 @@ export class JsonValidatorService {
     let validator = this.validators.get(cacheKey);
 
     if (!validator) {
-      if (!this.ajv || typeof this.ajv.compile !== 'function') {
-        // This check helps identify if ajv is not correctly initialized
-        throw new Error('Ajv instance or compile method is not available.');
-      }
-      // Compile the schema
-      validator = this.ajv.compile(schema) as ValidateFunction<unknown>;
+      // Schema has already been resolved by resolveCIDSchemas, compile directly
+      validator = this.ajv.compile(schema);
       this.validators.set(cacheKey, validator);
 
       if (!validator) {
@@ -151,35 +336,6 @@ export class JsonValidatorService {
   }
 
   /**
-   * Add a custom format validator
-   */
-  async addFormat(
-    name: string,
-    format: string | RegExp | ((data: string) => boolean)
-  ): Promise<void> {
-    await this.ajvInitialized;
-    this.ajv.addFormat(name, format);
-  }
-
-  /**
-   * Add a custom keyword validator
-   */
-  async addKeyword(keyword: string, definition: any): Promise<void> {
-    await this.ajvInitialized;
-    this.ajv.addKeyword({
-      keyword,
-      ...definition,
-    });
-  }
-
-  /**
-   * Clear the validator cache
-   */
-  clearCache(): void {
-    this.validators.clear();
-  }
-
-  /**
    * Get a human-readable error message from validation errors
    */
   getErrorMessage(errors: ValidationError[]): string {
@@ -199,7 +355,6 @@ export class JsonValidatorService {
    * Check if a schema is valid
    */
   async isValidSchema(schema: any): Promise<boolean> {
-    await this.ajvInitialized;
     try {
       this.ajv.compile(schema);
       return true;
