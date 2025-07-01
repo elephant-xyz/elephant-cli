@@ -48,7 +48,9 @@ export class FileScannerService {
       }
 
       if (validPropertyDirs === 0) {
-        errors.push('No valid property CID directories found');
+        errors.push(
+          'No valid property CID directories found. Expected directories with CID names (e.g., QmXXX...)'
+        );
       }
 
       return {

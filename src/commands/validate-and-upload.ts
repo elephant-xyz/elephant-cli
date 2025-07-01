@@ -336,8 +336,8 @@ export async function handleValidateAndUpload(
           try {
             await schemaCacheService.getSchema(schemaCid);
             prefetchedCount++;
+            fetchSuccess = true;
           } catch (error) {
-            fetchSuccess = false;
             logger.warn(
               `Error pre-fetching schema ${schemaCid}: ${error instanceof Error ? error.message : String(error)}. It will be attempted again during file processing.`
             );

@@ -142,8 +142,10 @@ export class JsonValidatorService {
     // Check if this schema node has a 'cid' property (along with type)
     if (schema.cid && typeof schema.cid === 'string' && schema.type) {
       try {
-        // Load and return the schema from the CID
-        return await this.loadSchemaFromCID(schema.cid);
+        // Load the schema from the CID
+        const loadedSchema = await this.loadSchemaFromCID(schema.cid);
+        // Recursively resolve any CID references within the loaded schema
+        return await this.resolveCIDSchemas(loadedSchema);
       } catch (error) {
         throw new Error(
           `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
@@ -306,9 +308,8 @@ export class JsonValidatorService {
     let validator = this.validators.get(cacheKey);
 
     if (!validator) {
-      // Handle async schema loading if needed
-      const processedSchema = await this.processSchemaReferences(schema);
-      validator = this.ajv.compile(processedSchema);
+      // Schema has already been resolved by resolveCIDSchemas, compile directly
+      validator = this.ajv.compile(schema);
       this.validators.set(cacheKey, validator);
 
       if (!validator) {
@@ -320,52 +321,6 @@ export class JsonValidatorService {
       throw new Error('Failed to compile or retrieve validator');
     }
     return validator;
-  }
-
-  /**
-   * Process schema references and resolve CID-based schemas
-   */
-  private async processSchemaReferences(
-    schema: JSONSchema
-  ): Promise<JSONSchema> {
-    // Deep clone to avoid modifying the original
-    const processedSchema = JSON.parse(JSON.stringify(schema));
-
-    // Recursively process the schema to find and resolve CID references
-    await this.processSchemaNode(processedSchema);
-
-    return processedSchema;
-  }
-
-  /**
-   * Recursively process schema nodes to resolve CID references
-   */
-  private async processSchemaNode(node: any): Promise<void> {
-    if (!node || typeof node !== 'object') {
-      return;
-    }
-
-    // Handle CID schema references: {"type": "string", "cid": <cid_value>}
-    if (node.type === 'string' && typeof node.cid === 'string') {
-      // Replace with embedded schema from IPFS
-      const embeddedSchema = await this.loadSchemaFromCID(node.cid);
-      Object.assign(node, embeddedSchema);
-      delete node.cid; // Remove the CID reference
-    }
-
-    // Recursively process all object properties
-    for (const key in node) {
-      if (Object.prototype.hasOwnProperty.call(node, key)) {
-        await this.processSchemaNode(node[key]);
-      }
-    }
-
-    // Handle arrays
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        await this.processSchemaNode(item);
-      }
-    }
   }
 
   /**

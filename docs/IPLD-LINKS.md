@@ -32,9 +32,13 @@ Note: While Pinata's API currently only supports UnixFS uploads, the CLI calcula
 ## Supported Path Types
 
 ### Relative Paths
-- `{"/": "./data.json"}` - relative to the input directory
-- `{"/": "subfolder/data.json"}` - relative path without ./
-- `{"/": "../sibling/data.json"}` - parent directory access
+- `{"/": "./data.json"}` - relative to the file containing the reference
+- `{"/": "subfolder/data.json"}` - relative path without ./ (still relative to containing file)
+- `{"/": "../sibling/data.json"}` - parent directory access (relative to containing file)
+
+**Important**: File paths are resolved relative to the file containing the reference, not the data directory root. For example:
+- If `data/propertyA/file1.json` contains `{"/": "./file2.json"}`, it resolves to `data/propertyA/file2.json`
+- If `data/propertyA/file1.json` contains `{"/": "../propertyB/file3.json"}`, it resolves to `data/propertyB/file3.json`
 
 ### Absolute Paths
 - `{"/": "/absolute/path/to/file.json"}` - full system path

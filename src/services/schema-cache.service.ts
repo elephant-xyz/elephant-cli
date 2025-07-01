@@ -12,6 +12,7 @@ export interface JSONSchema {
 export class SchemaCacheService {
   private cache: Map<string, JSONSchema>;
   private readonly maxSize: number;
+  private accessOrder: string[];
 
   constructor(
     private ipfsService: IPFSService,
@@ -19,6 +20,7 @@ export class SchemaCacheService {
   ) {
     this.cache = new Map();
     this.maxSize = maxSize;
+    this.accessOrder = [];
   }
 
   has(cid: string): boolean {
@@ -26,16 +28,42 @@ export class SchemaCacheService {
   }
 
   get(cid: string): JSONSchema | undefined {
-    return this.cache.get(cid);
+    const schema = this.cache.get(cid);
+    if (schema) {
+      // Move to end of access order (most recently used)
+      const index = this.accessOrder.indexOf(cid);
+      if (index > -1) {
+        this.accessOrder.splice(index, 1);
+      }
+      this.accessOrder.push(cid);
+    }
+    return schema;
   }
 
   private put(cid: string, schema: JSONSchema): void {
-    // Simple eviction: clear cache when it gets too big
+    // If already in cache, just update it
+    if (this.cache.has(cid)) {
+      this.cache.set(cid, schema);
+      // Move to end of access order
+      const index = this.accessOrder.indexOf(cid);
+      if (index > -1) {
+        this.accessOrder.splice(index, 1);
+      }
+      this.accessOrder.push(cid);
+      return;
+    }
+
+    // If cache is at capacity, evict least recently used items (10% of cache)
     if (this.cache.size >= this.maxSize) {
-      this.cache.clear();
+      const evictCount = Math.ceil(this.maxSize * 0.1); // Evict 10% of items
+      for (let i = 0; i < evictCount && this.accessOrder.length > 0; i++) {
+        const lruCid = this.accessOrder.shift()!;
+        this.cache.delete(lruCid);
+      }
     }
 
     this.cache.set(cid, schema);
+    this.accessOrder.push(cid);
   }
 
   async getSchema(dataGroupCid: string): Promise<JSONSchema> {
