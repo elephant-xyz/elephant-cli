@@ -113,6 +113,8 @@ Common issues to check:
 1. **CID Decoding**: Ensure the leading dot is removed
 2. **Block Ranges**: Recent blocks work; very old blocks may be pruned
 3. **IPFS Gateways**: Some gateways may be slow or unavailable
+4. **Log Files**: Check `elephant-cli.log` for detailed debugging information. The log shows blockchain queries, RPC calls, and other internal operations.
+5. **Timeout Issues**: The default `DEFAULT_FROM_BLOCK` (72310501) can cause timeouts as it requires querying millions of blocks. In tests, use mock services or skip blockchain queries in dry-run mode.
 
 ### Code Style
 

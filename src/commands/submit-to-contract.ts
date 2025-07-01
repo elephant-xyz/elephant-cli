@@ -113,8 +113,21 @@ export function registerSubmitToContractCommand(program: Command) {
 async function checkSubmissionEligibility(
   record: CsvRecord,
   chainStateService: ChainStateService,
-  userAddress: string
+  userAddress: string,
+  skipChecks: boolean = false
 ): Promise<SubmissionCheckResult> {
+  // In dry-run mode, skip expensive blockchain checks
+  if (skipChecks) {
+    return {
+      canSubmit: true,
+      dataItem: {
+        propertyCid: record.propertyCid,
+        dataGroupCID: record.dataGroupCid,
+        dataCID: record.dataCid,
+      },
+    };
+  }
+
   try {
     // Check if the latest consensus data hash differs from the one being submitted
     const currentDataCid = await chainStateService.getCurrentDataCid(
@@ -173,12 +186,14 @@ async function processRecord(
   chainStateService: ChainStateService,
   userAddress: string,
   progressTracker: SimpleProgress,
-  csvReporterService: CsvReporterService
+  csvReporterService: CsvReporterService,
+  skipChecks: boolean = false
 ): Promise<{ record: CsvRecord; checkResult: SubmissionCheckResult }> {
   const checkResult = await checkSubmissionEligibility(
     record,
     chainStateService,
-    userAddress
+    userAddress,
+    skipChecks
   );
 
   if (checkResult.canSubmit && checkResult.dataItem) {
@@ -217,24 +232,47 @@ export async function handleSubmitToContract(
     transactionBatchSize: options.transactionBatchSize,
   });
 
+  // Create mock services in dry-run mode to avoid blockchain calls
   const chainStateService =
     serviceOverrides.chainStateService ??
-    new ChainStateService(
-      options.rpcUrl,
-      options.contractAddress,
-      options.contractAddress,
-      SUBMIT_CONTRACT_ABI_FRAGMENTS,
-      SUBMIT_CONTRACT_ABI_FRAGMENTS
-    );
+    (options.dryRun
+      ? ({
+          prepopulateConsensusCache: async () => {},
+          getUserSubmissions: async () => new Set<string>(),
+          getCurrentDataCid: async () => null,
+          hasUserSubmittedData: async () => false,
+        } as any)
+      : new ChainStateService(
+          options.rpcUrl,
+          options.contractAddress,
+          options.contractAddress,
+          SUBMIT_CONTRACT_ABI_FRAGMENTS,
+          SUBMIT_CONTRACT_ABI_FRAGMENTS
+        ));
+
   const transactionBatcherService =
     serviceOverrides.transactionBatcherService ??
-    new TransactionBatcherService(
-      options.rpcUrl,
-      options.contractAddress,
-      options.privateKey,
-      config,
-      options.gasPrice
-    );
+    (options.dryRun
+      ? ({
+          groupItemsIntoBatches: (items: DataItem[]) => {
+            const batchSize = options.transactionBatchSize || 200;
+            const batches: DataItem[][] = [];
+            for (let i = 0; i < items.length; i += batchSize) {
+              batches.push(items.slice(i, i + batchSize));
+            }
+            return batches;
+          },
+          submitAll: async function* () {
+            // No-op generator for dry-run
+          },
+        } as any)
+      : new TransactionBatcherService(
+          options.rpcUrl,
+          options.contractAddress,
+          options.privateKey,
+          config,
+          options.gasPrice
+        ));
   const csvReporterService =
     serviceOverrides.csvReporterService ??
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
@@ -309,16 +347,28 @@ export async function handleSubmitToContract(
       new SimpleProgress(1, 'Indexing on-chain data');
     progressTracker.start();
 
-    logger.info('Pre-populating on-chain consensus data cache...');
-    await chainStateService.prepopulateConsensusCache();
-    logger.success('Consensus data cache populated.');
+    // Skip expensive blockchain operations in dry-run mode
+    if (!options.dryRun) {
+      logger.info('Pre-populating on-chain consensus data cache...');
+      await chainStateService.prepopulateConsensusCache();
+      logger.success('Consensus data cache populated.');
+    } else {
+      logger.info(
+        '[DRY RUN] Skipping on-chain consensus data cache population'
+      );
+    }
 
     // Check eligibility for each record
     const dataItemsForTransaction: DataItem[] = [];
     const skippedItems: { record: CsvRecord; reason: string }[] = [];
 
     progressTracker.setPhase('Checking Eligibility', records.length);
-    await chainStateService.getUserSubmissions(userAddress);
+
+    if (!options.dryRun) {
+      await chainStateService.getUserSubmissions(userAddress);
+    } else {
+      logger.info('[DRY RUN] Skipping user submission history check');
+    }
 
     const processingPromises = records.map((record) =>
       processRecord(
@@ -326,7 +376,8 @@ export async function handleSubmitToContract(
         chainStateService,
         userAddress,
         progressTracker!, // progressTracker is initialized before this loop
-        csvReporterService
+        csvReporterService,
+        options.dryRun // Skip checks in dry-run mode
       )
     );
 
@@ -393,9 +444,9 @@ export async function handleSubmitToContract(
       const batches = transactionBatcherService.groupItemsIntoBatches(
         dataItemsForTransaction
       );
-      batches.forEach((batch, index) => {
+      batches.forEach((batch: DataItem[], index: number) => {
         logger.info(`  Batch ${index + 1}: ${batch.length} items`);
-        batch.slice(0, 3).forEach((item) => {
+        batch.slice(0, 3).forEach((item: DataItem) => {
           logger.info(
             `    - Property: ${item.propertyCid}, DataGroup: ${item.dataGroupCID}, Data: ${item.dataCID}`
           );
