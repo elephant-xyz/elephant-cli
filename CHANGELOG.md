@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.3.1...v1.4.0) (2025-07-01)
+
+
+### Features
+
+* add support for custom json schema (schemalink) ([#28](https://github.com/elephant-xyz/elephant-cli/issues/28)) ([6b81845](https://github.com/elephant-xyz/elephant-cli/commit/6b81845861440a49d5b27cc3eba7a4256ad87687))
+
 ## [1.3.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.3.0...v1.3.1) (2025-06-22)
 
 
