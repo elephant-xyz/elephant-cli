@@ -24,25 +24,13 @@ describe('JsonValidatorService - Custom Formats', () => {
 
   describe('Currency Format', () => {
     const currencySchema: JSONSchema = {
-      type: 'string',
+      type: 'number',
       format: 'currency',
     };
 
     it('should validate valid currency values', async () => {
       const validValues = [
-        '100',
-        '100.00',
-        '$100',
-        '$100.00',
-        '1,000',
-        '1,000.00',
-        '$1,000',
-        '$1,000.00',
-        '1,000,000',
-        '$1,000,000.50',
-        '0.50',
-        '$0.50',
-        '999999999.99',
+        100, 100.5, 100.5, 0.01, 0.99, 999999.99, 1, 1.1, 1.11, 12345.67,
       ];
 
       for (const value of validValues) {
@@ -53,18 +41,18 @@ describe('JsonValidatorService - Custom Formats', () => {
 
     it('should reject invalid currency values', async () => {
       const invalidValues = [
-        '100.1', // Only one decimal place
-        '100.123', // Three decimal places
-        '$100.1', // Only one decimal place with $
-        '1,00', // Incorrect comma placement
-        '1,0000', // Too many digits after comma
-        '$$100', // Double dollar sign
-        '100$', // Dollar sign at end
-        '1,000,00', // Missing digit after comma
-        'abc', // Non-numeric
-        '100..00', // Double decimal
-        '$', // Just dollar sign
-        '', // Empty string
+        0, // Must be greater than 0
+        -100, // Negative values not allowed
+        -0.01, // Negative values not allowed
+        100.123, // Three decimal places
+        1.999, // Three decimal places
+        0.001, // Three decimal places
+        NaN, // Not a valid number
+        Infinity, // Not finite
+        -Infinity, // Not finite
+        '100', // String, not number
+        null, // Not a number
+        undefined, // Not a number
       ];
 
       for (const value of invalidValues) {
