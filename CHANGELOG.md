@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.5.0...v1.6.0) (2025-07-02)
+
+
+### Features
+
+* **json-validator:** add currency and custom format validators ([#30](https://github.com/elephant-xyz/elephant-cli/issues/30)) ([47f6617](https://github.com/elephant-xyz/elephant-cli/commit/47f66173178bc7fbbb4d813da0c86a2e5146b63f))
+
 # [1.5.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.4.0...v1.5.0) (2025-07-02)
 
 
