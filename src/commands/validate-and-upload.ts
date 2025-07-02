@@ -85,7 +85,9 @@ export interface ValidateAndUploadServiceOverrides {
   ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   jsonValidatorService?: JsonValidatorService;
-  jsonCanonicalizerService?: JsonCanonicalizerService | IPLDCanonicalizerService;
+  jsonCanonicalizerService?:
+    | JsonCanonicalizerService
+    | IPLDCanonicalizerService;
   cidCalculatorService?: CidCalculatorService;
   pinataService?: PinataService;
   csvReporterService?: CsvReporterService;
@@ -529,7 +531,9 @@ async function processFileAndGetUploadPromise(
   services: {
     schemaCacheService: SchemaCacheService;
     jsonValidatorService: JsonValidatorService;
-    jsonCanonicalizerService: JsonCanonicalizerService | IPLDCanonicalizerService;
+    jsonCanonicalizerService:
+      | JsonCanonicalizerService
+      | IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
     progressTracker: SimpleProgress;

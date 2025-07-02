@@ -14,7 +14,7 @@ export class IPLDCanonicalizerService {
   canonicalize(json: any): string {
     // First, sort arrays containing IPLD links
     const sortedJson = this.sortIPLDArrays(json);
-    
+
     // Then apply standard canonicalization
     return this.baseCanonicalizer.canonicalize(sortedJson);
   }
@@ -29,32 +29,32 @@ export class IPLDCanonicalizerService {
 
     if (Array.isArray(data)) {
       // Check if this array contains IPLD links
-      const hasIPLDLinks = data.some(item => this.isIPLDLink(item));
-      
+      const hasIPLDLinks = data.some((item) => this.isIPLDLink(item));
+
       if (hasIPLDLinks) {
         // Sort the array by CID values
         const sorted = [...data].sort((a, b) => {
           const cidA = this.extractCID(a);
           const cidB = this.extractCID(b);
-          
+
           // If both are IPLD links, sort by CID
           if (cidA && cidB) {
             return cidA.localeCompare(cidB);
           }
-          
+
           // IPLD links come before non-links
           if (cidA && !cidB) return -1;
           if (!cidA && cidB) return 1;
-          
+
           // For non-IPLD items, maintain original order
           return 0;
         });
-        
+
         // Recursively process sorted array elements
-        return sorted.map(item => this.sortIPLDArrays(item));
+        return sorted.map((item) => this.sortIPLDArrays(item));
       } else {
         // If no IPLD links, just recursively process elements
-        return data.map(item => this.sortIPLDArrays(item));
+        return data.map((item) => this.sortIPLDArrays(item));
       }
     }
 
