@@ -64,7 +64,7 @@ Validates ISO 8601 date format (YYYY-MM-DD).
 
 Validates HTTP/HTTPS URLs with specific pattern requirements. This overrides the default `uri` format.
 
-**Pattern**: `^https?://([\w-]+@)?[\w-]+(\.[\w-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$`
+**Pattern**: `^https?://([\\w-]+@)?[\\w-]+(\\.[\\w-]+)+([\\w\\-.,@?^=%&:/~+#]*[\\w\\-@?^=%&/~+#])?$`
 
 **Valid Examples**:
 
@@ -118,7 +118,7 @@ Validates IPFS URIs with Content Identifiers (CIDs).
 
 Validates interest rate percentages with exactly 3 decimal places.
 
-**Pattern**: `^\d+\.\d{3}$`
+**Pattern**: `^\\d+\\.\\d{3}$`
 
 **Valid Examples**:
 
@@ -203,4 +203,3 @@ Run tests with:
 ```bash
 npm test
 ```
-

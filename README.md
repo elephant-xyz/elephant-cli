@@ -2,6 +2,10 @@
 
 A command-line tool for interacting with the Elephant Network on Polygon blockchain. This tool allows elephant operators to list and download their assignments from IPFS based on blockchain events, and also to submit new data to the network.
 
+# Useful links
+
+[Elephant Lexicon](https://lexicon.elephant.xyz/)
+
 ## Installation
 
 ### Global Installation
@@ -107,7 +111,6 @@ npx @elephant-xyz/cli submit-to-contract upload-results.csv \
 - `--transaction-batch-size <number>`: Number of items per blockchain transaction. (Default: 200)
 - `--gas-price <value>`: Gas price in Gwei for transactions. Can be a number (e.g., 50) or 'auto' to let the provider determine the price. (Default: 30)
 - `--dry-run`: Perform all checks without submitting transactions.
-
 
 ### Environment Variables
 
@@ -271,7 +274,7 @@ The CLI now supports IPLD links with automatic file path to CID conversion. Duri
 
 // After upload
 {
-  "title": "Main Document", 
+  "title": "Main Document",
   "metadata": {
     "/": "QmMetadataCID..."
   },
@@ -282,6 +285,7 @@ The CLI now supports IPLD links with automatic file path to CID conversion. Duri
 ```
 
 This feature enables:
+
 - Modular data structures with linked components
 - Automatic upload of referenced files
 - IPLD compliant output with CID v1 format
@@ -343,6 +347,7 @@ elephant-cli list-assignments \
 ### Example 4: Two-Step File Submission Workflow
 
 #### Step 1: Validate and Upload Files
+
 ```bash
 # Validate and upload files to IPFS
 npx @elephant-xyz/cli validate-and-upload ./my-data-to-submit \
@@ -352,6 +357,7 @@ npx @elephant-xyz/cli validate-and-upload ./my-data-to-submit \
 ```
 
 #### Step 2: Submit to Blockchain
+
 ```bash
 # Submit the uploaded data to the smart contract
 npx @elephant-xyz/cli submit-to-contract my-uploads.csv \
@@ -377,6 +383,7 @@ npx @elephant-xyz/cli submit-to-contract my-uploads.csv \
 ### Example 6: Using Legacy Combined Command
 
 The original combined command is still available:
+
 ```bash
 npx @elephant-xyz/cli submit-files ./another-data-set \
   --private-key "0xdef456..." \
@@ -457,4 +464,3 @@ Downloaded 1 of 1 files...
 ## License
 
 MIT
-

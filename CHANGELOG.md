@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.4.0...v1.5.0) (2025-07-02)
+
+
+### Features
+
+* add new formats, sort ipld links in the arrays ([#29](https://github.com/elephant-xyz/elephant-cli/issues/29)) ([733c3d0](https://github.com/elephant-xyz/elephant-cli/commit/733c3d031f557af6db7043158a236e8eb9565323))
+
 # [1.4.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.3.1...v1.4.0) (2025-07-01)
 
 

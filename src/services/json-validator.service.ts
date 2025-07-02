@@ -1,6 +1,8 @@
 import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
+import * as raw_codec from 'multiformats/codecs/raw';
+import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { JSONSchema } from './schema-cache.service.js';
@@ -94,26 +96,22 @@ export class JsonValidatorService {
         if (!ipfsUriPattern.test(value)) {
           return false;
         }
-        
+
         // Extract CID from URI and validate it
         const cidString = value.substring(7); // Remove 'ipfs://'
         try {
           const cid = CID.parse(cidString);
-          
+
           // For CIDv1, check if it uses raw codec (0x55) and sha256
-          if (cid.version === 1) {
-            // raw codec is 0x55
-            const isRawCodec = cid.code === 0x55;
-            // sha2-256 is 0x12
-            const isSha256 = cid.multihash.code === 0x12;
-            
-            // We accept both raw codec with sha256 and other valid combinations
-            // The requirement mentions raw ipld 0x55 codec, but we should be flexible
-            return true;
+          if (cid.version === 0) {
+            return false;
           }
-          
-          // CIDv0 is also valid
-          return true;
+          // raw codec is 0x55
+          const isRawCodec = cid.code === raw_codec.code;
+          // sha2-256 is 0x12
+          const isSha256 = cid.multihash.code === sha256.code;
+
+          return isRawCodec && isSha256;
         } catch {
           return false;
         }
