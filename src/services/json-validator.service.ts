@@ -1,6 +1,8 @@
 import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
+import * as raw_codec from 'multiformats/codecs/raw';
+import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { JSONSchema } from './schema-cache.service.js';
@@ -32,11 +34,13 @@ export class JsonValidatorService {
       allErrors: true,
       loadSchema: this.loadSchemaFromCID.bind(this),
     });
+    // Add default formats first
     addFormats.default(this.ajv);
-    this.setupCIDCustomizations();
+    // Then setup our custom formats (which may override some defaults)
+    this.setupCustomFormats();
   }
 
-  private setupCIDCustomizations(): void {
+  private setupCustomFormats(): void {
     // Enhanced CID format validation
     this.ajv.addFormat('cid', {
       type: 'string',
@@ -47,6 +51,71 @@ export class JsonValidatorService {
         } catch {
           return false;
         }
+      },
+    });
+
+    // Custom currency format (supports dollar signs, commas for thousands, and exactly 2 decimal places)
+    this.ajv.addFormat('currency', {
+      type: 'string',
+      validate: (value: string): boolean => {
+        const currencyPattern =
+          /^\$?([0-9]{1,3}(,[0-9]{3})*|[0-9]+)(\.[0-9]{2})?$/;
+        return currencyPattern.test(value);
+      },
+    });
+
+    // Custom IPFS URI format
+    this.ajv.addFormat('ipfs_uri', {
+      type: 'string',
+      validate: (value: string): boolean => {
+        const ipfsUriPattern = /^ipfs:\/\/[A-Za-z0-9]{46,59}$/;
+        if (!ipfsUriPattern.test(value)) {
+          return false;
+        }
+
+        // Extract CID from URI and validate it
+        const cidString = value.substring(7); // Remove 'ipfs://'
+        try {
+          const cid = CID.parse(cidString);
+
+          // For CIDv1, check if it uses raw codec (0x55) and sha256
+          if (cid.version === 0) {
+            return false;
+          }
+          // raw codec is 0x55
+          const isRawCodec = cid.code === raw_codec.code;
+          // sha2-256 is 0x12
+          const isSha256 = cid.multihash.code === sha256.code;
+
+          return isRawCodec && isSha256;
+        } catch {
+          return false;
+        }
+      },
+    });
+
+    // Custom rate percent format (exactly 3 decimal places)
+    this.ajv.addFormat('rate_percent', {
+      type: 'string',
+      validate: (value: string): boolean => {
+        const ratePattern = /^\d+\.\d{3}$/;
+        return ratePattern.test(value);
+      },
+    });
+
+    // The 'date' format from ajv-formats already validates ISO format (YYYY-MM-DD)
+    // No need to override it since we want ISO format validation
+
+    // Override the default 'uri' format to match our specific pattern
+    this.ajv.addFormat('uri', {
+      type: 'string',
+      validate: (value: string): boolean => {
+        // Our specific URI pattern
+        // Note: In Unicode mode (which AJV uses), we need to be careful with escapes in character classes
+        // Updated to support optional user@ part
+        const uriPattern =
+          /^https?:\/\/([\w-]+@)?[\w-]+(\.[\w-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$/;
+        return uriPattern.test(value);
       },
     });
   }
