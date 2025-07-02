@@ -54,13 +54,40 @@ export class JsonValidatorService {
       },
     });
 
-    // Custom currency format (supports dollar signs, commas for thousands, and exactly 2 decimal places)
+    // Custom currency format (only positive numbers with max 2 decimal places)
     this.ajv.addFormat('currency', {
-      type: 'string',
-      validate: (value: string): boolean => {
-        const currencyPattern =
-          /^\$?([0-9]{1,3}(,[0-9]{3})*|[0-9]+)(\.[0-9]{2})?$/;
-        return currencyPattern.test(value);
+      type: 'number',
+      validate: (value: number): boolean => {
+        // Check if it's a valid number
+        if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+          return false;
+        }
+
+        // Must be greater than zero
+        if (value <= 0) {
+          return false;
+        }
+
+        // Convert to string to check decimal places
+        const valueStr = value.toString();
+        const parts = valueStr.split('.');
+
+        // If there's a decimal part, it should have at most 2 digits
+        if (parts.length === 2) {
+          // Handle scientific notation (e.g., 1e-10)
+          if (valueStr.includes('e') || valueStr.includes('E')) {
+            // Convert from scientific notation and check decimal places
+            const decimalPlaces = value
+              .toFixed(10)
+              .replace(/\.?0+$/, '')
+              .split('.')[1];
+            return !decimalPlaces || decimalPlaces.length <= 2;
+          }
+          return parts[1].length <= 2;
+        }
+
+        // No decimal part is valid
+        return parts.length === 1;
       },
     });
 
