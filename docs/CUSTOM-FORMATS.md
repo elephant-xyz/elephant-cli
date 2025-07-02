@@ -13,6 +13,7 @@ Validates monetary values with optional dollar sign and thousands separators.
 **Pattern**: `^\$?([0-9]{1,3}(,[0-9]{3})*|[0-9]+)(\.[0-9]{2})?$`
 
 **Valid Examples**:
+
 - `100`
 - `100.00`
 - `$100`
@@ -20,6 +21,7 @@ Validates monetary values with optional dollar sign and thousands separators.
 - `$1,000,000.50`
 
 **Schema Example**:
+
 ```json
 {
   "type": "string",
@@ -29,14 +31,16 @@ Validates monetary values with optional dollar sign and thousands separators.
 
 ### 2. Date Format (`date`)
 
-Validates ISO 8601 date format (YYYY-MM-DD). This overrides the default `date` format from `ajv-formats`.
+Validates ISO 8601 date format (YYYY-MM-DD).
 
 **Valid Examples**:
+
 - `2024-01-01`
 - `2023-12-31`
 - `2020-02-29` (leap year)
 
 **Schema Example**:
+
 ```json
 {
   "type": "string",
@@ -51,6 +55,7 @@ Validates HTTP/HTTPS URLs with specific pattern requirements. This overrides the
 **Pattern**: `^https?://([\w-]+@)?[\w-]+(\.[\w-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$`
 
 **Valid Examples**:
+
 - `http://example.com`
 - `https://sub.example.com`
 - `https://example.com/path`
@@ -58,6 +63,7 @@ Validates HTTP/HTTPS URLs with specific pattern requirements. This overrides the
 - `https://example.com:8080/path?query=value#anchor`
 
 **Schema Example**:
+
 ```json
 {
   "type": "string",
@@ -71,15 +77,20 @@ Validates IPFS URIs with Content Identifiers (CIDs).
 
 **Pattern**: `^ipfs://[A-Za-z0-9]{46,59}$`
 
-**Additional Validation**: 
+**Additional Validation**:
+
 - Validates that the CID portion is a valid IPFS CID
-- Supports both CIDv0 and CIDv1 formats
+- Supports both CIDv1
+- Supports only raw codec (0x055)
+- Supports only sha2-256 hash (0x12)
 
 **Valid Examples**:
+
 - `ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o` (CIDv0)
 - `ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi` (CIDv1)
 
 **Schema Example**:
+
 ```json
 {
   "type": "string",
@@ -94,12 +105,14 @@ Validates interest rate percentages with exactly 3 decimal places.
 **Pattern**: `^\d+\.\d{3}$`
 
 **Valid Examples**:
+
 - `5.250`
 - `0.000`
 - `10.375`
 - `100.000`
 
 **Schema Example**:
+
 ```json
 {
   "type": "string",
@@ -164,9 +177,12 @@ The custom formats are implemented in `src/services/json-validator.service.ts` i
 ## Testing
 
 Comprehensive tests for all custom formats are located in:
+
 - `tests/unit/services/json-validator-custom-formats.test.ts`
 
 Run tests with:
+
 ```bash
 npm test tests/unit/services/json-validator-custom-formats.test.ts
 ```
+
