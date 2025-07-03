@@ -33,6 +33,8 @@ export class JsonValidatorService {
     this.ajv = new Ajv({
       allErrors: true,
       loadSchema: this.loadSchemaFromCID.bind(this),
+      strict: false, // Allow draft-07 schemas
+      validateSchema: false, // Don't validate the schema itself
     });
     // Add default formats first
     addFormats.default(this.ajv);
@@ -442,7 +444,23 @@ export class JsonValidatorService {
     return errors
       .map((error) => {
         const path = error.path || 'root';
-        return `${path}: ${error.message}`;
+        let message = error.message || 'Validation failed';
+
+        // Add more context for common schema validation errors
+        if (error.keyword === 'required' && error.params?.missingProperty) {
+          message = `missing required property '${error.params.missingProperty}'`;
+        } else if (
+          error.keyword === 'additionalProperties' &&
+          error.params?.additionalProperty
+        ) {
+          message = `unexpected property '${error.params.additionalProperty}'`;
+        } else if (error.keyword === 'type' && error.params?.type) {
+          message = `must be ${error.params.type}`;
+        } else if (error.keyword === 'enum' && error.params?.allowedValues) {
+          message = `must be one of: ${error.params.allowedValues.join(', ')}`;
+        }
+
+        return `${path}: ${message}`;
       })
       .join(', ');
   }

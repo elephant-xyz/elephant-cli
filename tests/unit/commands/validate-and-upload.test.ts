@@ -384,7 +384,7 @@ describe('ValidateAndUploadCommand', () => {
       expect.objectContaining({
         propertyCid: 'property1',
         error: expect.stringContaining(
-          'Validation failed: instance.field: is required'
+          'Validation failed against schema dataGroup1: instance.field: is required'
         ),
       })
     );

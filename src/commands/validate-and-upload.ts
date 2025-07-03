@@ -589,7 +589,21 @@ async function processFileAndGetUploadPromise(
     );
 
     if (!validationResult.valid) {
-      const error = `Validation failed: ${services.jsonValidatorService.getErrorMessage(validationResult.errors || [])}`;
+      const errorDetails = services.jsonValidatorService.getErrorMessage(
+        validationResult.errors || []
+      );
+      let additionalInfo = '';
+
+      // Check if the error is related to string vs file path mismatch
+      if (
+        errorDetails.includes('must be string') &&
+        JSON.stringify(jsonData).includes('./')
+      ) {
+        additionalInfo =
+          ' The schema expects CID string values, but your data contains file paths like "./file.json". These need to be converted to IPFS CIDs first.';
+      }
+
+      const error = `Validation failed against schema ${schemaCid}: ${errorDetails}.${additionalInfo}`;
       await services.csvReporterService.logError({
         propertyCid: fileEntry.propertyCid,
         dataGroupCid: fileEntry.dataGroupCid,
