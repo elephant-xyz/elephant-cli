@@ -589,28 +589,31 @@ async function processFileAndGetUploadPromise(
     );
 
     if (!validationResult.valid) {
-      const errorDetails = services.jsonValidatorService.getErrorMessage(
-        validationResult.errors || []
-      );
-      let additionalInfo = '';
+      const errorMessages: string[] =
+        services.jsonValidatorService.getErrorMessages(
+          validationResult.errors || []
+        );
 
       // Check if the error is related to string vs file path mismatch
-      if (
-        errorDetails.includes('must be string') &&
-        JSON.stringify(jsonData).includes('./')
-      ) {
-        additionalInfo =
-          ' The schema expects CID string values, but your data contains file paths like "./file.json". These need to be converted to IPFS CIDs first.';
-      }
 
-      const error = `Validation failed against schema ${schemaCid}: ${errorDetails}.${additionalInfo}`;
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        error,
-        timestamp: new Date().toISOString(),
-      });
+      for (const errorMessage of errorMessages) {
+        let additionalInfo = '';
+        if (
+          errorMessage.includes('must be string') &&
+          JSON.stringify(jsonData).includes('./')
+        ) {
+          additionalInfo =
+            ' The schema expects CID string values, but your data contains file paths like "./file.json". These need to be converted to IPFS CIDs first.';
+        }
+        const error = `Validation failed against schema ${schemaCid}: ${errorMessage}.${additionalInfo}`;
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          error,
+          timestamp: new Date().toISOString(),
+        });
+      }
       services.progressTracker.increment('errors');
       return;
     }

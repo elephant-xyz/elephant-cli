@@ -7,6 +7,7 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { JSONSchema } from './schema-cache.service.js';
 import { IPFSService } from './ipfs.service.js';
+import { logger } from '../utils/logger.js';
 
 export interface ValidationError {
   path: string;
@@ -277,7 +278,7 @@ export class JsonValidatorService {
     data: any,
     currentFilePath?: string
   ): Promise<any> {
-    if (!data || typeof data !== 'object') {
+    if (!data) {
       return data;
     }
 
@@ -382,14 +383,19 @@ export class JsonValidatorService {
       );
     }
 
+    logger.debug(
+      `Before resolving CID pointers in object: ${JSON.stringify(data)}`
+    );
     // Recursively resolve CID pointers in objects
     const resolved: any = {};
     for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
+      if (typeof data[key] === 'object' && data[key] !== null) {
         resolved[key] = await this.resolveCIDPointers(
           data[key],
           currentFilePath
         );
+      } else {
+        resolved[key] = data[key];
       }
     }
     return resolved;
@@ -436,33 +442,31 @@ export class JsonValidatorService {
   /**
    * Get a human-readable error message from validation errors
    */
-  getErrorMessage(errors: ValidationError[]): string {
+  getErrorMessages(errors: ValidationError[]): string[] {
     if (!errors || errors.length === 0) {
-      return 'Unknown validation error';
+      return ['Unknown validation error'];
     }
 
-    return errors
-      .map((error) => {
-        const path = error.path || 'root';
-        let message = error.message || 'Validation failed';
+    return errors.map((error) => {
+      const path = error.path || 'root';
+      let message = error.message || 'Validation failed';
 
-        // Add more context for common schema validation errors
-        if (error.keyword === 'required' && error.params?.missingProperty) {
-          message = `missing required property '${error.params.missingProperty}'`;
-        } else if (
-          error.keyword === 'additionalProperties' &&
-          error.params?.additionalProperty
-        ) {
-          message = `unexpected property '${error.params.additionalProperty}'`;
-        } else if (error.keyword === 'type' && error.params?.type) {
-          message = `must be ${error.params.type}`;
-        } else if (error.keyword === 'enum' && error.params?.allowedValues) {
-          message = `must be one of: ${error.params.allowedValues.join(', ')}`;
-        }
+      // Add more context for common schema validation errors
+      if (error.keyword === 'required' && error.params?.missingProperty) {
+        message = `missing required property '${error.params.missingProperty}'`;
+      } else if (
+        error.keyword === 'additionalProperties' &&
+        error.params?.additionalProperty
+      ) {
+        message = `unexpected property '${error.params.additionalProperty}'`;
+      } else if (error.keyword === 'type' && error.params?.type) {
+        message = `must be ${error.params.type}`;
+      } else if (error.keyword === 'enum' && error.params?.allowedValues) {
+        message = `must be one of: ${error.params.allowedValues.join(', ')}`;
+      }
 
-        return `${path}: ${message}`;
-      })
-      .join(', ');
+      return `${path}: ${message}`;
+    });
   }
 
   /**
