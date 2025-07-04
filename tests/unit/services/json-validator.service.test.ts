@@ -1084,17 +1084,19 @@ describe('JsonValidatorService', () => {
 
     it('should handle IPFS fetch errors for CID pointers', async () => {
       const contentCID = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG';
+      const schemaCID = 'QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB';
 
-      vi.mocked(mockIPFSService.fetchContent).mockRejectedValueOnce(
-        new Error('IPFS gateway error')
-      );
+      // Mock schema resolution to succeed, then data CID resolution to fail
+      vi.mocked(mockIPFSService.fetchContent)
+        .mockResolvedValueOnce(Buffer.from(JSON.stringify({ type: 'object' }))) // Schema fetch succeeds
+        .mockRejectedValueOnce(new Error('IPFS gateway error')); // Data CID fetch fails
 
       const schema: JSONSchema = {
         type: 'object',
         properties: {
           content: {
             type: 'string',
-            cid: 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG',
+            cid: schemaCID,
           },
         },
       };

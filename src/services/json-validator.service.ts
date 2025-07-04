@@ -293,7 +293,7 @@ export class JsonValidatorService {
     // Handle arrays
     if (Array.isArray(schema)) {
       return Promise.all(
-        schema.map((item, index) =>
+        schema.map((item, _index) =>
           this.resolveCIDSchemasAndTrackPaths(
             item,
             cidAllowedMap,
@@ -617,7 +617,7 @@ export class JsonValidatorService {
       logger.debug(`Found an array: ${JSON.stringify(data)}`);
       const itemSchema = schema && schema.items ? schema.items : undefined;
       const arrayResults = await Promise.all(
-        data.map((item, index) => {
+        data.map((item, _index) => {
           try {
             const itemPath = currentPath ? `${currentPath}[]` : '[]';
             return this.resolveCIDPointers(
