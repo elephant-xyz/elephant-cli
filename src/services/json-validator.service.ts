@@ -270,19 +270,40 @@ export class JsonValidatorService {
     }
 
     // Check if this schema node has a 'cid' property (along with type)
-    if (schema.cid && typeof schema.cid === 'string' && schema.type) {
+    if (this.isCIDLinkSchema(schema)) {
       try {
         // Mark this path as allowing CID pointers
         cidAllowedMap.set(currentPath, true);
 
         // Load the schema from the CID
         const loadedSchema = await this.loadSchemaFromCID(schema.cid);
-        // Recursively resolve any CID references within the loaded schema
-        return await this.resolveCIDSchemasAndTrackPaths(
-          loadedSchema,
-          cidAllowedMap,
-          currentPath
-        );
+
+        // If the original schema allows multiple types (e.g., ['string', 'null']),
+        // we need to create a schema that combines the loaded schema with the null option
+        if (
+          Array.isArray(schema.type) &&
+          schema.type.includes('null') &&
+          schema.type.length > 1
+        ) {
+          // Create an anyOf schema that allows null or the loaded schema
+          const combinedSchema = {
+            anyOf: [{ type: 'null' }, loadedSchema],
+          };
+          // Recursively resolve any CID references within the combined schema
+          return await this.resolveCIDSchemasAndTrackPaths(
+            combinedSchema,
+            cidAllowedMap,
+            currentPath
+          );
+        } else {
+          // Single type or only string type, use the loaded schema as-is
+          // Recursively resolve any CID references within the loaded schema
+          return await this.resolveCIDSchemasAndTrackPaths(
+            loadedSchema,
+            cidAllowedMap,
+            currentPath
+          );
+        }
       } catch (error) {
         throw new Error(
           `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
@@ -351,12 +372,29 @@ export class JsonValidatorService {
     }
 
     // Check if this schema node has a 'cid' property (along with type)
-    if (schema.cid && typeof schema.cid === 'string' && schema.type) {
+    if (this.isCIDLinkSchema(schema)) {
       try {
         // Load the schema from the CID
         const loadedSchema = await this.loadSchemaFromCID(schema.cid);
-        // Recursively resolve any CID references within the loaded schema
-        return await this.resolveCIDSchemas(loadedSchema);
+
+        // If the original schema allows multiple types (e.g., ['string', 'null']),
+        // we need to create a schema that combines the loaded schema with the null option
+        if (
+          Array.isArray(schema.type) &&
+          schema.type.includes('null') &&
+          schema.type.length > 1
+        ) {
+          // Create an anyOf schema that allows null or the loaded schema
+          const combinedSchema = {
+            anyOf: [{ type: 'null' }, loadedSchema],
+          };
+          // Recursively resolve any CID references within the combined schema
+          return await this.resolveCIDSchemas(combinedSchema);
+        } else {
+          // Single type or only string type, use the loaded schema as-is
+          // Recursively resolve any CID references within the loaded schema
+          return await this.resolveCIDSchemas(loadedSchema);
+        }
       } catch (error) {
         throw new Error(
           `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
@@ -731,13 +769,26 @@ export class JsonValidatorService {
    * Check if a schema allows CID links (has type: 'string' and cid property)
    */
   private isCIDLinkSchema(schema: any): boolean {
-    return (
-      schema &&
-      typeof schema === 'object' &&
-      schema.type === 'string' &&
-      schema.cid &&
-      typeof schema.cid === 'string'
-    );
+    if (
+      !schema ||
+      typeof schema !== 'object' ||
+      !schema.cid ||
+      typeof schema.cid !== 'string'
+    ) {
+      return false;
+    }
+
+    // Handle both single type and array of types
+    if (schema.type === 'string') {
+      return true;
+    }
+
+    // Handle array of types (e.g., ['string', 'null'])
+    if (Array.isArray(schema.type) && schema.type.includes('string')) {
+      return true;
+    }
+
+    return false;
   }
 
   /**

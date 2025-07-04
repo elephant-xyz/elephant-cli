@@ -1649,6 +1649,120 @@ describe('JsonValidatorService', () => {
     });
   });
 
+  describe('CID links with null types', () => {
+    it('should handle CID links that allow null values', async () => {
+      const schemaCID =
+        'bafkreibyij6w2gagmolvnhnprheh6at5vff2ej5mnt6tphb7uvk5vvdhha';
+
+      // Schema from CID that validates string values
+      const cidSchema = {
+        type: 'string',
+        minLength: 5,
+      };
+
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(cidSchema))
+      );
+
+      // Main schema with CID link that allows null
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          flood_storm_info: {
+            cid: schemaCID,
+            description:
+              'Reference to property_to_flood_storm_information relationship schema (can be null)',
+            type: ['string', 'null'],
+          },
+        },
+      };
+
+      // Test with null value
+      const dataWithNull = { flood_storm_info: null };
+      const resultWithNull = await jsonValidator.validate(dataWithNull, schema);
+
+      expect(resultWithNull.valid).toBe(true);
+      expect(resultWithNull.errors).toBeUndefined();
+    });
+
+    it('should handle CID links that allow null values with string data', async () => {
+      const schemaCID =
+        'bafkreibyij6w2gagmolvnhnprheh6at5vff2ej5mnt6tphb7uvk5vvdhha';
+
+      // Schema from CID that validates string values
+      const cidSchema = {
+        type: 'string',
+        minLength: 5,
+      };
+
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(cidSchema))
+      );
+
+      // Main schema with CID link that allows null
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          flood_storm_info: {
+            cid: schemaCID,
+            description:
+              'Reference to property_to_flood_storm_information relationship schema (can be null)',
+            type: ['string', 'null'],
+          },
+        },
+      };
+
+      // Test with valid string value
+      const dataWithString = { flood_storm_info: 'valid string value' };
+      const resultWithString = await jsonValidator.validate(
+        dataWithString,
+        schema
+      );
+
+      expect(resultWithString.valid).toBe(true);
+      expect(resultWithString.errors).toBeUndefined();
+    });
+
+    it('should fail validation when CID link with null type receives invalid string', async () => {
+      const schemaCID =
+        'bafkreibyij6w2gagmolvnhnprheh6at5vff2ej5mnt6tphb7uvk5vvdhha';
+
+      // Schema from CID that validates string values with minimum length
+      const cidSchema = {
+        type: 'string',
+        minLength: 10,
+      };
+
+      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
+        Buffer.from(JSON.stringify(cidSchema))
+      );
+
+      // Main schema with CID link that allows null
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          flood_storm_info: {
+            cid: schemaCID,
+            description:
+              'Reference to property_to_flood_storm_information relationship schema (can be null)',
+            type: ['string', 'null'],
+          },
+        },
+      };
+
+      // Test with invalid string value (too short)
+      const dataWithInvalidString = { flood_storm_info: 'short' };
+      const resultWithInvalidString = await jsonValidator.validate(
+        dataWithInvalidString,
+        schema
+      );
+
+      expect(resultWithInvalidString.valid).toBe(false);
+      expect(resultWithInvalidString.errors).toBeDefined();
+      expect(resultWithInvalidString.errors!.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('isValidSchema', () => {
     it('should validate correct schemas', async () => {
       const schemas = [
