@@ -196,6 +196,9 @@ export class JsonValidatorService {
 
       // Also resolve any CID references in the schema
       const resolvedSchema = await this.resolveCIDSchemas(schema);
+      logger.debug(
+        `has files: ${resolvedData.relationships.property_has_file}`
+      );
 
       // Get or compile validator
       const validator = await this.getValidator(resolvedSchema);
@@ -204,7 +207,7 @@ export class JsonValidatorService {
       const result = validator(resolvedData);
       const valid =
         typeof result === 'object' && result !== null && 'then' in result
-          ? await result
+          ? result
           : result;
 
       if (valid) {
@@ -335,9 +338,9 @@ export class JsonValidatorService {
           );
         }
 
+        let filePath: string;
+        let fileContent: string;
         try {
-          let filePath: string;
-
           // Handle absolute paths (starting with /)
           if (pointerValue.startsWith('/')) {
             filePath = pointerValue;
@@ -357,35 +360,40 @@ export class JsonValidatorService {
             }
           }
 
-          const fileContent = await fsPromises.readFile(filePath, 'utf-8');
-
-          // Try to parse as JSON
-          try {
-            const parsed = JSON.parse(fileContent);
-            // Recursively resolve any nested CID pointers
-            return await this.resolveCIDPointers(parsed, currentFilePath);
-          } catch {
-            // Return as string if not valid JSON
-            return fileContent;
-          }
+          fileContent = await fsPromises.readFile(filePath, 'utf-8');
         } catch (fileError) {
           throw new Error(
             `Failed to resolve pointer - not a valid CID or accessible file path: ${pointerValue}`
           );
         }
+
+        // Try to parse as JSON
+        let parsed;
+        try {
+          parsed = JSON.parse(fileContent);
+        } catch {
+          return fileContent;
+        }
+        return await this.resolveCIDPointers(parsed, currentFilePath);
       }
     }
 
     // Recursively resolve CID pointers in arrays
     if (Array.isArray(data)) {
-      return Promise.all(
-        data.map((item) => this.resolveCIDPointers(item, currentFilePath))
+      logger.debug(`Found an array: ${JSON.stringify(data)}`);
+      const arrayResults = await Promise.all(
+        data.map((item) => {
+          try {
+            return this.resolveCIDPointers(item, currentFilePath);
+          } catch (error) {
+            throw new Error(`Failed to resolve CID pointer in array: ${error}`);
+          }
+        })
       );
+      logger.debug(`Resolved array: ${JSON.stringify(arrayResults)}`);
+      return arrayResults;
     }
 
-    logger.debug(
-      `Before resolving CID pointers in object: ${JSON.stringify(data)}`
-    );
     // Recursively resolve CID pointers in objects
     const resolved: any = {};
     for (const key in data) {

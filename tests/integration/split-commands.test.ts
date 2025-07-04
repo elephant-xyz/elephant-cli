@@ -53,6 +53,14 @@ describe('Split Commands Integration Tests', () => {
     await fs.promises.rm(outputDir, { recursive: true, force: true });
   });
 
+  describe('Integration test', () => {
+    it('should work', async () => {
+      const { stdout, stderr } = await execAsync(
+        `node ${cliPath} validate-and-upload new-json-schema-data/data --dry-run`
+      );
+    }, 0);
+  });
+
   describe('validate-and-upload command', () => {
     it('should validate files and generate CSV in dry-run mode', async () => {
       const privateKey = '0x' + '1'.repeat(64); // Dummy private key
