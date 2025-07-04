@@ -207,11 +207,12 @@ export class JsonValidatorService {
         };
       }
 
-      // Create a map of which schema parts allow CID resolution before resolving
-      const cidAllowedMap = this.createCIDAllowedMap(schema);
-
-      // Resolve any CID references in the schema first
-      const resolvedSchema = await this.resolveCIDSchemas(schema);
+      // Resolve any CID references in the schema first and create a map of which schema parts allow CID resolution
+      const cidAllowedMap = new Map<string, boolean>();
+      const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
+        schema,
+        cidAllowedMap
+      );
 
       // Resolve CID pointers in data if present, but only where schema allows it
       const resolvedData = await this.resolveCIDPointers(
@@ -256,6 +257,91 @@ export class JsonValidatorService {
   }
 
   /**
+   * Resolve CID references in schemas and track which paths allow CID pointers
+   * Replaces { type: 'string', cid: '...' } with the actual schema from IPFS
+   */
+  private async resolveCIDSchemasAndTrackPaths(
+    schema: any,
+    cidAllowedMap: Map<string, boolean>,
+    currentPath: string = ''
+  ): Promise<any> {
+    if (!schema || typeof schema !== 'object') {
+      return schema;
+    }
+
+    // Check if this schema node has a 'cid' property (along with type)
+    if (schema.cid && typeof schema.cid === 'string' && schema.type) {
+      try {
+        // Mark this path as allowing CID pointers
+        cidAllowedMap.set(currentPath, true);
+
+        // Load the schema from the CID
+        const loadedSchema = await this.loadSchemaFromCID(schema.cid);
+        // Recursively resolve any CID references within the loaded schema
+        return await this.resolveCIDSchemasAndTrackPaths(
+          loadedSchema,
+          cidAllowedMap,
+          currentPath
+        );
+      } catch (error) {
+        throw new Error(
+          `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    // Handle arrays
+    if (Array.isArray(schema)) {
+      return Promise.all(
+        schema.map((item, index) =>
+          this.resolveCIDSchemasAndTrackPaths(
+            item,
+            cidAllowedMap,
+            currentPath ? `${currentPath}[]` : '[]'
+          )
+        )
+      );
+    }
+
+    // Recursively process object properties
+    const resolved: any = {};
+    for (const key in schema) {
+      if (Object.prototype.hasOwnProperty.call(schema, key)) {
+        // Special handling for 'properties' - we want to track paths within the properties
+        if (key === 'properties' && typeof schema[key] === 'object') {
+          resolved[key] = {};
+          for (const propKey in schema[key]) {
+            const propPath = currentPath
+              ? `${currentPath}.${propKey}`
+              : propKey;
+            resolved[key][propKey] = await this.resolveCIDSchemasAndTrackPaths(
+              schema[key][propKey],
+              cidAllowedMap,
+              propPath
+            );
+          }
+        } else if (key === 'items') {
+          // Special handling for array items
+          const itemsPath = currentPath ? `${currentPath}[]` : '[]';
+          resolved[key] = await this.resolveCIDSchemasAndTrackPaths(
+            schema[key],
+            cidAllowedMap,
+            itemsPath
+          );
+        } else {
+          // For other properties, don't change the path
+          resolved[key] = await this.resolveCIDSchemasAndTrackPaths(
+            schema[key],
+            cidAllowedMap,
+            currentPath
+          );
+        }
+      }
+    }
+    return resolved;
+  }
+
+  /**
    * Resolve CID references in schemas
    * Replaces { type: 'string', cid: '...' } with the actual schema from IPFS
    */
@@ -291,6 +377,29 @@ export class JsonValidatorService {
       }
     }
     return resolved;
+  }
+
+  /**
+   * Create a map of which schema parts allow CID resolution
+   * This must be done with both original and resolved schemas to handle nested CID links
+   */
+  private createCIDAllowedMapWithOriginalSchema(
+    originalSchema: any,
+    resolvedSchema: any
+  ): Map<string, boolean> {
+    const map = new Map<string, boolean>();
+
+    // First, find CID links in the original schema
+    this.findCIDLinksInSchema(originalSchema, map);
+
+    // Then, find CID links in the resolved schema
+    this.findCIDLinksInSchema(resolvedSchema, map);
+
+    logger.debug(
+      `CID allowed map: ${JSON.stringify(Array.from(map.entries()))}`
+    );
+
+    return map;
   }
 
   /**
@@ -333,6 +442,39 @@ export class JsonValidatorService {
     }
 
     return map;
+  }
+
+  /**
+   * Find CID links in a schema and add them to the map
+   */
+  private findCIDLinksInSchema(
+    schema: any,
+    map: Map<string, boolean>,
+    path: string = ''
+  ): void {
+    if (!schema || typeof schema !== 'object') {
+      return;
+    }
+
+    // Check if this schema node is a CID link
+    if (this.isCIDLinkSchema(schema)) {
+      map.set(path, true);
+      return;
+    }
+
+    // Recursively process schema properties
+    if (schema.properties && typeof schema.properties === 'object') {
+      for (const key in schema.properties) {
+        const subPath = path ? `${path}.${key}` : key;
+        this.findCIDLinksInSchema(schema.properties[key], map, subPath);
+      }
+    }
+
+    // Handle array items
+    if (schema.items) {
+      const itemsPath = path ? `${path}[]` : '[]';
+      this.findCIDLinksInSchema(schema.items, map, itemsPath);
+    }
   }
 
   /**
@@ -399,6 +541,7 @@ export class JsonValidatorService {
           try {
             const parsed = JSON.parse(contentText);
             // Recursively resolve any nested CID pointers
+            // Reset currentPath to empty since we've replaced the CID pointer with actual data
             return await this.resolveCIDPointers(
               parsed,
               currentFilePath,

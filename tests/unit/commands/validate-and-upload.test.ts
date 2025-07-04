@@ -179,7 +179,7 @@ describe('ValidateAndUploadCommand', () => {
 
     mockJsonValidatorService = {
       validate: vi.fn().mockResolvedValue({ valid: true }),
-      getErrorMessage: vi.fn(),
+      getErrorMessages: vi.fn(),
     } as any;
 
     mockJsonCanonicalizerService = {
@@ -362,9 +362,9 @@ describe('ValidateAndUploadCommand', () => {
       })
       .mockResolvedValueOnce({ valid: true });
 
-    vi.mocked(mockJsonValidatorService.getErrorMessage).mockReturnValue(
-      'instance.field: is required'
-    );
+    vi.mocked(mockJsonValidatorService.getErrorMessages).mockReturnValue([
+      'instance.field: is required',
+    ]);
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,

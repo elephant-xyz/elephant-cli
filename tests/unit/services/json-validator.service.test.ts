@@ -916,8 +916,8 @@ describe('JsonValidatorService', () => {
     it('should resolve nested CID pointers when nested schema is a CID link', async () => {
       const userCID = 'QmTzQ1qTvWQWoK9DBwp9vRssFyY1jCFyLEgcs1qeYNBrkK';
       const profileCID = 'Qmbj6yDMMPSaXwYJWJfGoRAUtCfLtZZhM9fi2HEHVQ5Tde';
-      const userSchemaCID = 'QmUserSchemaCID';
-      const profileSchemaCID = 'QmProfileSchemaCID';
+      const userSchemaCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const profileSchemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       const userData = {
         name: 'Alice',
@@ -978,7 +978,7 @@ describe('JsonValidatorService', () => {
     it('should NOT resolve nested CID pointers when nested schema is not a CID link', async () => {
       const userCID = 'QmTzQ1qTvWQWoK9DBwp9vRssFyY1jCFyLEgcs1qeYNBrkK';
       const profileCID = 'Qmbj6yDMMPSaXwYJWJfGoRAUtCfLtZZhM9fi2HEHVQ5Tde';
-      const userSchemaCID = 'QmUserSchemaCID';
+      const userSchemaCID = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
 
       const userData = {
         name: 'Alice',
@@ -1091,9 +1091,15 @@ describe('JsonValidatorService', () => {
 
       const schema: JSONSchema = {
         type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            cid: 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG',
+          },
+        },
       };
 
-      const data = { '/': contentCID };
+      const data = { content: { '/': contentCID } };
 
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(false);
@@ -1181,7 +1187,7 @@ describe('JsonValidatorService', () => {
         mockIPFSService,
         baseDir
       );
-      const profileSchemaCID = 'QmProfileSchemaCID';
+      const profileSchemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
         JSON.stringify({ bio: 'Developer', location: 'NYC' }) as any
