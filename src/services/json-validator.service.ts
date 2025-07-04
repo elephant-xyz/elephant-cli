@@ -231,7 +231,7 @@ export class JsonValidatorService {
       const result = validator(resolvedData);
       const valid =
         typeof result === 'object' && result !== null && 'then' in result
-          ? result
+          ? await result
           : result;
 
       if (valid) {
@@ -418,104 +418,6 @@ export class JsonValidatorService {
   }
 
   /**
-   * Create a map of which schema parts allow CID resolution
-   * This must be done with both original and resolved schemas to handle nested CID links
-   */
-  private createCIDAllowedMapWithOriginalSchema(
-    originalSchema: any,
-    resolvedSchema: any
-  ): Map<string, boolean> {
-    const map = new Map<string, boolean>();
-
-    // First, find CID links in the original schema
-    this.findCIDLinksInSchema(originalSchema, map);
-
-    // Then, find CID links in the resolved schema
-    this.findCIDLinksInSchema(resolvedSchema, map);
-
-    logger.debug(
-      `CID allowed map: ${JSON.stringify(Array.from(map.entries()))}`
-    );
-
-    return map;
-  }
-
-  /**
-   * Create a map of which schema parts allow CID resolution
-   * This must be done before schema CID resolution to preserve the original structure
-   */
-  private createCIDAllowedMap(
-    schema: any,
-    path: string = ''
-  ): Map<string, boolean> {
-    const map = new Map<string, boolean>();
-
-    if (!schema || typeof schema !== 'object') {
-      return map;
-    }
-
-    // Check if this schema node is a CID link
-    if (this.isCIDLinkSchema(schema)) {
-      map.set(path, true);
-      return map;
-    }
-
-    // Recursively process schema properties
-    if (schema.properties && typeof schema.properties === 'object') {
-      for (const key in schema.properties) {
-        const subPath = path ? `${path}.${key}` : key;
-        const subMap = this.createCIDAllowedMap(
-          schema.properties[key],
-          subPath
-        );
-        subMap.forEach((value, subKey) => map.set(subKey, value));
-      }
-    }
-
-    // Handle array items
-    if (schema.items) {
-      const itemsPath = path ? `${path}[]` : '[]';
-      const subMap = this.createCIDAllowedMap(schema.items, itemsPath);
-      subMap.forEach((value, subKey) => map.set(subKey, value));
-    }
-
-    return map;
-  }
-
-  /**
-   * Find CID links in a schema and add them to the map
-   */
-  private findCIDLinksInSchema(
-    schema: any,
-    map: Map<string, boolean>,
-    path: string = ''
-  ): void {
-    if (!schema || typeof schema !== 'object') {
-      return;
-    }
-
-    // Check if this schema node is a CID link
-    if (this.isCIDLinkSchema(schema)) {
-      map.set(path, true);
-      return;
-    }
-
-    // Recursively process schema properties
-    if (schema.properties && typeof schema.properties === 'object') {
-      for (const key in schema.properties) {
-        const subPath = path ? `${path}.${key}` : key;
-        this.findCIDLinksInSchema(schema.properties[key], map, subPath);
-      }
-    }
-
-    // Handle array items
-    if (schema.items) {
-      const itemsPath = path ? `${path}[]` : '[]';
-      this.findCIDLinksInSchema(schema.items, map, itemsPath);
-    }
-  }
-
-  /**
    * Resolve CID pointers in data
    * Handles {"/": <cid>} pattern by fetching content from IPFS
    * Handles {"/": <relative_file_path>} pattern by reading from local filesystem
@@ -579,7 +481,6 @@ export class JsonValidatorService {
           try {
             const parsed = JSON.parse(contentText);
             // Recursively resolve any nested CID pointers
-            // Reset currentPath to empty since we've replaced the CID pointer with actual data
             return await this.resolveCIDPointers(
               parsed,
               currentFilePath,
