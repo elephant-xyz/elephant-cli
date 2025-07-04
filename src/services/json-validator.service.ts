@@ -191,14 +191,37 @@ export class JsonValidatorService {
     currentFilePath?: string
   ): Promise<ValidationResult> {
     try {
-      // Resolve CID pointers in data if present
-      const resolvedData = await this.resolveCIDPointers(data, currentFilePath);
+      // Root schema should not be a CID link itself
+      if (this.isCIDLinkSchema(schema)) {
+        return {
+          valid: false,
+          errors: [
+            {
+              path: '',
+              message:
+                'Root schema cannot be a CID link. CID links are only allowed within schema properties.',
+              keyword: 'error',
+              params: {},
+            },
+          ],
+        };
+      }
 
-      // Also resolve any CID references in the schema
+      // Create a map of which schema parts allow CID resolution before resolving
+      const cidAllowedMap = this.createCIDAllowedMap(schema);
+
+      // Resolve any CID references in the schema first
       const resolvedSchema = await this.resolveCIDSchemas(schema);
-      logger.debug(
-        `has files: ${resolvedData.relationships.property_has_file}`
+
+      // Resolve CID pointers in data if present, but only where schema allows it
+      const resolvedData = await this.resolveCIDPointers(
+        data,
+        currentFilePath,
+        resolvedSchema,
+        cidAllowedMap
       );
+
+      logger.debug(`resolved data type: ${typeof resolvedData}`);
 
       // Get or compile validator
       const validator = await this.getValidator(resolvedSchema);
@@ -271,17 +294,66 @@ export class JsonValidatorService {
   }
 
   /**
+   * Create a map of which schema parts allow CID resolution
+   * This must be done before schema CID resolution to preserve the original structure
+   */
+  private createCIDAllowedMap(
+    schema: any,
+    path: string = ''
+  ): Map<string, boolean> {
+    const map = new Map<string, boolean>();
+
+    if (!schema || typeof schema !== 'object') {
+      return map;
+    }
+
+    // Check if this schema node is a CID link
+    if (this.isCIDLinkSchema(schema)) {
+      map.set(path, true);
+      return map;
+    }
+
+    // Recursively process schema properties
+    if (schema.properties && typeof schema.properties === 'object') {
+      for (const key in schema.properties) {
+        const subPath = path ? `${path}.${key}` : key;
+        const subMap = this.createCIDAllowedMap(
+          schema.properties[key],
+          subPath
+        );
+        subMap.forEach((value, subKey) => map.set(subKey, value));
+      }
+    }
+
+    // Handle array items
+    if (schema.items) {
+      const itemsPath = path ? `${path}[]` : '[]';
+      const subMap = this.createCIDAllowedMap(schema.items, itemsPath);
+      subMap.forEach((value, subKey) => map.set(subKey, value));
+    }
+
+    return map;
+  }
+
+  /**
    * Resolve CID pointers in data
    * Handles {"/": <cid>} pattern by fetching content from IPFS
    * Handles {"/": <relative_file_path>} pattern by reading from local filesystem
+   * Only resolves pointers where the corresponding schema part is a CID link
    * @param data The data to resolve pointers in
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
+   * @param schema The schema corresponding to this data part
+   * @param cidAllowedMap Map of which schema paths allow CID resolution
+   * @param currentPath Current path in the data structure
    */
   private async resolveCIDPointers(
     data: any,
-    currentFilePath?: string
+    currentFilePath?: string,
+    schema?: any,
+    cidAllowedMap?: Map<string, boolean>,
+    currentPath: string = ''
   ): Promise<any> {
-    if (!data) {
+    if (!data || typeof data !== 'object' || data === null) {
       return data;
     }
 
@@ -292,6 +364,13 @@ export class JsonValidatorService {
       Object.keys(data).length === 1
     ) {
       const pointerValue = data['/'];
+
+      // Check if the current path allows CID links
+      const allowsCID = cidAllowedMap?.get(currentPath) || false;
+      if (!allowsCID) {
+        // Schema doesn't allow CID links, return the pointer as-is
+        return data;
+      }
 
       // Check for empty string
       if (!pointerValue) {
@@ -320,7 +399,13 @@ export class JsonValidatorService {
           try {
             const parsed = JSON.parse(contentText);
             // Recursively resolve any nested CID pointers
-            return await this.resolveCIDPointers(parsed, currentFilePath);
+            return await this.resolveCIDPointers(
+              parsed,
+              currentFilePath,
+              schema,
+              cidAllowedMap,
+              currentPath
+            );
           } catch {
             // Return as string if not valid JSON
             return contentText;
@@ -374,17 +459,31 @@ export class JsonValidatorService {
         } catch {
           return fileContent;
         }
-        return await this.resolveCIDPointers(parsed, currentFilePath);
+        return await this.resolveCIDPointers(
+          parsed,
+          currentFilePath,
+          schema,
+          cidAllowedMap,
+          currentPath
+        );
       }
     }
 
     // Recursively resolve CID pointers in arrays
     if (Array.isArray(data)) {
       logger.debug(`Found an array: ${JSON.stringify(data)}`);
+      const itemSchema = schema && schema.items ? schema.items : undefined;
       const arrayResults = await Promise.all(
-        data.map((item) => {
+        data.map((item, index) => {
           try {
-            return this.resolveCIDPointers(item, currentFilePath);
+            const itemPath = currentPath ? `${currentPath}[]` : '[]';
+            return this.resolveCIDPointers(
+              item,
+              currentFilePath,
+              itemSchema,
+              cidAllowedMap,
+              itemPath
+            );
           } catch (error) {
             throw new Error(`Failed to resolve CID pointer in array: ${error}`);
           }
@@ -398,9 +497,17 @@ export class JsonValidatorService {
     const resolved: any = {};
     for (const key in data) {
       if (typeof data[key] === 'object' && data[key] !== null) {
+        const propertySchema =
+          schema && schema.properties && schema.properties[key]
+            ? schema.properties[key]
+            : undefined;
+        const propertyPath = currentPath ? `${currentPath}.${key}` : key;
         resolved[key] = await this.resolveCIDPointers(
           data[key],
-          currentFilePath
+          currentFilePath,
+          propertySchema,
+          cidAllowedMap,
+          propertyPath
         );
       } else {
         resolved[key] = data[key];
@@ -475,6 +582,19 @@ export class JsonValidatorService {
 
       return `${path}: ${message}`;
     });
+  }
+
+  /**
+   * Check if a schema allows CID links (has type: 'string' and cid property)
+   */
+  private isCIDLinkSchema(schema: any): boolean {
+    return (
+      schema &&
+      typeof schema === 'object' &&
+      schema.type === 'string' &&
+      schema.cid &&
+      typeof schema.cid === 'string'
+    );
   }
 
   /**
