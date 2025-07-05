@@ -63,8 +63,10 @@ export function registerValidateAndUploadCommand(program: Command) {
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
       if (!options.pinataJwt && !options.dryRun) {
-        logger.error(
-          'Error: Pinata JWT is required for uploads. Provide via --pinata-jwt or PINATA_JWT env var.'
+        console.error(
+          chalk.red(
+            'Error: Pinata JWT is required for uploads. Provide via --pinata-jwt option or PINATA_JWT environment variable, or use --dry-run to validate without uploading.'
+          )
         );
         process.exit(1);
       }
