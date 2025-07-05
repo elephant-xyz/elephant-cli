@@ -146,7 +146,7 @@ elephant-cli submit-files ./data-directory --dry-run
 
 ## Requirements
 
-- Node.js 18.0 or higher
+- Node.js 20.0 or higher
 - Internet connection for blockchain and IPFS access
 
 ## Building from Source
@@ -155,7 +155,7 @@ If you want to build and run the CLI from source code:
 
 ### Prerequisites
 
-- Node.js 18.0 or higher
+- Node.js 20.0 or higher
 - npm (comes with Node.js)
 - Git
 

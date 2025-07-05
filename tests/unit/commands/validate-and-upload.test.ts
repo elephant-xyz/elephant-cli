@@ -347,6 +347,39 @@ describe('ValidateAndUploadCommand', () => {
     );
   });
 
+  it('should handle dry run mode without Pinata JWT', async () => {
+    const dryRunOptionsWithoutJWT: ValidateAndUploadCommandOptions = {
+      inputDir: '/test/input',
+      outputCsv: 'test-output.csv',
+      maxConcurrentUploads: 5,
+      dryRun: true,
+      // pinataJwt not provided for dry run
+    };
+    const serviceOverrides = {
+      fileScannerService: mockFileScannerService,
+      ipfsServiceForSchemas: mockIpfsService,
+      schemaCacheService: mockSchemaCacheService,
+      jsonValidatorService: mockJsonValidatorService,
+      jsonCanonicalizerService: mockJsonCanonicalizerService,
+      cidCalculatorService: mockCidCalculatorService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+      // No pinataService override - should use undefined when dry run
+    };
+
+    await handleValidateAndUpload(dryRunOptionsWithoutJWT, serviceOverrides);
+
+    // Should not attempt any uploads in dry run mode
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      'test-output.csv',
+      expect.stringContaining('QmTestCid12345')
+    );
+
+    // Should have processed both files
+    expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
+    expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
+  });
+
   it('should handle validation errors', async () => {
     vi.mocked(mockJsonValidatorService.validate)
       .mockResolvedValueOnce({

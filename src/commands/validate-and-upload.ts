@@ -22,7 +22,7 @@ import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 
 export interface ValidateAndUploadCommandOptions {
-  pinataJwt: string;
+  pinataJwt?: string;
   inputDir: string;
   outputCsv: string;
   maxConcurrentUploads?: number;
@@ -240,7 +240,9 @@ export async function handleValidateAndUpload(
 
   const pinataService =
     serviceOverrides.pinataService ??
-    new PinataService(options.pinataJwt, undefined, 18);
+    (options.dryRun
+      ? undefined
+      : new PinataService(options.pinataJwt!, undefined, 18));
 
   const ipldConverterService =
     serviceOverrides.ipldConverterService ??
@@ -537,7 +539,7 @@ async function processFileAndGetUploadPromise(
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
     progressTracker: SimpleProgress;
-    pinataService: PinataService;
+    pinataService: PinataService | undefined;
     ipldConverterService: IPLDConverterService;
   },
   options: ValidateAndUploadCommandOptions,
@@ -687,6 +689,9 @@ async function processFileAndGetUploadPromise(
       services.progressTracker.increment('processed');
       return Promise.resolve();
     } else {
+      if (!services.pinataService) {
+        throw new Error('Pinata service not available for upload');
+      }
       return services.pinataService
         .uploadBatch([processedFile])
         .then((uploadResults) => {
