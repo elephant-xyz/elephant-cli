@@ -36,9 +36,9 @@ Structure your data directory like this:
 ```
 your-data/
 ├── root_cid1/
-│   └── schema_cid.json     # Your data file
+│   └── data_group_schema_cid.json     # Your data file
 ├── root_cid2/
-│   └── schema_cid.json     # Your data file
+│   └── data_group_schema_cid.json     # Your data file
 └── ...
 ```
 
@@ -100,11 +100,40 @@ After upload
 }
 ```
 
+You can also build arrays of links. After transformation, the array will be sorted alphabetically by CID:
+
+Before upload:
+
+```json
+[
+  {
+    "/": "./property.json"
+  },
+  {
+    "/": "./address.json"
+  }
+]
+```
+
+After upload:
+
+```json
+[
+  {
+    "/": "bafybeifxyz123propertydata456..."
+  },
+  {
+    "/": "bafybeiabc789addressdata012..."
+  }
+]
+```
+
 The CLI automatically:
 
 - Uploads referenced files to IPFS
 - Converts file paths to IPFS CIDs (CIDv1 format)
 - Creates proper IPLD-linked data structures
+- Canonicalize the JSON files
 
 Learn more: [IPLD Course](https://proto.school/course/ipld) | [IPFS Course](https://proto.school/course/ipfs)
 
@@ -264,4 +293,3 @@ DEBUG=elephant:* elephant-cli validate-and-upload ./your-data
 ## License
 
 MIT
-
