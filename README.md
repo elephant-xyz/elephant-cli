@@ -216,6 +216,8 @@ elephant-cli submit-to-contract results.csv --gas-price auto
 ### Submit to Contract Options
 
 - `--private-key <key>` - Wallet private key (or use ELEPHANT_PRIVATE_KEY env var)
+- `--rpc-url <url>` - Custom RPC endpoint
+- `--contract-address <address>` - Custom smart contract address
 - `--gas-price <value>` - Gas price in Gwei or 'auto' (default: 30)
 - `--transaction-batch-size <num>` - Items per transaction (default: 200)
 - `--dry-run` - Test without submitting
