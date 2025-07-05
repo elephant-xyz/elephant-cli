@@ -391,6 +391,9 @@ export async function handleValidateAndUpload(
     // Map to store seed CIDs for directories
     const seedCidMap = new Map<string, string>(); // directory path -> uploaded seed CID
 
+    // Set to track directories with failed seed validation
+    const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
+
     // Phase 1: Process all seed files first
     const seedFiles = allFiles.filter(
       (file) => file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
@@ -408,7 +411,8 @@ export async function handleValidateAndUpload(
               servicesForProcessing,
               options,
               uploadRecords,
-              seedCidMap
+              seedCidMap,
+              failedSeedDirectories
             );
           })
         );
@@ -423,20 +427,34 @@ export async function handleValidateAndUpload(
       (file) => file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
     );
 
-    // Update propertyCids for files in seed datagroup directories
-    const updatedFiles = nonSeedFiles.map((file) => {
-      if (file.propertyCid.startsWith('SEED_PENDING:')) {
-        const dirName = file.propertyCid.replace('SEED_PENDING:', '');
-        const dirPath = file.filePath.split('/').slice(0, -1).join('/');
-        const seedCid = seedCidMap.get(dirPath);
-        if (seedCid) {
-          return { ...file, propertyCid: seedCid };
+    // Update propertyCids for files in seed datagroup directories, but skip directories with failed seeds
+    const updatedFiles = nonSeedFiles
+      .filter((file) => {
+        // Skip files from directories with failed seed validation
+        if (file.propertyCid.startsWith('SEED_PENDING:')) {
+          const dirPath = file.filePath.split('/').slice(0, -1).join('/');
+          if (failedSeedDirectories.has(dirPath)) {
+            logger.warn(
+              `Skipping file ${file.filePath} because seed validation failed for directory ${dirPath}`
+            );
+            return false;
+          }
         }
-        // If no seed CID found, keep the directory name
-        return { ...file, propertyCid: dirName };
-      }
-      return file;
-    });
+        return true;
+      })
+      .map((file) => {
+        if (file.propertyCid.startsWith('SEED_PENDING:')) {
+          const dirName = file.propertyCid.replace('SEED_PENDING:', '');
+          const dirPath = file.filePath.split('/').slice(0, -1).join('/');
+          const seedCid = seedCidMap.get(dirPath);
+          if (seedCid) {
+            return { ...file, propertyCid: seedCid };
+          }
+          // If no seed CID found, keep the directory name
+          return { ...file, propertyCid: dirName };
+        }
+        return file;
+      });
 
     if (updatedFiles.length > 0) {
       logger.info(`Processing ${updatedFiles.length} non-seed files...`);
@@ -602,24 +620,60 @@ async function processSeedFile(
   },
   options: ValidateAndUploadCommandOptions,
   uploadRecords: UploadRecord[],
-  seedCidMap: Map<string, string>
+  seedCidMap: Map<string, string>,
+  failedSeedDirectories: Set<string>
 ): Promise<void> {
-  // Process the seed file exactly like a normal file
-  await processFileAndGetUploadPromise(
-    fileEntry,
-    services,
-    options,
-    uploadRecords
-  );
-
-  // If upload was successful, store the CID in the map
   const dirPath = fileEntry.filePath.split('/').slice(0, -1).join('/');
-  const latestRecord = uploadRecords[uploadRecords.length - 1];
-  if (latestRecord && latestRecord.filePath === fileEntry.filePath) {
-    seedCidMap.set(dirPath, latestRecord.dataCid);
-    logger.debug(
-      `Stored seed CID ${latestRecord.dataCid} for directory ${dirPath}`
+  const uploadRecordsCountBefore = uploadRecords.length;
+  const errorsCountBefore = services.progressTracker.getMetrics().errors;
+
+  try {
+    // Process the seed file exactly like a normal file
+    await processFileAndGetUploadPromise(
+      fileEntry,
+      services,
+      options,
+      uploadRecords
     );
+
+    // Check if processing was successful by checking if:
+    // 1. A new record was added (successful validation and upload/dry-run), OR
+    // 2. No new errors were recorded (indicating successful processing)
+    const latestRecord = uploadRecords[uploadRecords.length - 1];
+    const recordAdded =
+      uploadRecords.length > uploadRecordsCountBefore &&
+      latestRecord &&
+      latestRecord.filePath === fileEntry.filePath;
+
+    const errorsCountAfter = services.progressTracker.getMetrics().errors;
+    const newErrorsOccurred = errorsCountAfter > errorsCountBefore;
+
+    if (recordAdded) {
+      // Successful upload/dry-run
+      seedCidMap.set(dirPath, latestRecord.dataCid);
+      logger.debug(
+        `Stored seed CID ${latestRecord.dataCid} for directory ${dirPath}`
+      );
+    } else if (newErrorsOccurred) {
+      // Validation or processing failed
+      failedSeedDirectories.add(dirPath);
+      logger.error(
+        `Seed validation/upload failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+      );
+    } else {
+      // No record added and no errors - this shouldn't happen, but treat as failure
+      failedSeedDirectories.add(dirPath);
+      logger.error(
+        `Seed processing completed without success or error for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+      );
+    }
+  } catch (error) {
+    // Mark this directory as having a failed seed
+    failedSeedDirectories.add(dirPath);
+    logger.error(
+      `Seed processing failed for ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}. All other files in directory ${dirPath} will be skipped.`
+    );
+    throw error; // Re-throw to maintain error reporting
   }
 }
 

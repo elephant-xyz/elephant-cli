@@ -318,6 +318,24 @@ describe('FileScannerService', () => {
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    it('should validate seed datagroup directory even if only seed file is present', async () => {
+      // Create seed datagroup directory with only seed file
+      const seedDirName = 'only-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+
+      // Create only the seed file
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
   });
 
   describe('scanDirectory', () => {
