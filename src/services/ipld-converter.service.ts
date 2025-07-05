@@ -162,7 +162,13 @@ export class IPLDConverterService {
       // Try to parse as JSON
       let dataToUpload: any;
       try {
-        dataToUpload = JSON.parse(fileContent);
+        const parsedData = JSON.parse(fileContent);
+        // Recursively process the parsed data to convert any nested file path links
+        dataToUpload = await this.processDataForIPLD(
+          parsedData,
+          [],
+          resolvedPath
+        );
       } catch {
         // If not JSON, treat as raw text
         dataToUpload = fileContent;
