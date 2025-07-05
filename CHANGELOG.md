@@ -1,3 +1,10 @@
+## [1.6.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.1...v1.6.2) (2025-07-05)
+
+
+### Bug Fixes
+
+* **ipld-converter:** recursively process nested file links ([#32](https://github.com/elephant-xyz/elephant-cli/issues/32)) ([af0fb31](https://github.com/elephant-xyz/elephant-cli/commit/af0fb3147c9a4d99b48e665ed054bdc5f113fc42))
+
 ## [1.6.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.0...v1.6.1) (2025-07-05)
 
 
