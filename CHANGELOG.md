@@ -1,3 +1,10 @@
+## [1.6.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.2...v1.6.3) (2025-07-05)
+
+
+### Bug Fixes
+
+* **validate-and-upload:** support dry run without Pinata JWT ([#33](https://github.com/elephant-xyz/elephant-cli/issues/33)) ([a24406a](https://github.com/elephant-xyz/elephant-cli/commit/a24406adceb135b42cd6a0e0831e712ab5b5de8e))
+
 ## [1.6.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.1...v1.6.2) (2025-07-05)
 
 
