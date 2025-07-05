@@ -331,6 +331,104 @@ describe('IPLDConverterService', () => {
       );
       expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
     });
+
+    it('should recursively process nested file path links in referenced files', async () => {
+      // Mock file system reads:
+      // 1. Main file with link to relationship.json
+      // 2. relationship.json contains links to person.json and property.json
+      // 3. person.json contains actual person data
+      // 4. property.json contains actual property data
+
+      vi.mocked(fsPromises.readFile)
+        // First call: relationship.json with nested file links
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            from: { '/': './person.json' },
+            to: { '/': './property.json' },
+          }) as any
+        )
+        // Second call: person.json
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            name: 'John Doe',
+            age: 30,
+          }) as any
+        )
+        // Third call: property.json
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            address: '123 Main St',
+            value: 250000,
+          }) as any
+        );
+
+      // Mock Pinata service to return different CIDs for each upload
+      mockPinataService.uploadBatch = vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'bafkreipersoncid12345678901234567890123456789012',
+            propertyCid: 'linked-content',
+            dataGroupCid: 'linked-content',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'bafkreipropertycid1234567890123456789012345678901',
+            propertyCid: 'linked-content',
+            dataGroupCid: 'linked-content',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'bafkreirelationshipcid123456789012345678901234567',
+            propertyCid: 'linked-content',
+            dataGroupCid: 'linked-content',
+          },
+        ]);
+
+      const dataWithNestedLinks = {
+        label: 'County',
+        relationship: { '/': 'relationship.json' },
+      };
+
+      const result = await ipldConverterService.convertToIPLD(
+        dataWithNestedLinks,
+        '/test/data/main.json'
+      );
+
+      expect(result.hasLinks).toBe(true);
+      expect(result.linkedCIDs).toHaveLength(3); // person.json, property.json, relationship.json
+
+      // Verify the nested structure was properly converted
+      expect(result.convertedData).toEqual({
+        label: 'County',
+        relationship: {
+          '/': 'bafkreirelationshipcid123456789012345678901234567',
+        },
+      });
+
+      // Verify all three files were read
+      expect(fsPromises.readFile).toHaveBeenCalledTimes(3);
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/relationship.json',
+        'utf-8'
+      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/person.json',
+        'utf-8'
+      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/data/property.json',
+        'utf-8'
+      );
+
+      // Verify all three files were uploaded
+      expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('DAG-JSON encoding/decoding', () => {
