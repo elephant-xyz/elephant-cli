@@ -630,10 +630,81 @@ export class JsonValidatorService {
   private transformErrors(ajvErrors: ErrorObject[]): ValidationError[] {
     return ajvErrors.map((error) => ({
       path: error.instancePath || '/',
-      message: error.message || 'Validation failed',
+      message: this.enhanceErrorMessage(error),
       keyword: error.keyword,
       params: error.params,
     }));
+  }
+
+  /**
+   * Enhance error messages with detailed format descriptions
+   */
+  private enhanceErrorMessage(error: ErrorObject): string {
+    const baseMessage = error.message || 'Validation failed';
+
+    // Enhanced format error messages
+    if (error.keyword === 'format' && error.params?.format) {
+      const format = error.params.format;
+
+      switch (format) {
+        case 'date':
+          return 'must be a valid ISO date in YYYY-MM-DD format';
+        case 'date-time':
+          return 'must be a valid ISO date-time in YYYY-MM-DDTHH:mm:ss.sssZ format';
+        case 'time':
+          return 'must be a valid ISO time in HH:mm:ss format';
+        case 'email':
+          return 'must be a valid email address';
+        case 'hostname':
+          return 'must be a valid hostname';
+        case 'ipv4':
+          return 'must be a valid IPv4 address';
+        case 'ipv6':
+          return 'must be a valid IPv6 address';
+        case 'uri':
+          return 'must be a valid URI starting with http:// or https://';
+        case 'uri-reference':
+          return 'must be a valid URI reference';
+        case 'iri':
+          return 'must be a valid IRI (Internationalized Resource Identifier)';
+        case 'iri-reference':
+          return 'must be a valid IRI reference';
+        case 'uuid':
+          return 'must be a valid UUID';
+        case 'json-pointer':
+          return 'must be a valid JSON Pointer';
+        case 'relative-json-pointer':
+          return 'must be a valid relative JSON Pointer';
+        case 'regex':
+          return 'must be a valid regular expression';
+        case 'cid':
+          return 'must be a valid IPFS Content Identifier (CID)';
+        case 'currency':
+          return 'must be a positive number with at most 2 decimal places';
+        case 'ipfs_uri':
+          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256';
+        case 'rate_percent':
+          return 'must be a percentage rate with exactly 3 decimal places (e.g., "12.345")';
+        default:
+          return `must match format "${format}"`;
+      }
+    }
+
+    // Enhanced error messages for other common validation errors
+    if (error.keyword === 'required' && error.params?.missingProperty) {
+      return `missing required property '${error.params.missingProperty}'`;
+    } else if (
+      error.keyword === 'additionalProperties' &&
+      error.params?.additionalProperty
+    ) {
+      return `unexpected property '${error.params.additionalProperty}'`;
+    } else if (error.keyword === 'type' && error.params?.type) {
+      return `must be ${error.params.type}`;
+    } else if (error.keyword === 'enum' && error.params?.allowedValues) {
+      return `must be one of: ${error.params.allowedValues.join(', ')}`;
+    }
+
+    return baseMessage;
   }
 
   /**
@@ -646,21 +717,7 @@ export class JsonValidatorService {
 
     return errors.map((error) => {
       const path = error.path || 'root';
-      let message = error.message || 'Validation failed';
-
-      // Add more context for common schema validation errors
-      if (error.keyword === 'required' && error.params?.missingProperty) {
-        message = `missing required property '${error.params.missingProperty}'`;
-      } else if (
-        error.keyword === 'additionalProperties' &&
-        error.params?.additionalProperty
-      ) {
-        message = `unexpected property '${error.params.additionalProperty}'`;
-      } else if (error.keyword === 'type' && error.params?.type) {
-        message = `must be ${error.params.type}`;
-      } else if (error.keyword === 'enum' && error.params?.allowedValues) {
-        message = `must be one of: ${error.params.allowedValues.join(', ')}`;
-      }
+      const message = error.message || 'Validation failed';
 
       return `${path}: ${message}`;
     });
