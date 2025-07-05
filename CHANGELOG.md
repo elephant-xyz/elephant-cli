@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.3...v1.7.0) (2025-07-05)
+
+
+### Features
+
+* **json-validator:** enhance error messages with detailed formats ([#35](https://github.com/elephant-xyz/elephant-cli/issues/35)) ([476a6f6](https://github.com/elephant-xyz/elephant-cli/commit/476a6f615e67db5495e5836a40c9521c4a2aa858))
+
 ## [1.6.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.2...v1.6.3) (2025-07-05)
 
 
