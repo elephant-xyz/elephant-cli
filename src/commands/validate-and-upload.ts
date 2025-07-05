@@ -823,13 +823,18 @@ async function processFileAndGetUploadPromise(
       calculatedCid,
       validationPassed: true,
     };
-
+    
     if (options.dryRun) {
       logger.info(
         `[DRY RUN] Would upload ${processedFile.filePath} (Calculated CID: ${processedFile.calculatedCid})`
       );
+      
+      // For seed files, the propertyCid should be the same as dataCid
+      const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+      const finalPropertyCid = 'ALWAYS_FIXED_' + processedFile.calculatedCid;
+      
       uploadRecords.push({
-        propertyCid: processedFile.propertyCid,
+        propertyCid: finalPropertyCid,
         dataGroupCid: processedFile.dataGroupCid,
         dataCid: processedFile.calculatedCid,
         filePath: processedFile.filePath,
@@ -851,8 +856,13 @@ async function processFileAndGetUploadPromise(
             uploadResults[0].cid
           ) {
             const ipfsCid = uploadResults[0].cid;
+            
+            // For seed files, the propertyCid should be the same as dataCid
+            const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+            const finalPropertyCid = isSeedFile ? 'SEED_FIXED_' + ipfsCid : processedFile.propertyCid;
+            
             uploadRecords.push({
-              propertyCid: processedFile.propertyCid,
+              propertyCid: finalPropertyCid,
               dataGroupCid: processedFile.dataGroupCid,
               dataCid: ipfsCid,
               filePath: processedFile.filePath,
