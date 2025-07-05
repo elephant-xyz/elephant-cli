@@ -67,3 +67,4 @@ tmp/
 tests/integration/test-data/
 tests/integration/test-output/
 demo-scenario/
+new-json-schema-data/
