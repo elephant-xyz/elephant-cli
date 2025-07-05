@@ -1,6 +1,7 @@
 import { stat, readdir } from 'fs/promises';
 import { join, extname } from 'path';
 import { FileEntry } from '../types/submit.types.js';
+import { logger } from '../utils/logger.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
 export interface ValidationResult {
