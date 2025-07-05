@@ -24,7 +24,7 @@ npx @elephant-xyz/cli --help
 
 The Elephant Network CLI provides two main workflows:
 
-1. **✅ Validate & Upload** - Process and upload your data files  
+1. **✅ Validate & Upload** - Process and upload your data files
 2. **🔗 Submit to Blockchain** - Register your submissions on-chain
 
 ## Workflow 1: Preparing and Uploading Data
@@ -32,6 +32,7 @@ The Elephant Network CLI provides two main workflows:
 ### Step 1: Organize Your Data
 
 Structure your data directory like this:
+
 ```
 your-data/
 ├── root_cid1/
@@ -41,18 +42,21 @@ your-data/
 └── ...
 ```
 
-**Important:** 
-- Directory names must be root CIDs (a.k.a. seed CIDs) 
+**Important:**
+
+- Directory names must be root CIDs (a.k.a. seed CIDs)
 - File names must be schema CIDs
 - Files must contain valid JSON data
 
 ### Step 2: Get Your Credentials
 
 You'll need:
+
 - **Private Key**: Your oracle wallet private key
 - **Pinata JWT**: Token for IPFS uploads (get from [Pinata](https://pinata.cloud))
 
 Set up environment variables (recommended):
+
 ```bash
 # Create a .env file in your project directory
 echo "ELEPHANT_PRIVATE_KEY=your_private_key_here" >> .env
@@ -69,6 +73,7 @@ elephant-cli validate-and-upload ./your-data --dry-run --output-csv test-results
 ```
 
 **What this does:**
+
 - Validates your JSON files against the required schemas
 - Converts file path references to IPFS CIDs
 - Shows what would be uploaded (without actually uploading)
@@ -77,21 +82,28 @@ elephant-cli validate-and-upload ./your-data --dry-run --output-csv test-results
 **IPLD Links Support:**
 Your JSON data can reference other files using IPLD links:
 
+Before upload
+
 ```json
 {
-  "title": "Main Document",
-  "metadata": {
-    "/": "./metadata.json"
-  },
-  "license": {
-    "/": "../shared/license.json"  
-  }
+  "from": { "/": "./property.json" },
+  "to": { "/": "./address.json" }
+}
+```
+
+After upload
+
+```json
+{
+  "from": { "/": "bafybeifxyz123propertydata456..." },
+  "to": { "/": "bafybeiabc789addressdata012..." }
 }
 ```
 
 The CLI automatically:
+
 - Uploads referenced files to IPFS
-- Converts file paths to IPFS CIDs
+- Converts file paths to IPFS CIDs (CIDv1 format)
 - Creates proper IPLD-linked data structures
 
 Learn more: [IPLD Course](https://proto.school/course/ipld) | [IPFS Course](https://proto.school/course/ipfs)
@@ -105,6 +117,7 @@ elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
 ```
 
 **What this does:**
+
 - Validates all your data files
 - Uploads valid files to IPFS via Pinata
 - Creates a CSV file with upload results (needed for next step)
@@ -114,8 +127,9 @@ elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
 ### Step 1: Review Upload Results
 
 Check the CSV file from the previous step (`upload-results.csv`). It contains:
+
 - Root CIDs (a.k.a. seed CIDs)
-- Data group CIDs  
+- Data group CIDs
 - Your uploaded data CIDs
 - File paths and timestamps
 
@@ -128,6 +142,7 @@ elephant-cli submit-to-contract upload-results.csv --dry-run
 ```
 
 **What this does:**
+
 - Verifies your data differs from existing consensus
 - Checks you haven't already submitted the same data
 - Shows what transactions would be sent (without sending them)
@@ -141,6 +156,7 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 ```
 
 **What this does:**
+
 - Submits your data hashes to the Elephant Network smart contract
 - Groups submissions into batches for efficiency
 - Provides transaction confirmations
@@ -159,18 +175,17 @@ elephant-cli submit-to-contract results.csv --gas-price 50
 elephant-cli submit-to-contract results.csv --gas-price auto
 ```
 
-
-
 ## Common Command Options
 
+### Validate and Upload Options
 
-### Validate and Upload Options  
 - `--pinata-jwt <token>` - Pinata API token (or use PINATA_JWT env var)
 - `--output-csv <file>` - Results file name (default: upload-results.csv)
 - `--max-concurrent-uploads <num>` - Control upload speed
 - `--dry-run` - Test without uploading
 
 ### Submit to Contract Options
+
 - `--private-key <key>` - Wallet private key (or use ELEPHANT_PRIVATE_KEY env var)
 - `--gas-price <value>` - Gas price in Gwei or 'auto' (default: 30)
 - `--transaction-batch-size <num>` - Items per transaction (default: 200)
@@ -181,23 +196,28 @@ elephant-cli submit-to-contract results.csv --gas-price auto
 ### Common Issues
 
 **"Invalid oracle address"**
+
 - Use a valid Ethereum address format: `0x1234...` (42 characters)
 
 **"No data found"**
+
 - Check your oracle address is correct
 - Verify you have data in the specified period
 
 **"Validation failed"**
+
 - Check your JSON files match the required schema
 - Ensure file paths exist for IPLD links
 - Review error details in the generated error CSV
 
 **"Upload failed"**
+
 - Verify your Pinata JWT token is valid
 - Check your internet connection
 - Try reducing `--max-concurrent-uploads`
 
 **"Transaction failed"**
+
 - Ensure your private key has sufficient MATIC for gas
 - Try increasing `--gas-price`
 - Check you haven't already submitted the same data
@@ -244,3 +264,4 @@ DEBUG=elephant:* elephant-cli validate-and-upload ./your-data
 ## License
 
 MIT
+
