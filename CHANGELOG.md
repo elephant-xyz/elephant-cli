@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.7.0...v1.8.0) (2025-07-05)
+
+
+### Features
+
+* **seed-datagroup:** add support for seed datagroup directories ([#36](https://github.com/elephant-xyz/elephant-cli/issues/36)) ([26b8f40](https://github.com/elephant-xyz/elephant-cli/commit/26b8f40938350807dacbbbd1b8599f862b607ede))
+
 # [1.7.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.3...v1.7.0) (2025-07-05)
 
 
