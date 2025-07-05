@@ -296,7 +296,7 @@ export class FileScannerService {
           }
         } catch (error) {
           // Log error but continue processing other directories
-          console.error(`Error scanning directory ${propertyDirPath}:`, error);
+          logger.error(`Error scanning directory ${propertyDirPath}:`, error);
         }
       }
 

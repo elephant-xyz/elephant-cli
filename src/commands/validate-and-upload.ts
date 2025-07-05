@@ -623,7 +623,7 @@ async function processSeedFile(
   seedCidMap: Map<string, string>,
   failedSeedDirectories: Set<string>
 ): Promise<void> {
-  const dirPath = fileEntry.filePath.split('/').slice(0, -1).join('/');
+  const dirPath = path.dirname(fileEntry.filePath);
   const uploadRecordsCountBefore = uploadRecords.length;
   const errorsCountBefore = services.progressTracker.getMetrics().errors;
 
