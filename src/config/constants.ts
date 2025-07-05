@@ -20,6 +20,10 @@ export const SUBMIT_CONTRACT_METHODS = {
 export const PINATA_API_BASE_URL = 'https://api.pinata.cloud';
 export const PINATA_GATEWAY_BASE_URL = 'https://gateway.pinata.cloud/ipfs/';
 
+// Seed datagroup schema CID
+export const SEED_DATAGROUP_SCHEMA_CID =
+  'bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu';
+
 // Smart contract method ABIs for submit functionality
 export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
   {

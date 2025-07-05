@@ -44,9 +44,28 @@ your-data/
 
 **Important:**
 
-- Directory names must be root CIDs (a.k.a. seed CIDs)
+- Directory names must be root CIDs (a.k.a. seed CIDs) OR contain a seed datagroup file
 - File names must be schema CIDs
 - Files must contain valid JSON data
+
+**Seed Datagroup Support:**
+
+Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`
+
+```
+your-data/
+├── property_data_set_1/          # Any name (not a CID)
+│   ├── bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json  # Seed file
+│   └── other_schema_cid.json     # Other data files
+├── bafybe.../                    # Traditional CID directory
+│   └── schema_cid.json           # Data file
+└── ...
+```
+
+When using seed datagroup directories:
+- The seed file is uploaded first to IPFS
+- The CID of the uploaded seed file becomes the propertyCid for ALL files in that directory
+- This allows flexible directory naming while maintaining traceability
 
 ### Step 2: Get Your Credentials
 

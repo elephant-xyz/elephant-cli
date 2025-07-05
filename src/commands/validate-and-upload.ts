@@ -20,6 +20,7 @@ import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
 export interface ValidateAndUploadCommandOptions {
   pinataJwt?: string;
@@ -362,8 +363,17 @@ export async function handleValidateAndUpload(
       // Decide if this is a fatal error. For now, log and continue, as individual file processing will still attempt schema loading.
     }
 
+    // Collect all files first to handle seed files in two phases
+    const allFiles: FileEntry[] = [];
+    for await (const fileBatch of fileScannerService.scanDirectory(
+      options.inputDir,
+      config.fileScanBatchSize
+    )) {
+      allFiles.push(...fileBatch);
+    }
+
     // Phase 2: Processing Files (totalFiles steps)
-    progressTracker.setPhase('Processing Files', totalFiles);
+    progressTracker.setPhase('Processing Files', allFiles.length);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
     const servicesForProcessing = {
@@ -378,27 +388,75 @@ export async function handleValidateAndUpload(
       ipldConverterService,
     };
 
-    const allOperationPromises: Promise<void>[] = [];
+    // Map to store seed CIDs for directories
+    const seedCidMap = new Map<string, string>(); // directory path -> uploaded seed CID
 
-    for await (const fileBatch of fileScannerService.scanDirectory(
-      options.inputDir,
-      config.fileScanBatchSize
-    )) {
-      for (const fileEntry of fileBatch) {
+    // Phase 1: Process all seed files first
+    const seedFiles = allFiles.filter(
+      (file) => file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
+    );
+
+    if (seedFiles.length > 0) {
+      logger.info(`Processing ${seedFiles.length} seed files first...`);
+
+      const seedPromises: Promise<void>[] = [];
+      for (const seedFile of seedFiles) {
+        seedPromises.push(
+          localProcessingSemaphore.runExclusive(async () => {
+            await processSeedFile(
+              seedFile,
+              servicesForProcessing,
+              options,
+              uploadRecords,
+              seedCidMap
+            );
+          })
+        );
+      }
+
+      await Promise.all(seedPromises);
+      logger.info(`Completed processing ${seedFiles.length} seed files`);
+    }
+
+    // Phase 2: Process all non-seed files with updated propertyCids
+    const nonSeedFiles = allFiles.filter(
+      (file) => file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
+    );
+
+    // Update propertyCids for files in seed datagroup directories
+    const updatedFiles = nonSeedFiles.map((file) => {
+      if (file.propertyCid.startsWith('SEED_PENDING:')) {
+        const dirName = file.propertyCid.replace('SEED_PENDING:', '');
+        const dirPath = file.filePath.split('/').slice(0, -1).join('/');
+        const seedCid = seedCidMap.get(dirPath);
+        if (seedCid) {
+          return { ...file, propertyCid: seedCid };
+        }
+        // If no seed CID found, keep the directory name
+        return { ...file, propertyCid: dirName };
+      }
+      return file;
+    });
+
+    if (updatedFiles.length > 0) {
+      logger.info(`Processing ${updatedFiles.length} non-seed files...`);
+
+      const allOperationPromises: Promise<void>[] = [];
+      for (const fileEntry of updatedFiles) {
         allOperationPromises.push(
           localProcessingSemaphore.runExclusive(async () =>
             processFileAndGetUploadPromise(
               fileEntry,
-              servicesForProcessing, // Use renamed services object
+              servicesForProcessing,
               options,
               uploadRecords
             )
           )
         );
       }
-    }
 
-    await Promise.all(allOperationPromises);
+      await Promise.all(allOperationPromises);
+    }
 
     if (progressTracker) {
       progressTracker.stop();
@@ -525,6 +583,43 @@ export async function handleValidateAndUpload(
       );
     }
     process.exit(1);
+  }
+}
+
+async function processSeedFile(
+  fileEntry: FileEntry,
+  services: {
+    schemaCacheService: SchemaCacheService;
+    jsonValidatorService: JsonValidatorService;
+    jsonCanonicalizerService:
+      | JsonCanonicalizerService
+      | IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+    csvReporterService: CsvReporterService;
+    progressTracker: SimpleProgress;
+    pinataService: PinataService | undefined;
+    ipldConverterService: IPLDConverterService;
+  },
+  options: ValidateAndUploadCommandOptions,
+  uploadRecords: UploadRecord[],
+  seedCidMap: Map<string, string>
+): Promise<void> {
+  // Process the seed file exactly like a normal file
+  await processFileAndGetUploadPromise(
+    fileEntry,
+    services,
+    options,
+    uploadRecords
+  );
+
+  // If upload was successful, store the CID in the map
+  const dirPath = fileEntry.filePath.split('/').slice(0, -1).join('/');
+  const latestRecord = uploadRecords[uploadRecords.length - 1];
+  if (latestRecord && latestRecord.filePath === fileEntry.filePath) {
+    seedCidMap.set(dirPath, latestRecord.dataCid);
+    logger.debug(
+      `Stored seed CID ${latestRecord.dataCid} for directory ${dirPath}`
+    );
   }
 }
 

@@ -83,9 +83,10 @@ This command:
 1. Validates file structure in the input directory
 2. Confirms file assignments to the user
 3. Uses filenames as Schema CIDs to validate JSON data
-4. Canonicalizes validated data
-5. Uploads canonicalized files to IPFS via Pinata
-6. Generates a CSV file with upload results
+4. Handles seed datagroup processing (uploads seed files first to get their CIDs)
+5. Canonicalizes validated data
+6. Uploads canonicalized files to IPFS via Pinata
+7. Generates a CSV file with upload results
 
 ### submit-to-contract Command
 
@@ -149,6 +150,7 @@ Common issues to check:
 - **Retry Count**: 1 retry on IPFS failure
 - **CID Version**: v1 (base32 encoding) for all uploads
 - **CID Codec**: DAG-JSON (0x0129) for IPLD linked data, DAG-PB (0x70) for regular files
+- **Seed Datagroup Schema CID**: `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu`
 
 ## Development Commands
 
@@ -288,6 +290,30 @@ const data = {
 // Both are fetched from IPFS and validated
 const result = await validator.validate(data, schema);
 ```
+
+## Seed Datagroup Feature
+
+The validate-and-upload command supports a special "seed datagroup" workflow:
+
+### Directory Structure
+Two types of directories are supported:
+1. **Standard CID directories**: Directory name is a valid IPFS CID
+2. **Seed datagroup directories**: Directory name can be anything, but must contain a file named `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`
+
+### Processing Workflow
+1. **Phase 1**: All seed files (`bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`) are processed first
+2. **Phase 2**: All other files are processed, with files in seed datagroup directories using the uploaded seed CID as their `propertyCid`
+
+### Implementation Details
+- Files are scanned and marked with `SEED_PENDING:${dirName}` for seed datagroup directories
+- Seed files are uploaded first and their CIDs are stored in a map
+- Non-seed files in seed datagroup directories get their `propertyCid` updated to the uploaded seed CID
+- All files (seed and non-seed) from the same directory share the same `propertyCid` in the final CSV output
+
+### File Scanner Service Changes
+- `validateStructure()`: Accepts directories with seed files even if directory name isn't a CID
+- `scanDirectory()`: Marks seed datagroup files with special `SEED_PENDING:` prefix
+- `getAllDataGroupCids()`: Includes the hardcoded seed datagroup schema CID when found
 
 ## Security Considerations
 
