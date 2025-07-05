@@ -117,7 +117,9 @@ describe('JsonValidatorService', () => {
 
       const result2 = await jsonValidator.validate(invalidData, schema);
       expect(result2.valid).toBe(false);
-      expect(result2.errors![0].message).toContain('format');
+      expect(result2.errors![0].message).toContain(
+        'must be a valid email address'
+      );
     });
 
     it('should validate arrays', async () => {
@@ -441,7 +443,9 @@ describe('JsonValidatorService', () => {
         const result = await jsonValidator.validate(invalidCID, schema);
         expect(result.valid).toBe(false);
         expect(result.errors).toBeDefined();
-        expect(result.errors![0].message).toContain('format');
+        expect(result.errors![0].message).toContain(
+          'must be a valid IPFS Content Identifier (CID)'
+        );
       }
     });
 

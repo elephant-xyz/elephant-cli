@@ -182,11 +182,18 @@ npm run dev
 npm run clean
 
 # Run tests
-npm test
+npm run test
 
-# Run specific test files
-npm test tests/unit/commands/validate-and-upload.test.ts
-npm test tests/integration/split-commands.test.ts
+# Run specific test files or patterns
+npm run test -- tests/unit/commands/validate-and-upload.test.ts
+npm run test -- tests/integration/split-commands.test.ts
+npm run test -- json-validator
+
+# Run tests with watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
 ```
 
 ## File Structure Context
@@ -259,6 +266,11 @@ Data can reference local files using relative paths:
 4. **CID Format Validation**: Validates CID strings using multiformats library
 
 5. **File Path Resolution**: Relative file paths in IPLD links are resolved relative to the containing file's directory, not the data directory root
+
+6. **Enhanced Error Messages**: Provides detailed, user-friendly error messages for validation failures:
+   - Format errors include specific format requirements (e.g., "must be a valid ISO date in YYYY-MM-DD format")
+   - Custom format errors explain the expected format (e.g., "must be a positive number with at most 2 decimal places")
+   - Validation errors specify the issue clearly (e.g., "missing required property 'name'")
 
 ### Example Flow
 ```typescript
