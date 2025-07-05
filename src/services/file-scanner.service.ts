@@ -1,6 +1,8 @@
 import { stat, readdir } from 'fs/promises';
 import { join, extname } from 'path';
 import { FileEntry } from '../types/submit.types.js';
+import { logger } from '../utils/logger.js';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -33,16 +35,24 @@ export class FileScannerService {
       let validPropertyDirs = 0;
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          // Only process directories with valid CID names
+          const propertyDirPath = join(directoryPath, entry.name);
+
+          // Check if this is a valid CID directory OR a seed datagroup directory
           if (this.isValidCid(entry.name)) {
+            // Standard CID directory
             validPropertyDirs++;
-            // Check files within the property directory
-            const propertyDirPath = join(directoryPath, entry.name);
             const propertyValidation =
               await this.validatePropertyDirectory(propertyDirPath);
             errors.push(...propertyValidation.errors);
+          } else {
+            // Check if this is a seed datagroup directory
+            const seedValidation =
+              await this.validateSeedDatagroupDirectory(propertyDirPath);
+            if (seedValidation.isValid) {
+              validPropertyDirs++;
+              errors.push(...seedValidation.errors);
+            }
           }
-          // Ignore directories with non-CID names
         }
         // Ignore files in root directory
       }
@@ -115,6 +125,68 @@ export class FileScannerService {
     }
   }
 
+  private async validateSeedDatagroupDirectory(
+    directoryPath: string
+  ): Promise<ValidationResult> {
+    const errors: string[] = [];
+
+    try {
+      const files = await readdir(directoryPath, { withFileTypes: true });
+
+      if (files.length === 0) {
+        errors.push(`Directory ${directoryPath} is empty`);
+        return { isValid: false, errors };
+      }
+
+      // Check if there's a file with the seed datagroup schema CID
+      const seedFile = files.find(
+        (file) =>
+          file.isFile() && file.name === `${SEED_DATAGROUP_SCHEMA_CID}.json`
+      );
+
+      if (!seedFile) {
+        // Not a seed datagroup directory, return invalid without error
+        return { isValid: false, errors: [] };
+      }
+
+      // Count valid files including the seed file and other CID files
+      let validFiles = 0;
+      for (const file of files) {
+        if (file.isFile()) {
+          // Only process files with .json extension
+          if (extname(file.name) === '.json') {
+            // Extract data group CID from filename (remove .json extension)
+            const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
+
+            // Count seed file and other valid CID files
+            if (
+              dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
+              this.isValidCid(dataGroupCid)
+            ) {
+              validFiles++;
+            }
+          }
+        }
+      }
+
+      if (validFiles === 0) {
+        errors.push(
+          `No valid files found in seed datagroup directory ${directoryPath}`
+        );
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+      };
+    } catch (error) {
+      errors.push(
+        `Failed to access seed datagroup directory ${directoryPath}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return { isValid: false, errors };
+    }
+  }
+
   private isValidCid(cid: string): boolean {
     // Basic CID validation
     // IPFS CIDs typically start with 'Qm' (CIDv0) or 'b' (CIDv1 base32)
@@ -157,17 +229,30 @@ export class FileScannerService {
           continue; // Skip non-directories
         }
 
-        const propertyCid = propertyDir.name;
-
-        // Skip directories with non-CID names
-        if (!this.isValidCid(propertyCid)) {
-          continue;
-        }
-
-        const propertyDirPath = join(directoryPath, propertyCid);
+        const dirName = propertyDir.name;
+        const propertyDirPath = join(directoryPath, dirName);
 
         try {
           const files = await readdir(propertyDirPath, { withFileTypes: true });
+
+          // Check if this directory has a seed file
+          const hasSeedFile = files.some(
+            (file) =>
+              file.isFile() && file.name === `${SEED_DATAGROUP_SCHEMA_CID}.json`
+          );
+
+          // Use directory name as propertyCid for now
+          // For seed datagroup directories, this will be updated later after upload
+          const propertyCid = this.isValidCid(dirName)
+            ? dirName
+            : hasSeedFile
+              ? `SEED_PENDING:${dirName}`
+              : dirName;
+
+          // Skip directories that are neither CID directories nor seed datagroup directories
+          if (!this.isValidCid(dirName) && !hasSeedFile) {
+            continue;
+          }
 
           for (const file of files) {
             if (!file.isFile() || !file.name.endsWith('.json')) {
@@ -176,9 +261,23 @@ export class FileScannerService {
 
             const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
 
-            // Skip files with non-CID names
-            if (!this.isValidCid(dataGroupCid)) {
-              continue;
+            // For standard CID directories, only process files with valid CID names
+            // For seed datagroup directories, process seed file and other valid CID files
+            if (this.isValidCid(dirName)) {
+              // Standard CID directory - only process valid CID files
+              if (!this.isValidCid(dataGroupCid)) {
+                continue;
+              }
+            } else if (hasSeedFile) {
+              // Seed datagroup directory - process seed file and other valid CID files
+              if (
+                dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID &&
+                !this.isValidCid(dataGroupCid)
+              ) {
+                continue;
+              }
+            } else {
+              continue; // Skip invalid directories
             }
 
             const filePath = join(propertyDirPath, file.name);
@@ -198,10 +297,7 @@ export class FileScannerService {
           }
         } catch (error) {
           // Log error but continue processing other directories
-          console.error(
-            `Error scanning property directory ${propertyDirPath}:`,
-            error
-          );
+          logger.error(`Error scanning directory ${propertyDirPath}: ${error}`);
         }
       }
 
@@ -239,24 +335,42 @@ export class FileScannerService {
           continue;
         }
 
-        // Skip directories with non-CID names
-        if (!this.isValidCid(propertyDir.name)) {
-          continue;
-        }
-
-        const propertyDirPath = join(directoryPath, propertyDir.name);
+        const dirName = propertyDir.name;
+        const propertyDirPath = join(directoryPath, dirName);
 
         try {
           const files = await readdir(propertyDirPath, { withFileTypes: true });
+
+          // Check if this directory has a seed file
+          const hasSeedFile = files.some(
+            (file) =>
+              file.isFile() && file.name === `${SEED_DATAGROUP_SCHEMA_CID}.json`
+          );
+
+          // Skip directories that are neither CID directories nor seed datagroup directories
+          if (!this.isValidCid(dirName) && !hasSeedFile) {
+            continue;
+          }
 
           for (const file of files) {
             if (!file.isFile() || !file.name.endsWith('.json')) {
               continue;
             }
             const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
-            if (this.isValidCid(dataGroupCid)) {
-              // Ensure it's a valid CID before adding
-              dataGroupCids.add(dataGroupCid);
+
+            if (this.isValidCid(dirName)) {
+              // Standard CID directory - only process valid CID files
+              if (this.isValidCid(dataGroupCid)) {
+                dataGroupCids.add(dataGroupCid);
+              }
+            } else if (hasSeedFile) {
+              // Seed datagroup directory - process seed file and other valid CID files
+              if (
+                dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
+                this.isValidCid(dataGroupCid)
+              ) {
+                dataGroupCids.add(dataGroupCid);
+              }
             }
           }
         } catch (error) {

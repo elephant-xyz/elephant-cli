@@ -4,6 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
 import { FileScannerService } from '../../../src/services/file-scanner.service';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants';
 
 describe('FileScannerService', () => {
   let fileScannerService: FileScannerService;
@@ -33,9 +34,11 @@ describe('FileScannerService', () => {
 
   describe('validateStructure', () => {
     it('should validate a proper directory structure', async () => {
-      // Create valid structure
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
-      const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      // Create valid structure (valid CIDv1 base32 format)
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -109,7 +112,8 @@ describe('FileScannerService', () => {
     });
 
     it('should ignore non-JSON files in property directories', async () => {
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
       await writeFile(join(propertyDir, 'invalid-file.txt'), 'test content');
@@ -127,7 +131,8 @@ describe('FileScannerService', () => {
     });
 
     it('should ignore invalid data group CID filenames', async () => {
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
       await writeFile(
@@ -148,7 +153,8 @@ describe('FileScannerService', () => {
     });
 
     it('should ignore subdirectories in property directories', async () => {
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
       await mkdir(join(propertyDir, 'subdirectory'));
@@ -166,7 +172,8 @@ describe('FileScannerService', () => {
     });
 
     it('should reject empty property directories', async () => {
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
 
@@ -179,9 +186,12 @@ describe('FileScannerService', () => {
 
     it('should validate multiple property directories', async () => {
       // Create multiple valid property directories
-      const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
-      const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
-      const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      const propertyCid1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const propertyCid2 =
+        'bafybeiabc234567defghijklmnopqrstuvwxyz2345abcdefghijk';
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
@@ -205,8 +215,10 @@ describe('FileScannerService', () => {
 
     it('should validate structure with mixed valid and invalid entries', async () => {
       // Create a mix of valid and invalid entries
-      const validPropertyCid = 'QmPropertyCid123456789012345678901234567890';
-      const validDataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      const validPropertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const validDataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       // Valid property directory with valid data
       const validPropertyDir = join(tempDir, validPropertyCid);
@@ -232,14 +244,109 @@ describe('FileScannerService', () => {
       expect(result.isValid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    it('should validate seed datagroup directory with seed file', async () => {
+      // Create directory with non-CID name but containing seed file
+      const seedDirName = 'my-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+
+      // Create seed file
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      // Create other valid CID file
+      const otherCid = 'bafybeiotheridataklmnopqrstuvwxyz234567abcdefghijklmn';
+      await writeFile(join(seedDir, `${otherCid}.json`), '{"other": "data"}');
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should reject non-CID directory without seed file', async () => {
+      // Create directory with non-CID name and no seed file
+      const invalidDirName = 'invalid-dir';
+      const invalidDir = join(tempDir, invalidDirName);
+      await mkdir(invalidDir);
+
+      // Create some other file
+      const otherCid = 'QmOtherDataCid123456789012345678901234567';
+      await writeFile(
+        join(invalidDir, `${otherCid}.json`),
+        '{"other": "data"}'
+      );
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(
+        result.errors.some((err) =>
+          err.includes('No valid property CID directories found')
+        )
+      ).toBe(true);
+    });
+
+    it('should validate both CID directories and seed datagroup directories', async () => {
+      // Create standard CID directory
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const propertyDir = join(tempDir, propertyCid);
+      await mkdir(propertyDir);
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
+      await writeFile(
+        join(propertyDir, `${dataGroupCid}.json`),
+        '{"standard": "data"}'
+      );
+
+      // Create seed datagroup directory
+      const seedDirName = 'my-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should validate seed datagroup directory even if only seed file is present', async () => {
+      // Create seed datagroup directory with only seed file
+      const seedDirName = 'only-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+
+      // Create only the seed file
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      const result = await fileScannerService.validateStructure(tempDir);
+
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
   });
 
   describe('scanDirectory', () => {
     it('should scan and return file entries', async () => {
       // Create test structure
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
-      const dataGroupCid1 = 'QmDataGroupCid123456789012345678901234567';
-      const dataGroupCid2 = 'QmDataGroupCid234567890123456789012345678';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const dataGroupCid1 =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
+      const dataGroupCid2 =
+        'bafybeianotherdataklmnopqrstuvwxyz234567abcdefghijklm';
 
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -261,23 +368,35 @@ describe('FileScannerService', () => {
       expect(batches[0]).toHaveLength(2);
 
       const fileEntries = batches[0];
-      expect(fileEntries[0]).toEqual({
-        propertyCid,
-        dataGroupCid: dataGroupCid1,
-        filePath: join(propertyDir, `${dataGroupCid1}.json`),
-      });
-      expect(fileEntries[1]).toEqual({
-        propertyCid,
-        dataGroupCid: dataGroupCid2,
-        filePath: join(propertyDir, `${dataGroupCid2}.json`),
-      });
+
+      // Files may be returned in any order, so check both files are present
+      expect(fileEntries).toHaveLength(2);
+      expect(
+        fileEntries.some(
+          (entry) =>
+            entry.propertyCid === propertyCid &&
+            entry.dataGroupCid === dataGroupCid1 &&
+            entry.filePath === join(propertyDir, `${dataGroupCid1}.json`)
+        )
+      ).toBe(true);
+      expect(
+        fileEntries.some(
+          (entry) =>
+            entry.propertyCid === propertyCid &&
+            entry.dataGroupCid === dataGroupCid2 &&
+            entry.filePath === join(propertyDir, `${dataGroupCid2}.json`)
+        )
+      ).toBe(true);
     });
 
     it('should handle multiple property directories', async () => {
       // Create multiple property directories
-      const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
-      const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
-      const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      const propertyCid1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const propertyCid2 =
+        'bafybeiabc234567defghijklmnopqrstuvwxyz2345abcdefghijk';
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
@@ -309,15 +428,23 @@ describe('FileScannerService', () => {
 
     it('should respect batch size', async () => {
       // Create many files to test batching
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
 
-      // Create 5 files
+      // Create 5 files with valid CIDv1 base32 characters
+      const baseCids = [
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr22',
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr23',
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr24',
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr25',
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr26',
+      ];
+
       for (let i = 0; i < 5; i++) {
-        const dataGroupCid = `QmDataGroupCid12345678901234567890123456${i.toString().padStart(2, '0')}`;
         await writeFile(
-          join(propertyDir, `${dataGroupCid}.json`),
+          join(propertyDir, `${baseCids[i]}.json`),
           `{"test": "data${i}"}`
         );
       }
@@ -335,8 +462,10 @@ describe('FileScannerService', () => {
     });
 
     it('should skip non-JSON files without throwing', async () => {
-      const propertyCid = 'QmPropertyCid123456789012345678901234567890';
-      const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       const propertyDir = join(tempDir, propertyCid);
       await mkdir(propertyDir);
@@ -364,14 +493,123 @@ describe('FileScannerService', () => {
 
       expect(allEntries).toHaveLength(0);
     });
+
+    it('should scan seed datagroup directory with SEED_PENDING propertyCid', async () => {
+      // Create seed datagroup directory
+      const seedDirName = 'my-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+
+      // Create seed file
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      // Create other valid CID file
+      const otherCid = 'bafybeiotheridataklmnopqrstuvwxyz234567abcdefghijklmn';
+      await writeFile(join(seedDir, `${otherCid}.json`), '{"other": "data"}');
+
+      const allEntries: any[] = [];
+      for await (const batch of fileScannerService.scanDirectory(tempDir)) {
+        allEntries.push(...batch);
+      }
+
+      expect(allEntries).toHaveLength(2);
+
+      // Both files should have the special SEED_PENDING propertyCid
+      const seedFileEntry = allEntries.find(
+        (entry) => entry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
+      );
+      const otherFileEntry = allEntries.find(
+        (entry) => entry.dataGroupCid === otherCid
+      );
+
+      expect(seedFileEntry).toBeDefined();
+      expect(seedFileEntry.propertyCid).toBe(`SEED_PENDING:${seedDirName}`);
+      expect(seedFileEntry.filePath).toBe(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`)
+      );
+
+      expect(otherFileEntry).toBeDefined();
+      expect(otherFileEntry.propertyCid).toBe(`SEED_PENDING:${seedDirName}`);
+      expect(otherFileEntry.filePath).toBe(join(seedDir, `${otherCid}.json`));
+    });
+
+    it('should scan both standard CID and seed datagroup directories', async () => {
+      // Create standard CID directory
+      const propertyCid =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const propertyDir = join(tempDir, propertyCid);
+      await mkdir(propertyDir);
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
+      await writeFile(
+        join(propertyDir, `${dataGroupCid}.json`),
+        '{"standard": "data"}'
+      );
+
+      // Create seed datagroup directory
+      const seedDirName = 'my-seed-data';
+      const seedDir = join(tempDir, seedDirName);
+      await mkdir(seedDir);
+      await writeFile(
+        join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`),
+        '{"seed": "data"}'
+      );
+
+      const allEntries: any[] = [];
+      for await (const batch of fileScannerService.scanDirectory(tempDir)) {
+        allEntries.push(...batch);
+      }
+
+      expect(allEntries).toHaveLength(2);
+
+      // Standard CID directory file should use directory name as propertyCid
+      const standardEntry = allEntries.find(
+        (entry) => entry.dataGroupCid === dataGroupCid
+      );
+      expect(standardEntry).toBeDefined();
+      expect(standardEntry.propertyCid).toBe(propertyCid);
+
+      // Seed datagroup file should use SEED_PENDING propertyCid
+      const seedEntry = allEntries.find(
+        (entry) => entry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
+      );
+      expect(seedEntry).toBeDefined();
+      expect(seedEntry.propertyCid).toBe(`SEED_PENDING:${seedDirName}`);
+    });
+
+    it('should ignore directories without CID names and without seed files', async () => {
+      // Create invalid directory (no CID name, no seed file)
+      const invalidDirName = 'invalid-dir';
+      const invalidDir = join(tempDir, invalidDirName);
+      await mkdir(invalidDir);
+      const otherCid = 'QmOtherDataCid123456789012345678901234567';
+      await writeFile(
+        join(invalidDir, `${otherCid}.json`),
+        '{"other": "data"}'
+      );
+
+      const allEntries: any[] = [];
+      for await (const batch of fileScannerService.scanDirectory(tempDir)) {
+        allEntries.push(...batch);
+      }
+
+      // Should find no entries because directory is neither CID nor seed datagroup
+      expect(allEntries).toHaveLength(0);
+    });
   });
 
   describe('countTotalFiles', () => {
     it('should count total files correctly', async () => {
       // Create test structure with multiple files
-      const propertyCid1 = 'QmPropertyCid123456789012345678901234567890';
-      const propertyCid2 = 'QmPropertyCid234567890123456789012345678901';
-      const dataGroupCid = 'QmDataGroupCid123456789012345678901234567';
+      const propertyCid1 =
+        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const propertyCid2 =
+        'bafybeiabc234567defghijklmnopqrstuvwxyz2345abcdefghijk';
+      const dataGroupCid =
+        'bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu';
 
       const propertyDir1 = join(tempDir, propertyCid1);
       const propertyDir2 = join(tempDir, propertyCid2);
@@ -381,17 +619,26 @@ describe('FileScannerService', () => {
 
       // Create 2 files in first property dir
       await writeFile(
-        join(propertyDir1, `${dataGroupCid}1.json`),
+        join(
+          propertyDir1,
+          `bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr22.json`
+        ),
         '{"test": "data1"}'
       );
       await writeFile(
-        join(propertyDir1, `${dataGroupCid}2.json`),
+        join(
+          propertyDir1,
+          `bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr23.json`
+        ),
         '{"test": "data2"}'
       );
 
       // Create 1 file in second property dir
       await writeFile(
-        join(propertyDir2, `${dataGroupCid}3.json`),
+        join(
+          propertyDir2,
+          `bafybeighijklmnopqrstuvwxyz234567abcdefghijklmnopqr24.json`
+        ),
         '{"test": "data3"}'
       );
 
