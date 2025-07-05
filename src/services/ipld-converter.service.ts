@@ -94,7 +94,8 @@ export class IPLDConverterService {
         // It's a file path, upload the file and convert to CID link
         const cid = await this.uploadFileAndGetCID(
           pointerValue,
-          currentFilePath
+          currentFilePath,
+          linkedCIDs
         );
         linkedCIDs.push(cid);
 
@@ -131,10 +132,12 @@ export class IPLDConverterService {
    * Uses CID v1 with DAG-JSON for IPLD compliance
    * @param filePath The file path to upload
    * @param currentFilePath Optional path of the file containing the reference (for relative path resolution)
+   * @param linkedCIDs Array to collect all linked CIDs found during processing
    */
   private async uploadFileAndGetCID(
     filePath: string,
-    currentFilePath?: string
+    currentFilePath?: string,
+    linkedCIDs?: string[]
   ): Promise<string> {
     try {
       let resolvedPath: string;
@@ -166,7 +169,7 @@ export class IPLDConverterService {
         // Recursively process the parsed data to convert any nested file path links
         dataToUpload = await this.processDataForIPLD(
           parsedData,
-          [],
+          linkedCIDs || [],
           resolvedPath
         );
       } catch {
