@@ -1,6 +1,6 @@
 # Elephant Network CLI
 
-A command-line tool for Elephant Network operators to manage their data assignments on the Polygon blockchain. This tool helps you discover, validate, and submit data to the decentralized Elephant Network.
+A command-line tool for Elephant Network oracles to manage their data on the Polygon blockchain. This tool helps you validate and submit data to the decentralized Elephant Network.
 
 ## Quick Start
 
@@ -22,68 +22,34 @@ npx @elephant-xyz/cli --help
 
 ## What You Can Do
 
-The Elephant Network CLI provides three main workflows:
+The Elephant Network CLI provides two main workflows:
 
-1. **📋 List Assignments** - Discover what data you need to submit
-2. **✅ Validate & Upload** - Process and upload your data files  
-3. **🔗 Submit to Blockchain** - Register your submissions on-chain
+1. **✅ Validate & Upload** - Process and upload your data files  
+2. **🔗 Submit to Blockchain** - Register your submissions on-chain
 
-## Workflow 1: Discovering Your Assignments
-
-### Step 1: Find Your Assignments
-
-```bash
-elephant-cli list-assignments --oracle YOUR_ELEPHANT_ADDRESS
-```
-
-**What this does:**
-- Scans the Polygon blockchain for assignments to your elephant address
-- Downloads the assignment specifications from IPFS
-- Shows you what data you need to prepare
-
-**Example output:**
-```
-✔ Current block: 71876500
-✔ Found 2 assignments
-
-Assignment 1:
-  CID: QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU
-  Block: 71875870
-  Downloaded to: ./downloads/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU
-
-Summary: 2 assignments found, 2 files downloaded
-```
-
-### Step 2: Review Your Assignments
-
-Check the downloaded files in the `./downloads` directory. Each file contains:
-- Data schema (what format your data should follow)
-- Property requirements
-- Validation rules
-
-## Workflow 2: Preparing and Uploading Data
+## Workflow 1: Preparing and Uploading Data
 
 ### Step 1: Organize Your Data
 
 Structure your data directory like this:
 ```
 your-data/
-├── property1_cid/
+├── root_cid1/
 │   └── schema_cid.json     # Your data file
-├── property2_cid/
+├── root_cid2/
 │   └── schema_cid.json     # Your data file
 └── ...
 ```
 
 **Important:** 
-- Directory names must be property CIDs from your assignments
-- File names must be schema CIDs from your assignments
+- Directory names must be root CIDs (a.k.a. seed CIDs) 
+- File names must be schema CIDs
 - Files must contain valid JSON data
 
 ### Step 2: Get Your Credentials
 
 You'll need:
-- **Private Key**: Your elephant wallet private key
+- **Private Key**: Your oracle wallet private key
 - **Pinata JWT**: Token for IPFS uploads (get from [Pinata](https://pinata.cloud))
 
 Set up environment variables (recommended):
@@ -108,6 +74,28 @@ elephant-cli validate-and-upload ./your-data --dry-run --output-csv test-results
 - Shows what would be uploaded (without actually uploading)
 - Creates a CSV report
 
+**IPLD Links Support:**
+Your JSON data can reference other files using IPLD links:
+
+```json
+{
+  "title": "Main Document",
+  "metadata": {
+    "/": "./metadata.json"
+  },
+  "license": {
+    "/": "../shared/license.json"  
+  }
+}
+```
+
+The CLI automatically:
+- Uploads referenced files to IPFS
+- Converts file paths to IPFS CIDs
+- Creates proper IPLD-linked data structures
+
+Learn more: [IPLD Course](https://proto.school/course/ipld) | [IPFS Course](https://proto.school/course/ipfs)
+
 ### Step 4: Upload for Real
 
 If dry run succeeds, upload your data:
@@ -121,12 +109,12 @@ elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
 - Uploads valid files to IPFS via Pinata
 - Creates a CSV file with upload results (needed for next step)
 
-## Workflow 3: Submitting to Blockchain
+## Workflow 2: Submitting to Blockchain
 
 ### Step 1: Review Upload Results
 
 Check the CSV file from the previous step (`upload-results.csv`). It contains:
-- Property CIDs
+- Root CIDs (a.k.a. seed CIDs)
 - Data group CIDs  
 - Your uploaded data CIDs
 - File paths and timestamps
@@ -162,12 +150,6 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 ### Custom Configuration
 
 ```bash
-# Use custom RPC endpoint
-elephant-cli list-assignments --oracle YOUR_ADDRESS --rpc https://your-rpc.com
-
-# Use custom IPFS gateway
-elephant-cli list-assignments --oracle YOUR_ADDRESS --gateway https://your-gateway.com/ipfs/
-
 # Control upload concurrency
 elephant-cli validate-and-upload ./data --max-concurrent-uploads 5
 
@@ -177,45 +159,10 @@ elephant-cli submit-to-contract results.csv --gas-price 50
 elephant-cli submit-to-contract results.csv --gas-price auto
 ```
 
-### IPLD Links Support
 
-Your JSON data can reference other files using IPLD links:
-
-```json
-{
-  "title": "Main Document",
-  "metadata": {
-    "/": "./metadata.json"
-  },
-  "license": {
-    "/": "../shared/license.json"  
-  }
-}
-```
-
-The CLI automatically:
-- Uploads referenced files to IPFS
-- Converts file paths to IPFS CIDs
-- Creates proper IPLD-linked data structures
-
-### Block Range Optimization
-
-```bash
-# Search recent blocks only (faster)
-elephant-cli list-assignments --oracle YOUR_ADDRESS --from-block 71800000
-
-# Search specific range
-elephant-cli list-assignments --oracle YOUR_ADDRESS --from-block 71000000
-```
 
 ## Common Command Options
 
-### List Assignments Options
-- `--oracle <address>` - Your elephant address (required)
-- `--from-block <number>` - Starting block to search from
-- `--download-dir <path>` - Where to save assignments (default: ./downloads)
-- `--rpc <url>` - Custom RPC endpoint
-- `--gateway <url>` - Custom IPFS gateway
 
 ### Validate and Upload Options  
 - `--pinata-jwt <token>` - Pinata API token (or use PINATA_JWT env var)
@@ -233,13 +180,12 @@ elephant-cli list-assignments --oracle YOUR_ADDRESS --from-block 71000000
 
 ### Common Issues
 
-**"Invalid elephant address"**
+**"Invalid oracle address"**
 - Use a valid Ethereum address format: `0x1234...` (42 characters)
 
-**"No assignments found"**
-- Check your elephant address is correct
-- Try a wider block range with `--from-block`
-- Verify you have assignments in the specified period
+**"No data found"**
+- Check your oracle address is correct
+- Verify you have data in the specified period
 
 **"Validation failed"**
 - Check your JSON files match the required schema
@@ -263,7 +209,6 @@ elephant-cli list-assignments --oracle YOUR_ADDRESS --from-block 71000000
 elephant-cli --help
 
 # Get help for specific command
-elephant-cli list-assignments --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 ```
@@ -273,7 +218,7 @@ elephant-cli submit-to-contract --help
 Set `DEBUG=elephant:*` environment variable for detailed logging:
 
 ```bash
-DEBUG=elephant:* elephant-cli list-assignments --oracle YOUR_ADDRESS
+DEBUG=elephant:* elephant-cli validate-and-upload ./your-data
 ```
 
 ## Network Information
