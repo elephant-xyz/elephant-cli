@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.6.0...v1.6.1) (2025-07-05)
+
+
+### Bug Fixes
+
+* fixed error messages and data resolution ([#31](https://github.com/elephant-xyz/elephant-cli/issues/31)) ([8118a6f](https://github.com/elephant-xyz/elephant-cli/commit/8118a6f27ba70303b5c920dc2212273c7b04312f))
+
 # [1.6.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.5.0...v1.6.0) (2025-07-02)
 
 
