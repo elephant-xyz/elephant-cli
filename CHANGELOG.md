@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.0...v1.8.1) (2025-07-05)
+
+
+### Bug Fixes
+
+* **validate:** improve error message for missing Pinata JWT ([#37](https://github.com/elephant-xyz/elephant-cli/issues/37)) ([35c24c5](https://github.com/elephant-xyz/elephant-cli/commit/35c24c52b4193b3d9bcb7147d660ed50ec1f7f77))
+
 # [1.8.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.7.0...v1.8.0) (2025-07-05)
 
 
