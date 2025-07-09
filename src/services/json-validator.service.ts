@@ -294,11 +294,9 @@ export class JsonValidatorService {
             );
 
           // Create an anyOf schema that allows null or the resolved loaded schema
-          const combinedSchema = {
+          return {
             anyOf: [{ type: 'null' }, resolvedLoadedSchema],
           };
-
-          return combinedSchema;
         } else {
           // Single type or only string type, use the loaded schema as-is
           // Recursively resolve any CID references within the loaded schema
@@ -456,18 +454,11 @@ export class JsonValidatorService {
 
       // If schema is an anyOf, check if any of the options allow CID resolution
       if (!allowsCID && schema && schema.anyOf && Array.isArray(schema.anyOf)) {
-        for (const option of schema.anyOf) {
-          // Skip null type options, look for object options that might allow CID resolution
-          if (option.type === 'null') {
-            continue;
-          }
-
-          // If this option is a complex schema that could contain CID pointers, allow resolution
-          if (option.type === 'object' || option.properties || !option.type) {
-            allowsCID = true;
-            break;
-          }
-        }
+        allowsCID = schema.anyOf.some(
+          (option: any) =>
+            option.type !== 'null' &&
+            (option.type === 'object' || option.properties || !option.type)
+        );
       }
 
       if (!allowsCID) {
