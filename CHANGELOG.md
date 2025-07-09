@@ -1,3 +1,10 @@
+## [1.8.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.1...v1.8.2) (2025-07-09)
+
+
+### Bug Fixes
+
+* **json-validator:** handle anyOf with null and CID ([#38](https://github.com/elephant-xyz/elephant-cli/issues/38)) ([6dd48d5](https://github.com/elephant-xyz/elephant-cli/commit/6dd48d544778cea88574c7c7f88a43a3c4dd481e))
+
 ## [1.8.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.0...v1.8.1) (2025-07-05)
 
 
