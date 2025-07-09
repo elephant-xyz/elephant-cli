@@ -285,16 +285,18 @@ export class JsonValidatorService {
           schema.type.includes('null') &&
           schema.type.length > 1
         ) {
-          // Create an anyOf schema that allows null or the loaded schema
-          const combinedSchema = {
-            anyOf: [{ type: 'null' }, loadedSchema],
+          // First, recursively resolve any CID references within the loaded schema
+          const resolvedLoadedSchema =
+            await this.resolveCIDSchemasAndTrackPaths(
+              loadedSchema,
+              cidAllowedMap,
+              currentPath
+            );
+
+          // Create an anyOf schema that allows null or the resolved loaded schema
+          return {
+            anyOf: [{ type: 'null' }, resolvedLoadedSchema],
           };
-          // Recursively resolve any CID references within the combined schema
-          return await this.resolveCIDSchemasAndTrackPaths(
-            combinedSchema,
-            cidAllowedMap,
-            currentPath
-          );
         } else {
           // Single type or only string type, use the loaded schema as-is
           // Recursively resolve any CID references within the loaded schema
@@ -448,7 +450,17 @@ export class JsonValidatorService {
       const pointerValue = data['/'];
 
       // Check if the current path allows CID links
-      const allowsCID = cidAllowedMap?.get(currentPath) || false;
+      let allowsCID = cidAllowedMap?.get(currentPath) || false;
+
+      // If schema is an anyOf, check if any of the options allow CID resolution
+      if (!allowsCID && schema && schema.anyOf && Array.isArray(schema.anyOf)) {
+        allowsCID = schema.anyOf.some(
+          (option: any) =>
+            option.type !== 'null' &&
+            (option.type === 'object' || option.properties || !option.type)
+        );
+      }
+
       if (!allowsCID) {
         // Schema doesn't allow CID links, return the pointer as-is
         return data;
@@ -579,10 +591,26 @@ export class JsonValidatorService {
     const resolved: any = {};
     for (const key in data) {
       if (typeof data[key] === 'object' && data[key] !== null) {
-        const propertySchema =
+        let propertySchema =
           schema && schema.properties && schema.properties[key]
             ? schema.properties[key]
             : undefined;
+
+        // If schema is an anyOf and we don't have a property schema, check anyOf options
+        if (
+          !propertySchema &&
+          schema &&
+          schema.anyOf &&
+          Array.isArray(schema.anyOf)
+        ) {
+          for (const option of schema.anyOf) {
+            if (option.properties && option.properties[key]) {
+              propertySchema = option.properties[key];
+              break;
+            }
+          }
+        }
+
         const propertyPath = currentPath ? `${currentPath}.${key}` : key;
         resolved[key] = await this.resolveCIDPointers(
           data[key],

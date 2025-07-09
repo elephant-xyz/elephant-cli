@@ -1,7 +1,7 @@
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { create as createDigest } from 'multiformats/hashes/digest';
-import { isAddress } from 'ethers'; // ethers v6
+import { isAddress, hexlify } from 'ethers'; // ethers v6
 import { logger } from './logger.js';
 
 export const isValidAddress = (address: string | undefined | null): boolean => {
@@ -79,11 +79,7 @@ export const extractHashFromCID = (cid: string): string => {
     const hashBytes = parsedCid.multihash.digest;
 
     // Convert to hex string with 0x prefix
-    const hexHash =
-      '0x' +
-      Array.from(hashBytes)
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('');
+    const hexHash = hexlify(hashBytes);
 
     return hexHash;
   } catch (e: unknown) {
