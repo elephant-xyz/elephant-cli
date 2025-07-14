@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.js';
 import { ChainStateService } from '../services/chain-state.service.js';
 import { TransactionBatcherService } from '../services/transaction-batcher.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
+import { UnsignedTransactionJsonService } from '../services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { DataItem } from '../types/contract.types.js';
 import { Wallet } from 'ethers';
@@ -25,6 +26,7 @@ export interface SubmitToContractCommandOptions {
   transactionBatchSize?: number;
   gasPrice: string | number;
   dryRun: boolean;
+  unsignedTransactionsJson?: string;
 }
 
 interface CsvRecord {
@@ -75,25 +77,42 @@ export function registerSubmitToContractCommand(program: Command) {
       'Perform all checks without submitting transactions.',
       false
     )
+    .option(
+      '--unsigned-transactions-json <path>',
+      'Generate JSON file with unsigned transactions for later signing and submission (dry-run mode only)'
+    )
     .action(async (csvFile, options) => {
       if (
         options.gasPrice !== 'auto' &&
         (isNaN(parseFloat(options.gasPrice)) || !isFinite(options.gasPrice))
       ) {
-        logger.error('Error: Invalid gas-price. Must be a number or "auto".');
+        const errorMsg =
+          'Error: Invalid gas-price. Must be a number or "auto".';
+        logger.error(errorMsg);
+        console.error(errorMsg);
         process.exit(1);
       }
 
       const gasPrice =
         options.gasPrice === 'auto' ? 'auto' : parseFloat(options.gasPrice);
 
+      // Validate unsigned transactions JSON option
+      if (options.unsignedTransactionsJson && !options.dryRun) {
+        const errorMsg =
+          'Error: --unsigned-transactions-json can only be used with --dry-run mode.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
       options.privateKey =
         options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
 
       if (!options.privateKey) {
-        logger.error(
-          'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.'
-        );
+        const errorMsg =
+          'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
         process.exit(1);
       }
 
@@ -104,6 +123,9 @@ export function registerSubmitToContractCommand(program: Command) {
         ...options,
         csvFile: path.resolve(csvFile),
         gasPrice,
+        unsignedTransactionsJson: options.unsignedTransactionsJson
+          ? path.resolve(options.unsignedTransactionsJson)
+          : undefined,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -178,6 +200,7 @@ export interface SubmitToContractServiceOverrides {
   chainStateService?: ChainStateService;
   transactionBatcherService?: TransactionBatcherService;
   csvReporterService?: CsvReporterService;
+  unsignedTransactionJsonService?: UnsignedTransactionJsonService;
   progressTracker?: SimpleProgress;
 }
 
@@ -276,6 +299,18 @@ export async function handleSubmitToContract(
   const csvReporterService =
     serviceOverrides.csvReporterService ??
     new CsvReporterService(config.errorCsvPath, config.warningCsvPath);
+
+  const unsignedTransactionJsonService =
+    serviceOverrides.unsignedTransactionJsonService ??
+    (options.unsignedTransactionsJson
+      ? new UnsignedTransactionJsonService(
+          options.unsignedTransactionsJson,
+          options.contractAddress,
+          options.gasPrice,
+          137, // Polygon mainnet chain ID
+          0 // Starting nonce (will be fetched from provider)
+        )
+      : undefined);
 
   const wallet = new Wallet(options.privateKey);
   const userAddress = wallet.address;
@@ -456,6 +491,32 @@ export async function handleSubmitToContract(
           logger.info(`    ... and ${batch.length - 3} more items`);
         }
       });
+
+      // Generate unsigned transactions JSON if requested
+      if (unsignedTransactionJsonService) {
+        try {
+          logger.info('Generating unsigned transactions JSON...');
+          await unsignedTransactionJsonService.generateUnsignedTransactionsJson(
+            batches,
+            options.rpcUrl,
+            userAddress
+          );
+          logger.success(
+            `Unsigned transactions JSON generated at: ${options.unsignedTransactionsJson}`
+          );
+        } catch (error) {
+          const errorMsg = `Failed to generate unsigned transactions JSON: ${error instanceof Error ? error.message : String(error)}`;
+          logger.error(errorMsg);
+          await csvReporterService.logError({
+            propertyCid: 'N/A',
+            dataGroupCid: 'N/A',
+            filePath: options.csvFile,
+            errorMessage: errorMsg,
+            errorPath: 'N/A',
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
     }
 
     progressTracker.stop();
@@ -480,6 +541,11 @@ export async function handleSubmitToContract(
       console.log(
         `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
       );
+      if (options.unsignedTransactionsJson) {
+        console.log(
+          `  Unsigned transactions:  ${options.unsignedTransactionsJson}`
+        );
+      }
     }
 
     const elapsed = Date.now() - finalMetrics.startTime;

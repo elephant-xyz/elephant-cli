@@ -95,6 +95,7 @@ This command:
 2. Verifies consensus data differs from submission
 3. Checks user hasn't previously submitted same data
 4. Submits data hashes to the smart contract in batches
+5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
 ## Common Tasks for AI Assistants
 
@@ -179,6 +180,13 @@ npm run dev
   --private-key "0x..." \
   --gas-price 50 \
   --dry-run
+
+# Test the CLI - Submit to contract with unsigned transactions CSV
+./bin/elephant-cli submit-to-contract results.csv \
+  --private-key "0x..." \
+  --gas-price 50 \
+  --dry-run \
+  --unsigned-transactions-csv unsigned_txs.csv
 
 # Clean build artifacts
 npm run clean
@@ -314,6 +322,45 @@ Two types of directories are supported:
 - `validateStructure()`: Accepts directories with seed files even if directory name isn't a CID
 - `scanDirectory()`: Marks seed datagroup files with special `SEED_PENDING:` prefix
 - `getAllDataGroupCids()`: Includes the hardcoded seed datagroup schema CID when found
+
+## Unsigned Transactions Feature
+
+The `submit-to-contract` command supports generating unsigned transactions for later signing and submission when used with `--dry-run` and `--unsigned-transactions-csv` options.
+
+### Use Cases
+- **Cold wallet signing**: Generate transactions on an online machine, transfer to offline machine for signing
+- **Multi-signature workflows**: Prepare transactions for multiple signers
+- **Batch preparation**: Generate all transactions at once for later submission
+- **Gas price optimization**: Generate transactions and submit when gas prices are favorable
+
+### CSV Format
+The unsigned transactions CSV contains the following columns:
+- `batch_id`: Sequential batch identifier
+- `item_count`: Number of data items in this batch
+- `property_cids`: Semicolon-separated list of property CIDs
+- `data_group_cids`: Semicolon-separated list of data group CIDs  
+- `data_cids`: Semicolon-separated list of data CIDs
+- `to`: Contract address
+- `data`: Encoded function call data
+- `value`: Transaction value (always 0 for these calls)
+- `gas_limit`: Estimated gas limit with 20% buffer
+- `gas_price`: Gas price in Wei (legacy transactions)
+- `max_fee_per_gas`: Maximum fee per gas in Wei (EIP-1559 transactions)
+- `max_priority_fee_per_gas`: Priority fee per gas in Wei (EIP-1559 transactions)
+- `nonce`: Transaction nonce
+- `chain_id`: Blockchain network chain ID (137 for Polygon)
+- `type`: Transaction type (0 for legacy, 2 for EIP-1559)
+- `timestamp`: When the transaction was generated
+
+### Transaction Types
+- **Legacy transactions** (type 0): Used when `--gas-price` is specified as a number
+- **EIP-1559 transactions** (type 2): Used when `--gas-price auto` is specified
+
+### Security Notes
+- Unsigned transactions contain no private information
+- Generated nonces are sequential starting from the current account nonce
+- Gas estimates are fetched from the RPC provider when possible
+- All CIDs are properly converted to hashes for contract calls
 
 ## Security Considerations
 

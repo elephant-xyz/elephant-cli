@@ -7,6 +7,7 @@ import {
 import { ChainStateService } from '../../../src/services/chain-state.service.js';
 import { TransactionBatcherService } from '../../../src/services/transaction-batcher.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
+import { UnsignedTransactionJsonService } from '../../../src/services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 
 vi.mock('fs', () => ({
@@ -16,6 +17,7 @@ vi.mock('fs', () => ({
 
 vi.mock('../../../src/services/transaction-batcher.service.js');
 vi.mock('../../../src/services/chain-state.service.js');
+vi.mock('../../../src/services/unsigned-transaction-json.service.js');
 
 vi.mock('ethers', async () => {
   const actual = await vi.importActual('ethers');
@@ -47,6 +49,7 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
   let mockChainStateService: ChainStateService;
+  let mockUnsignedTransactionJsonService: UnsignedTransactionJsonService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,6 +88,10 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       finalize: vi.fn().mockResolvedValue({}),
       logError: vi.fn(),
       logWarning: vi.fn(),
+    } as any;
+
+    mockUnsignedTransactionJsonService = {
+      generateUnsignedTransactionsJson: vi.fn(),
     } as any;
 
     mockProgressTracker = {
@@ -228,5 +235,139 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       MockedTransactionBatcher.mock.results[0].value.submitAll;
     const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
+  });
+
+  describe('unsigned transactions feature', () => {
+    it('should generate unsigned transactions JSON in dry-run mode when option is provided', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify the service was called correctly
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).toHaveBeenCalledTimes(1);
+
+      const callArgs =
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
+          .calls[0];
+      expect(callArgs[0]).toEqual(expect.any(Array)); // batches
+      expect(callArgs[1]).toBe(dryRunOptions.rpcUrl); // rpcUrl
+      // callArgs[2] is userAddress which might be undefined in test environment
+    });
+
+    it('should not generate unsigned transactions JSON in dry-run mode when option is not provided', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        // unsignedTransactionsJson not provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Service should not be called if option not provided
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should handle unsigned transaction JSON generation errors gracefully', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      // Mock the service to throw an error
+      mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson = vi
+        .fn()
+        .mockRejectedValue(new Error('Failed to write JSON file'));
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should log error to CSV reporter
+      expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorMessage: expect.stringContaining(
+            'Failed to generate unsigned transactions JSON'
+          ),
+        })
+      );
+    });
+
+    it('should not generate unsigned transactions JSON in non-dry-run mode even if option is provided', async () => {
+      const nonDryRunOptions = {
+        ...mockOptions,
+        dryRun: false, // Not dry run
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(nonDryRunOptions, serviceOverrides);
+
+      // Should not generate JSON in non-dry-run mode
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should pass correct batches to unsigned transaction JSON service', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        transactionBatchSize: 1, // Force each item into separate batch
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should be called with 3 batches (since batch size is 1)
+      const generateCall = vi.mocked(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).mock.calls[0];
+
+      const batches = generateCall[0];
+      expect(batches).toHaveLength(3); // 3 items with batch size 1 = 3 batches
+      expect(batches[0]).toHaveLength(1);
+      expect(batches[1]).toHaveLength(1);
+      expect(batches[2]).toHaveLength(1);
+    });
   });
 });

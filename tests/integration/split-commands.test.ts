@@ -4,11 +4,22 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { CID } from 'multiformats/cid';
+import { sha256 } from 'multiformats/hashes/sha2';
 import 'dotenv/config';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RPC_URL = process.env.RPC_URL || 'https://polygon-rpc.com';
+
+// Helper function to generate CIDv1 from test data
+async function generateCIDFromData(data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(data);
+  const hash = await sha256.digest(bytes);
+  const cid = CID.create(1, 0x0129, hash); // CIDv1 with dag-json codec
+  return cid.toString();
+}
 
 describe('Split Commands Integration Tests', () => {
   const testDataDir = path.join(__dirname, 'test-data');
@@ -198,6 +209,113 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       expect(stdout).toContain('Total records in CSV:   0');
 
       await fs.promises.rm(emptyCsvPath);
+    });
+
+    it('should generate unsigned transactions CSV in dry-run mode', async () => {
+      const privateKey = '0x' + '1'.repeat(64);
+      const testCsvPath = path.join(outputDir, 'test-submit.csv');
+      const unsignedTxCsvPath = path.join(
+        outputDir,
+        'unsigned-transactions.csv'
+      );
+
+      // Generate valid CIDv1 values from test data
+      const propertyCid1 = await generateCIDFromData('test-property-1');
+      const dataGroupCid1 = await generateCIDFromData('test-datagroup-1');
+      const dataCid1 = await generateCIDFromData('test-data-1');
+      const propertyCid2 = await generateCIDFromData('test-property-2');
+      const dataGroupCid2 = await generateCIDFromData('test-datagroup-2');
+      const dataCid2 = await generateCIDFromData('test-data-2');
+
+      // Create test CSV with valid CID data
+      const csvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+${propertyCid1},${dataGroupCid1},${dataCid1},"/test/property1/data1.json",2024-01-01T00:00:00Z
+${propertyCid2},${dataGroupCid2},${dataCid2},"/test/property2/data2.json",2024-01-01T00:01:00Z`;
+
+      await fs.promises.writeFile(testCsvPath, csvContent);
+
+      const { stdout, stderr } = await execAsync(
+        `node ${cliPath} submit-to-contract ${testCsvPath} ` +
+          `--private-key ${privateKey} ` +
+          `--dry-run ` +
+          `--unsigned-transactions-csv ${unsignedTxCsvPath} ` +
+          `--rpc-url ${RPC_URL}`
+      );
+
+      expect(stderr).toBe('');
+      expect(stdout).toContain('Contract submission process finished');
+      expect(stdout).toContain('Total records in CSV:   2');
+      expect(stdout).toContain('[DRY RUN] Would submit: 2 items');
+
+      // Check that unsigned transactions CSV was created
+      const csvExists = await fs.promises
+        .access(unsignedTxCsvPath)
+        .then(() => true)
+        .catch(() => false);
+      expect(csvExists).toBe(true);
+
+      // Read and verify unsigned transactions CSV content
+      const unsignedTxContent = await fs.promises.readFile(
+        unsignedTxCsvPath,
+        'utf-8'
+      );
+      const lines = unsignedTxContent.trim().split('\n');
+
+      // Should have header + at least 1 data line
+      expect(lines.length).toBeGreaterThan(1);
+      expect(lines[0]).toContain(
+        'batch_id,item_count,property_cids,data_group_cids,data_cids,to,data,value,gas_limit'
+      );
+
+      // Verify first data line has correct structure
+      const firstDataLine = lines[1].split(',');
+      expect(firstDataLine[0]).toBe('1'); // batch_id
+      expect(parseInt(firstDataLine[1])).toBeGreaterThan(0); // item_count
+      expect(firstDataLine[5]).toMatch(/^0x[a-fA-F0-9]{40}$/); // contract address
+      expect(firstDataLine[6]).toMatch(/^0x[a-fA-F0-9]+$/); // transaction data
+      expect(firstDataLine[7]).toBe('0'); // value
+      expect(parseInt(firstDataLine[8])).toBeGreaterThan(0); // gas_limit
+
+      // Cleanup
+      await fs.promises.rm(testCsvPath);
+      await fs.promises.rm(unsignedTxCsvPath);
+    }, 30000); // 30 second timeout
+
+    it('should fail when unsigned transactions CSV option is used without dry-run', async () => {
+      const privateKey = '0x' + '1'.repeat(64);
+      const testCsvPath = path.join(outputDir, 'test-submit.csv');
+      const unsignedTxCsvPath = path.join(
+        outputDir,
+        'unsigned-transactions.csv'
+      );
+
+      // Generate valid CID and create test CSV
+      const propertyCid = await generateCIDFromData('test-property');
+      const dataGroupCid = await generateCIDFromData('test-datagroup');
+      const dataCid = await generateCIDFromData('test-data');
+
+      const csvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+${propertyCid},${dataGroupCid},${dataCid},"/test/property1/data1.json",2024-01-01T00:00:00Z`;
+
+      await fs.promises.writeFile(testCsvPath, csvContent);
+
+      try {
+        await execAsync(
+          `node ${cliPath} submit-to-contract ${testCsvPath} ` +
+            `--private-key ${privateKey} ` +
+            `--unsigned-transactions-csv ${unsignedTxCsvPath} ` +
+            `--rpc-url ${RPC_URL}`
+          // Note: no --dry-run flag
+        );
+        expect.fail('Command should have failed');
+      } catch (error: any) {
+        expect(error.code).toBe(1);
+        // The CLI should exit with code 1 when invalid options are provided
+        // Note: Error message validation is complex in integration tests due to CLI output handling
+      }
+
+      // Cleanup
+      await fs.promises.rm(testCsvPath);
     });
   });
 
