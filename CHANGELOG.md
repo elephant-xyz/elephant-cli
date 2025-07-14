@@ -1,3 +1,10 @@
+## [1.8.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.3...v1.8.4) (2025-07-14)
+
+
+### Bug Fixes
+
+* **json-validator:** improve error messages for paths ([#41](https://github.com/elephant-xyz/elephant-cli/issues/41)) ([a612b7c](https://github.com/elephant-xyz/elephant-cli/commit/a612b7cf4ea6cc20b85efb7a6cbc35203f312a1a))
+
 ## [1.8.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.2...v1.8.3) (2025-07-10)
 
 
