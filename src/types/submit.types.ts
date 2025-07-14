@@ -67,38 +67,6 @@ export interface ReportSummary {
   duration: number;
 }
 
-export interface UnsignedTransaction {
-  to: string;
-  data: string;
-  value: string;
-  gasLimit: string;
-  gasPrice?: string;
-  maxFeePerGas?: string;
-  maxPriorityFeePerGas?: string;
-  nonce: number;
-  chainId: number;
-  type: number;
-}
-
-export interface UnsignedTransactionEntry {
-  batchId: number;
-  itemCount: number;
-  propertyCids: string;
-  dataGroupCids: string;
-  dataCids: string;
-  to: string;
-  data: string;
-  value: string;
-  gasLimit: string;
-  gasPrice?: string;
-  maxFeePerGas?: string;
-  maxPriorityFeePerGas?: string;
-  nonce: number;
-  chainId: number;
-  type: number;
-  timestamp: string;
-}
-
 // EIP-1474 compliant transaction object for eth_sendTransaction
 export interface EIP1474Transaction {
   from: string;
@@ -111,15 +79,4 @@ export interface EIP1474Transaction {
   data: string;
   nonce: string;
   type?: string;
-}
-
-// Extended transaction with metadata for JSON output
-export interface UnsignedTransactionWithMetadata {
-  batchId: number;
-  itemCount: number;
-  propertyCids: string[];
-  dataGroupCids: string[];
-  dataCids: string[];
-  transaction: EIP1474Transaction;
-  timestamp: string;
 }
