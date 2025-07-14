@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.4...v1.9.0) (2025-07-14)
+
+
+### Features
+
+* **submit:** add unsigned tx JSON dry-run export ([#42](https://github.com/elephant-xyz/elephant-cli/issues/42)) ([e7cddbd](https://github.com/elephant-xyz/elephant-cli/commit/e7cddbdf14943b8857bd80b1b6c491791674a521))
+
 ## [1.8.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.3...v1.8.4) (2025-07-14)
 
 
