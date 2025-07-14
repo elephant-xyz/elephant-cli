@@ -59,7 +59,7 @@ describe('CsvReporterService', () => {
       const warningContent = await readFile(warningCsvPath, 'utf-8');
 
       expect(errorContent).toBe(
-        'property_cid,data_group_cid,file_path,error,timestamp\n'
+        'property_cid,data_group_cid,file_path,error_path,error_message,timestamp\n'
       );
       expect(warningContent).toBe(
         'property_cid,data_group_cid,file_path,reason,timestamp\n'
@@ -103,7 +103,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
         filePath: '/path/to/file.json',
-        error: 'JSON validation failed',
+        errorPath: 'root',
+        errorMessage: 'JSON validation failed',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -114,7 +115,7 @@ describe('CsvReporterService', () => {
 
       expect(lines).toHaveLength(2); // Header + 1 data line
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,JSON validation failed,2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,root,JSON validation failed,2023-01-01T00:00:00.000Z'
       );
       expect(csvReporter.getErrorCount()).toBe(1);
     });
@@ -124,7 +125,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
         filePath: '/path/to/file,with,commas.json',
-        error: 'Error message, with commas',
+        errorPath: 'property.name',
+        errorMessage: 'Error message, with commas',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -134,7 +136,7 @@ describe('CsvReporterService', () => {
       const lines = content.trim().split('\n');
 
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json","Error message, with commas",2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json",property.name,"Error message, with commas",2023-01-01T00:00:00.000Z'
       );
     });
 
@@ -143,7 +145,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
         filePath: '/path/to/file.json',
-        error: 'Error with "quotes" in message',
+        errorPath: 'data.value',
+        errorMessage: 'Error with "quotes" in message',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -153,7 +156,7 @@ describe('CsvReporterService', () => {
       const lines = content.trim().split('\n');
 
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,"Error with ""quotes"" in message",2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,data.value,"Error with ""quotes"" in message",2023-01-01T00:00:00.000Z'
       );
     });
 
@@ -162,7 +165,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid1',
         dataGroupCid: 'QmDataGroupCid1',
         filePath: '/path/to/file1.json',
-        error: 'First error',
+        errorPath: 'root',
+        errorMessage: 'First error',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -170,7 +174,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid2',
         dataGroupCid: 'QmDataGroupCid2',
         filePath: '/path/to/file2.json',
-        error: 'Second error',
+        errorPath: 'property.name',
+        errorMessage: 'Second error',
         timestamp: '2023-01-01T00:01:00.000Z',
       };
 
@@ -193,7 +198,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
         filePath: '/path/to/file.json',
-        error: 'Test error',
+        errorPath: 'root',
+        errorMessage: 'Test error',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -277,7 +283,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid1',
         dataGroupCid: 'QmDataGroupCid1',
         filePath: '/path/to/file1.json',
-        error: 'Test error',
+        errorPath: 'root',
+        errorMessage: 'Test error',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -317,7 +324,8 @@ describe('CsvReporterService', () => {
         propertyCid: 'QmPropertyCid123',
         dataGroupCid: 'QmDataGroupCid456',
         filePath: '/path/to/file.json',
-        error: 'Test error',
+        errorPath: 'root',
+        errorMessage: 'Test error',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 

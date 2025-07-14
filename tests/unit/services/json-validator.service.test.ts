@@ -315,9 +315,9 @@ describe('JsonValidatorService', () => {
       };
 
       const result = await jsonValidator.validate({}, schema);
-      const message = jsonValidator.getErrorMessages(result.errors || [])[0];
+      const errorMessages = jsonValidator.getErrorMessages(result.errors || []);
 
-      expect(message).toContain('required property');
+      expect(errorMessages[0].message).toContain('required property');
     });
 
     it('should format multiple error messages', async () => {
@@ -331,16 +331,19 @@ describe('JsonValidatorService', () => {
       };
 
       const result = await jsonValidator.validate({ age: -5 }, schema);
-      const message = jsonValidator.getErrorMessages(result.errors || [])[0];
+      const errorMessages = jsonValidator.getErrorMessages(result.errors || []);
 
-      expect(message).toContain('required property');
+      expect(errorMessages[0].message).toContain('required property');
       // AJV might report errors in different order, so check that we have multiple errors
       expect(result.errors!.length).toBeGreaterThan(1);
     });
 
     it('should handle empty errors', () => {
-      const message = jsonValidator.getErrorMessages([])[0];
-      expect(message).toBe('Unknown validation error');
+      const errorMessages = jsonValidator.getErrorMessages([]);
+      expect(errorMessages[0]).toEqual({
+        path: 'root',
+        message: 'Unknown validation error',
+      });
     });
   });
 

@@ -42,7 +42,8 @@ export interface ErrorEntry {
   propertyCid: string;
   dataGroupCid: string;
   filePath: string;
-  error: string;
+  errorPath: string;
+  errorMessage: string;
   timestamp: string;
 }
 

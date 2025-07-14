@@ -743,9 +743,11 @@ export class JsonValidatorService {
   /**
    * Get a human-readable error message from validation errors
    */
-  getErrorMessages(errors: ValidationError[]): string[] {
+  getErrorMessages(
+    errors: ValidationError[]
+  ): Array<{ path: string; message: string }> {
     if (!errors || errors.length === 0) {
-      return ['Unknown validation error'];
+      return [{ path: 'root', message: 'Unknown validation error' }];
     }
 
     return errors.map((error) => {
@@ -764,7 +766,7 @@ export class JsonValidatorService {
           : `Value ${dataValue} is not a valid CID or file path.`;
       }
 
-      return `${path}: ${message}`;
+      return { path, message };
     });
   }
 
