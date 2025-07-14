@@ -433,7 +433,8 @@ export async function handleSubmitToContract(
           propertyCid: 'N/A',
           dataGroupCid: 'N/A',
           filePath: options.csvFile,
-          error: errorMsg,
+          errorMessage: errorMsg,
+          errorPath: 'N/A',
           timestamp: new Date().toISOString(),
         });
       }

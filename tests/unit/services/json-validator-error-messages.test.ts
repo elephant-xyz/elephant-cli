@@ -282,9 +282,10 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
 
       expect(result.valid).toBe(false);
       const errorMessages = jsonValidator.getErrorMessages(result.errors!);
-      expect(errorMessages[0]).toBe(
-        '/user/email: must be a valid email address'
-      );
+      expect(errorMessages[0]).toEqual({
+        path: '/user/email',
+        message: 'must be a valid email address',
+      });
     });
 
     it('should handle array validation error paths', async () => {
@@ -305,7 +306,10 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
 
       expect(result.valid).toBe(false);
       const errorMessages = jsonValidator.getErrorMessages(result.errors!);
-      expect(errorMessages[0]).toBe('/1/email: must be a valid email address');
+      expect(errorMessages[0]).toEqual({
+        path: '/1/email',
+        message: 'must be a valid email address',
+      });
     });
   });
 
@@ -333,13 +337,19 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
       expect(result.errors!.length).toBeGreaterThan(1);
 
       const errorMessages = jsonValidator.getErrorMessages(result.errors!);
-      const emailError = errorMessages.find((msg) => msg.includes('email'));
-      const ageError = errorMessages.find((msg) => msg.includes('age'));
-      const statusError = errorMessages.find((msg) => msg.includes('status'));
+      const emailError = errorMessages.find((msg) =>
+        msg.path.includes('email')
+      );
+      const ageError = errorMessages.find((msg) => msg.path === '/');
+      const statusError = errorMessages.find((msg) =>
+        msg.path.includes('status')
+      );
 
-      expect(emailError).toContain('must be a valid email address');
-      expect(ageError).toContain("missing required property 'age'");
-      expect(statusError).toContain('must be one of: active, inactive');
+      expect(emailError?.message).toContain('must be a valid email address');
+      expect(ageError?.message).toContain("missing required property 'age'");
+      expect(statusError?.message).toContain(
+        'must be one of: active, inactive'
+      );
     });
   });
 });

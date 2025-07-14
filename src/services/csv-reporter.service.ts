@@ -27,7 +27,7 @@ export class CsvReporterService {
     this.errorStream = createWriteStream(this.errorCsvPath, { flags: 'w' });
     await new Promise<void>((resolve, reject) => {
       this.errorStream!.write(
-        'property_cid,data_group_cid,file_path,error,timestamp\n',
+        'property_cid,data_group_cid,file_path,error_path,error_message,timestamp\n',
         (err?: Error | null) => (err ? reject(err) : resolve())
       );
     });
@@ -55,10 +55,11 @@ export class CsvReporterService {
       throw new Error('CSV reporter not initialized. Call initialize() first.');
     }
 
-    const escapedError = this.escapeCsvValue(entry.error);
+    const escapedErrorPath = this.escapeCsvValue(entry.errorPath);
+    const escapedErrorMessage = this.escapeCsvValue(entry.errorMessage);
     const escapedFilePath = this.escapeCsvValue(entry.filePath);
 
-    const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedError},${entry.timestamp}\n`;
+    const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedErrorPath},${escapedErrorMessage},${entry.timestamp}\n`;
 
     return new Promise((resolve, reject) => {
       this.errorStream!.write(csvLine, (error) => {

@@ -712,7 +712,8 @@ async function processFileAndGetUploadPromise(
       propertyCid: fileEntry.propertyCid,
       dataGroupCid: fileEntry.dataGroupCid,
       filePath: fileEntry.filePath,
-      error: `File read/parse error: ${errorMsg}`,
+      errorPath: 'root',
+      errorMessage: `File read/parse error: ${errorMsg}`,
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');
@@ -728,7 +729,8 @@ async function processFileAndGetUploadPromise(
         propertyCid: fileEntry.propertyCid,
         dataGroupCid: fileEntry.dataGroupCid,
         filePath: fileEntry.filePath,
-        error,
+        errorPath: 'root',
+        errorMessage: error,
         timestamp: new Date().toISOString(),
       });
       services.progressTracker.increment('errors');
@@ -742,28 +744,20 @@ async function processFileAndGetUploadPromise(
     );
 
     if (!validationResult.valid) {
-      const errorMessages: string[] =
+      const errorMessages: Array<{ path: string; message: string }> =
         services.jsonValidatorService.getErrorMessages(
           validationResult.errors || []
         );
 
       // Check if the error is related to string vs file path mismatch
 
-      for (const errorMessage of errorMessages) {
-        let additionalInfo = '';
-        if (
-          errorMessage.includes('must be string') &&
-          JSON.stringify(jsonData).includes('./')
-        ) {
-          additionalInfo =
-            ' The schema expects CID string values, but your data contains file paths like "./file.json". These need to be converted to IPFS CIDs first.';
-        }
-        const error = `Validation failed against schema ${schemaCid}: ${errorMessage}.${additionalInfo}`;
+      for (const errorInfo of errorMessages) {
         await services.csvReporterService.logError({
           propertyCid: fileEntry.propertyCid,
           dataGroupCid: fileEntry.dataGroupCid,
           filePath: fileEntry.filePath,
-          error,
+          errorPath: errorInfo.path,
+          errorMessage: errorInfo.message,
           timestamp: new Date().toISOString(),
         });
       }
@@ -802,7 +796,8 @@ async function processFileAndGetUploadPromise(
           propertyCid: fileEntry.propertyCid,
           dataGroupCid: fileEntry.dataGroupCid,
           filePath: fileEntry.filePath,
-          error: `IPLD conversion error: ${errorMsg}`,
+          errorPath: 'root',
+          errorMessage: `IPLD conversion error: ${errorMsg}`,
           timestamp: new Date().toISOString(),
         });
         services.progressTracker.increment('errors');
@@ -890,7 +885,8 @@ async function processFileAndGetUploadPromise(
               propertyCid: processedFile.propertyCid,
               dataGroupCid: processedFile.dataGroupCid,
               filePath: processedFile.filePath,
-              error: `Upload failed: ${errorDetail}`,
+              errorPath: 'root',
+              errorMessage: `Upload failed: ${errorDetail}`,
               timestamp: new Date().toISOString(),
             });
             services.progressTracker.increment('errors');
@@ -908,7 +904,8 @@ async function processFileAndGetUploadPromise(
             propertyCid: processedFile.propertyCid,
             dataGroupCid: processedFile.dataGroupCid,
             filePath: processedFile.filePath,
-            error: `Upload exception: ${errorMsg}`,
+            errorPath: 'root',
+            errorMessage: `Upload exception: ${errorMsg}`,
             timestamp: new Date().toISOString(),
           });
           services.progressTracker.increment('errors');
@@ -923,7 +920,8 @@ async function processFileAndGetUploadPromise(
       propertyCid: fileEntry.propertyCid,
       dataGroupCid: fileEntry.dataGroupCid,
       filePath: fileEntry.filePath,
-      error: `Processing error: ${errorMsg}`,
+      errorPath: 'root',
+      errorMessage: `Processing error: ${errorMsg}`,
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');
