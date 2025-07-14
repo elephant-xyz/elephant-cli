@@ -416,9 +416,7 @@ describe('ValidateAndUploadCommand', () => {
     expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
       expect.objectContaining({
         propertyCid: 'property1',
-        error: expect.stringContaining(
-          'Validation failed against schema dataGroup1: instance.field: is required'
-        ),
+        error: expect.stringContaining('instance.field: is required'),
       })
     );
 

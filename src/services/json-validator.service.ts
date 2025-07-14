@@ -14,6 +14,7 @@ export interface ValidationError {
   message: string;
   keyword: string;
   params: any;
+  data: any;
 }
 
 export interface ValidationResult {
@@ -190,6 +191,7 @@ export class JsonValidatorService {
     schema: JSONSchema,
     currentFilePath?: string
   ): Promise<ValidationResult> {
+    let resolvedData;
     try {
       // Root schema should not be a CID link itself
       if (this.isCIDLinkSchema(schema)) {
@@ -202,6 +204,7 @@ export class JsonValidatorService {
                 'Root schema cannot be a CID link. CID links are only allowed within schema properties.',
               keyword: 'error',
               params: {},
+              data: {},
             },
           ],
         };
@@ -215,7 +218,7 @@ export class JsonValidatorService {
       );
 
       // Resolve CID pointers in data if present, but only where schema allows it
-      const resolvedData = await this.resolveCIDPointers(
+      resolvedData = await this.resolveCIDPointers(
         data,
         currentFilePath,
         resolvedSchema,
@@ -250,6 +253,7 @@ export class JsonValidatorService {
             message: `Validation error: ${error instanceof Error ? error.message : String(error)}`,
             keyword: 'error',
             params: {},
+            data: resolvedData || data,
           },
         ],
       };
@@ -661,6 +665,7 @@ export class JsonValidatorService {
       message: this.enhanceErrorMessage(error),
       keyword: error.keyword,
       params: error.params,
+      data: error.data,
     }));
   }
 
@@ -745,7 +750,19 @@ export class JsonValidatorService {
 
     return errors.map((error) => {
       const path = error.path || 'root';
-      const message = error.message || 'Validation failed';
+      let message = error.message || 'Validation failed';
+
+      const isStringError = message.includes('must be string');
+      const hasDataSlash = error.data && Object.hasOwn(error.data, '/');
+
+      if (isStringError && hasDataSlash) {
+        const dataValue = String(error.data['/']);
+        const isFilePath = dataValue.startsWith('./');
+
+        message = isFilePath
+          ? `File ${dataValue} does not exist or is not a valid JSON file.`
+          : `Value ${dataValue} is not a valid CID or file path.`;
+      }
 
       return `${path}: ${message}`;
     });

@@ -750,20 +750,11 @@ async function processFileAndGetUploadPromise(
       // Check if the error is related to string vs file path mismatch
 
       for (const errorMessage of errorMessages) {
-        let additionalInfo = '';
-        if (
-          errorMessage.includes('must be string') &&
-          JSON.stringify(jsonData).includes('./')
-        ) {
-          additionalInfo =
-            ' The schema expects CID string values, but your data contains file paths like "./file.json". These need to be converted to IPFS CIDs first.';
-        }
-        const error = `Validation failed against schema ${schemaCid}: ${errorMessage}.${additionalInfo}`;
         await services.csvReporterService.logError({
           propertyCid: fileEntry.propertyCid,
           dataGroupCid: fileEntry.dataGroupCid,
           filePath: fileEntry.filePath,
-          error,
+          error: errorMessage,
           timestamp: new Date().toISOString(),
         });
       }
