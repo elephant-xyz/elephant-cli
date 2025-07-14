@@ -42,9 +42,9 @@ describe('SubmitToContractCommand', () => {
   };
 
   const mockCsvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-property1,dataGroup1,QmCid1,"/test/property1/dataGroup1.json",2024-01-01T00:00:00Z
-property2,dataGroup2,QmCid2,"/test/property2/dataGroup2.json",2024-01-01T00:01:00Z
-property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:00Z`;
+bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,"/test/property1/dataGroup1.json",2024-01-01T00:00:00Z
+bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,"/test/property2/dataGroup2.json",2024-01-01T00:01:00Z
+bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,"/test/property3/dataGroup3.json",2024-01-01T00:02:00Z`;
 
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
@@ -91,7 +91,7 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     } as any;
 
     mockUnsignedTransactionJsonService = {
-      generateUnsignedTransactionsJson: vi.fn(),
+      generateUnsignedTransactionsJson: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     mockProgressTracker = {
@@ -184,7 +184,9 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     mockChainStateService.getCurrentDataCid = vi
       .fn()
       .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('QmCid2') // property2 already has this CID
+      .mockResolvedValueOnce(
+        'bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma'
+      ) // property2 already has this CID
       .mockResolvedValueOnce('');
 
     const serviceOverrides = {
@@ -197,7 +199,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyCid: 'property2',
+        propertyCid:
+          'bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma',
         reason: expect.stringContaining('already exists on chain'),
       })
     );
@@ -225,7 +228,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyCid: 'property3',
+        propertyCid:
+          'bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4',
         reason: expect.stringContaining('User has already submitted'),
       })
     );
@@ -368,6 +372,135 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       expect(batches[0]).toHaveLength(1);
       expect(batches[1]).toHaveLength(1);
       expect(batches[2]).toHaveLength(1);
+    });
+  });
+
+  describe('--from-address feature', () => {
+    it('should use provided from-address when generating unsigned transactions in dry-run mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        fromAddress,
+        privateKey: undefined, // No private key provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify the service was called with the provided from address
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).toHaveBeenCalledTimes(1);
+
+      const callArgs =
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
+          .calls[0];
+      expect(callArgs[2]).toBe(fromAddress); // userAddress should be the provided fromAddress
+    });
+
+    it('should derive address from private key when from-address is not provided', async () => {
+      // For this test, we'll verify that the Wallet constructor is called with the private key
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        // fromAddress not provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify that Wallet constructor was called with the private key
+      const { Wallet } = await import('ethers');
+      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+    });
+
+    it('should allow missing private key when using from-address in unsigned transaction mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        fromAddress,
+        privateKey: undefined, // No private key provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      // Should not throw an error about missing private key
+      await expect(
+        handleSubmitToContract(dryRunOptions, serviceOverrides)
+      ).resolves.not.toThrow();
+    });
+
+    it('should not use from-address when not in unsigned transaction mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const normalOptions = {
+        ...mockOptions,
+        dryRun: false, // Not dry run
+        fromAddress,
+        // No unsignedTransactionsJson
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(normalOptions, serviceOverrides);
+
+      // Should use address from private key, not from-address
+      // This is verified by the fact that TransactionBatcherService is called with private key
+      expect(TransactionBatcherService).toHaveBeenCalledWith(
+        normalOptions.rpcUrl,
+        normalOptions.contractAddress,
+        normalOptions.privateKey,
+        expect.any(Object),
+        normalOptions.gasPrice
+      );
+    });
+
+    it('should not use from-address when unsignedTransactionsJson is not provided', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        fromAddress,
+        // No unsignedTransactionsJson
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should use address from private key, not from-address
+      // Verified by checking that Wallet constructor was called with private key
+      const { Wallet } = await import('ethers');
+      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
     });
   });
 });

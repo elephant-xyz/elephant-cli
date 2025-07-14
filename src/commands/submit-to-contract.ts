@@ -27,6 +27,7 @@ export interface SubmitToContractCommandOptions {
   gasPrice: string | number;
   dryRun: boolean;
   unsignedTransactionsJson?: string;
+  fromAddress?: string;
 }
 
 interface CsvRecord {
@@ -81,6 +82,10 @@ export function registerSubmitToContractCommand(program: Command) {
       '--unsigned-transactions-json <path>',
       'Generate JSON file with unsigned transactions for later signing and submission (dry-run mode only)'
     )
+    .option(
+      '--from-address <address>',
+      'Address to use as "from" field in unsigned transactions (makes private key optional for unsigned transaction generation)'
+    )
     .action(async (csvFile, options) => {
       if (
         options.gasPrice !== 'auto' &&
@@ -108,7 +113,25 @@ export function registerSubmitToContractCommand(program: Command) {
       options.privateKey =
         options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
 
-      if (!options.privateKey) {
+      // Validate from-address format if provided
+      if (
+        options.fromAddress &&
+        !options.fromAddress.match(/^0x[a-fA-F0-9]{40}$/)
+      ) {
+        const errorMsg =
+          'Error: Invalid from-address format. Must be a valid Ethereum address.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
+      // Private key is optional when generating unsigned transactions with --from-address
+      const isUnsignedTransactionMode =
+        options.unsignedTransactionsJson &&
+        options.dryRun &&
+        options.fromAddress;
+
+      if (!options.privateKey && !isUnsignedTransactionMode) {
         const errorMsg =
           'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
         logger.error(errorMsg);
@@ -126,6 +149,7 @@ export function registerSubmitToContractCommand(program: Command) {
         unsignedTransactionsJson: options.unsignedTransactionsJson
           ? path.resolve(options.unsignedTransactionsJson)
           : undefined,
+        fromAddress: options.fromAddress,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -312,9 +336,25 @@ export async function handleSubmitToContract(
         )
       : undefined);
 
-  const wallet = new Wallet(options.privateKey);
-  const userAddress = wallet.address;
-  logger.technical(`User wallet address: ${userAddress}`);
+  // Use fromAddress if provided and in unsigned transaction mode, otherwise derive from private key
+  let userAddress: string;
+  if (
+    options.fromAddress &&
+    options.unsignedTransactionsJson &&
+    options.dryRun
+  ) {
+    userAddress = options.fromAddress;
+    logger.technical(`Using provided from address: ${userAddress}`);
+  } else {
+    if (!options.privateKey) {
+      throw new Error(
+        'Private key is required when not using --from-address with unsigned transactions'
+      );
+    }
+    const wallet = new Wallet(options.privateKey);
+    userAddress = wallet.address;
+    logger.technical(`User wallet address: ${userAddress}`);
+  }
 
   let progressTracker: SimpleProgress | undefined;
   const startTime = Date.now();
