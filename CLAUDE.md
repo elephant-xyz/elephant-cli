@@ -95,6 +95,7 @@ This command:
 2. Verifies consensus data differs from submission
 3. Checks user hasn't previously submitted same data
 4. Submits data hashes to the smart contract in batches
+5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
 ## Common Tasks for AI Assistants
 
@@ -179,6 +180,13 @@ npm run dev
   --private-key "0x..." \
   --gas-price 50 \
   --dry-run
+
+# Test the CLI - Submit to contract with unsigned transactions JSON
+./bin/elephant-cli submit-to-contract results.csv \
+  --private-key "0x..." \
+  --gas-price 50 \
+  --dry-run \
+  --unsigned-transactions-json unsigned_txs.json
 
 # Clean build artifacts
 npm run clean
@@ -314,6 +322,39 @@ Two types of directories are supported:
 - `validateStructure()`: Accepts directories with seed files even if directory name isn't a CID
 - `scanDirectory()`: Marks seed datagroup files with special `SEED_PENDING:` prefix
 - `getAllDataGroupCids()`: Includes the hardcoded seed datagroup schema CID when found
+
+## Unsigned Transactions Feature
+
+The `submit-to-contract` command supports generating unsigned transactions for later signing and submission when used with `--dry-run` and `--unsigned-transactions-json` options.
+
+### Use Cases
+- **Cold wallet signing**: Generate transactions on an online machine, transfer to offline machine for signing
+- **Multi-signature workflows**: Prepare transactions for multiple signers
+- **Batch preparation**: Generate all transactions at once for later submission
+- **Gas price optimization**: Generate transactions and submit when gas prices are favorable
+
+### JSON Format
+The unsigned transactions JSON contains an array of EIP-1474 compliant transaction objects with the following fields:
+- `from`: Sender address
+- `to`: Contract address
+- `gas`: Estimated gas limit with 20% buffer (hex-encoded)
+- `value`: Transaction value (always '0x0' for these calls)
+- `data`: Encoded function call data (hex-encoded)
+- `nonce`: Transaction nonce (hex-encoded)
+- `type`: Transaction type ('0x0' for legacy, '0x2' for EIP-1559)
+- `gasPrice`: Gas price in Wei (legacy transactions, hex-encoded)
+- `maxFeePerGas`: Maximum fee per gas in Wei (EIP-1559 transactions, hex-encoded)
+- `maxPriorityFeePerGas`: Priority fee per gas in Wei (EIP-1559 transactions, hex-encoded)
+
+### Transaction Types
+- **Legacy transactions** (type 0): Used when `--gas-price` is specified as a number
+- **EIP-1559 transactions** (type 2): Used when `--gas-price auto` is specified
+
+### Security Notes
+- Unsigned transactions contain no private information
+- Generated nonces are sequential starting from the current account nonce
+- Gas estimates are fetched from the RPC provider when possible
+- All CIDs are properly converted to hashes for contract calls
 
 ## Security Considerations
 

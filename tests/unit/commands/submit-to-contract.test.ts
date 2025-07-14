@@ -7,6 +7,7 @@ import {
 import { ChainStateService } from '../../../src/services/chain-state.service.js';
 import { TransactionBatcherService } from '../../../src/services/transaction-batcher.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
+import { UnsignedTransactionJsonService } from '../../../src/services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 
 vi.mock('fs', () => ({
@@ -16,6 +17,7 @@ vi.mock('fs', () => ({
 
 vi.mock('../../../src/services/transaction-batcher.service.js');
 vi.mock('../../../src/services/chain-state.service.js');
+vi.mock('../../../src/services/unsigned-transaction-json.service.js');
 
 vi.mock('ethers', async () => {
   const actual = await vi.importActual('ethers');
@@ -40,13 +42,14 @@ describe('SubmitToContractCommand', () => {
   };
 
   const mockCsvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-property1,dataGroup1,QmCid1,"/test/property1/dataGroup1.json",2024-01-01T00:00:00Z
-property2,dataGroup2,QmCid2,"/test/property2/dataGroup2.json",2024-01-01T00:01:00Z
-property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:00Z`;
+bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,"/test/property1/dataGroup1.json",2024-01-01T00:00:00Z
+bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma,"/test/property2/dataGroup2.json",2024-01-01T00:01:00Z
+bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,"/test/property3/dataGroup3.json",2024-01-01T00:02:00Z`;
 
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
   let mockChainStateService: ChainStateService;
+  let mockUnsignedTransactionJsonService: UnsignedTransactionJsonService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -85,6 +88,10 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       finalize: vi.fn().mockResolvedValue({}),
       logError: vi.fn(),
       logWarning: vi.fn(),
+    } as any;
+
+    mockUnsignedTransactionJsonService = {
+      generateUnsignedTransactionsJson: vi.fn().mockResolvedValue(undefined),
     } as any;
 
     mockProgressTracker = {
@@ -177,7 +184,9 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
     mockChainStateService.getCurrentDataCid = vi
       .fn()
       .mockResolvedValueOnce('')
-      .mockResolvedValueOnce('QmCid2') // property2 already has this CID
+      .mockResolvedValueOnce(
+        'bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma'
+      ) // property2 already has this CID
       .mockResolvedValueOnce('');
 
     const serviceOverrides = {
@@ -190,7 +199,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyCid: 'property2',
+        propertyCid:
+          'bafkreigd6yhp5dfcdrtfubtdq76cnstxehqvpjgmrpuhj7jnwtf3syx3ma',
         reason: expect.stringContaining('already exists on chain'),
       })
     );
@@ -218,7 +228,8 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyCid: 'property3',
+        propertyCid:
+          'bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4',
         reason: expect.stringContaining('User has already submitted'),
       })
     );
@@ -228,5 +239,268 @@ property3,dataGroup3,QmCid3,"/test/property3/dataGroup3.json",2024-01-01T00:02:0
       MockedTransactionBatcher.mock.results[0].value.submitAll;
     const submitAllCalls = vi.mocked(mockSubmitAll).mock.calls;
     expect(submitAllCalls[0][0]).toHaveLength(2);
+  });
+
+  describe('unsigned transactions feature', () => {
+    it('should generate unsigned transactions JSON in dry-run mode when option is provided', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify the service was called correctly
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).toHaveBeenCalledTimes(1);
+
+      const callArgs =
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
+          .calls[0];
+      expect(callArgs[0]).toEqual(expect.any(Array)); // batches
+      expect(callArgs[1]).toBe(dryRunOptions.rpcUrl); // rpcUrl
+      // callArgs[2] is userAddress which might be undefined in test environment
+    });
+
+    it('should not generate unsigned transactions JSON in dry-run mode when option is not provided', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        // unsignedTransactionsJson not provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Service should not be called if option not provided
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should handle unsigned transaction JSON generation errors gracefully', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      // Mock the service to throw an error
+      mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson = vi
+        .fn()
+        .mockRejectedValue(new Error('Failed to write JSON file'));
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should log error to CSV reporter
+      expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorMessage: expect.stringContaining(
+            'Failed to generate unsigned transactions JSON'
+          ),
+        })
+      );
+    });
+
+    it('should not generate unsigned transactions JSON in non-dry-run mode even if option is provided', async () => {
+      const nonDryRunOptions = {
+        ...mockOptions,
+        dryRun: false, // Not dry run
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(nonDryRunOptions, serviceOverrides);
+
+      // Should not generate JSON in non-dry-run mode
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should pass correct batches to unsigned transaction JSON service', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        transactionBatchSize: 1, // Force each item into separate batch
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should be called with 3 batches (since batch size is 1)
+      const generateCall = vi.mocked(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).mock.calls[0];
+
+      const batches = generateCall[0];
+      expect(batches).toHaveLength(3); // 3 items with batch size 1 = 3 batches
+      expect(batches[0]).toHaveLength(1);
+      expect(batches[1]).toHaveLength(1);
+      expect(batches[2]).toHaveLength(1);
+    });
+  });
+
+  describe('--from-address feature', () => {
+    it('should use provided from-address when generating unsigned transactions in dry-run mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        fromAddress,
+        privateKey: undefined, // No private key provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify the service was called with the provided from address
+      expect(
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
+      ).toHaveBeenCalledTimes(1);
+
+      const callArgs =
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
+          .calls[0];
+      expect(callArgs[2]).toBe(fromAddress); // userAddress should be the provided fromAddress
+    });
+
+    it('should derive address from private key when from-address is not provided', async () => {
+      // For this test, we'll verify that the Wallet constructor is called with the private key
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        // fromAddress not provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Verify that Wallet constructor was called with the private key
+      const { Wallet } = await import('ethers');
+      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+    });
+
+    it('should allow missing private key when using from-address in unsigned transaction mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
+        fromAddress,
+        privateKey: undefined, // No private key provided
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        unsignedTransactionJsonService: mockUnsignedTransactionJsonService,
+      };
+
+      // Should not throw an error about missing private key
+      await expect(
+        handleSubmitToContract(dryRunOptions, serviceOverrides)
+      ).resolves.not.toThrow();
+    });
+
+    it('should not use from-address when not in unsigned transaction mode', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const normalOptions = {
+        ...mockOptions,
+        dryRun: false, // Not dry run
+        fromAddress,
+        // No unsignedTransactionsJson
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(normalOptions, serviceOverrides);
+
+      // Should use address from private key, not from-address
+      // This is verified by the fact that TransactionBatcherService is called with private key
+      expect(TransactionBatcherService).toHaveBeenCalledWith(
+        normalOptions.rpcUrl,
+        normalOptions.contractAddress,
+        normalOptions.privateKey,
+        expect.any(Object),
+        normalOptions.gasPrice
+      );
+    });
+
+    it('should not use from-address when unsignedTransactionsJson is not provided', async () => {
+      const fromAddress = '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0';
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        fromAddress,
+        // No unsignedTransactionsJson
+      };
+
+      const serviceOverrides = {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      };
+
+      await handleSubmitToContract(dryRunOptions, serviceOverrides);
+
+      // Should use address from private key, not from-address
+      // Verified by checking that Wallet constructor was called with private key
+      const { Wallet } = await import('ethers');
+      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+    });
   });
 });

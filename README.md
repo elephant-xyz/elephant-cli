@@ -223,6 +223,50 @@ elephant-cli submit-to-contract results.csv --gas-price 50
 elephant-cli submit-to-contract results.csv --gas-price auto
 ```
 
+### Cold Wallet & External Signing
+
+For enhanced security, you can generate unsigned transactions for signing on an offline device:
+
+```bash
+# Generate unsigned transactions without exposing your private key
+elephant-cli submit-to-contract upload-results.csv \
+  --dry-run \
+  --unsigned-transactions-json unsigned-txs.json \
+  --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0
+```
+
+**What this does:**
+
+- Creates a JSON file with EIP-1474 compatible unsigned transactions
+- No private key required - specify the sender address directly
+- Perfect for cold wallet workflows and hardware wallet signing
+- Transactions can be signed offline and submitted later
+
+**Output Format:**
+
+The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIPS/eip-1474) for `eth_sendTransaction`:
+
+```json
+[
+  {
+    "from": "0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0",
+    "to": "0x79D5046e34D4A56D357E12636A18da6eaEfe0586",
+    "gas": "0x18741",
+    "gasPrice": "0x6fc23ac00",
+    "value": "0x0",
+    "data": "0xb35d6ef2...",
+    "nonce": "0x0",
+    "type": "0x0"
+  }
+]
+```
+
+**Use Cases:**
+- **Cold Storage**: Generate transactions on an online machine, sign on offline device
+- **Hardware Wallets**: Export transactions for signing with Ledger, Trezor, etc.
+- **Multi-signature**: Prepare transactions for multiple signers
+- **Gas Optimization**: Generate now, submit when gas prices are lower
+
 ## Common Command Options
 
 ### Validate and Upload Options
@@ -240,6 +284,8 @@ elephant-cli submit-to-contract results.csv --gas-price auto
 - `--gas-price <value>` - Gas price in Gwei or 'auto' (default: 30)
 - `--transaction-batch-size <num>` - Items per transaction (default: 200)
 - `--dry-run` - Test without submitting
+- `--unsigned-transactions-json <file>` - Generate unsigned transactions for external signing (dry-run only)
+- `--from-address <address>` - Specify sender address for unsigned transactions (makes private key optional)
 
 ## Troubleshooting
 

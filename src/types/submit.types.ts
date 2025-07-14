@@ -66,3 +66,17 @@ export interface ReportSummary {
   endTime: Date;
   duration: number;
 }
+
+// EIP-1474 compliant transaction object for eth_sendTransaction
+export interface EIP1474Transaction {
+  from: string;
+  to: string;
+  gas: string;
+  gasPrice?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
+  value: string;
+  data: string;
+  nonce: string;
+  type?: string;
+}
