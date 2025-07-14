@@ -204,9 +204,9 @@ describe('UnsignedTransactionJsonService', () => {
       expect(transactions).toHaveLength(2); // 2 batches = 2 transactions
 
       // Check first transaction
-      expect(transactions[0].nonce).toBe('0x0'); // fallback nonce
+      expect(transactions[0].nonce).toBe('0x2a'); // nonce from provider (42)
       // Check second transaction
-      expect(transactions[1].nonce).toBe('0x1'); // incremented nonce
+      expect(transactions[1].nonce).toBe('0x2b'); // incremented nonce (43)
     });
 
     it('should handle empty batches array', async () => {

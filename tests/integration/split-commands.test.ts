@@ -211,12 +211,12 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
       await fs.promises.rm(emptyCsvPath);
     });
 
-    it('should generate unsigned transactions CSV in dry-run mode', async () => {
+    it('should generate unsigned transactions JSON in dry-run mode', async () => {
       const privateKey = '0x' + '1'.repeat(64);
       const testCsvPath = path.join(outputDir, 'test-submit.csv');
-      const unsignedTxCsvPath = path.join(
+      const unsignedTxJsonPath = path.join(
         outputDir,
-        'unsigned-transactions.csv'
+        'unsigned-transactions.json'
       );
 
       // Generate valid CIDv1 values from test data
@@ -238,7 +238,7 @@ ${propertyCid2},${dataGroupCid2},${dataCid2},"/test/property2/data2.json",2024-0
         `node ${cliPath} submit-to-contract ${testCsvPath} ` +
           `--private-key ${privateKey} ` +
           `--dry-run ` +
-          `--unsigned-transactions-csv ${unsignedTxCsvPath} ` +
+          `--unsigned-transactions-json ${unsignedTxJsonPath} ` +
           `--rpc-url ${RPC_URL}`
       );
 
@@ -247,46 +247,45 @@ ${propertyCid2},${dataGroupCid2},${dataCid2},"/test/property2/data2.json",2024-0
       expect(stdout).toContain('Total records in CSV:   2');
       expect(stdout).toContain('[DRY RUN] Would submit: 2 items');
 
-      // Check that unsigned transactions CSV was created
-      const csvExists = await fs.promises
-        .access(unsignedTxCsvPath)
+      // Check that unsigned transactions JSON was created
+      const jsonExists = await fs.promises
+        .access(unsignedTxJsonPath)
         .then(() => true)
         .catch(() => false);
-      expect(csvExists).toBe(true);
+      expect(jsonExists).toBe(true);
 
-      // Read and verify unsigned transactions CSV content
+      // Read and verify unsigned transactions JSON content
       const unsignedTxContent = await fs.promises.readFile(
-        unsignedTxCsvPath,
+        unsignedTxJsonPath,
         'utf-8'
       );
-      const lines = unsignedTxContent.trim().split('\n');
+      const transactions = JSON.parse(unsignedTxContent);
 
-      // Should have header + at least 1 data line
-      expect(lines.length).toBeGreaterThan(1);
-      expect(lines[0]).toContain(
-        'batch_id,item_count,property_cids,data_group_cids,data_cids,to,data,value,gas_limit'
-      );
+      // Should be an array with at least 1 transaction
+      expect(Array.isArray(transactions)).toBe(true);
+      expect(transactions.length).toBeGreaterThan(0);
 
-      // Verify first data line has correct structure
-      const firstDataLine = lines[1].split(',');
-      expect(firstDataLine[0]).toBe('1'); // batch_id
-      expect(parseInt(firstDataLine[1])).toBeGreaterThan(0); // item_count
-      expect(firstDataLine[5]).toMatch(/^0x[a-fA-F0-9]{40}$/); // contract address
-      expect(firstDataLine[6]).toMatch(/^0x[a-fA-F0-9]+$/); // transaction data
-      expect(firstDataLine[7]).toBe('0'); // value
-      expect(parseInt(firstDataLine[8])).toBeGreaterThan(0); // gas_limit
+      // Verify first transaction has correct EIP-1474 structure
+      const firstTransaction = transactions[0];
+      expect(firstTransaction.from).toMatch(/^0x[a-fA-F0-9]{40}$/); // from address
+      expect(firstTransaction.to).toMatch(/^0x[a-fA-F0-9]{40}$/); // contract address
+      expect(firstTransaction.gas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded gas
+      expect(firstTransaction.value).toBe('0x0'); // value
+      expect(firstTransaction.data).toMatch(/^0x[a-fA-F0-9]+$/); // encoded function data
+      expect(firstTransaction.nonce).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded nonce
+      expect(['0x0', '0x2']).toContain(firstTransaction.type); // legacy or EIP-1559
 
       // Cleanup
       await fs.promises.rm(testCsvPath);
-      await fs.promises.rm(unsignedTxCsvPath);
+      await fs.promises.rm(unsignedTxJsonPath);
     }, 30000); // 30 second timeout
 
-    it('should fail when unsigned transactions CSV option is used without dry-run', async () => {
+    it('should fail when unsigned transactions JSON option is used without dry-run', async () => {
       const privateKey = '0x' + '1'.repeat(64);
       const testCsvPath = path.join(outputDir, 'test-submit.csv');
-      const unsignedTxCsvPath = path.join(
+      const unsignedTxJsonPath = path.join(
         outputDir,
-        'unsigned-transactions.csv'
+        'unsigned-transactions.json'
       );
 
       // Generate valid CID and create test CSV
@@ -303,7 +302,7 @@ ${propertyCid},${dataGroupCid},${dataCid},"/test/property1/data1.json",2024-01-0
         await execAsync(
           `node ${cliPath} submit-to-contract ${testCsvPath} ` +
             `--private-key ${privateKey} ` +
-            `--unsigned-transactions-csv ${unsignedTxCsvPath} ` +
+            `--unsigned-transactions-json ${unsignedTxJsonPath} ` +
             `--rpc-url ${RPC_URL}`
           // Note: no --dry-run flag
         );

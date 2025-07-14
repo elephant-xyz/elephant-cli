@@ -181,12 +181,12 @@ npm run dev
   --gas-price 50 \
   --dry-run
 
-# Test the CLI - Submit to contract with unsigned transactions CSV
+# Test the CLI - Submit to contract with unsigned transactions JSON
 ./bin/elephant-cli submit-to-contract results.csv \
   --private-key "0x..." \
   --gas-price 50 \
   --dry-run \
-  --unsigned-transactions-csv unsigned_txs.csv
+  --unsigned-transactions-json unsigned_txs.json
 
 # Clean build artifacts
 npm run clean
@@ -325,7 +325,7 @@ Two types of directories are supported:
 
 ## Unsigned Transactions Feature
 
-The `submit-to-contract` command supports generating unsigned transactions for later signing and submission when used with `--dry-run` and `--unsigned-transactions-csv` options.
+The `submit-to-contract` command supports generating unsigned transactions for later signing and submission when used with `--dry-run` and `--unsigned-transactions-json` options.
 
 ### Use Cases
 - **Cold wallet signing**: Generate transactions on an online machine, transfer to offline machine for signing
@@ -333,24 +333,18 @@ The `submit-to-contract` command supports generating unsigned transactions for l
 - **Batch preparation**: Generate all transactions at once for later submission
 - **Gas price optimization**: Generate transactions and submit when gas prices are favorable
 
-### CSV Format
-The unsigned transactions CSV contains the following columns:
-- `batch_id`: Sequential batch identifier
-- `item_count`: Number of data items in this batch
-- `property_cids`: Semicolon-separated list of property CIDs
-- `data_group_cids`: Semicolon-separated list of data group CIDs  
-- `data_cids`: Semicolon-separated list of data CIDs
+### JSON Format
+The unsigned transactions JSON contains an array of EIP-1474 compliant transaction objects with the following fields:
+- `from`: Sender address
 - `to`: Contract address
-- `data`: Encoded function call data
-- `value`: Transaction value (always 0 for these calls)
-- `gas_limit`: Estimated gas limit with 20% buffer
-- `gas_price`: Gas price in Wei (legacy transactions)
-- `max_fee_per_gas`: Maximum fee per gas in Wei (EIP-1559 transactions)
-- `max_priority_fee_per_gas`: Priority fee per gas in Wei (EIP-1559 transactions)
-- `nonce`: Transaction nonce
-- `chain_id`: Blockchain network chain ID (137 for Polygon)
-- `type`: Transaction type (0 for legacy, 2 for EIP-1559)
-- `timestamp`: When the transaction was generated
+- `gas`: Estimated gas limit with 20% buffer (hex-encoded)
+- `value`: Transaction value (always '0x0' for these calls)
+- `data`: Encoded function call data (hex-encoded)
+- `nonce`: Transaction nonce (hex-encoded)
+- `type`: Transaction type ('0x0' for legacy, '0x2' for EIP-1559)
+- `gasPrice`: Gas price in Wei (legacy transactions, hex-encoded)
+- `maxFeePerGas`: Maximum fee per gas in Wei (EIP-1559 transactions, hex-encoded)
+- `maxPriorityFeePerGas`: Priority fee per gas in Wei (EIP-1559 transactions, hex-encoded)
 
 ### Transaction Types
 - **Legacy transactions** (type 0): Used when `--gas-price` is specified as a number

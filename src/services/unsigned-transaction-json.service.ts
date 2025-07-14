@@ -65,7 +65,8 @@ export class UnsignedTransactionJsonService {
     batchItems: DataItem[],
     userAddress: string,
     nonce: number,
-    gasLimit: string
+    gasLimit: string,
+    provider?: ethers.JsonRpcProvider
   ): Promise<EIP1474Transaction> {
     const preparedBatch = batchItems.map((item) =>
       this.prepareDataItemForContract(item)
@@ -95,8 +96,32 @@ export class UnsignedTransactionJsonService {
     if (this.gasPrice === 'auto') {
       // EIP-1559 transaction (type 2)
       transaction.type = '0x2';
-      transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-      transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+
+      // Fetch dynamic fee data from provider if available
+      if (provider) {
+        try {
+          const feeData = await provider.getFeeData();
+          if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+            transaction.maxFeePerGas = `0x${feeData.maxFeePerGas.toString(16)}`;
+            transaction.maxPriorityFeePerGas = `0x${feeData.maxPriorityFeePerGas.toString(16)}`;
+          } else {
+            // Fallback to reasonable defaults if provider doesn't support EIP-1559
+            transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
+            transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to fetch fee data from provider: ${error instanceof Error ? error.message : String(error)}`
+          );
+          // Fallback to defaults
+          transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
+          transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+        }
+      } else {
+        // Fallback to defaults if no provider is available
+        transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
+        transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+      }
     } else {
       // Legacy transaction (type 0)
       transaction.type = '0x0';
@@ -157,9 +182,10 @@ export class UnsignedTransactionJsonService {
 
       // Get starting nonce from provider if we have an RPC URL
       let currentNonce = this.startingNonce;
+      let provider: ethers.JsonRpcProvider | undefined;
       if (rpcUrl && userAddress) {
         try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          provider = new ethers.JsonRpcProvider(rpcUrl);
           currentNonce = await provider.getTransactionCount(
             userAddress,
             'pending'
@@ -169,6 +195,7 @@ export class UnsignedTransactionJsonService {
           logger.warn(
             `Failed to get nonce from provider, using default: ${currentNonce}`
           );
+          provider = undefined; // Reset provider on error
         }
       }
 
@@ -189,7 +216,8 @@ export class UnsignedTransactionJsonService {
           batch,
           userAddress,
           currentNonce + i,
-          gasLimit
+          gasLimit,
+          provider
         );
 
         transactions.push(transaction);
