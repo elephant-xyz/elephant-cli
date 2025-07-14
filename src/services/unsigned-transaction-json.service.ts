@@ -86,7 +86,7 @@ export class UnsignedTransactionJsonService {
     const transaction: EIP1474Transaction = {
       from: userAddress,
       to: this.contractAddress,
-      gas: `0x${parseInt(gasLimit).toString(16)}`,
+      gas: `0x${BigInt(gasLimit).toString(16)}`,
       value: '0x0',
       data: functionData,
       nonce: `0x${nonce.toString(16)}`,
