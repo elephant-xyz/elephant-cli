@@ -47,6 +47,7 @@ your-data/
 - Directory names must be root CIDs (a.k.a. seed CIDs) OR contain a seed datagroup file
 - File names must be schema CIDs
 - Files must contain valid JSON data
+- Schema CIDs must point to valid data group schemas (see [Data Group Schema Requirements](#data-group-schema-requirements))
 
 **Seed Datagroup Support:**
 
@@ -66,6 +67,69 @@ When using seed datagroup directories:
 - The seed file is uploaded first to IPFS
 - The CID of the uploaded seed file becomes the propertyCid for ALL files in that directory
 - This allows flexible directory naming while maintaining traceability
+
+### Data Group Schema Requirements
+
+All schema CIDs used as file names must point to valid **data group schemas**. A data group schema is a JSON schema that describes an object with exactly two properties:
+
+1. **`label`** - Can be any valid JSON schema definition
+2. **`relationships`** - Can be any valid JSON schema definition
+
+**Valid Data Group Schema Example:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "description": "Human-readable label for the data group"
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "target": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["label", "relationships"]
+}
+```
+
+**Invalid Examples:**
+
+```json
+// ❌ Wrong: Missing relationships property
+{
+  "type": "object",
+  "properties": {
+    "label": { "type": "string" }
+  }
+}
+
+// ❌ Wrong: Has extra properties
+{
+  "type": "object", 
+  "properties": {
+    "label": { "type": "string" },
+    "relationships": { "type": "array" },
+    "extra": { "type": "string" }
+  }
+}
+
+// ❌ Wrong: Not describing an object
+{
+  "type": "string"
+}
+```
+
+**Where to Find Valid Schemas:**
+
+Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid data group schemas for your use case.
 
 ### Step 2: Get Your Credentials
 
@@ -305,6 +369,12 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 - Check your JSON files match the required schema
 - Ensure file paths exist for IPLD links
 - Review error details in the generated error CSV
+
+**"Schema CID is not a valid data group schema"**
+
+- Verify the schema CID points to a valid data group schema
+- Data group schemas must have exactly two properties: `label` and `relationships`
+- Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid schemas
 
 **"Upload failed"**
 
