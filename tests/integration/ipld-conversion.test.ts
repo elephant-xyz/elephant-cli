@@ -72,9 +72,13 @@ describe('IPLD Conversion Integration', () => {
       JSON.stringify(mainData, null, 2)
     );
 
-    // Mock schema that accepts any object
+    // Mock schema that is a valid data group schema
     const mockSchema = {
       type: 'object',
+      properties: {
+        label: { type: 'string' },
+        relationships: { type: 'array' },
+      },
       additionalProperties: true,
     };
 
@@ -205,7 +209,14 @@ describe('IPLD Conversion Integration', () => {
     );
 
     // Mock services
-    const mockSchema = { type: 'object', additionalProperties: true };
+    const mockSchema = {
+      type: 'object',
+      properties: {
+        label: { type: 'string' },
+        relationships: { type: 'array' },
+      },
+      additionalProperties: true,
+    };
     const mockIPFSService = {
       fetchContent: async () => Buffer.from(JSON.stringify(mockSchema)),
     } as any;

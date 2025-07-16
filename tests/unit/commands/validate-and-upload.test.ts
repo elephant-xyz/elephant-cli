@@ -173,7 +173,10 @@ describe('ValidateAndUploadCommand', () => {
     mockSchemaCacheService = {
       getSchema: vi.fn().mockResolvedValue({
         type: 'object',
-        properties: { name: { type: 'string' } },
+        properties: {
+          label: { type: 'string' },
+          relationships: { type: 'array' },
+        },
       }),
     } as any;
 
@@ -381,6 +384,19 @@ describe('ValidateAndUploadCommand', () => {
   });
 
   it('should handle validation errors', async () => {
+    // Create a schema that passes data group validation but causes data validation failure
+    const validDataGroupSchema = {
+      type: 'object',
+      properties: {
+        label: { type: 'string' },
+        relationships: { type: 'array' },
+      },
+    };
+
+    vi.mocked(mockSchemaCacheService.getSchema).mockResolvedValue(
+      validDataGroupSchema
+    );
+
     vi.mocked(mockJsonValidatorService.validate)
       .mockResolvedValueOnce({
         valid: false,
@@ -447,6 +463,18 @@ describe('ValidateAndUploadCommand', () => {
     );
     vi.mocked(mockFileScannerService.countTotalFiles).mockResolvedValue(
       mockFiles.length
+    );
+
+    // Use valid data group schema for this test
+    const validDataGroupSchema = {
+      type: 'object',
+      properties: {
+        label: { type: 'string' },
+        relationships: { type: 'array' },
+      },
+    };
+    vi.mocked(mockSchemaCacheService.getSchema).mockResolvedValue(
+      validDataGroupSchema
     );
 
     vi.mocked(mockPinataService.uploadBatch)
