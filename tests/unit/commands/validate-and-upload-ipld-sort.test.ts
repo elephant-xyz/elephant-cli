@@ -34,7 +34,8 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
       getSchema: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
-          links: { type: 'array' },
+          label: { type: 'string' },
+          relationships: { type: 'array' },
         },
       }),
     },

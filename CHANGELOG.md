@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.9.0...v1.10.0) (2025-07-16)
+
+
+### Features
+
+* **validate:** enforce data group schema checks ([#44](https://github.com/elephant-xyz/elephant-cli/issues/44)) ([9400425](https://github.com/elephant-xyz/elephant-cli/commit/9400425c0be106cdde4d1c394b215aa41bd38345))
+
 # [1.9.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.4...v1.9.0) (2025-07-14)
 
 
