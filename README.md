@@ -50,12 +50,12 @@ your-data/
 
 **Seed Datagroup Support:**
 
-Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`
+Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json`
 
 ```
 your-data/
 ├── property_data_set_1/          # Any name (not a CID)
-│   ├── bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json  # Seed file
+│   ├── bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json  # Seed file
 │   └── other_schema_cid.json     # Other data files
 ├── bafybe.../                    # Traditional CID directory
 │   └── schema_cid.json           # Data file
