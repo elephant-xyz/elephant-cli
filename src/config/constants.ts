@@ -22,7 +22,7 @@ export const PINATA_GATEWAY_BASE_URL = 'https://gateway.pinata.cloud/ipfs/';
 
 // Seed datagroup schema CID
 export const SEED_DATAGROUP_SCHEMA_CID =
-  'bafkreigpq7bp6avgaedafovqfblh65qdoapxub44gd4bxbmp3lsiz7hcyy';
+  'bafkreig4k6wql25woipn743nz4pgh76xmrscbrro4klb6p6m3va4lqmwqu';
 
 // Smart contract method ABIs for submit functionality
 export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
