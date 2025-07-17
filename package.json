@@ -1,6 +1,6 @@
 {
   "name": "@elephant-xyz/cli",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "CLI tool for Elephant Network",
   "main": "dist/index.js",
   "type": "module",
