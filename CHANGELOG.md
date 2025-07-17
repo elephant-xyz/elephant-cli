@@ -1,3 +1,10 @@
+## [1.10.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.1...v1.10.2) (2025-07-17)
+
+
+### Bug Fixes
+
+* **constants:** update schema CID value ([#46](https://github.com/elephant-xyz/elephant-cli/issues/46)) ([ee9235a](https://github.com/elephant-xyz/elephant-cli/commit/ee9235aaa3ffea86f317af59eef879de23fd9070))
+
 ## [1.10.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.0...v1.10.1) (2025-07-16)
 
 
