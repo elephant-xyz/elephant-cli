@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { config } from 'dotenv';
 import { Command } from 'commander';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // Load environment variables from .env file in current working directory
 config({ path: '.env' });
@@ -14,12 +17,19 @@ import { listAssignments } from './commands/list-assignments.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
 
+// Read version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, '../package.json'), 'utf-8')
+);
+
 const program = new Command();
 
 program
   .name('elephant-cli')
   .description('CLI tool for Elephant Network on Polygon')
-  .version('1.0.0');
+  .version(packageJson.version);
 
 // Register list-assignments command
 program
