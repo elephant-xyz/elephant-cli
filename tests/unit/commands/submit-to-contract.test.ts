@@ -39,6 +39,7 @@ describe('SubmitToContractCommand', () => {
     transactionBatchSize: 2,
     gasPrice: 30,
     dryRun: false,
+    checkEligibility: false,
   };
 
   const mockCsvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
@@ -157,8 +158,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     });
 
     expect(fs.readFileSync).toHaveBeenCalledWith('test-input.csv', 'utf-8');
-    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(3);
-    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3);
+    // Should not check eligibility by default
+    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(0);
+    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(0);
 
     const MockedTransactionBatcher = vi.mocked(TransactionBatcherService);
     const mockSubmitAll =
@@ -180,7 +182,43 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(0);
   });
 
-  it('should skip items that already exist on chain', async () => {
+  it('should skip eligibility checks by default', async () => {
+    const serviceOverrides = {
+      chainStateService: mockChainStateService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+    };
+
+    await handleSubmitToContract(mockOptions, serviceOverrides);
+
+    // Should not call chain state methods when checkEligibility is false (default)
+    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(0);
+    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(0);
+    expect(
+      mockChainStateService.prepopulateConsensusCache
+    ).toHaveBeenCalledTimes(0);
+  });
+
+  it('should perform eligibility checks when checkEligibility is true', async () => {
+    const optionsWithChecks = { ...mockOptions, checkEligibility: true };
+    const serviceOverrides = {
+      chainStateService: mockChainStateService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+    };
+
+    await handleSubmitToContract(optionsWithChecks, serviceOverrides);
+
+    // Should call chain state methods when checkEligibility is true
+    expect(
+      mockChainStateService.prepopulateConsensusCache
+    ).toHaveBeenCalledTimes(1);
+    expect(mockChainStateService.getCurrentDataCid).toHaveBeenCalledTimes(3); // 3 records
+    expect(mockChainStateService.hasUserSubmittedData).toHaveBeenCalledTimes(3); // 3 records
+  });
+
+  it('should skip items that already exist on chain when checkEligibility is true', async () => {
+    const optionsWithChecks = { ...mockOptions, checkEligibility: true };
     mockChainStateService.getCurrentDataCid = vi
       .fn()
       .mockResolvedValueOnce('')
@@ -195,7 +233,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       progressTracker: mockProgressTracker,
     };
 
-    await handleSubmitToContract(mockOptions, serviceOverrides);
+    await handleSubmitToContract(optionsWithChecks, serviceOverrides);
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -211,7 +249,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     expect(submitAllCalls[0][0]).toHaveLength(2);
   });
 
-  it('should skip items already submitted by user', async () => {
+  it('should skip items already submitted by user when checkEligibility is true', async () => {
+    const optionsWithChecks = { ...mockOptions, checkEligibility: true };
     mockChainStateService.hasUserSubmittedData = vi
       .fn()
       .mockResolvedValueOnce(false)
@@ -224,7 +263,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       progressTracker: mockProgressTracker,
     };
 
-    await handleSubmitToContract(mockOptions, serviceOverrides);
+    await handleSubmitToContract(optionsWithChecks, serviceOverrides);
 
     expect(mockCsvReporterService.logWarning).toHaveBeenCalledWith(
       expect.objectContaining({

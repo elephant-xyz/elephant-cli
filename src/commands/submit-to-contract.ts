@@ -37,6 +37,7 @@ export interface SubmitToContractCommandOptions {
   domain?: string;
   apiKey?: string;
   oracleKeyId?: string;
+  checkEligibility?: boolean;
 }
 
 interface CsvRecord {
@@ -101,6 +102,11 @@ export function registerSubmitToContractCommand(program: Command) {
     )
     .option('--api-key <key>', 'API key for centralized submission')
     .option('--oracle-key-id <id>', 'Oracle key ID for centralized submission')
+    .option(
+      '--check-eligibility',
+      'Enable eligibility checks to verify if data has reached consensus or if user has already submitted (slower but safer)',
+      false
+    )
     .action(async (csvFile, options) => {
       if (
         options.gasPrice !== 'auto' &&
@@ -213,6 +219,7 @@ export function registerSubmitToContractCommand(program: Command) {
         domain: options.domain,
         apiKey: options.apiKey,
         oracleKeyId: options.oracleKeyId,
+        checkEligibility: options.checkEligibility || false,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -223,10 +230,10 @@ async function checkSubmissionEligibility(
   record: CsvRecord,
   chainStateService: ChainStateService,
   userAddress: string,
-  skipChecks: boolean = false
+  performChecks: boolean = false
 ): Promise<SubmissionCheckResult> {
-  // In dry-run mode, skip expensive blockchain checks
-  if (skipChecks) {
+  // By default, skip expensive blockchain checks unless explicitly requested
+  if (!performChecks) {
     return {
       canSubmit: true,
       dataItem: {
@@ -300,13 +307,13 @@ async function processRecord(
   userAddress: string,
   progressTracker: SimpleProgress,
   csvReporterService: CsvReporterService,
-  skipChecks: boolean = false
+  performChecks: boolean = false
 ): Promise<{ record: CsvRecord; checkResult: SubmissionCheckResult }> {
   const checkResult = await checkSubmissionEligibility(
     record,
     chainStateService,
     userAddress,
-    skipChecks
+    performChecks
   );
 
   if (checkResult.canSubmit && checkResult.dataItem) {
@@ -337,6 +344,19 @@ export async function handleSubmitToContract(
     logger.warn('DRY RUN MODE: No transactions will be sent');
   }
 
+  if (options.checkEligibility) {
+    console.log(
+      chalk.yellow(
+        'Eligibility checks enabled - this will perform additional blockchain queries'
+      )
+    );
+    logger.info('Eligibility checks enabled');
+  } else {
+    logger.info(
+      'Eligibility checks disabled (default) - skipping consensus and submission history verification'
+    );
+  }
+
   if (isApiMode) {
     console.log(chalk.yellow('Using centralized API submission mode'));
     logger.info('Using centralized API submission mode');
@@ -354,10 +374,10 @@ export async function handleSubmitToContract(
     transactionBatchSize: options.transactionBatchSize,
   });
 
-  // Create mock services in dry-run mode or API mode to avoid blockchain calls
+  // Create mock services when eligibility checks are disabled, in dry-run mode, or API mode to avoid blockchain calls
   const chainStateService =
     serviceOverrides.chainStateService ??
-    (options.dryRun || isApiMode
+    (!options.checkEligibility || options.dryRun || isApiMode
       ? ({
           prepopulateConsensusCache: async () => {},
           getUserSubmissions: async () => new Set<string>(),
@@ -540,16 +560,19 @@ export async function handleSubmitToContract(
       new SimpleProgress(1, 'Indexing on-chain data');
     progressTracker.start();
 
-    // Skip expensive blockchain operations in dry-run mode or API mode
-    if (!options.dryRun && !isApiMode) {
+    // Skip expensive blockchain operations when eligibility checks are disabled, in dry-run mode, or API mode
+    if (options.checkEligibility && !options.dryRun && !isApiMode) {
       logger.info('Pre-populating on-chain consensus data cache...');
       await chainStateService.prepopulateConsensusCache();
       logger.success('Consensus data cache populated.');
     } else {
+      const reason = !options.checkEligibility
+        ? 'Eligibility checks disabled'
+        : options.dryRun
+          ? 'DRY RUN'
+          : 'API MODE';
       logger.info(
-        options.dryRun
-          ? '[DRY RUN] Skipping on-chain consensus data cache population'
-          : '[API MODE] Skipping on-chain consensus data cache population'
+        `[${reason}] Skipping on-chain consensus data cache population`
       );
     }
 
@@ -557,16 +580,20 @@ export async function handleSubmitToContract(
     const dataItemsForTransaction: DataItem[] = [];
     const skippedItems: { record: CsvRecord; reason: string }[] = [];
 
-    progressTracker.setPhase('Checking Eligibility', records.length);
+    progressTracker.setPhase(
+      options.checkEligibility ? 'Checking Eligibility' : 'Processing Records',
+      records.length
+    );
 
-    if (!options.dryRun && !isApiMode) {
+    if (options.checkEligibility && !options.dryRun && !isApiMode) {
       await chainStateService.getUserSubmissions(userAddress);
     } else {
-      logger.info(
-        options.dryRun
-          ? '[DRY RUN] Skipping user submission history check'
-          : '[API MODE] Skipping user submission history check'
-      );
+      const reason = !options.checkEligibility
+        ? 'Eligibility checks disabled'
+        : options.dryRun
+          ? 'DRY RUN'
+          : 'API MODE';
+      logger.info(`[${reason}] Skipping user submission history check`);
     }
 
     const processingPromises = records.map((record) =>
@@ -576,7 +603,7 @@ export async function handleSubmitToContract(
         userAddress,
         progressTracker!, // progressTracker is initialized before this loop
         csvReporterService,
-        options.dryRun || isApiMode // Skip checks in dry-run mode or API mode
+        options.checkEligibility && !options.dryRun && !isApiMode // Only perform checks if explicitly enabled and not in dry-run/API mode
       )
     );
 
@@ -594,7 +621,9 @@ export async function handleSubmitToContract(
     }
 
     logger.success(
-      `Eligibility check complete: ${dataItemsForTransaction.length} item${dataItemsForTransaction.length === 1 ? '' : 's'} ready for submission`
+      options.checkEligibility
+        ? `Eligibility check complete: ${dataItemsForTransaction.length} item${dataItemsForTransaction.length === 1 ? '' : 's'} ready for submission`
+        : `Processing complete: ${dataItemsForTransaction.length} item${dataItemsForTransaction.length === 1 ? '' : 's'} ready for submission`
     );
 
     if (skippedItems.length > 0) {
