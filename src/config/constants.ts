@@ -22,7 +22,7 @@ export const PINATA_GATEWAY_BASE_URL = 'https://gateway.pinata.cloud/ipfs/';
 
 // Seed datagroup schema CID
 export const SEED_DATAGROUP_SCHEMA_CID =
-  'bafkreig4k6wql25woipn743nz4pgh76xmrscbrro4klb6p6m3va4lqmwqu';
+  'bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be';
 
 // Blockchain constants
 export const POLYGON_MAINNET_CHAIN_ID = 137;

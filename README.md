@@ -17,12 +17,12 @@ npx @elephant-xyz/cli --help
 ### Requirements
 
 To use this tool, the oracle needs to have:
+
 1.  Node.js 20.0 or higher.
 2.  A custom JSON RPC URL for Polygon (e.g., from Alchemy or Infura).
 3.  An exported Polygon private key (e.g., from MetaMask). For institutional oracles, an API key, domain, and oracle key ID are required.
 4.  A Pinata JWT for IPFS uploads.
 5.  Stable internet access.
-
 
 ## What You Can Do
 
@@ -55,12 +55,12 @@ your-data/
 
 **Seed Datagroup Support:**
 
-Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json`
+Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be.json`
 
 ```
 your-data/
 ├── property_data_set_1/          # Any name (not a CID)
-│   ├── bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json  # Seed file
+│   ├── bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be.json  # Seed file
 │   └── other_schema_cid.json     # Other data files
 ├── bafybe.../                    # Traditional CID directory
 │   └── schema_cid.json           # Data file
