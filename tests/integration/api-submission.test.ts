@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleSubmitToContract } from '../../src/commands/submit-to-contract.js';
-import { ApiSubmissionService } from '../../src/services/api-submission.service.js';
-import { TransactionStatusService } from '../../src/services/transaction-status.service.js';
-import { TransactionStatusReporterService } from '../../src/services/transaction-status-reporter.service.js';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -68,6 +65,22 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
       fromAddress: '0x1234567890123456789012345678901234567890',
     };
 
+    // Mock the UnsignedTransactionJsonService
+    const mockUnsignedTxService = {
+      generateUnsignedTransactions: vi.fn().mockResolvedValue([
+        {
+          from: '0x1234567890123456789012345678901234567890',
+          to: '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
+          data: '0xmockdata',
+          value: '0x0',
+          gas: '0x5208',
+          nonce: '0x0',
+          type: '0x0',
+          gasPrice: '0x6fc23ac00',
+        },
+      ]),
+    };
+
     await handleSubmitToContract(options, {
       apiSubmissionService: mockApiService,
       transactionStatusService: mockStatusService,
@@ -81,6 +94,7 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
       transactionBatcherService: {
         groupItemsIntoBatches: vi.fn().mockImplementation((items) => [items]),
       } as any,
+      unsignedTransactionJsonService: mockUnsignedTxService as any,
     });
 
     // Verify API submission was called
@@ -103,13 +117,30 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
     const options = {
       rpcUrl: 'https://rpc.test.com',
       contractAddress: '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
-      privateKey: '0x' + '0'.repeat(64),
+      privateKey: '',
       csvFile: csvPath,
       gasPrice: 30,
       dryRun: false,
       domain: 'oracles.staircaseapi.com',
       apiKey: 'invalid-key',
       oracleKeyId: '550e8400-e29b-41d4-a716-446655440000',
+      fromAddress: '0x1234567890123456789012345678901234567890',
+    };
+
+    // Mock the UnsignedTransactionJsonService
+    const mockUnsignedTxService = {
+      generateUnsignedTransactions: vi.fn().mockResolvedValue([
+        {
+          from: '0x1234567890123456789012345678901234567890',
+          to: '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
+          data: '0xmockdata',
+          value: '0x0',
+          gas: '0x5208',
+          nonce: '0x0',
+          type: '0x0',
+          gasPrice: '0x6fc23ac00',
+        },
+      ]),
     };
 
     await handleSubmitToContract(options, {
@@ -125,6 +156,7 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
       transactionBatcherService: {
         groupItemsIntoBatches: vi.fn().mockImplementation((items) => [items]),
       } as any,
+      unsignedTransactionJsonService: mockUnsignedTxService as any,
     });
 
     // Should still log the error to the status reporter
@@ -150,6 +182,23 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
       fromAddress: '0x1234567890123456789012345678901234567890',
     };
 
+    // Mock the UnsignedTransactionJsonService
+    const mockUnsignedTxService = {
+      generateUnsignedTransactions: vi.fn().mockResolvedValue([
+        {
+          from: '0x1234567890123456789012345678901234567890',
+          to: '0x79D5046e34D4A56D357E12636A18da6eaEfe0586',
+          data: '0xmockdata',
+          value: '0x0',
+          gas: '0x5208',
+          nonce: '0x0',
+          type: '0x2',
+          maxFeePerGas: '0x6fc23ac00',
+          maxPriorityFeePerGas: '0x3b9aca00',
+        },
+      ]),
+    };
+
     await handleSubmitToContract(options, {
       apiSubmissionService: mockApiService,
       transactionStatusService: mockStatusService,
@@ -163,6 +212,7 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
       transactionBatcherService: {
         groupItemsIntoBatches: vi.fn().mockImplementation((items) => [items]),
       } as any,
+      unsignedTransactionJsonService: mockUnsignedTxService as any,
     });
 
     // Should still work

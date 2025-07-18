@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execSync } from 'child_process';
 import { writeFileSync, unlinkSync, existsSync } from 'fs';
 import path from 'path';
@@ -122,6 +122,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
         cwd: process.cwd(),
         stdio: 'pipe',
         encoding: 'utf8',
+        env: { ...process.env, ELEPHANT_PRIVATE_KEY: '' },
       });
       // If it doesn't throw, the test should fail
       expect(result).toBe('should have thrown an error');
@@ -141,6 +142,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
         cwd: process.cwd(),
         stdio: 'pipe',
         encoding: 'utf8',
+        env: { ...process.env, ELEPHANT_PRIVATE_KEY: '' },
       });
       // If it doesn't throw, the test should fail
       expect(result).toBe('should have thrown an error');

@@ -454,9 +454,11 @@ export async function handleSubmitToContract(
     }
   } else {
     if (!options.privateKey) {
-      throw new Error(
-        'Private key is required when not using --from-address with unsigned transactions'
-      );
+      const errorMsg =
+        'Error: Private key is required when not using --from-address with unsigned transactions or API mode. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+      logger.error(errorMsg);
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
     const wallet = new Wallet(options.privateKey);
     userAddress = wallet.address;
@@ -621,13 +623,15 @@ export async function handleSubmitToContract(
           );
 
           // Generate unsigned transactions using the service
-          const unsignedTxService = new UnsignedTransactionJsonService(
-            'temp-unsigned.json', // Temporary, we won't write to file
-            options.contractAddress,
-            options.gasPrice,
-            137, // Polygon mainnet
-            0
-          );
+          const unsignedTxService =
+            unsignedTransactionJsonService ||
+            new UnsignedTransactionJsonService(
+              'temp-unsigned.json', // Temporary, we won't write to file
+              options.contractAddress,
+              options.gasPrice,
+              137, // Polygon mainnet
+              0
+            );
 
           // Generate all unsigned transactions
           const unsignedTransactions =
@@ -708,19 +712,21 @@ export async function handleSubmitToContract(
                   progressTracker.increment('errors');
                 }
               }
-
-              // Log to transaction status CSV
-              await transactionStatusReporter.logTransaction({
-                batchIndex: result.batchIndex,
-                transactionHash: result.transactionHash || '',
-                status: result.status.status,
-                blockNumber: result.status.blockNumber,
-                gasUsed: result.status.gasUsed,
-                itemCount: result.itemCount,
-                error: result.status.error,
-                timestamp: new Date().toISOString(),
-              });
             }
+          }
+
+          // Log all results to transaction status CSV (including failures)
+          for (const result of apiResults) {
+            await transactionStatusReporter.logTransaction({
+              batchIndex: result.batchIndex,
+              transactionHash: result.transactionHash || '',
+              status: result.status.status,
+              blockNumber: result.status.blockNumber,
+              gasUsed: result.status.gasUsed,
+              itemCount: result.itemCount,
+              error: result.status.error,
+              timestamp: new Date().toISOString(),
+            });
           }
 
           logger.success('API submission process completed.');
