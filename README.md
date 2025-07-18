@@ -64,6 +64,7 @@ your-data/
 ```
 
 When using seed datagroup directories:
+
 - The seed file is uploaded first to IPFS
 - The CID of the uploaded seed file becomes the propertyCid for ALL files in that directory
 - This allows flexible directory naming while maintaining traceability
@@ -113,7 +114,7 @@ All schema CIDs used as file names must point to valid **data group schemas**. A
 
 // ❌ Wrong: Has extra properties
 {
-  "type": "object", 
+  "type": "object",
   "properties": {
     "label": { "type": "string" },
     "relationships": { "type": "array" },
@@ -299,6 +300,28 @@ elephant-cli submit-to-contract upload-results.csv \
   --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0
 ```
 
+### Centralized API Submission
+
+Submit data through a centralized API instead of directly to the blockchain:
+
+```bash
+# Submit via API (no private key needed)
+elephant-cli submit-to-contract upload-results.csv \
+  --domain oracles.staircaseapi.com \
+  --api-key YOUR_API_KEY \
+  --oracle-key-id YOUR_ORACLE_KEY_ID \
+  --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0
+```
+
+This mode:
+
+- Generates unsigned transactions locally
+- Submits them to the API for signing
+- Monitors transaction confirmation
+- Reports status in `transaction-status.csv`
+
+See [API Submission Documentation](./docs/API-SUBMISSION.md) for details.
+
 **What this does:**
 
 - Creates a JSON file with EIP-1474 compatible unsigned transactions
@@ -326,6 +349,7 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 ```
 
 **Use Cases:**
+
 - **Cold Storage**: Generate transactions on an online machine, sign on offline device
 - **Hardware Wallets**: Export transactions for signing with Ledger, Trezor, etc.
 - **Multi-signature**: Prepare transactions for multiple signers

@@ -1,3 +1,5 @@
+import { DataItem } from './contract.types.js';
+
 export interface FileEntry {
   propertyCid: string;
   dataGroupCid: string;
@@ -79,4 +81,42 @@ export interface EIP1474Transaction {
   data: string;
   nonce: string;
   type?: string;
+}
+
+// API submission interfaces
+export interface ApiSubmissionRequest {
+  oracle_key_id: string;
+  unsigned_transaction: EIP1474Transaction[];
+}
+
+export interface ApiSubmissionResponse {
+  transaction_hash: string;
+}
+
+export interface TransactionStatus {
+  hash: string;
+  status: 'pending' | 'success' | 'failed';
+  blockNumber?: number;
+  gasUsed?: string;
+  error?: string;
+}
+
+export interface ApiSubmissionResult {
+  batchIndex: number;
+  transactionHash?: string;
+  status: TransactionStatus;
+  itemCount: number;
+  items: DataItem[];
+  error?: string;
+}
+
+export interface TransactionStatusEntry {
+  batchIndex: number;
+  transactionHash: string;
+  status: 'pending' | 'success' | 'failed';
+  blockNumber?: number;
+  gasUsed?: string;
+  itemCount: number;
+  error?: string;
+  timestamp: string;
 }

@@ -7,6 +7,8 @@ import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
+  POLYGON_MAINNET_CHAIN_ID,
+  ZERO_ADDRESS,
 } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
@@ -17,6 +19,10 @@ import { UnsignedTransactionJsonService } from '../services/unsigned-transaction
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { DataItem } from '../types/contract.types.js';
 import { Wallet } from 'ethers';
+import { ApiSubmissionService } from '../services/api-submission.service.js';
+import { TransactionStatusService } from '../services/transaction-status.service.js';
+import { TransactionStatusReporterService } from '../services/transaction-status-reporter.service.js';
+import { ApiSubmissionResult } from '../types/submit.types.js';
 
 export interface SubmitToContractCommandOptions {
   rpcUrl: string;
@@ -28,6 +34,9 @@ export interface SubmitToContractCommandOptions {
   dryRun: boolean;
   unsignedTransactionsJson?: string;
   fromAddress?: string;
+  domain?: string;
+  apiKey?: string;
+  oracleKeyId?: string;
 }
 
 interface CsvRecord {
@@ -86,6 +95,12 @@ export function registerSubmitToContractCommand(program: Command) {
       '--from-address <address>',
       'Address to use as "from" field in unsigned transactions (makes private key optional for unsigned transaction generation)'
     )
+    .option(
+      '--domain <domain>',
+      'Domain for centralized API submission (e.g., oracles.staircaseapi.com)'
+    )
+    .option('--api-key <key>', 'API key for centralized submission')
+    .option('--oracle-key-id <id>', 'Oracle key ID for centralized submission')
     .action(async (csvFile, options) => {
       if (
         options.gasPrice !== 'auto' &&
@@ -110,8 +125,37 @@ export function registerSubmitToContractCommand(program: Command) {
         process.exit(1);
       }
 
-      options.privateKey =
-        options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      // Validate API parameters - all three must be provided together
+      const apiParamsCount = [
+        options.domain,
+        options.apiKey,
+        options.oracleKeyId,
+      ].filter(Boolean).length;
+      if (apiParamsCount > 0 && apiParamsCount < 3) {
+        const errorMsg =
+          'Error: When using centralized API submission, all three parameters must be provided: --domain, --api-key, and --oracle-key-id';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
+      const isApiMode = apiParamsCount === 3;
+
+      // Handle private key from environment
+      if (!isApiMode) {
+        options.privateKey =
+          options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
+      } else if (process.env.ELEPHANT_PRIVATE_KEY && !options.privateKey) {
+        // In API mode with env var set but no CLI private key
+        console.log(
+          chalk.yellow(
+            'Note: Ignoring ELEPHANT_PRIVATE_KEY environment variable in API mode'
+          )
+        );
+        logger.info(
+          'API mode detected, ignoring ELEPHANT_PRIVATE_KEY environment variable'
+        );
+      }
 
       // Validate from-address format if provided
       if (
@@ -125,18 +169,34 @@ export function registerSubmitToContractCommand(program: Command) {
         process.exit(1);
       }
 
-      // Private key is optional when generating unsigned transactions with --from-address
+      // Private key is optional when generating unsigned transactions with --from-address or using API mode
       const isUnsignedTransactionMode =
         options.unsignedTransactionsJson &&
         options.dryRun &&
         options.fromAddress;
 
-      if (!options.privateKey && !isUnsignedTransactionMode) {
+      if (!options.privateKey && !isUnsignedTransactionMode && !isApiMode) {
         const errorMsg =
-          'Error: Private key is required. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+          'Error: Private key is required when not using API mode. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
         logger.error(errorMsg);
         console.error(errorMsg);
         process.exit(1);
+      }
+
+      // Ensure private key is not used with API mode
+      if (options.privateKey && isApiMode) {
+        // Check if private key was explicitly provided via CLI (not from env)
+        const wasExplicitlyProvided =
+          process.argv.includes('--private-key') || process.argv.includes('-k');
+        if (wasExplicitlyProvided) {
+          const errorMsg =
+            'Error: Private key should not be provided when using API mode (--domain, --api-key, --oracle-key-id).';
+          logger.error(errorMsg);
+          console.error(errorMsg);
+          process.exit(1);
+        }
+        // Clear any private key in API mode
+        options.privateKey = '';
       }
 
       options.transactionBatchSize =
@@ -150,6 +210,9 @@ export function registerSubmitToContractCommand(program: Command) {
           ? path.resolve(options.unsignedTransactionsJson)
           : undefined,
         fromAddress: options.fromAddress,
+        domain: options.domain,
+        apiKey: options.apiKey,
+        oracleKeyId: options.oracleKeyId,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -226,6 +289,9 @@ export interface SubmitToContractServiceOverrides {
   csvReporterService?: CsvReporterService;
   unsignedTransactionJsonService?: UnsignedTransactionJsonService;
   progressTracker?: SimpleProgress;
+  apiSubmissionService?: ApiSubmissionService;
+  transactionStatusService?: TransactionStatusService;
+  transactionStatusReporter?: TransactionStatusReporterService;
 }
 
 async function processRecord(
@@ -265,8 +331,17 @@ export async function handleSubmitToContract(
   console.log(chalk.bold.blue('🐘 Elephant Network CLI - Submit to Contract'));
   console.log();
 
+  const isApiMode = !!(options.domain && options.apiKey && options.oracleKeyId);
+
   if (options.dryRun) {
     logger.warn('DRY RUN MODE: No transactions will be sent');
+  }
+
+  if (isApiMode) {
+    console.log(chalk.yellow('Using centralized API submission mode'));
+    logger.info('Using centralized API submission mode');
+    logger.technical(`API Domain: ${options.domain}`);
+    logger.technical(`Oracle Key ID: ${options.oracleKeyId}`);
   }
 
   logger.technical(`CSV file: ${options.csvFile}`);
@@ -279,10 +354,10 @@ export async function handleSubmitToContract(
     transactionBatchSize: options.transactionBatchSize,
   });
 
-  // Create mock services in dry-run mode to avoid blockchain calls
+  // Create mock services in dry-run mode or API mode to avoid blockchain calls
   const chainStateService =
     serviceOverrides.chainStateService ??
-    (options.dryRun
+    (options.dryRun || isApiMode
       ? ({
           prepopulateConsensusCache: async () => {},
           getUserSubmissions: async () => new Set<string>(),
@@ -299,7 +374,7 @@ export async function handleSubmitToContract(
 
   const transactionBatcherService =
     serviceOverrides.transactionBatcherService ??
-    (options.dryRun
+    (options.dryRun || isApiMode
       ? ({
           groupItemsIntoBatches: (items: DataItem[]) => {
             const batchSize = options.transactionBatchSize || 200;
@@ -310,7 +385,7 @@ export async function handleSubmitToContract(
             return batches;
           },
           submitAll: async function* () {
-            // No-op generator for dry-run
+            // No-op generator for dry-run and API mode
           },
         } as any)
       : new TransactionBatcherService(
@@ -336,6 +411,26 @@ export async function handleSubmitToContract(
         )
       : undefined);
 
+  const apiSubmissionService =
+    serviceOverrides.apiSubmissionService ??
+    (isApiMode && options.domain && options.apiKey && options.oracleKeyId
+      ? new ApiSubmissionService(
+          options.domain,
+          options.apiKey,
+          options.oracleKeyId
+        )
+      : undefined);
+  const transactionStatusService =
+    serviceOverrides.transactionStatusService ??
+    (isApiMode ? new TransactionStatusService(options.rpcUrl) : undefined);
+
+  const transactionStatusReporter =
+    serviceOverrides.transactionStatusReporter ??
+    (isApiMode
+      ? new TransactionStatusReporterService(
+          path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')
+        )
+      : undefined);
   // Use fromAddress if provided and in unsigned transaction mode, otherwise derive from private key
   let userAddress: string;
   if (
@@ -345,11 +440,27 @@ export async function handleSubmitToContract(
   ) {
     userAddress = options.fromAddress;
     logger.technical(`Using provided from address: ${userAddress}`);
+  } else if (isApiMode) {
+    // In API mode, we need an address for generating unsigned transactions
+    if (options.fromAddress) {
+      userAddress = options.fromAddress;
+      logger.technical(
+        `Using provided from address for API mode: ${userAddress}`
+      );
+    } else {
+      // Generate a dummy address for API mode if none provided
+      userAddress = ZERO_ADDRESS;
+      logger.warn(
+        'No address provided for API mode, using zero address for unsigned transactions'
+      );
+    }
   } else {
     if (!options.privateKey) {
-      throw new Error(
-        'Private key is required when not using --from-address with unsigned transactions'
-      );
+      const errorMsg =
+        'Error: Private key is required when not using --from-address with unsigned transactions or API mode. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+      logger.error(errorMsg);
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
     const wallet = new Wallet(options.privateKey);
     userAddress = wallet.address;
@@ -365,6 +476,13 @@ export async function handleSubmitToContract(
     logger.technical(
       `Warning reports will be saved to: ${config.warningCsvPath}`
     );
+
+    if (transactionStatusReporter) {
+      await transactionStatusReporter.initialize();
+      logger.technical(
+        `Transaction status will be saved to: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
+      );
+    }
 
     // Read and parse CSV file
     let csvContent: string;
@@ -422,14 +540,16 @@ export async function handleSubmitToContract(
       new SimpleProgress(1, 'Indexing on-chain data');
     progressTracker.start();
 
-    // Skip expensive blockchain operations in dry-run mode
-    if (!options.dryRun) {
+    // Skip expensive blockchain operations in dry-run mode or API mode
+    if (!options.dryRun && !isApiMode) {
       logger.info('Pre-populating on-chain consensus data cache...');
       await chainStateService.prepopulateConsensusCache();
       logger.success('Consensus data cache populated.');
     } else {
       logger.info(
-        '[DRY RUN] Skipping on-chain consensus data cache population'
+        options.dryRun
+          ? '[DRY RUN] Skipping on-chain consensus data cache population'
+          : '[API MODE] Skipping on-chain consensus data cache population'
       );
     }
 
@@ -439,10 +559,14 @@ export async function handleSubmitToContract(
 
     progressTracker.setPhase('Checking Eligibility', records.length);
 
-    if (!options.dryRun) {
+    if (!options.dryRun && !isApiMode) {
       await chainStateService.getUserSubmissions(userAddress);
     } else {
-      logger.info('[DRY RUN] Skipping user submission history check');
+      logger.info(
+        options.dryRun
+          ? '[DRY RUN] Skipping user submission history check'
+          : '[API MODE] Skipping user submission history check'
+      );
     }
 
     const processingPromises = records.map((record) =>
@@ -452,7 +576,7 @@ export async function handleSubmitToContract(
         userAddress,
         progressTracker!, // progressTracker is initialized before this loop
         csvReporterService,
-        options.dryRun // Skip checks in dry-run mode
+        options.dryRun || isApiMode // Skip checks in dry-run mode or API mode
       )
     );
 
@@ -488,30 +612,166 @@ export async function handleSubmitToContract(
     let totalItemsSubmitted = 0;
 
     if (!options.dryRun && dataItemsForTransaction.length > 0) {
-      try {
-        for await (const batchResult of transactionBatcherService.submitAll(
-          dataItemsForTransaction
-        )) {
-          logger.info(
-            `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
+      if (
+        isApiMode &&
+        apiSubmissionService &&
+        transactionStatusService &&
+        transactionStatusReporter
+      ) {
+        // API submission mode
+        try {
+          const batches = transactionBatcherService.groupItemsIntoBatches(
+            dataItemsForTransaction
           );
-          submittedTransactionCount++;
-          totalItemsSubmitted += batchResult.itemsSubmitted;
-          progressTracker.increase('processed', batchResult.itemsSubmitted);
+
+          // Generate unsigned transactions using the service
+          const unsignedTxService =
+            unsignedTransactionJsonService ||
+            new UnsignedTransactionJsonService(
+              'temp-unsigned.json', // Temporary, we won't write to file
+              options.contractAddress,
+              options.gasPrice,
+              POLYGON_MAINNET_CHAIN_ID,
+              0
+            );
+
+          // Generate all unsigned transactions
+          const unsignedTransactions =
+            await unsignedTxService.generateUnsignedTransactions(
+              batches,
+              options.rpcUrl,
+              userAddress
+            );
+
+          const apiResults: ApiSubmissionResult[] = [];
+
+          progressTracker.setPhase('Submitting to API', batches.length);
+
+          // Submit each batch to API
+          for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            try {
+              // Submit to API
+              const apiResponse = await apiSubmissionService.submitTransaction(
+                unsignedTransactions[i],
+                i
+              );
+
+              apiResults.push({
+                batchIndex: i,
+                transactionHash: apiResponse.transaction_hash,
+                status: {
+                  hash: apiResponse.transaction_hash,
+                  status: 'pending',
+                },
+                itemCount: batch.length,
+                items: batch,
+              });
+
+              progressTracker.increment('processed');
+            } catch (error) {
+              const errorMsg = `Failed to submit batch ${i + 1}: ${error instanceof Error ? error.message : String(error)}`;
+              logger.error(errorMsg);
+
+              apiResults.push({
+                batchIndex: i,
+                status: { hash: '', status: 'failed', error: errorMsg },
+                itemCount: batch.length,
+                items: batch,
+                error: errorMsg,
+              });
+
+              progressTracker.increment('errors');
+            }
+          }
+
+          // Wait for transaction confirmations
+          if (apiResults.some((r) => r.transactionHash)) {
+            progressTracker.setPhase(
+              'Waiting for Confirmations',
+              apiResults.filter((r) => r.transactionHash).length
+            );
+
+            for (const result of apiResults) {
+              if (result.transactionHash) {
+                try {
+                  const status =
+                    await transactionStatusService.waitForTransaction(
+                      result.transactionHash
+                    );
+                  result.status = status;
+
+                  if (status.status === 'success') {
+                    submittedTransactionCount++;
+                    totalItemsSubmitted += result.itemCount;
+                  }
+
+                  progressTracker.increment('processed');
+                } catch (error) {
+                  result.status.status = 'failed';
+                  result.status.error =
+                    error instanceof Error ? error.message : String(error);
+                  progressTracker.increment('errors');
+                }
+              }
+            }
+          }
+
+          // Log all results to transaction status CSV (including failures)
+          for (const result of apiResults) {
+            await transactionStatusReporter.logTransaction({
+              batchIndex: result.batchIndex,
+              transactionHash: result.transactionHash || '',
+              status: result.status.status,
+              blockNumber: result.status.blockNumber,
+              gasUsed: result.status.gasUsed,
+              itemCount: result.itemCount,
+              error: result.status.error,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          logger.success('API submission process completed.');
+        } catch (error) {
+          const errorMsg = `Error during API submission: ${error instanceof Error ? error.message : String(error)}`;
+          logger.error(errorMsg);
+          progressTracker.increment('errors');
+          await csvReporterService.logError({
+            propertyCid: 'N/A',
+            dataGroupCid: 'N/A',
+            filePath: options.csvFile,
+            errorMessage: errorMsg,
+            errorPath: 'N/A',
+            timestamp: new Date().toISOString(),
+          });
         }
-        logger.success('All transaction batches submitted successfully.');
-      } catch (error) {
-        const errorMsg = `Error during transaction submission: ${error instanceof Error ? error.message : String(error)}`;
-        logger.error(errorMsg);
-        progressTracker.increment('errors');
-        await csvReporterService.logError({
-          propertyCid: 'N/A',
-          dataGroupCid: 'N/A',
-          filePath: options.csvFile,
-          errorMessage: errorMsg,
-          errorPath: 'N/A',
-          timestamp: new Date().toISOString(),
-        });
+      } else {
+        // Direct blockchain submission mode
+        try {
+          for await (const batchResult of transactionBatcherService.submitAll(
+            dataItemsForTransaction
+          )) {
+            logger.info(
+              `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
+            );
+            submittedTransactionCount++;
+            totalItemsSubmitted += batchResult.itemsSubmitted;
+            progressTracker.increase('processed', batchResult.itemsSubmitted);
+          }
+          logger.success('All transaction batches submitted successfully.');
+        } catch (error) {
+          const errorMsg = `Error during transaction submission: ${error instanceof Error ? error.message : String(error)}`;
+          logger.error(errorMsg);
+          progressTracker.increment('errors');
+          await csvReporterService.logError({
+            propertyCid: 'N/A',
+            dataGroupCid: 'N/A',
+            filePath: options.csvFile,
+            errorMessage: errorMsg,
+            errorPath: 'N/A',
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     } else if (options.dryRun && dataItemsForTransaction.length > 0) {
       logger.info(
@@ -563,6 +823,9 @@ export async function handleSubmitToContract(
 
     // Final summary
     await csvReporterService.finalize();
+    if (transactionStatusReporter) {
+      await transactionStatusReporter.finalize();
+    }
     const finalMetrics = progressTracker.getMetrics();
 
     console.log(chalk.green('\n✅ Contract submission process finished\n'));
@@ -593,6 +856,11 @@ export async function handleSubmitToContract(
     console.log(`  Duration:               ${seconds}s`);
     console.log(`\n  Error report:   ${config.errorCsvPath}`);
     console.log(`  Warning report: ${config.warningCsvPath}`);
+    if (isApiMode) {
+      console.log(
+        `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
+      );
+    }
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
@@ -606,6 +874,9 @@ export async function handleSubmitToContract(
       progressTracker.stop();
     }
     await csvReporterService.finalize();
+    if (transactionStatusReporter) {
+      await transactionStatusReporter.finalize();
+    }
     process.exit(1);
   }
 }
