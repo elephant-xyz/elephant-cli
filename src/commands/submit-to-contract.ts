@@ -7,7 +7,6 @@ import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
-  SUBMIT_CONTRACT_METHODS,
 } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
@@ -17,16 +16,11 @@ import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { UnsignedTransactionJsonService } from '../services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { DataItem } from '../types/contract.types.js';
-import { Wallet, ethers } from 'ethers';
-import { extractHashFromCID } from '../utils/validation.js';
-import { EIP1474Transaction } from '../types/submit.types.js';
+import { Wallet } from 'ethers';
 import { ApiSubmissionService } from '../services/api-submission.service.js';
 import { TransactionStatusService } from '../services/transaction-status.service.js';
 import { TransactionStatusReporterService } from '../services/transaction-status-reporter.service.js';
-import {
-  ApiSubmissionResult,
-  TransactionStatusEntry,
-} from '../types/submit.types.js';
+import { ApiSubmissionResult } from '../types/submit.types.js';
 
 export interface SubmitToContractCommandOptions {
   rpcUrl: string;
@@ -626,7 +620,7 @@ export async function handleSubmitToContract(
             dataItemsForTransaction
           );
 
-          // Generate unsigned transactions
+          // Generate unsigned transactions using the service
           const unsignedTxService = new UnsignedTransactionJsonService(
             'temp-unsigned.json', // Temporary, we won't write to file
             options.contractAddress,
@@ -635,11 +629,13 @@ export async function handleSubmitToContract(
             0
           );
 
-          const provider = new ethers.JsonRpcProvider(options.rpcUrl);
-          const currentNonce = await provider.getTransactionCount(
-            userAddress,
-            'pending'
-          );
+          // Generate all unsigned transactions
+          const unsignedTransactions =
+            await unsignedTxService.generateUnsignedTransactions(
+              batches,
+              options.rpcUrl,
+              userAddress
+            );
 
           const apiResults: ApiSubmissionResult[] = [];
 
@@ -649,105 +645,9 @@ export async function handleSubmitToContract(
           for (let i = 0; i < batches.length; i++) {
             const batch = batches[i];
             try {
-              // Create unsigned transaction for this batch
-              const preparedBatch = batch.map((item: DataItem) => ({
-                propertyHash: extractHashFromCID(
-                  item.propertyCid.startsWith('.')
-                    ? item.propertyCid.substring(1)
-                    : item.propertyCid
-                ),
-                dataGroupHash: extractHashFromCID(
-                  item.dataGroupCID.startsWith('.')
-                    ? item.dataGroupCID.substring(1)
-                    : item.dataGroupCID
-                ),
-                dataHash: extractHashFromCID(
-                  item.dataCID.startsWith('.')
-                    ? item.dataCID.substring(1)
-                    : item.dataCID
-                ),
-              }));
-
-              const contractInterface = new ethers.Interface(
-                SUBMIT_CONTRACT_ABI_FRAGMENTS
-              );
-              const functionData = contractInterface.encodeFunctionData(
-                SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA,
-                [preparedBatch]
-              );
-
-              // Estimate gas
-              let gasLimit: string;
-              try {
-                const gasEstimateParams = [
-                  {
-                    from: userAddress,
-                    to: options.contractAddress,
-                    data: functionData,
-                    value: '0x0',
-                  },
-                  'latest',
-                ];
-
-                const estimatedGasHex = await provider.send(
-                  'eth_estimateGas',
-                  gasEstimateParams
-                );
-                const estimatedGas = BigInt(estimatedGasHex);
-                const gasWithBuffer =
-                  estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.3));
-                gasLimit = `0x${gasWithBuffer.toString(16)}`;
-              } catch (error) {
-                logger.warn(
-                  `Gas estimation failed: ${error instanceof Error ? error.message : String(error)}`
-                );
-                gasLimit = `0x${BigInt(650000).toString(16)}`;
-              }
-
-              // Create unsigned transaction
-              const unsignedTx: EIP1474Transaction = {
-                from: userAddress,
-                to: options.contractAddress,
-                gas: gasLimit,
-                value: '0x0',
-                data: functionData,
-                nonce: `0x${(currentNonce + i).toString(16)}`,
-                type: '0x2',
-              };
-
-              // Set gas pricing
-              if (options.gasPrice === 'auto') {
-                try {
-                  const feeData = await provider.getFeeData();
-                  if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-                    unsignedTx.maxFeePerGas = `0x${feeData.maxFeePerGas.toString(16)}`;
-                    unsignedTx.maxPriorityFeePerGas = `0x${feeData.maxPriorityFeePerGas.toString(16)}`;
-                  } else {
-                    unsignedTx.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-                    unsignedTx.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
-                  }
-                } catch (error) {
-                  unsignedTx.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-                  unsignedTx.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
-                }
-              } else {
-                const gasPrice = ethers.parseUnits(
-                  options.gasPrice.toString(),
-                  'gwei'
-                );
-                unsignedTx.maxFeePerGas = `0x${gasPrice.toString(16)}`;
-                const priorityFee = BigInt(
-                  Math.max(
-                    Number(gasPrice) * 0.1,
-                    Number(ethers.parseUnits('1', 'gwei'))
-                  )
-                );
-                unsignedTx.maxPriorityFeePerGas = `0x${priorityFee.toString(16)}`;
-              }
-
               // Submit to API
               const apiResponse = await apiSubmissionService.submitTransaction(
-                unsignedTx,
+                unsignedTransactions[i],
                 i
               );
 
