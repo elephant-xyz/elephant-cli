@@ -7,6 +7,8 @@ import {
   DEFAULT_RPC_URL,
   DEFAULT_CONTRACT_ADDRESS,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
+  POLYGON_MAINNET_CHAIN_ID,
+  ZERO_ADDRESS,
 } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
@@ -447,7 +449,7 @@ export async function handleSubmitToContract(
       );
     } else {
       // Generate a dummy address for API mode if none provided
-      userAddress = '0x0000000000000000000000000000000000000000';
+      userAddress = ZERO_ADDRESS;
       logger.warn(
         'No address provided for API mode, using zero address for unsigned transactions'
       );
@@ -629,7 +631,7 @@ export async function handleSubmitToContract(
               'temp-unsigned.json', // Temporary, we won't write to file
               options.contractAddress,
               options.gasPrice,
-              137, // Polygon mainnet
+              POLYGON_MAINNET_CHAIN_ID,
               0
             );
 

@@ -7,6 +7,11 @@ import { EIP1474Transaction } from '../types/submit.types.js';
 import {
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
   SUBMIT_CONTRACT_METHODS,
+  GAS_ESTIMATION_BUFFER,
+  FALLBACK_GAS_LIMIT,
+  DEFAULT_MAX_FEE_PER_GAS_GWEI,
+  DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI,
+  MIN_PRIORITY_FEE_GWEI,
 } from '../config/constants.js';
 import { extractHashFromCID } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
@@ -15,20 +20,18 @@ export class UnsignedTransactionJsonService {
   private jsonPath: string;
   private contractAddress: string;
   private gasPrice: string | number;
-  private chainId: number;
   private startingNonce: number;
 
   constructor(
     jsonPath: string,
     contractAddress: string,
     gasPrice: string | number = 'auto',
-    chainId: number = 137, // Polygon mainnet
+    _chainId: number = 137, // Polygon mainnet - kept for backward compatibility but not used
     startingNonce: number = 0
   ) {
     this.jsonPath = jsonPath;
     this.contractAddress = contractAddress;
     this.gasPrice = gasPrice;
-    this.chainId = chainId;
     this.startingNonce = startingNonce;
   }
 
@@ -99,20 +102,21 @@ export class UnsignedTransactionJsonService {
       );
       const estimatedGas = BigInt(estimatedGasHex);
 
-      // Add 30% buffer for safety
+      // Add buffer for safety
       const gasWithBuffer =
-        estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.3));
+        estimatedGas +
+        BigInt(Math.floor(Number(estimatedGas) * GAS_ESTIMATION_BUFFER));
       gasLimit = `0x${gasWithBuffer.toString(16)}`;
 
       logger.technical(
-        `Gas estimated: ${estimatedGas}, with 30% buffer: ${gasWithBuffer}`
+        `Gas estimated: ${estimatedGas}, with ${GAS_ESTIMATION_BUFFER * 100}% buffer: ${gasWithBuffer}`
       );
     } catch (error) {
       logger.warn(
         `Gas estimation via eth_estimateGas failed: ${error instanceof Error ? error.message : String(error)}`
       );
       // Fallback to reasonable default
-      gasLimit = `0x${BigInt(650000).toString(16)}`; // 650k gas as fallback with buffer included
+      gasLimit = `0x${BigInt(FALLBACK_GAS_LIMIT).toString(16)}`; // Fallback gas limit with buffer included
     }
 
     // Create EIP-1474 compliant transaction object
@@ -137,24 +141,27 @@ export class UnsignedTransactionJsonService {
           transaction.maxPriorityFeePerGas = `0x${feeData.maxPriorityFeePerGas.toString(16)}`;
         } else {
           // Fallback to reasonable defaults if provider doesn't support EIP-1559
-          transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-          transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+          transaction.maxFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
+          transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
         }
       } catch (error) {
         logger.warn(
           `Failed to fetch fee data from provider: ${error instanceof Error ? error.message : String(error)}`
         );
         // Fallback to defaults
-        transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-        transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+        transaction.maxFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
+        transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
       }
     } else {
       // Convert numeric gas price to EIP-1559 format
       const gasPrice = ethers.parseUnits(this.gasPrice.toString(), 'gwei');
       transaction.maxFeePerGas = `0x${gasPrice.toString(16)}`;
-      // Use 10% of maxFeePerGas as priority fee, minimum 1 gwei
+      // Use 10% of maxFeePerGas as priority fee, minimum MIN_PRIORITY_FEE_GWEI
       const priorityFee = BigInt(
-        Math.max(Number(gasPrice) * 0.1, Number(ethers.parseUnits('1', 'gwei')))
+        Math.max(
+          Number(gasPrice) * 0.1,
+          Number(ethers.parseUnits(MIN_PRIORITY_FEE_GWEI, 'gwei'))
+        )
       );
       transaction.maxPriorityFeePerGas = `0x${priorityFee.toString(16)}`;
     }

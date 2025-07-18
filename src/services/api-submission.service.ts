@@ -4,9 +4,9 @@ import {
   ApiSubmissionResponse,
 } from '../types/submit.types.js';
 import { logger } from '../utils/logger.js';
+import { ApiError, NetworkError } from '../utils/errors.js';
 
 export class ApiSubmissionService {
-  private domain: string;
   private apiKey: string;
   private oracleKeyId: string;
   private baseUrl: string;
@@ -14,7 +14,6 @@ export class ApiSubmissionService {
   private retryDelay: number = 1000; // 1 second
 
   constructor(domain: string, apiKey: string, oracleKeyId: string) {
-    this.domain = domain;
     this.apiKey = apiKey;
     this.oracleKeyId = oracleKeyId;
 
@@ -66,23 +65,21 @@ export class ApiSubmissionService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          const apiError = new Error(
-            `API request failed with status ${response.status}: ${errorText}`
+          throw new ApiError(
+            `API request failed with status ${response.status}: ${errorText}`,
+            response.status,
+            false // API errors are not retryable
           );
-          // Mark as non-retryable API error
-          (apiError as any).isApiError = true;
-          throw apiError;
         }
 
         const result: ApiSubmissionResponse = await response.json();
 
         if (!result.transaction_hash) {
-          const validationError = new Error(
-            'API response missing transaction_hash'
+          throw new ApiError(
+            'API response missing transaction_hash',
+            undefined,
+            false // Validation errors are not retryable
           );
-          // Mark as non-retryable validation error
-          (validationError as any).isApiError = true;
-          throw validationError;
         }
         logger.success(
           `Batch ${batchIndex + 1} submitted successfully. Transaction hash: ${result.transaction_hash}`
@@ -96,7 +93,7 @@ export class ApiSubmissionService {
         );
 
         // Don't retry API errors (4xx, 5xx responses) or validation errors
-        if ((error as any).isApiError) {
+        if (error instanceof ApiError && !error.isRetryable) {
           throw error;
         }
 
@@ -112,6 +109,6 @@ export class ApiSubmissionService {
       lastError?.message || 'Unknown error'
     }`;
     logger.error(errorMsg);
-    throw new Error(errorMsg);
+    throw new NetworkError(errorMsg, false); // Network errors after all retries are not retryable
   }
 }

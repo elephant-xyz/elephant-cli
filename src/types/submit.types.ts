@@ -113,7 +113,7 @@ export interface ApiSubmissionResult {
 export interface TransactionStatusEntry {
   batchIndex: number;
   transactionHash: string;
-  status: string;
+  status: 'pending' | 'success' | 'failed';
   blockNumber?: number;
   gasUsed?: string;
   itemCount: number;
