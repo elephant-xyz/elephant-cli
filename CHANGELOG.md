@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.3...v1.11.0) (2025-07-18)
+
+
+### Features
+
+* **api:** add centralized API submission mode ([#48](https://github.com/elephant-xyz/elephant-cli/issues/48)) ([68e0bbc](https://github.com/elephant-xyz/elephant-cli/commit/68e0bbc504bf8f9ba054aa6e7532cd57ee7238e9))
+
 ## [1.10.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.2...v1.10.3) (2025-07-18)
 
 
