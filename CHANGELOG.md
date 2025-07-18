@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.0...v1.11.1) (2025-07-18)
+
+
+### Bug Fixes
+
+* update seed CID ([#50](https://github.com/elephant-xyz/elephant-cli/issues/50)) ([788eec9](https://github.com/elephant-xyz/elephant-cli/commit/788eec9d571a87fdd6fea88d9a441e7e782ea558))
+
 # [1.11.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.3...v1.11.0) (2025-07-18)
 
 
