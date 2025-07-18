@@ -16,9 +16,13 @@ npx @elephant-xyz/cli --help
 
 ### Requirements
 
-- Node.js 20.0 or higher
-- Internet connection for blockchain and IPFS access
-- Polygon mainnet access (via RPC)
+To use this tool, the oracle needs to have:
+1.  Node.js 20.0 or higher.
+2.  A custom JSON RPC URL for Polygon (e.g., from Alchemy or Infura).
+3.  An exported Polygon private key (e.g., from MetaMask). For institutional oracles, an API key, domain, and oracle key ID are required.
+4.  A Pinata JWT for IPFS uploads.
+5.  Stable internet access.
+
 
 ## What You Can Do
 
