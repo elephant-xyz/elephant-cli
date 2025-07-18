@@ -1,3 +1,10 @@
+## [1.10.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.2...v1.10.3) (2025-07-18)
+
+
+### Bug Fixes
+
+* **unsigned tx:** produce tx type: 2 and estimate gas before execution ([#47](https://github.com/elephant-xyz/elephant-cli/issues/47)) ([f406273](https://github.com/elephant-xyz/elephant-cli/commit/f40627313650ed7ebb1d361173ad234b44377da9))
+
 ## [1.10.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.1...v1.10.2) (2025-07-17)
 
 
