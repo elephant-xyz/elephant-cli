@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.1...v1.12.0) (2025-07-18)
+
+
+### Features
+
+* optional eligibility check ([#51](https://github.com/elephant-xyz/elephant-cli/issues/51)) ([2fa6dc9](https://github.com/elephant-xyz/elephant-cli/commit/2fa6dc91c64239994f7e00a10534fa053a75ed62))
+
 ## [1.11.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.0...v1.11.1) (2025-07-18)
 
 
