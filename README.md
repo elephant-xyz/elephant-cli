@@ -16,9 +16,13 @@ npx @elephant-xyz/cli --help
 
 ### Requirements
 
-- Node.js 20.0 or higher
-- Internet connection for blockchain and IPFS access
-- Polygon mainnet access (via RPC)
+To use this tool, the oracle needs to have:
+
+1.  Node.js 20.0 or higher.
+2.  A custom JSON RPC URL for Polygon (e.g., from Alchemy or Infura).
+3.  An exported Polygon private key (e.g., from MetaMask). For institutional oracles, an API key, domain, and oracle key ID are required.
+4.  A Pinata JWT for IPFS uploads.
+5.  Stable internet access.
 
 ## What You Can Do
 
@@ -47,15 +51,16 @@ your-data/
 - Directory names must be root CIDs (a.k.a. seed CIDs) OR contain a seed datagroup file
 - File names must be schema CIDs
 - Files must contain valid JSON data
+- Schema CIDs must point to valid data group schemas (see [Data Group Schema Requirements](#data-group-schema-requirements))
 
 **Seed Datagroup Support:**
 
-Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json`
+Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be.json`
 
 ```
 your-data/
 ├── property_data_set_1/          # Any name (not a CID)
-│   ├── bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy.json  # Seed file
+│   ├── bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be.json  # Seed file
 │   └── other_schema_cid.json     # Other data files
 ├── bafybe.../                    # Traditional CID directory
 │   └── schema_cid.json           # Data file
@@ -63,9 +68,73 @@ your-data/
 ```
 
 When using seed datagroup directories:
+
 - The seed file is uploaded first to IPFS
 - The CID of the uploaded seed file becomes the propertyCid for ALL files in that directory
 - This allows flexible directory naming while maintaining traceability
+
+### Data Group Schema Requirements
+
+All schema CIDs used as file names must point to valid **data group schemas**. A data group schema is a JSON schema that describes an object with exactly two properties:
+
+1. **`label`** - Can be any valid JSON schema definition
+2. **`relationships`** - Can be any valid JSON schema definition
+
+**Valid Data Group Schema Example:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "description": "Human-readable label for the data group"
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "target": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["label", "relationships"]
+}
+```
+
+**Invalid Examples:**
+
+```json
+// ❌ Wrong: Missing relationships property
+{
+  "type": "object",
+  "properties": {
+    "label": { "type": "string" }
+  }
+}
+
+// ❌ Wrong: Has extra properties
+{
+  "type": "object",
+  "properties": {
+    "label": { "type": "string" },
+    "relationships": { "type": "array" },
+    "extra": { "type": "string" }
+  }
+}
+
+// ❌ Wrong: Not describing an object
+{
+  "type": "string"
+}
+```
+
+**Where to Find Valid Schemas:**
+
+Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid data group schemas for your use case.
 
 ### Step 2: Get Your Credentials
 
@@ -235,6 +304,28 @@ elephant-cli submit-to-contract upload-results.csv \
   --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0
 ```
 
+### Centralized API Submission
+
+Submit data through a centralized API instead of directly to the blockchain:
+
+```bash
+# Submit via API (no private key needed)
+elephant-cli submit-to-contract upload-results.csv \
+  --domain oracles.staircaseapi.com \
+  --api-key YOUR_API_KEY \
+  --oracle-key-id YOUR_ORACLE_KEY_ID \
+  --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0
+```
+
+This mode:
+
+- Generates unsigned transactions locally
+- Submits them to the API for signing
+- Monitors transaction confirmation
+- Reports status in `transaction-status.csv`
+
+See [API Submission Documentation](./docs/API-SUBMISSION.md) for details.
+
 **What this does:**
 
 - Creates a JSON file with EIP-1474 compatible unsigned transactions
@@ -262,6 +353,7 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 ```
 
 **Use Cases:**
+
 - **Cold Storage**: Generate transactions on an online machine, sign on offline device
 - **Hardware Wallets**: Export transactions for signing with Ledger, Trezor, etc.
 - **Multi-signature**: Prepare transactions for multiple signers
@@ -305,6 +397,12 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 - Check your JSON files match the required schema
 - Ensure file paths exist for IPLD links
 - Review error details in the generated error CSV
+
+**"Schema CID is not a valid data group schema"**
+
+- Verify the schema CID points to a valid data group schema
+- Data group schemas must have exactly two properties: `label` and `relationships`
+- Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid schemas
 
 **"Upload failed"**
 

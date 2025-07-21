@@ -7,6 +7,11 @@ import { EIP1474Transaction } from '../types/submit.types.js';
 import {
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
   SUBMIT_CONTRACT_METHODS,
+  GAS_ESTIMATION_BUFFER,
+  FALLBACK_GAS_LIMIT,
+  DEFAULT_MAX_FEE_PER_GAS_GWEI,
+  DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI,
+  MIN_PRIORITY_FEE_GWEI,
 } from '../config/constants.js';
 import { extractHashFromCID } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
@@ -15,20 +20,18 @@ export class UnsignedTransactionJsonService {
   private jsonPath: string;
   private contractAddress: string;
   private gasPrice: string | number;
-  private chainId: number;
   private startingNonce: number;
 
   constructor(
     jsonPath: string,
     contractAddress: string,
     gasPrice: string | number = 'auto',
-    chainId: number = 137, // Polygon mainnet
+    _chainId: number = 137, // Polygon mainnet - kept for backward compatibility but not used
     startingNonce: number = 0
   ) {
     this.jsonPath = jsonPath;
     this.contractAddress = contractAddress;
     this.gasPrice = gasPrice;
-    this.chainId = chainId;
     this.startingNonce = startingNonce;
   }
 
@@ -65,8 +68,7 @@ export class UnsignedTransactionJsonService {
     batchItems: DataItem[],
     userAddress: string,
     nonce: number,
-    gasLimit: string,
-    provider?: ethers.JsonRpcProvider
+    provider: ethers.JsonRpcProvider
   ): Promise<EIP1474Transaction> {
     const preparedBatch = batchItems.map((item) =>
       this.prepareDataItemForContract(item)
@@ -81,91 +83,136 @@ export class UnsignedTransactionJsonService {
       [preparedBatch]
     );
 
+    // Estimate gas using direct eth_estimateGas RPC call
+    let gasLimit: string;
+    try {
+      const gasEstimateParams = [
+        {
+          from: userAddress,
+          to: this.contractAddress,
+          data: functionData,
+          value: '0x0',
+        },
+        'latest',
+      ];
+
+      const estimatedGasHex = await provider.send(
+        'eth_estimateGas',
+        gasEstimateParams
+      );
+      const estimatedGas = BigInt(estimatedGasHex);
+
+      // Add buffer for safety
+      const gasWithBuffer =
+        estimatedGas +
+        BigInt(Math.floor(Number(estimatedGas) * GAS_ESTIMATION_BUFFER));
+      gasLimit = `0x${gasWithBuffer.toString(16)}`;
+
+      logger.technical(
+        `Gas estimated: ${estimatedGas}, with ${GAS_ESTIMATION_BUFFER * 100}% buffer: ${gasWithBuffer}`
+      );
+    } catch (error) {
+      logger.warn(
+        `Gas estimation via eth_estimateGas failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      // Fallback to reasonable default
+      gasLimit = `0x${BigInt(FALLBACK_GAS_LIMIT).toString(16)}`; // Fallback gas limit with buffer included
+    }
+
     // Create EIP-1474 compliant transaction object
-    // All values must be hex-encoded with 0x prefix
+    // Always use EIP-1559 Type 2 transactions (no legacy support)
     const transaction: EIP1474Transaction = {
       from: userAddress,
       to: this.contractAddress,
-      gas: `0x${BigInt(gasLimit).toString(16)}`,
+      gas: gasLimit,
       value: '0x0',
       data: functionData,
       nonce: `0x${nonce.toString(16)}`,
+      type: '0x2', // Always EIP-1559 Type 2
     };
 
-    // Add gas pricing based on transaction type
+    // Set gas pricing for EIP-1559 transaction
     if (this.gasPrice === 'auto') {
-      // EIP-1559 transaction (type 2)
-      transaction.type = '0x2';
-
-      // Fetch dynamic fee data from provider if available
-      if (provider) {
-        try {
-          const feeData = await provider.getFeeData();
-          if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-            transaction.maxFeePerGas = `0x${feeData.maxFeePerGas.toString(16)}`;
-            transaction.maxPriorityFeePerGas = `0x${feeData.maxPriorityFeePerGas.toString(16)}`;
-          } else {
-            // Fallback to reasonable defaults if provider doesn't support EIP-1559
-            transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-            transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
-          }
-        } catch (error) {
-          logger.warn(
-            `Failed to fetch fee data from provider: ${error instanceof Error ? error.message : String(error)}`
-          );
-          // Fallback to defaults
-          transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-          transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+      // Fetch dynamic fee data from provider
+      try {
+        const feeData = await provider.getFeeData();
+        if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+          transaction.maxFeePerGas = `0x${feeData.maxFeePerGas.toString(16)}`;
+          transaction.maxPriorityFeePerGas = `0x${feeData.maxPriorityFeePerGas.toString(16)}`;
+        } else {
+          // Fallback to reasonable defaults if provider doesn't support EIP-1559
+          transaction.maxFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
+          transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
         }
-      } else {
-        // Fallback to defaults if no provider is available
-        transaction.maxFeePerGas = `0x${ethers.parseUnits('50', 'gwei').toString(16)}`;
-        transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits('2', 'gwei').toString(16)}`;
+      } catch (error) {
+        logger.warn(
+          `Failed to fetch fee data from provider: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Fallback to defaults
+        transaction.maxFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
+        transaction.maxPriorityFeePerGas = `0x${ethers.parseUnits(DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI, 'gwei').toString(16)}`;
       }
     } else {
-      // Legacy transaction (type 0)
-      transaction.type = '0x0';
-      transaction.gasPrice = `0x${ethers.parseUnits(this.gasPrice.toString(), 'gwei').toString(16)}`;
+      // Convert numeric gas price to EIP-1559 format
+      const gasPrice = ethers.parseUnits(this.gasPrice.toString(), 'gwei');
+      transaction.maxFeePerGas = `0x${gasPrice.toString(16)}`;
+      // Use 10% of maxFeePerGas as priority fee, minimum MIN_PRIORITY_FEE_GWEI
+      const priorityFee = BigInt(
+        Math.max(
+          Number(gasPrice) * 0.1,
+          Number(ethers.parseUnits(MIN_PRIORITY_FEE_GWEI, 'gwei'))
+        )
+      );
+      transaction.maxPriorityFeePerGas = `0x${priorityFee.toString(16)}`;
     }
 
     return transaction;
   }
 
   /**
-   * Estimates gas for a batch of items
+   * Generates unsigned transactions for batches of items and returns them
    */
-  public async estimateGasForBatch(
-    batchItems: DataItem[],
-    rpcUrl: string
-  ): Promise<string> {
+  public async generateUnsignedTransactions(
+    batches: DataItem[][],
+    rpcUrl: string,
+    userAddress: string
+  ): Promise<EIP1474Transaction[]> {
+    // Create provider - required for gas estimation and nonce fetching
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+    // Get starting nonce from provider
+    let currentNonce = this.startingNonce;
     try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const contract = new ethers.Contract(
-        this.contractAddress,
-        SUBMIT_CONTRACT_ABI_FRAGMENTS,
+      currentNonce = await provider.getTransactionCount(userAddress, 'pending');
+      logger.info(`Starting nonce from provider: ${currentNonce}`);
+    } catch (error) {
+      logger.warn(
+        `Failed to get nonce from provider, using default: ${currentNonce}`
+      );
+      // Continue with default nonce but keep provider for gas estimation
+    }
+
+    const transactions: EIP1474Transaction[] = [];
+
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      logger.info(
+        `Generating unsigned transaction for batch ${i + 1} of ${batches.length} (${batch.length} items)`
+      );
+
+      // Create EIP-1474 compliant transaction (gas estimation is now internal)
+      const transaction = await this.createEIP1474Transaction(
+        batch,
+        userAddress,
+        currentNonce + i,
         provider
       );
 
-      const preparedBatch = batchItems.map((item) =>
-        this.prepareDataItemForContract(item)
-      );
-
-      const estimatedGas =
-        await contract[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA].estimateGas(
-          preparedBatch
-        );
-
-      // Add 20% buffer
-      const gasWithBuffer =
-        estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2));
-      return gasWithBuffer.toString();
-    } catch (error) {
-      logger.warn(
-        `Gas estimation failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-      // Return a reasonable default if estimation fails
-      return '500000'; // 500k gas as fallback
+      transactions.push(transaction);
     }
+
+    return transactions;
   }
 
   /**
@@ -180,48 +227,12 @@ export class UnsignedTransactionJsonService {
       // Ensure directory exists
       await mkdir(dirname(this.jsonPath), { recursive: true });
 
-      // Get starting nonce from provider if we have an RPC URL
-      let currentNonce = this.startingNonce;
-      let provider: ethers.JsonRpcProvider | undefined;
-      if (rpcUrl && userAddress) {
-        try {
-          provider = new ethers.JsonRpcProvider(rpcUrl);
-          currentNonce = await provider.getTransactionCount(
-            userAddress,
-            'pending'
-          );
-          logger.info(`Starting nonce from provider: ${currentNonce}`);
-        } catch (error) {
-          logger.warn(
-            `Failed to get nonce from provider, using default: ${currentNonce}`
-          );
-          provider = undefined; // Reset provider on error
-        }
-      }
-
-      const transactions: EIP1474Transaction[] = [];
-
-      // Process each batch
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-        logger.info(
-          `Generating unsigned transaction for batch ${i + 1} of ${batches.length} (${batch.length} items)`
-        );
-
-        // Estimate gas for this batch
-        const gasLimit = await this.estimateGasForBatch(batch, rpcUrl);
-
-        // Create EIP-1474 compliant transaction
-        const transaction = await this.createEIP1474Transaction(
-          batch,
-          userAddress,
-          currentNonce + i,
-          gasLimit,
-          provider
-        );
-
-        transactions.push(transaction);
-      }
+      // Generate the transactions
+      const transactions = await this.generateUnsignedTransactions(
+        batches,
+        rpcUrl,
+        userAddress
+      );
 
       // Write JSON file
       const jsonOutput = JSON.stringify(transactions, null, 2);

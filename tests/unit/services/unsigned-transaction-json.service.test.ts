@@ -26,6 +26,11 @@ vi.mock('ethers', async () => {
 
   const mockProvider = {
     getTransactionCount: vi.fn().mockResolvedValue(42),
+    send: vi.fn().mockResolvedValue('0x493e0'), // 300000 in hex
+    getFeeData: vi.fn().mockResolvedValue({
+      maxFeePerGas: BigInt('50000000000'), // 50 gwei
+      maxPriorityFeePerGas: BigInt('2000000000'), // 2 gwei
+    }),
   };
 
   const mockInterface = {
@@ -91,7 +96,7 @@ describe('UnsignedTransactionJsonService', () => {
   });
 
   describe('generateUnsignedTransactionsJson', () => {
-    it('should generate JSON with unsigned transactions for legacy gas pricing', async () => {
+    it('should generate JSON with unsigned transactions for numeric gas pricing (converted to EIP-1559)', async () => {
       const testData: DataItem[] = [
         {
           propertyCid: 'QmPropertyCid1',
@@ -131,10 +136,10 @@ describe('UnsignedTransactionJsonService', () => {
       expect(transaction.value).toBe('0x0');
       expect(transaction.data).toMatch(/^0x[a-fA-F0-9]+$/); // encoded function data
       expect(transaction.nonce).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded nonce
-      expect(transaction.type).toBe('0x0'); // legacy transaction
-      expect(transaction.gasPrice).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded gas price
-      expect(transaction.maxFeePerGas).toBeUndefined();
-      expect(transaction.maxPriorityFeePerGas).toBeUndefined();
+      expect(transaction.type).toBe('0x2'); // Always EIP-1559 transaction
+      expect(transaction.gasPrice).toBeUndefined(); // No gasPrice for EIP-1559
+      expect(transaction.maxFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded max fee
+      expect(transaction.maxPriorityFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded priority fee
     });
 
     it('should generate JSON with unsigned transactions for auto gas pricing (EIP-1559)', async () => {
@@ -264,9 +269,39 @@ describe('UnsignedTransactionJsonService', () => {
     });
   });
 
-  describe('estimateGasForBatch', () => {
-    it('should estimate gas and add buffer', async () => {
-      // Create a service that can properly use mocked ethers
+  describe('gas estimation behavior', () => {
+    it('should use eth_estimateGas with 30% buffer when estimation succeeds', async () => {
+      const testData: DataItem[] = [
+        {
+          propertyCid: 'QmPropertyCid1',
+          dataGroupCID: 'QmDataGroupCid1',
+          dataCID: 'QmDataCid1',
+        },
+      ];
+
+      const batches = [testData];
+
+      await service.generateUnsignedTransactionsJson(
+        batches,
+        rpcUrl,
+        userAddress
+      );
+
+      const jsonContent = await readFile(jsonPath, 'utf-8');
+      const transactions = JSON.parse(jsonContent);
+      const transaction = transactions[0];
+
+      // The actual gas limit should be a hex-encoded value
+      expect(transaction.gas).toMatch(/^0x[a-fA-F0-9]+$/);
+
+      // Convert back to decimal to verify it's reasonable
+      const gasLimitDecimal = parseInt(transaction.gas, 16);
+      expect(gasLimitDecimal).toBeGreaterThan(300000); // Should be higher than base estimate
+      expect(gasLimitDecimal).toBeLessThan(1000000); // Should be reasonable upper bound
+    });
+
+    it('should use fallback gas when estimation fails', async () => {
+      // Create service with a provider that will fail gas estimation
       const testService = new UnsignedTransactionJsonService(
         jsonPath,
         contractAddress,
@@ -275,9 +310,6 @@ describe('UnsignedTransactionJsonService', () => {
         0
       );
 
-      // Mock the estimation to return the expected value
-      vi.spyOn(testService, 'estimateGasForBatch').mockResolvedValue('360000');
-
       const testData: DataItem[] = [
         {
           propertyCid: 'QmPropertyCid1',
@@ -286,27 +318,21 @@ describe('UnsignedTransactionJsonService', () => {
         },
       ];
 
-      const gasLimit = await testService.estimateGasForBatch(testData, rpcUrl);
+      const batches = [testData];
 
-      expect(gasLimit).toBe('360000'); // 300000 + 20% = 360000
-    });
-
-    it('should return fallback gas limit on estimation failure', async () => {
-      const testData: DataItem[] = [
-        {
-          propertyCid: 'QmPropertyCid1',
-          dataGroupCID: 'QmDataGroupCid1',
-          dataCID: 'QmDataCid1',
-        },
-      ];
-
-      // The actual implementation will return fallback gas limit due to invalid RPC URL
-      const gasLimit = await service.estimateGasForBatch(
-        testData,
-        'invalid-url'
+      // Use invalid RPC URL to trigger fallback
+      await testService.generateUnsignedTransactionsJson(
+        batches,
+        'invalid-rpc-url',
+        userAddress
       );
 
-      expect(gasLimit).toBe('500000'); // fallback value
+      const jsonContent = await readFile(jsonPath, 'utf-8');
+      const transactions = JSON.parse(jsonContent);
+      const transaction = transactions[0];
+
+      // Should use fallback gas limit of 650000 (0x9eb10)
+      expect(transaction.gas).toBe('0x9eb10');
     });
   });
 });

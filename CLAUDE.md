@@ -83,10 +83,11 @@ This command:
 1. Validates file structure in the input directory
 2. Confirms file assignments to the user
 3. Uses filenames as Schema CIDs to validate JSON data
-4. Handles seed datagroup processing (uploads seed files first to get their CIDs)
-5. Canonicalizes validated data
-6. Uploads canonicalized files to IPFS via Pinata
-7. Generates a CSV file with upload results
+4. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+5. Handles seed datagroup processing (uploads seed files first to get their CIDs)
+6. Canonicalizes validated data
+7. Uploads canonicalized files to IPFS via Pinata
+8. Generates a CSV file with upload results
 
 ### submit-to-contract Command
 

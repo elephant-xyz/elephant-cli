@@ -1,3 +1,52 @@
+# [1.12.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.1...v1.12.0) (2025-07-18)
+
+
+### Features
+
+* optional eligibility check ([#51](https://github.com/elephant-xyz/elephant-cli/issues/51)) ([2fa6dc9](https://github.com/elephant-xyz/elephant-cli/commit/2fa6dc91c64239994f7e00a10534fa053a75ed62))
+
+## [1.11.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.0...v1.11.1) (2025-07-18)
+
+
+### Bug Fixes
+
+* update seed CID ([#50](https://github.com/elephant-xyz/elephant-cli/issues/50)) ([788eec9](https://github.com/elephant-xyz/elephant-cli/commit/788eec9d571a87fdd6fea88d9a441e7e782ea558))
+
+# [1.11.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.3...v1.11.0) (2025-07-18)
+
+
+### Features
+
+* **api:** add centralized API submission mode ([#48](https://github.com/elephant-xyz/elephant-cli/issues/48)) ([68e0bbc](https://github.com/elephant-xyz/elephant-cli/commit/68e0bbc504bf8f9ba054aa6e7532cd57ee7238e9))
+
+## [1.10.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.2...v1.10.3) (2025-07-18)
+
+
+### Bug Fixes
+
+* **unsigned tx:** produce tx type: 2 and estimate gas before execution ([#47](https://github.com/elephant-xyz/elephant-cli/issues/47)) ([f406273](https://github.com/elephant-xyz/elephant-cli/commit/f40627313650ed7ebb1d361173ad234b44377da9))
+
+## [1.10.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.1...v1.10.2) (2025-07-17)
+
+
+### Bug Fixes
+
+* **constants:** update schema CID value ([#46](https://github.com/elephant-xyz/elephant-cli/issues/46)) ([ee9235a](https://github.com/elephant-xyz/elephant-cli/commit/ee9235aaa3ffea86f317af59eef879de23fd9070))
+
+## [1.10.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.10.0...v1.10.1) (2025-07-16)
+
+
+### Bug Fixes
+
+* **constants:** update schema CID value ([#45](https://github.com/elephant-xyz/elephant-cli/issues/45)) ([a444a2c](https://github.com/elephant-xyz/elephant-cli/commit/a444a2cdc193c0023ae024c2b6e2ce0a7804225b))
+
+# [1.10.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.9.0...v1.10.0) (2025-07-16)
+
+
+### Features
+
+* **validate:** enforce data group schema checks ([#44](https://github.com/elephant-xyz/elephant-cli/issues/44)) ([9400425](https://github.com/elephant-xyz/elephant-cli/commit/9400425c0be106cdde4d1c394b215aa41bd38345))
+
 # [1.9.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.8.4...v1.9.0) (2025-07-14)
 
 

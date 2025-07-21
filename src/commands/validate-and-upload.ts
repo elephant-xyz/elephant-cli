@@ -22,6 +22,58 @@ import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
+function validateDataGroupSchema(schema: any): {
+  valid: boolean;
+  error?: string;
+} {
+  if (!schema || typeof schema !== 'object') {
+    return {
+      valid: false,
+      error: 'Schema must be a valid JSON object',
+    };
+  }
+
+  if (schema.type !== 'object') {
+    return {
+      valid: false,
+      error: 'Data group schema must describe an object (type: "object")',
+    };
+  }
+
+  if (!schema.properties || typeof schema.properties !== 'object') {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "properties" object',
+    };
+  }
+
+  const properties = schema.properties;
+
+  if (!properties.label) {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "label" property',
+    };
+  }
+
+  if (!properties.relationships) {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "relationships" property',
+    };
+  }
+
+  if (Object.keys(properties).length !== 2) {
+    return {
+      valid: false,
+      error:
+        'Data group schema must have exactly 2 properties: "label" and "relationships"',
+    };
+  }
+
+  return { valid: true };
+}
+
 export interface ValidateAndUploadCommandOptions {
   pinataJwt?: string;
   inputDir: string;
@@ -725,6 +777,22 @@ async function processFileAndGetUploadPromise(
     const schema = await services.schemaCacheService.getSchema(schemaCid);
     if (!schema) {
       const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
+      await services.csvReporterService.logError({
+        propertyCid: fileEntry.propertyCid,
+        dataGroupCid: fileEntry.dataGroupCid,
+        filePath: fileEntry.filePath,
+        errorPath: 'root',
+        errorMessage: error,
+        timestamp: new Date().toISOString(),
+      });
+      services.progressTracker.increment('errors');
+      return;
+    }
+
+    // Validate that the schema is a valid data group schema
+    const schemaValidation = validateDataGroupSchema(schema);
+    if (!schemaValidation.valid) {
+      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
       await services.csvReporterService.logError({
         propertyCid: fileEntry.propertyCid,
         dataGroupCid: fileEntry.dataGroupCid,

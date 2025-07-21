@@ -22,7 +22,18 @@ export const PINATA_GATEWAY_BASE_URL = 'https://gateway.pinata.cloud/ipfs/';
 
 // Seed datagroup schema CID
 export const SEED_DATAGROUP_SCHEMA_CID =
-  'bafkreieyzdh647glz5gtzewydfqe42cfs2p3veuipxgc7qmqvcpx6rvnoy';
+  'bafkreicejtlqsmjzaz7wo2rfp7wdfihuayyl3x342z3evr46t6qym4h6be';
+
+// Blockchain constants
+export const POLYGON_MAINNET_CHAIN_ID = 137;
+export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+// Gas estimation constants
+export const GAS_ESTIMATION_BUFFER = 0.3; // 30% buffer
+export const FALLBACK_GAS_LIMIT = 650000;
+export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '50';
+export const DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI = '2';
+export const MIN_PRIORITY_FEE_GWEI = '1';
 
 // Smart contract method ABIs for submit functionality
 export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
