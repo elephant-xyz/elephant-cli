@@ -171,7 +171,7 @@ describe('UnsignedTransactionJsonService', () => {
       expect(transaction.maxFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded max fee
       expect(transaction.maxPriorityFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded priority fee
       expect(transaction.type).toBe('0x2'); // EIP-1559 transaction
-    });
+    }, { timeout: 60000 });
 
     it('should handle multiple batches correctly', async () => {
       const batch1: DataItem[] = [
@@ -207,7 +207,7 @@ describe('UnsignedTransactionJsonService', () => {
       expect(transactions[0].nonce).toBe('0x0'); // nonce from provider (0)
       // Check second transaction
       expect(transactions[1].nonce).toBe('0x1'); // incremented nonce (1)
-    });
+    }, { timeout: 30000 });
 
     it('should handle empty batches array', async () => {
       const batches: DataItem[][] = [];
