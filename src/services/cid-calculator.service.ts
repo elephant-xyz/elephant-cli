@@ -5,6 +5,7 @@ import { base32 } from 'multiformats/bases/base32';
 import * as dagPB from '@ipld/dag-pb';
 import { UnixFS } from 'ipfs-unixfs';
 import * as dagJSON from '@ipld/dag-json';
+import * as raw from 'multiformats/codecs/raw';
 
 export class CidCalculatorService {
   constructor() {}
@@ -178,5 +179,31 @@ export class CidCalculatorService {
     }
 
     return false;
+  }
+
+  /**
+   * Calculate CID v1 for raw binary data (e.g., images)
+   * Uses raw codec (0x55) instead of UnixFS
+   */
+  async calculateCidV1ForRawData(data: Buffer): Promise<string> {
+    try {
+      // Validate input
+      if (!data || !Buffer.isBuffer(data)) {
+        throw new Error('Invalid input: data must be a valid Buffer');
+      }
+
+      // Calculate SHA-256 hash of raw data
+      const hash = await sha256.digest(data);
+
+      // Create CID v1 with raw codec (0x55)
+      const cid = CID.create(1, raw.code, hash);
+
+      // Return base32 string (standard for CID v1)
+      return cid.toString(base32);
+    } catch (error) {
+      throw new Error(
+        `Failed to calculate raw CID v1: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }

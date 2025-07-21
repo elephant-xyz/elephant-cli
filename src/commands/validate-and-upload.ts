@@ -767,7 +767,7 @@ async function processFileAndGetUploadPromise(
 
     // Check if data contains file path links and convert them to IPLD format
     let dataToUpload = jsonData;
-    if (services.ipldConverterService.hasIPLDLinks(jsonData)) {
+    if (services.ipldConverterService.hasIPLDLinks(jsonData, schema)) {
       logger.debug(
         `Converting file path links to IPLD format for ${fileEntry.filePath}`
       );
@@ -775,7 +775,8 @@ async function processFileAndGetUploadPromise(
         const conversionResult =
           await services.ipldConverterService.convertToIPLD(
             jsonData,
-            fileEntry.filePath
+            fileEntry.filePath,
+            schema
           );
         dataToUpload = conversionResult.convertedData;
 

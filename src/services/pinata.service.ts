@@ -1,6 +1,7 @@
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
+import path from 'path';
 
 export interface PinMetadata {
   name?: string;
@@ -27,14 +28,20 @@ export class PinataService {
   }
 
   private async processUpload(
-    fileToProcess: ProcessedFile
+    fileToProcess: ProcessedFile & { binaryData?: Buffer; metadata?: any }
   ): Promise<UploadResult> {
     logger.debug(
       `Processing upload for ${fileToProcess.filePath} (CID: ${fileToProcess.calculatedCid})`
     );
     try {
+      // Determine if this is a binary file (e.g., image)
+      const isBinary = fileToProcess.binaryData !== undefined;
+      const fileExtension = isBinary && fileToProcess.metadata?.isImage 
+        ? path.extname(fileToProcess.filePath)
+        : '.json';
+      
       const metadata: PinMetadata = {
-        name: `${fileToProcess.dataGroupCid}.json`,
+        name: `${fileToProcess.dataGroupCid}${fileExtension}`,
         keyvalues: {
           propertyCid: fileToProcess.propertyCid,
           dataGroupCid: fileToProcess.dataGroupCid,
@@ -42,10 +49,17 @@ export class PinataService {
         },
       };
 
+      const fileBuffer = isBinary 
+        ? fileToProcess.binaryData!
+        : Buffer.from(fileToProcess.canonicalJson);
+      
+      const mimeType = fileToProcess.metadata?.mimeType || 'application/json';
+
       return await this.uploadFileInternal(
-        Buffer.from(fileToProcess.canonicalJson),
+        fileBuffer,
         metadata,
-        fileToProcess
+        fileToProcess,
+        mimeType
       );
     } catch (error) {
       logger.error(
@@ -67,7 +81,8 @@ export class PinataService {
   private async uploadFileInternal(
     fileBuffer: Buffer,
     metadata: PinMetadata,
-    originalFileInfo: ProcessedFile,
+    originalFileInfo: ProcessedFile & { binaryData?: Buffer; metadata?: any },
+    mimeType: string = 'application/json',
     retries: number = 10
   ): Promise<UploadResult> {
     let lastError: Error | undefined;
@@ -77,8 +92,8 @@ export class PinataService {
         logger.debug(`Attempt ${attempt + 1} to upload ${metadata.name}`);
 
         // Use native File and FormData (Node 18+)
-        const file = new File([fileBuffer], metadata.name || 'file.json', {
-          type: 'application/json',
+        const file = new File([fileBuffer], metadata.name || 'file', {
+          type: mimeType,
         });
         const form = new FormData();
         form.append('file', file);
@@ -161,7 +176,7 @@ export class PinataService {
     return this.uploadFileInternal(data, metadata, dummyFileInfo);
   }
 
-  public async uploadBatch(files: ProcessedFile[]): Promise<UploadResult[]> {
+  public async uploadBatch(files: (ProcessedFile & { binaryData?: Buffer; metadata?: any })[]): Promise<UploadResult[]> {
     if (files.length === 0) {
       return [];
     }
