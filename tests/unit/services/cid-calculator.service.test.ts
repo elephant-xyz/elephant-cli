@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
+import { CID } from 'multiformats/cid';
+import * as raw from 'multiformats/codecs/raw';
 
 describe('CidCalculatorService', () => {
   let cidCalculator: CidCalculatorService;
@@ -262,6 +264,84 @@ describe('CidCalculatorService', () => {
 
       expect(cids).toHaveLength(100);
       expect(duration).toBeLessThan(1000); // Should complete within 1 second
+    });
+  });
+
+  describe('calculateCidV1ForRawData', () => {
+    it('should calculate valid CID v1 for raw binary data', async () => {
+      const data = Buffer.from('Hello Raw Data!');
+      const cid = await cidCalculator.calculateCidV1ForRawData(data);
+
+      // CID v1 should be base32 encoded and start with 'bafkrei'
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+
+      // Verify it's a valid CID
+      const parsedCid = CID.parse(cid);
+      expect(parsedCid.version).toBe(1);
+      expect(parsedCid.code).toBe(raw.code); // Should use raw codec (0x55)
+    });
+
+    it('should calculate consistent CID for same raw data', async () => {
+      const data = Buffer.from('Test raw data');
+
+      const cid1 = await cidCalculator.calculateCidV1ForRawData(data);
+      const cid2 = await cidCalculator.calculateCidV1ForRawData(data);
+
+      expect(cid1).toBe(cid2);
+    });
+
+    it('should calculate different CIDs for different raw data', async () => {
+      const data1 = Buffer.from('Image data 1');
+      const data2 = Buffer.from('Image data 2');
+
+      const cid1 = await cidCalculator.calculateCidV1ForRawData(data1);
+      const cid2 = await cidCalculator.calculateCidV1ForRawData(data2);
+
+      expect(cid1).not.toBe(cid2);
+    });
+
+    it('should handle empty buffer', async () => {
+      const data = Buffer.from('');
+      const cid = await cidCalculator.calculateCidV1ForRawData(data);
+
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+    });
+
+    it('should handle large binary data', async () => {
+      // Create a 1MB buffer
+      const data = Buffer.alloc(1024 * 1024);
+      data.fill('a');
+
+      const cid = await cidCalculator.calculateCidV1ForRawData(data);
+
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+    });
+
+    it('should throw error for invalid input', async () => {
+      await expect(
+        cidCalculator.calculateCidV1ForRawData(null as any)
+      ).rejects.toThrow('Invalid input: data must be a valid Buffer');
+
+      await expect(
+        cidCalculator.calculateCidV1ForRawData('not a buffer' as any)
+      ).rejects.toThrow('Invalid input: data must be a valid Buffer');
+    });
+
+    it('should produce different CID than UnixFS format', async () => {
+      const data = Buffer.from('Compare formats');
+
+      const rawCid = await cidCalculator.calculateCidV1ForRawData(data);
+      const unixfsCid = await cidCalculator.calculateCidV1(data);
+
+      // Raw and UnixFS CIDs should be different
+      expect(rawCid).not.toBe(unixfsCid);
+
+      // Raw CID uses raw codec, UnixFS uses dag-pb
+      const rawParsed = CID.parse(rawCid);
+      const unixfsParsed = CID.parse(unixfsCid);
+
+      expect(rawParsed.code).toBe(0x55); // raw codec
+      expect(unixfsParsed.code).toBe(0x70); // dag-pb codec
     });
   });
 });

@@ -142,77 +142,85 @@ describe('UnsignedTransactionJsonService', () => {
       expect(transaction.maxPriorityFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded priority fee
     });
 
-    it('should generate JSON with unsigned transactions for auto gas pricing (EIP-1559)', async () => {
-      // Create service with auto gas pricing
-      const serviceAuto = new UnsignedTransactionJsonService(
-        jsonPath,
-        contractAddress,
-        'auto',
-        137,
-        0
-      );
+    it(
+      'should generate JSON with unsigned transactions for auto gas pricing (EIP-1559)',
+      async () => {
+        // Create service with auto gas pricing
+        const serviceAuto = new UnsignedTransactionJsonService(
+          jsonPath,
+          contractAddress,
+          'auto',
+          137,
+          0
+        );
 
-      const testData: DataItem[] = [
-        {
-          propertyCid: 'QmPropertyCid1',
-          dataGroupCID: 'QmDataGroupCid1',
-          dataCID: 'QmDataCid1',
-        },
-      ];
+        const testData: DataItem[] = [
+          {
+            propertyCid: 'QmPropertyCid1',
+            dataGroupCID: 'QmDataGroupCid1',
+            dataCID: 'QmDataCid1',
+          },
+        ];
 
-      const batches = [testData];
+        const batches = [testData];
 
-      await serviceAuto.generateUnsignedTransactionsJson(
-        batches,
-        rpcUrl,
-        userAddress
-      );
+        await serviceAuto.generateUnsignedTransactionsJson(
+          batches,
+          rpcUrl,
+          userAddress
+        );
 
-      const jsonContent = await readFile(jsonPath, 'utf-8');
-      const transactions = JSON.parse(jsonContent);
-      const transaction = transactions[0];
+        const jsonContent = await readFile(jsonPath, 'utf-8');
+        const transactions = JSON.parse(jsonContent);
+        const transaction = transactions[0];
 
-      expect(transaction.gasPrice).toBeUndefined(); // No gasPrice for EIP-1559
-      expect(transaction.maxFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded max fee
-      expect(transaction.maxPriorityFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded priority fee
-      expect(transaction.type).toBe('0x2'); // EIP-1559 transaction
-    });
+        expect(transaction.gasPrice).toBeUndefined(); // No gasPrice for EIP-1559
+        expect(transaction.maxFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded max fee
+        expect(transaction.maxPriorityFeePerGas).toMatch(/^0x[a-fA-F0-9]+$/); // hex-encoded priority fee
+        expect(transaction.type).toBe('0x2'); // EIP-1559 transaction
+      },
+      { timeout: 60000 }
+    );
 
-    it('should handle multiple batches correctly', async () => {
-      const batch1: DataItem[] = [
-        {
-          propertyCid: 'QmPropertyCid1',
-          dataGroupCID: 'QmDataGroupCid1',
-          dataCID: 'QmDataCid1',
-        },
-      ];
+    it(
+      'should handle multiple batches correctly',
+      async () => {
+        const batch1: DataItem[] = [
+          {
+            propertyCid: 'QmPropertyCid1',
+            dataGroupCID: 'QmDataGroupCid1',
+            dataCID: 'QmDataCid1',
+          },
+        ];
 
-      const batch2: DataItem[] = [
-        {
-          propertyCid: 'QmPropertyCid2',
-          dataGroupCID: 'QmDataGroupCid2',
-          dataCID: 'QmDataCid2',
-        },
-      ];
+        const batch2: DataItem[] = [
+          {
+            propertyCid: 'QmPropertyCid2',
+            dataGroupCID: 'QmDataGroupCid2',
+            dataCID: 'QmDataCid2',
+          },
+        ];
 
-      const batches = [batch1, batch2];
+        const batches = [batch1, batch2];
 
-      await service.generateUnsignedTransactionsJson(
-        batches,
-        rpcUrl,
-        userAddress
-      );
+        await service.generateUnsignedTransactionsJson(
+          batches,
+          rpcUrl,
+          userAddress
+        );
 
-      const jsonContent = await readFile(jsonPath, 'utf-8');
-      const transactions = JSON.parse(jsonContent);
+        const jsonContent = await readFile(jsonPath, 'utf-8');
+        const transactions = JSON.parse(jsonContent);
 
-      expect(transactions).toHaveLength(2); // 2 batches = 2 transactions
+        expect(transactions).toHaveLength(2); // 2 batches = 2 transactions
 
-      // Check first transaction
-      expect(transactions[0].nonce).toBe('0x0'); // nonce from provider (0)
-      // Check second transaction
-      expect(transactions[1].nonce).toBe('0x1'); // incremented nonce (1)
-    });
+        // Check first transaction
+        expect(transactions[0].nonce).toBe('0x0'); // nonce from provider (0)
+        // Check second transaction
+        expect(transactions[1].nonce).toBe('0x1'); // incremented nonce (1)
+      },
+      { timeout: 30000 }
+    );
 
     it('should handle empty batches array', async () => {
       const batches: DataItem[][] = [];

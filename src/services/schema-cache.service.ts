@@ -1,4 +1,5 @@
 import { IPFSService } from './ipfs.service.js';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
 export interface JSONSchema {
   $schema?: string;
@@ -71,6 +72,26 @@ export class SchemaCacheService {
     const cached = this.get(dataGroupCid);
     if (cached) {
       return cached;
+    }
+
+    // Special handling for the seed datagroup schema
+    if (dataGroupCid === SEED_DATAGROUP_SCHEMA_CID) {
+      const seedDatagroupSchema: JSONSchema = {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: {
+          label: {
+            type: 'string',
+          },
+          relationships: {
+            type: 'object',
+          },
+        },
+        required: ['label', 'relationships'],
+        additionalProperties: false,
+      };
+      this.put(dataGroupCid, seedDatagroupSchema);
+      return seedDatagroupSchema;
     }
 
     try {

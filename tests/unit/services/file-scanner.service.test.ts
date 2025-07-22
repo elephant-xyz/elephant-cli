@@ -3,8 +3,8 @@ import { mkdir, writeFile, unlink, rmdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
-import { FileScannerService } from '../../../src/services/file-scanner.service';
-import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants';
+import { FileScannerService } from '../../../src/services/file-scanner.service.js';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 
 describe('FileScannerService', () => {
   let fileScannerService: FileScannerService;

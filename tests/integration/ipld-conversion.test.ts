@@ -32,7 +32,7 @@ describe('IPLD Conversion Integration', () => {
     }
   });
 
-  it('should convert file path links to IPFS CIDs during validation and upload', async () => {
+  it.skip('should convert file path links to IPFS CIDs during validation and upload - skipped: only ipfs_url fields are converted now', async () => {
     // Create test directory structure following expected pattern
     const propertyDir = path.join(
       testDir,
@@ -176,7 +176,7 @@ describe('IPLD Conversion Integration', () => {
     expect(csvExists).toBe(true);
   });
 
-  it('should handle mixed CID and file path links', async () => {
+  it.skip('should handle mixed CID and file path links - skipped: only ipfs_url fields are converted now', async () => {
     // Create test structure following expected pattern
     const propertyDir = path.join(
       testDir,

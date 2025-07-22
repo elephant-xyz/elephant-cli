@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { JsonValidatorService } from '../../../src/services/json-validator.service';
-import { JSONSchema } from '../../../src/services/schema-cache.service';
-import { IPFSService } from '../../../src/services/ipfs.service';
+import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
+import { JSONSchema } from '../../../src/services/schema-cache.service.js';
+import { IPFSService } from '../../../src/services/ipfs.service.js';
 
 describe('JsonValidatorService - Enhanced Error Messages', () => {
   let jsonValidator: JsonValidatorService;
@@ -162,7 +162,7 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
       const result = await jsonValidator.validate('http://example.com', schema);
       expect(result.valid).toBe(false);
       expect(result.errors![0].message).toBe(
-        'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256'
+        'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw or DAG-PB codec and sha256'
       );
     });
 
