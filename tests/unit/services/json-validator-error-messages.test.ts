@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { JsonValidatorService } from '../../../src/services/json-validator.service';
-import { JSONSchema } from '../../../src/services/schema-cache.service';
-import { IPFSService } from '../../../src/services/ipfs.service';
+import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
+import { JSONSchema } from '../../../src/services/schema-cache.service.js';
+import { IPFSService } from '../../../src/services/ipfs.service.js';
 
 describe('JsonValidatorService - Enhanced Error Messages', () => {
   let jsonValidator: JsonValidatorService;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { IPLDConverterService } from '../../../src/services/ipld-converter.service';
-import { PinataService } from '../../../src/services/pinata.service';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service';
+import { IPLDConverterService } from '../../../src/services/ipld-converter.service.js';
+import { PinataService } from '../../../src/services/pinata.service.js';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { promises as fsPromises } from 'fs';
 
 vi.mock('fs', () => ({

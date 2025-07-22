@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { CID } from 'multiformats/cid';
 import * as raw from 'multiformats/codecs/raw';
 
