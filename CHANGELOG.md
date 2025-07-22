@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.12.0...v1.13.0) (2025-07-22)
+
+
+### Features
+
+* Images uploading ([#52](https://github.com/elephant-xyz/elephant-cli/issues/52)) ([059f51c](https://github.com/elephant-xyz/elephant-cli/commit/059f51c5bcb23599de99f7a977ab3f5284e9243c))
+
 # [1.12.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.11.1...v1.12.0) (2025-07-18)
 
 
