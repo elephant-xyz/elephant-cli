@@ -243,8 +243,7 @@ async function scanAndUploadHTMLFiles(
     if (dryRun) {
       // In dry-run mode, simulate uploads
       for (const file of filesToUpload) {
-        const calculatedCid =
-          'dry-run-html-cid-' + file.dirName.substring(0, 8);
+        const calculatedCid = `bafybeig${file.dirName.toLowerCase().substring(7, 20)}htmldryrun`;
         const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
 
         logger.info(`[DRY RUN] Would upload HTML for property ${file.dirName}`);
@@ -1018,15 +1017,22 @@ export async function handleValidateAndUpload(
       writeFileSync(options.outputCsv, csvHeader + csvContent);
       logger.success(`Upload results saved to: ${options.outputCsv}`);
 
-      // Display first 5 property HTML links
-      const uniquePropertyLinks = new Map<string, string>();
+      // Display first 5 unique HTML links (based on the link itself, not property CID)
+      const uniqueHtmlLinks = new Map<
+        string,
+        { propertyCid: string; dirName: string }
+      >();
       for (const record of uploadRecords) {
-        if (record.htmlLink && !uniquePropertyLinks.has(record.propertyCid)) {
-          uniquePropertyLinks.set(record.propertyCid, record.htmlLink);
+        if (record.htmlLink && !uniqueHtmlLinks.has(record.htmlLink)) {
+          const dirName = path.basename(path.dirname(record.filePath));
+          uniqueHtmlLinks.set(record.htmlLink, {
+            propertyCid: record.propertyCid,
+            dirName: dirName,
+          });
         }
       }
 
-      if (uniquePropertyLinks.size > 0) {
+      if (uniqueHtmlLinks.size > 0) {
         console.log(chalk.bold('\n🌐 Property Fact Sheet Links:'));
         console.log(
           chalk.gray(
@@ -1034,19 +1040,19 @@ export async function handleValidateAndUpload(
           )
         );
 
-        const linksArray = Array.from(uniquePropertyLinks.entries());
+        const linksArray = Array.from(uniqueHtmlLinks.entries());
         const displayCount = Math.min(5, linksArray.length);
 
         for (let i = 0; i < displayCount; i++) {
-          const [propertyCid, htmlLink] = linksArray[i];
-          // Display property CID on one line and full URL on the next for better readability
-          console.log(`  ${i + 1}. Property: ${propertyCid}`);
+          const [htmlLink, info] = linksArray[i];
+          // Display directory name and property CID on one line and full URL on the next
+          console.log(`  ${i + 1}. Directory: ${info.dirName}`);
           console.log(`     ${chalk.cyan(htmlLink)}\n`);
         }
 
         if (linksArray.length > 5) {
           console.log(
-            chalk.yellow(`  ... and ${linksArray.length - 5} more properties.`)
+            chalk.yellow(`  ... and ${linksArray.length - 5} more fact sheets.`)
           );
         }
 
