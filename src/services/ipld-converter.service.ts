@@ -72,38 +72,39 @@ export class IPLDConverterService {
     data: any,
     linkedCIDs: string[],
     currentFilePath?: string,
-    schema?: any
+    schema?: any,
+    fieldName?: string
   ): Promise<any> {
-    // Handle string values with ipfs_uri format
-    if (typeof data === 'string' && schema?.format === 'ipfs_uri') {
+    // Handle string values for ipfs_url fields
+    if (typeof data === 'string' && fieldName === 'ipfs_url') {
       // Check if it's already an IPFS URI
       if (data.startsWith('ipfs://')) {
         return data;
       }
       
       // Check if it's a valid CID
-      let isCID = false;
       try {
         CID.parse(data);
-        isCID = true;
+        // It's a CID, convert to IPFS URI
+        return `ipfs://${data}`;
       } catch {
-        // Not a valid CID
+        // Not a CID, treat as local path
       }
       
-      if (isCID) {
-        // Convert bare CID to ipfs:// URI
-        return `ipfs://${data}`;
-      } else {
-        // It's a local file path, upload it
+      // It's a local path, upload as image
+      if (this.isImageFile(data)) {
         const cid = await this.uploadFileAndGetCID(
           data,
           currentFilePath,
           linkedCIDs,
-          true // isIpfsUriFormat
+          true // treat as ipfs_uri format
         );
         linkedCIDs.push(cid);
         return `ipfs://${cid}`;
       }
+      
+      // Not an image file, return as-is
+      return data;
     }
     
     if (!data || typeof data !== 'object') {
@@ -132,25 +133,25 @@ export class IPLDConverterService {
         linkedCIDs.push(pointerValue);
         return data;
       } else {
-        // Check if schema indicates this should be an IPFS URI
+        // Only process image files or files marked with ipfs_uri format
+        // Leave other file references as-is for the validator to resolve
         const isIpfsUriFormat = schema?.format === 'ipfs_uri';
+        const isImageFile = this.isImageFile(pointerValue);
         
-        // It's a file path, upload the file and convert to CID link
-        const cid = await this.uploadFileAndGetCID(
-          pointerValue,
-          currentFilePath,
-          linkedCIDs,
-          isIpfsUriFormat
-        );
-        linkedCIDs.push(cid);
-
-        // If it's an IPFS URI format, return the proper ipfs:// URI
-        if (isIpfsUriFormat) {
+        if (isIpfsUriFormat || isImageFile) {
+          // It's an image file or specifically marked as ipfs_uri, upload and convert
+          const cid = await this.uploadFileAndGetCID(
+            pointerValue,
+            currentFilePath,
+            linkedCIDs,
+            true // treat as ipfs_uri format
+          );
+          linkedCIDs.push(cid);
           return `ipfs://${cid}`;
+        } else {
+          // Not an image file, leave the file reference as-is for validator to resolve
+          return data;
         }
-        
-        // Otherwise, return proper IPLD link format
-        return { '/': cid };
       }
     }
 
@@ -159,7 +160,7 @@ export class IPLDConverterService {
       const itemSchema = schema?.items;
       return Promise.all(
         data.map((item) =>
-          this.processDataForIPLD(item, linkedCIDs, currentFilePath, itemSchema)
+          this.processDataForIPLD(item, linkedCIDs, currentFilePath, itemSchema, fieldName)
         )
       );
     }
@@ -173,7 +174,8 @@ export class IPLDConverterService {
           data[key],
           linkedCIDs,
           currentFilePath,
-          propertySchema
+          propertySchema,
+          key // Pass the field name
         );
       }
     }
@@ -266,7 +268,9 @@ export class IPLDConverterService {
           dataToUpload = await this.processDataForIPLD(
             parsedData,
             linkedCIDs || [],
-            resolvedPath
+            resolvedPath,
+            undefined, // No schema for nested files
+            undefined  // No field name context
           );
         } catch {
           // If not JSON, treat as raw text
@@ -279,10 +283,11 @@ export class IPLDConverterService {
         logger.debug(`Uploading linked file to IPFS: ${resolvedPath}`);
 
         let processedFile: any;
+        let expectedCid: string;
         
         if (uploadMetadata.isImage) {
           // For images, upload as binary with raw codec
-          const expectedCid = await this.cidCalculatorService.calculateCidV1ForRawData(
+          expectedCid = await this.cidCalculatorService.calculateCidV1ForRawData(
             dataToUpload as Buffer
           );
           
@@ -298,7 +303,7 @@ export class IPLDConverterService {
         } else {
           // For JSON/text, use canonical JSON
           const canonicalJson = JSON.stringify(dataToUpload);
-          const expectedCid = await this.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
+          expectedCid = await this.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
           
           processedFile = {
             propertyCid: 'linked-content',
@@ -321,10 +326,12 @@ export class IPLDConverterService {
           uploadResults[0].success &&
           uploadResults[0].cid
         ) {
+          // Use the actual Pinata CID - it's the one that exists on IPFS
+          const cidToReturn = uploadResults[0].cid;
           logger.debug(
-            `Successfully uploaded linked file. CID v1: ${uploadResults[0].cid}`
+            `Successfully uploaded linked file. CID v1: ${cidToReturn}`
           );
-          return uploadResults[0].cid;
+          return cidToReturn;
         } else {
           throw new Error(
             `Failed to upload linked file: ${uploadResults?.[0]?.error || 'Unknown error'}`
@@ -403,10 +410,20 @@ export class IPLDConverterService {
   /**
    * Check if data contains any IPLD links
    */
-  hasIPLDLinks(data: any, schema?: any): boolean {
-    // Check if it's a string with ipfs_uri format that's not already an IPFS URI
-    if (typeof data === 'string' && schema?.format === 'ipfs_uri') {
-      return !data.startsWith('ipfs://');
+  hasIPLDLinks(data: any, schema?: any, fieldName?: string): boolean {
+    // Check if it's a string that might need conversion
+    if (typeof data === 'string') {
+      // Already an IPFS URI, no conversion needed
+      if (data.startsWith('ipfs://')) {
+        return false;
+      }
+      
+      // Check various conditions for when to process
+      return (
+        schema?.format === 'ipfs_uri' || 
+        fieldName === 'ipfs_url' || 
+        this.isImageFile(data)
+      );
     }
     
     if (!data || typeof data !== 'object') {
@@ -431,14 +448,14 @@ export class IPLDConverterService {
     // Check arrays
     if (Array.isArray(data)) {
       const itemSchema = schema?.items;
-      return data.some((item) => this.hasIPLDLinks(item, itemSchema));
+      return data.some((item) => this.hasIPLDLinks(item, itemSchema, fieldName));
     }
 
     // Check object properties
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
         const propertySchema = schema?.properties?.[key];
-        if (this.hasIPLDLinks(data[key], propertySchema)) {
+        if (this.hasIPLDLinks(data[key], propertySchema, key)) {
           return true;
         }
       }

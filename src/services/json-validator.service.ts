@@ -109,16 +109,17 @@ export class JsonValidatorService {
         try {
           const cid = CID.parse(cidString);
 
-          // For CIDv1, check if it uses raw codec (0x55) and sha256
+          // Accept any valid CIDv1 (both raw codec for data and DAG-PB for images)
           if (cid.version === 0) {
             return false;
           }
-          // raw codec is 0x55
-          const isRawCodec = cid.code === raw_codec.code;
+          
+          // Accept raw codec (0x55) or DAG-PB codec (0x70) with sha256
+          const isValidCodec = cid.code === raw_codec.code || cid.code === 0x70; // 0x70 is DAG-PB
           // sha2-256 is 0x12
           const isSha256 = cid.multihash.code === sha256.code;
 
-          return isRawCodec && isSha256;
+          return isValidCodec && isSha256;
         } catch {
           return false;
         }
@@ -185,11 +186,13 @@ export class JsonValidatorService {
    * @param data The data to validate
    * @param schema The schema to validate against
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
+   * @param skipCIDResolution Skip resolving CID pointers (useful when data is already processed)
    */
   async validate(
     data: any,
     schema: JSONSchema,
-    currentFilePath?: string
+    currentFilePath?: string,
+    skipCIDResolution?: boolean
   ): Promise<ValidationResult> {
     let resolvedData;
     try {
@@ -218,12 +221,16 @@ export class JsonValidatorService {
       );
 
       // Resolve CID pointers in data if present, but only where schema allows it
-      resolvedData = await this.resolveCIDPointers(
-        data,
-        currentFilePath,
-        resolvedSchema,
-        cidAllowedMap
-      );
+      if (skipCIDResolution) {
+        resolvedData = data;
+      } else {
+        resolvedData = await this.resolveCIDPointers(
+          data,
+          currentFilePath,
+          resolvedSchema,
+          cidAllowedMap
+        );
+      }
 
       logger.debug(`resolved data type: ${typeof resolvedData}`);
 
@@ -715,7 +722,7 @@ export class JsonValidatorService {
         case 'currency':
           return 'must be a positive number with at most 2 decimal places';
         case 'ipfs_uri':
-          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256';
+          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw or DAG-PB codec and sha256';
         case 'rate_percent':
           return 'must be a percentage rate with exactly 3 decimal places (e.g., "12.345")';
         default:
@@ -805,6 +812,39 @@ export class JsonValidatorService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Resolve file references in data without validating
+   * Used to get fully resolved data for further processing
+   */
+  async resolveData(
+    data: any,
+    schema: JSONSchema,
+    currentFilePath?: string
+  ): Promise<any> {
+    try {
+      // Resolve any CID references in the schema first
+      const cidAllowedMap = new Map<string, boolean>();
+      const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
+        schema,
+        cidAllowedMap
+      );
+
+      // Resolve CID pointers in data
+      const resolvedData = await this.resolveCIDPointers(
+        data,
+        currentFilePath,
+        resolvedSchema,
+        cidAllowedMap
+      );
+
+      return resolvedData;
+    } catch (error) {
+      throw new Error(
+        `Failed to resolve data: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 }

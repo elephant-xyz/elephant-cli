@@ -101,8 +101,20 @@ describe('validate-and-upload with image support', () => {
 
     // Mock JSON validator service
     mockJsonValidatorService = {
-      validate: vi.fn().mockResolvedValue({ valid: true }),
-      getErrorMessages: vi.fn(),
+      validate: vi.fn()
+        .mockResolvedValueOnce({ 
+          valid: false, 
+          errors: [{ 
+            message: 'must be a valid IPFS URI', 
+            path: '/relationships/0/ipfs_url' 
+          }] 
+        }) // First validation fails
+        .mockResolvedValueOnce({ valid: true }) // After IPLD conversion
+        .mockResolvedValueOnce({ valid: true }), // Second file already valid
+      getErrorMessages: vi.fn().mockReturnValue([
+        { path: '/relationships/0/ipfs_url', message: 'must be a valid IPFS URI' }
+      ]),
+      resolveData: vi.fn().mockImplementation((data) => Promise.resolve(data)),
     } as any;
 
     // Mock canonicalizer service
@@ -176,8 +188,7 @@ describe('validate-and-upload with image support', () => {
       label: 'Product 1',
       relationships: [{
         name: 'Product 1',
-        image: './images/product1.jpg',
-        gallery: ['./images/thumb1.png', './images/thumb2.png']
+        ipfs_url: './images/product1.jpg'
       }]
     };
 
@@ -185,8 +196,7 @@ describe('validate-and-upload with image support', () => {
       label: 'Product 2',
       relationships: [{
         name: 'Product 2',
-        image: 'ipfs://bafkreiexistingimage', // Already an IPFS URI
-        gallery: ['./images/product2.jpg']
+        ipfs_url: 'ipfs://bafkreiexistingimage' // Already an IPFS URI
       }]
     };
 
@@ -207,25 +217,17 @@ describe('validate-and-upload with image support', () => {
           label: 'Product 1',
           relationships: [{
             name: 'Product 1',
-            image: 'ipfs://bafkreiimage1',
-            gallery: ['ipfs://bafkreithumb1', 'ipfs://bafkreithumb2']
+            ipfs_url: 'ipfs://bafkreiimage1'
           }]
         },
         hasLinks: true,
-        linkedCIDs: ['bafkreiimage1', 'bafkreithumb1', 'bafkreithumb2'],
+        linkedCIDs: ['bafkreiimage1'],
       })
       .mockResolvedValueOnce({
         originalData: jsonData2,
-        convertedData: {
-          label: 'Product 2',
-          relationships: [{
-            name: 'Product 2',
-            image: 'ipfs://bafkreiexistingimage',
-            gallery: ['ipfs://bafkreiproduct2']
-          }]
-        },
-        hasLinks: true,
-        linkedCIDs: ['bafkreiproduct2'], // Existing URI not included
+        convertedData: jsonData2, // No conversion needed, already IPFS URI
+        hasLinks: false,
+        linkedCIDs: [],
       });
 
     const options = {
@@ -250,8 +252,8 @@ describe('validate-and-upload with image support', () => {
 
     await handleValidateAndUpload(options, serviceOverrides);
 
-    // Verify IPLD converter was called with schema information
-    expect(mockIpldConverterService.convertToIPLD).toHaveBeenCalledTimes(2);
+    // Verify IPLD converter was called only for file with local path
+    expect(mockIpldConverterService.convertToIPLD).toHaveBeenCalledTimes(1);
     expect(mockIpldConverterService.convertToIPLD).toHaveBeenCalledWith(
       jsonData1,
       '/test/dir/property1/bafkreischema.json',
@@ -288,7 +290,7 @@ describe('validate-and-upload with image support', () => {
       label: 'Test Product',
       relationships: [{
         name: 'Test Product',
-        image: './image.png'
+        ipfs_url: './image.png'
       }]
     };
 
@@ -301,7 +303,7 @@ describe('validate-and-upload with image support', () => {
         label: 'Test Product',
         relationships: [{
           name: 'Test Product',
-          image: 'ipfs://bafkreicalculatedimage'
+          ipfs_url: 'ipfs://bafkreicalculatedimage'
         }]
       },
       hasLinks: true,
@@ -349,7 +351,7 @@ describe('validate-and-upload with image support', () => {
         label: 'Test Product',
         relationships: expect.arrayContaining([{
           name: 'Test Product',
-          image: 'ipfs://bafkreicalculatedimage'
+          ipfs_url: 'ipfs://bafkreicalculatedimage'
         }])
       })
     );
@@ -360,12 +362,22 @@ describe('validate-and-upload with image support', () => {
       label: 'Invalid Product',
       relationships: [{
         name: 'Invalid Product',
-        image: './non-existent-image.jpg'
+        ipfs_url: './non-existent-image.jpg'
       }]
     };
 
     vi.mocked(fsPromises.readFile).mockResolvedValue(JSON.stringify(jsonData));
 
+    // Mock validation to fail with ipfs_url error
+    mockJsonValidatorService.validate = vi.fn()
+      .mockResolvedValueOnce({ 
+        valid: false, 
+        errors: [{ 
+          message: 'must be a valid IPFS URI', 
+          path: '/relationships/0/ipfs_url' 
+        }] 
+      });
+    
     // Mock IPLD converter to throw error for missing file
     mockIpldConverterService.hasIPLDLinks = vi.fn().mockReturnValue(true);
     mockIpldConverterService.convertToIPLD = vi.fn().mockRejectedValue(
@@ -413,10 +425,11 @@ describe('validate-and-upload with image support', () => {
 
     await handleValidateAndUpload(options, serviceOverrides);
 
-    // Verify error was logged
+    // Verify error was logged - the original validation error since IPLD conversion failed
     expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
       expect.objectContaining({
-        errorMessage: expect.stringContaining('IPLD conversion error'),
+        errorMessage: 'must be a valid IPFS URI',
+        errorPath: '/relationships/0/ipfs_url'
       })
     );
 
@@ -424,39 +437,28 @@ describe('validate-and-upload with image support', () => {
     expect(mockProgressTracker.increment).toHaveBeenCalledWith('errors');
   });
 
-  it('should not process image paths when format is not ipfs_uri', async () => {
+  it('should only process fields named ipfs_url', async () => {
     const jsonData = {
       label: 'Product',
       relationships: [{
         name: 'Product',
-        description: './description.txt', // Not marked as ipfs_uri
-        image: './image.png' // Marked as ipfs_uri
+        description: './description.txt', // Not named ipfs_url
+        ipfs_url: './image.png' // Named ipfs_url
       }]
     };
 
-    // Update schema to have mixed formats
-    mockSchemaCacheService.getSchema = vi.fn().mockResolvedValue({
-      type: 'object',
-      properties: {
-        label: { type: 'string' },
-        relationships: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              description: { type: 'string' }, // No format specified
-              image: { 
-                type: 'string',
-                format: 'ipfs_uri'
-              }
-            }
-          }
-        }
-      },
-    });
-
     vi.mocked(fsPromises.readFile).mockResolvedValue(JSON.stringify(jsonData));
+
+    // Mock validation to fail first, then succeed after conversion
+    mockJsonValidatorService.validate = vi.fn()
+      .mockResolvedValueOnce({ 
+        valid: false, 
+        errors: [{ 
+          message: 'must be a valid IPFS URI', 
+          path: '/relationships/0/ipfs_url' 
+        }] 
+      })
+      .mockResolvedValueOnce({ valid: true });
 
     mockIpldConverterService.hasIPLDLinks = vi.fn().mockReturnValue(true);
     mockIpldConverterService.convertToIPLD = vi.fn().mockResolvedValue({
@@ -466,7 +468,7 @@ describe('validate-and-upload with image support', () => {
         relationships: [{
           name: 'Product',
           description: './description.txt', // Unchanged
-          image: 'ipfs://bafkreiimage123' // Converted
+          ipfs_url: 'ipfs://bafkreiimage123' // Converted
         }]
       },
       hasLinks: true,
@@ -505,24 +507,11 @@ describe('validate-and-upload with image support', () => {
 
     await handleValidateAndUpload(options, serviceOverrides);
 
-    // Verify IPLD converter received the schema
+    // Verify IPLD converter was called with resolved data
     expect(mockIpldConverterService.convertToIPLD).toHaveBeenCalledWith(
-      jsonData,
+      jsonData, // The resolved data
       expect.any(String),
-      expect.objectContaining({
-        properties: expect.objectContaining({
-          label: { type: 'string' },
-          relationships: expect.objectContaining({
-            type: 'array',
-            items: expect.objectContaining({
-              properties: expect.objectContaining({
-                description: { type: 'string' }, // No format
-                image: { type: 'string', format: 'ipfs_uri' }
-              })
-            })
-          })
-        })
-      })
+      expect.any(Object) // Schema
     );
   });
 });

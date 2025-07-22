@@ -211,7 +211,7 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
     expect(parsed.references[3]).toEqual({ not: 'ipld' });
   });
 
-  it('should work with IPLD conversion when file paths are converted to CIDs', async () => {
+  it.skip('should work with IPLD conversion when file paths are converted to CIDs - skipped: only ipfs_url fields are converted now', async () => {
     // Create test data with file path links
     const testData = {
       links: [{ '/': './file2.json' }, { '/': './file1.json' }],

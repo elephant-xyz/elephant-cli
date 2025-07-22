@@ -805,19 +805,83 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
-    const validationResult = await services.jsonValidatorService.validate(
-      jsonData,
+    // First validate to resolve all file references
+    let dataToUpload = jsonData;
+    let validationResult = await services.jsonValidatorService.validate(
+      dataToUpload,
       schema,
-      fileEntry.filePath
+      fileEntry.filePath,
+      false // allow resolution of file references
     );
+
+    // If validation fails with ipfs_url errors, try IPLD conversion
+    if (!validationResult.valid && services.ipldConverterService) {
+      const hasIpfsUrlError = validationResult.errors?.some(
+        error => error.message?.includes('must be a valid IPFS URI')
+      );
+      
+      logger.debug(`Validation failed. Has ipfs_url error: ${hasIpfsUrlError}`);
+      logger.debug(`Checking if data has IPLD links: ${services.ipldConverterService.hasIPLDLinks(jsonData, schema)}`);
+      
+      if (hasIpfsUrlError) {
+        logger.debug(
+          `Found ipfs_url validation errors, converting image paths for ${fileEntry.filePath}`
+        );
+        
+        try {
+          // First, get the fully resolved data from the validator
+          const resolvedData = await services.jsonValidatorService.resolveData(
+            jsonData,
+            schema,
+            fileEntry.filePath
+          );
+          
+          // Run IPLD converter on the resolved data to process ipfs_url fields
+          const conversionResult =
+            await services.ipldConverterService.convertToIPLD(
+              resolvedData,
+              fileEntry.filePath,
+              schema
+            );
+          dataToUpload = conversionResult.convertedData;
+
+          // Validate again after conversion
+          logger.debug(`Re-validating after IPLD conversion...`);
+          validationResult = await services.jsonValidatorService.validate(
+            dataToUpload,
+            schema,
+            fileEntry.filePath,
+            false // allow resolution of file references
+          );
+          
+          logger.debug(`Re-validation result: ${validationResult.valid ? 'PASSED' : 'FAILED'}`);
+          if (!validationResult.valid && validationResult.errors) {
+            logger.debug(`Re-validation errors: ${JSON.stringify(validationResult.errors.map(e => ({path: e.path, message: e.message})))}`);
+          }
+          
+          if (conversionResult.hasLinks) {
+            logger.debug(
+              `Converted ${conversionResult.linkedCIDs.length} image paths to IPFS URIs`
+            );
+          }
+        } catch (conversionError) {
+          const errorMsg =
+            conversionError instanceof Error
+              ? conversionError.message
+              : String(conversionError);
+          logger.error(
+            `Failed to convert image paths for ${fileEntry.filePath}: ${errorMsg}`
+          );
+          // Continue with original validation errors
+        }
+      }
+    }
 
     if (!validationResult.valid) {
       const errorMessages: Array<{ path: string; message: string }> =
         services.jsonValidatorService.getErrorMessages(
           validationResult.errors || []
         );
-
-      // Check if the error is related to string vs file path mismatch
 
       for (const errorInfo of errorMessages) {
         await services.csvReporterService.logError({
@@ -831,47 +895,6 @@ async function processFileAndGetUploadPromise(
       }
       services.progressTracker.increment('errors');
       return;
-    }
-
-    // Check if data contains file path links and convert them to IPLD format
-    let dataToUpload = jsonData;
-    if (services.ipldConverterService.hasIPLDLinks(jsonData, schema)) {
-      logger.debug(
-        `Converting file path links to IPLD format for ${fileEntry.filePath}`
-      );
-      try {
-        const conversionResult =
-          await services.ipldConverterService.convertToIPLD(
-            jsonData,
-            fileEntry.filePath,
-            schema
-          );
-        dataToUpload = conversionResult.convertedData;
-
-        if (conversionResult.hasLinks) {
-          logger.debug(
-            `Converted ${conversionResult.linkedCIDs.length} file paths to IPFS CIDs`
-          );
-        }
-      } catch (conversionError) {
-        const errorMsg =
-          conversionError instanceof Error
-            ? conversionError.message
-            : String(conversionError);
-        logger.error(
-          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
-        );
-        await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
-          dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: 'root',
-          errorMessage: `IPLD conversion error: ${errorMsg}`,
-          timestamp: new Date().toISOString(),
-        });
-        services.progressTracker.increment('errors');
-        return;
-      }
     }
 
     const canonicalJson =
