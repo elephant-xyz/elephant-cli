@@ -246,8 +246,8 @@ elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
 The CLI now automatically generates beautiful HTML fact sheets for your properties:
 
 - Installs/updates the fact-sheet tool automatically
-- Generates HTML files for each property in your data
-- Uploads HTML files to IPFS
+- Generates self-contained HTML files with inline CSS and JavaScript
+- Uploads HTML files to IPFS in parallel for faster processing
 - Provides web-accessible links in the format: `http://dweb.link/ipfs/<cid>`
 - Shows the first 5 property links in the console output
 - All HTML links are saved in the CSV file for reference
@@ -255,13 +255,27 @@ The CLI now automatically generates beautiful HTML fact sheets for your properti
 Example output:
 ```
 🌐 Property Fact Sheet Links:
-  1. bafkreitest1: http://dweb.link/ipfs/bafkreihtmlcid1
-  2. bafkreitest2: http://dweb.link/ipfs/bafkreihtmlcid2
-  3. bafkreitest3: http://dweb.link/ipfs/bafkreihtmlcid3
-  4. bafkreitest4: http://dweb.link/ipfs/bafkreihtmlcid4
-  5. bafkreitest5: http://dweb.link/ipfs/bafkreihtmlcid5
+  (Note: It may take a few minutes for pages to propagate through IPFS gateways)
 
-  ... and 15 more properties. Check the output CSV file for all links.
+  1. Property: bafkreitest1
+     http://dweb.link/ipfs/bafkreihtmlcid1
+
+  2. Property: bafkreitest2
+     http://dweb.link/ipfs/bafkreihtmlcid2
+
+  3. Property: bafkreitest3
+     http://dweb.link/ipfs/bafkreihtmlcid3
+
+  4. Property: bafkreitest4
+     http://dweb.link/ipfs/bafkreihtmlcid4
+
+  5. Property: bafkreitest5
+     http://dweb.link/ipfs/bafkreihtmlcid5
+
+  ... and 15 more properties.
+
+📄 All HTML links have been saved to: upload-results.csv
+  Please check this file for the complete list of property fact sheet URLs.
 ```
 
 ## Workflow 2: Submitting to Blockchain

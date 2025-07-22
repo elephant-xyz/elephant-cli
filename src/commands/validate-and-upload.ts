@@ -14,7 +14,7 @@ import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
-import { PinataService, PinMetadata } from '../services/pinata.service.js';
+import { PinataService } from '../services/pinata.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
@@ -204,6 +204,13 @@ async function scanAndUploadHTMLFiles(
       `Found ${directories.length} property directories with HTML files`
     );
 
+    // Prepare files for batch processing
+    const filesToUpload: Array<{
+      dirName: string;
+      htmlContent: string;
+      htmlBuffer?: Buffer;
+    }> = [];
+
     for (const dir of directories) {
       const dirName = dir.name;
       const htmlFilePath = path.join(htmlDir, dirName, 'index.html');
@@ -219,68 +226,85 @@ async function scanAndUploadHTMLFiles(
 
         // Read HTML file
         const htmlContent = await fsPromises.readFile(htmlFilePath, 'utf-8');
-
-        if (dryRun) {
-          // In dry-run mode, calculate what the CID would be
-          const calculatedCid = 'dry-run-html-cid-' + dirName.substring(0, 8);
-          const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
-
-          logger.info(`[DRY RUN] Would upload HTML for property ${dirName}`);
-
-          htmlUploadMap.set(dirName, {
-            propertyCid: dirName,
-            htmlCid: calculatedCid,
-            htmlLink,
-          });
-
-          progressTracker.increment('processed');
-        } else {
-          if (!pinataService) {
-            throw new Error('Pinata service not available for HTML upload');
-          }
-
-          // Upload HTML file to IPFS
-          const htmlBuffer = Buffer.from(htmlContent, 'utf-8');
-          const metadata: PinMetadata = {
-            name: `${dirName}-index.html`,
-            keyvalues: {
-              propertyDir: dirName,
-              dataGroupCid: 'html-fact-sheet',
-              type: 'fact-sheet-html',
-            },
-          };
-
-          const uploadResult = await pinataService.uploadFile(
-            htmlBuffer,
-            metadata
-          );
-
-          if (uploadResult.success && uploadResult.cid) {
-            const htmlLink = `http://dweb.link/ipfs/${uploadResult.cid}`;
-
-            htmlUploadMap.set(dirName, {
-              propertyCid: dirName,
-              htmlCid: uploadResult.cid,
-              htmlLink,
-            });
-
-            logger.debug(
-              `Uploaded HTML for directory ${dirName}: ${uploadResult.cid}`
-            );
-            progressTracker.increment('processed');
-          } else {
-            logger.error(
-              `Failed to upload HTML for directory ${dirName}: ${uploadResult.error}`
-            );
-            progressTracker.increment('errors');
-          }
-        }
+        filesToUpload.push({
+          dirName,
+          htmlContent,
+          htmlBuffer: Buffer.from(htmlContent, 'utf-8'),
+        });
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         logger.error(
-          `Error processing HTML for directory ${dirName}: ${errorMsg}`
+          `Error reading HTML for directory ${dirName}: ${errorMsg}`
         );
         progressTracker.increment('errors');
+      }
+    }
+
+    if (dryRun) {
+      // In dry-run mode, simulate uploads
+      for (const file of filesToUpload) {
+        const calculatedCid =
+          'dry-run-html-cid-' + file.dirName.substring(0, 8);
+        const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
+
+        logger.info(`[DRY RUN] Would upload HTML for property ${file.dirName}`);
+
+        htmlUploadMap.set(file.dirName, {
+          propertyCid: file.dirName,
+          htmlCid: calculatedCid,
+          htmlLink,
+        });
+
+        progressTracker.increment('processed');
+      }
+    } else {
+      if (!pinataService) {
+        throw new Error('Pinata service not available for HTML upload');
+      }
+
+      // Prepare batch upload using existing PinataService mechanism
+      const processedFiles = filesToUpload.map((file) => ({
+        propertyCid: file.dirName,
+        dataGroupCid: 'html-fact-sheet',
+        filePath: `${file.dirName}/index.html`,
+        canonicalJson: file.htmlContent,
+        calculatedCid: '', // Not used for HTML
+        validationPassed: true,
+        binaryData: file.htmlBuffer,
+        metadata: {
+          isImage: false,
+          mimeType: 'text/html',
+        },
+      }));
+
+      // Use the existing batch upload mechanism with parallel processing
+      logger.info(
+        `Uploading ${processedFiles.length} HTML files in parallel...`
+      );
+      const uploadResults = await pinataService.uploadBatch(processedFiles);
+
+      // Process results
+      for (let i = 0; i < uploadResults.length; i++) {
+        const result = uploadResults[i];
+        const dirName = filesToUpload[i].dirName;
+
+        if (result.success && result.cid) {
+          const htmlLink = `http://dweb.link/ipfs/${result.cid}`;
+
+          htmlUploadMap.set(dirName, {
+            propertyCid: dirName,
+            htmlCid: result.cid,
+            htmlLink,
+          });
+
+          logger.debug(`Uploaded HTML for directory ${dirName}: ${result.cid}`);
+          progressTracker.increment('processed');
+        } else {
+          logger.error(
+            `Failed to upload HTML for directory ${dirName}: ${result.error}`
+          );
+          progressTracker.increment('errors');
+        }
       }
     }
 
@@ -1004,21 +1028,38 @@ export async function handleValidateAndUpload(
 
       if (uniquePropertyLinks.size > 0) {
         console.log(chalk.bold('\n🌐 Property Fact Sheet Links:'));
+        console.log(
+          chalk.gray(
+            '  (Note: It may take a few minutes for pages to propagate through IPFS gateways)\n'
+          )
+        );
+
         const linksArray = Array.from(uniquePropertyLinks.entries());
         const displayCount = Math.min(5, linksArray.length);
 
         for (let i = 0; i < displayCount; i++) {
           const [propertyCid, htmlLink] = linksArray[i];
-          console.log(`  ${i + 1}. ${propertyCid}: ${chalk.cyan(htmlLink)}`);
+          // Display property CID on one line and full URL on the next for better readability
+          console.log(`  ${i + 1}. Property: ${propertyCid}`);
+          console.log(`     ${chalk.cyan(htmlLink)}\n`);
         }
 
         if (linksArray.length > 5) {
           console.log(
-            chalk.yellow(
-              `\n  ... and ${linksArray.length - 5} more properties. Check the output CSV file for all links.`
-            )
+            chalk.yellow(`  ... and ${linksArray.length - 5} more properties.`)
           );
         }
+
+        console.log(
+          chalk.bold(
+            `\n📄 All HTML links have been saved to: ${chalk.green(options.outputCsv)}`
+          )
+        );
+        console.log(
+          chalk.gray(
+            '  Please check this file for the complete list of property fact sheet URLs.'
+          )
+        );
       }
     } catch (writeCsvError) {
       const errMsg =
