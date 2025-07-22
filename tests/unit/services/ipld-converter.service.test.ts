@@ -195,6 +195,43 @@ describe('IPLDConverterService', () => {
       expect(result.convertedData).toEqual(dataWithCID);
     });
 
+    it('should convert file path references to CIDs - seed data scenario', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ property: 'bafkreixxxxx', address: '0x1234' }) as any
+      );
+
+      const seedData = {
+        label: 'Seed',
+        relationships: {
+          property_seed: {
+            '/': './relationship_property_to_address.json',
+          },
+        },
+      };
+
+      const result = await ipldConverterService.convertToIPLD(seedData);
+
+      expect(result.hasLinks).toBe(true);
+      expect(result.linkedCIDs).toHaveLength(1);
+      expect(result.linkedCIDs[0]).toBe(
+        'QmMockUploadedCID123456789012345678901234567890'
+      );
+      expect(result.convertedData).toEqual({
+        label: 'Seed',
+        relationships: {
+          property_seed: {
+            '/': 'QmMockUploadedCID123456789012345678901234567890',
+          },
+        },
+      });
+
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/base/relationship_property_to_address.json',
+        'utf-8'
+      );
+      expect(mockPinataService.uploadBatch).toHaveBeenCalled();
+    });
+
     it('should convert image paths in ipfs_url fields to IPFS URIs', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
         Buffer.from('fake image data')

@@ -136,25 +136,15 @@ export class IPLDConverterService {
         linkedCIDs.push(pointerValue);
         return data;
       } else {
-        // Only process image files or files marked with ipfs_uri format
-        // Leave other file references as-is for the validator to resolve
-        const isIpfsUriFormat = schema?.format === 'ipfs_uri';
-        const isImageFile = this.isImageFile(pointerValue);
-
-        if (isIpfsUriFormat || isImageFile) {
-          // It's an image file or specifically marked as ipfs_uri, upload and convert
-          const cid = await this.uploadFileAndGetCID(
-            pointerValue,
-            currentFilePath,
-            linkedCIDs,
-            true // treat as ipfs_uri format
-          );
-          linkedCIDs.push(cid);
-          return `ipfs://${cid}`;
-        } else {
-          // Not an image file, leave the file reference as-is for validator to resolve
-          return data;
-        }
+        // This is a file path reference - upload it to IPFS
+        const cid = await this.uploadFileAndGetCID(
+          pointerValue,
+          currentFilePath,
+          linkedCIDs,
+          false // not necessarily an ipfs_uri format
+        );
+        linkedCIDs.push(cid);
+        return { '/': cid };
       }
     }
 

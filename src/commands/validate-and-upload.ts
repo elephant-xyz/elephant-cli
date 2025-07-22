@@ -805,83 +805,51 @@ async function processFileAndGetUploadPromise(
       return;
     }
 
-    // First validate to resolve all file references
+    // Check if data has IPLD links that need conversion
     let dataToUpload = jsonData;
-    let validationResult = await services.jsonValidatorService.validate(
+
+    if (
+      services.ipldConverterService &&
+      services.ipldConverterService.hasIPLDLinks(jsonData, schema)
+    ) {
+      logger.debug(
+        `Data has IPLD links, running IPLD converter for ${fileEntry.filePath}`
+      );
+
+      try {
+        // Run IPLD converter to process file references and ipfs_url fields
+        const conversionResult =
+          await services.ipldConverterService.convertToIPLD(
+            jsonData,
+            fileEntry.filePath,
+            schema
+          );
+        dataToUpload = conversionResult.convertedData;
+
+        if (conversionResult.hasLinks) {
+          logger.debug(
+            `Converted ${conversionResult.linkedCIDs.length} links to IPFS CIDs`
+          );
+        }
+      } catch (conversionError) {
+        const errorMsg =
+          conversionError instanceof Error
+            ? conversionError.message
+            : String(conversionError);
+        logger.error(
+          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+        );
+        // Continue with original data
+      }
+    }
+
+    // Validate the data (potentially after IPLD conversion)
+    const validationResult = await services.jsonValidatorService.validate(
       dataToUpload,
       schema,
       fileEntry.filePath,
       false // allow resolution of file references
     );
-
-    // If validation fails with ipfs_url errors, try IPLD conversion
-    if (!validationResult.valid && services.ipldConverterService) {
-      const hasIpfsUrlError = validationResult.errors?.some((error) =>
-        error.message?.includes('must be a valid IPFS URI')
-      );
-
-      logger.debug(`Validation failed. Has ipfs_url error: ${hasIpfsUrlError}`);
-      logger.debug(
-        `Checking if data has IPLD links: ${services.ipldConverterService.hasIPLDLinks(jsonData, schema)}`
-      );
-
-      if (hasIpfsUrlError) {
-        logger.debug(
-          `Found ipfs_url validation errors, converting image paths for ${fileEntry.filePath}`
-        );
-
-        try {
-          // First, get the fully resolved data from the validator
-          const resolvedData = await services.jsonValidatorService.resolveData(
-            jsonData,
-            schema,
-            fileEntry.filePath
-          );
-
-          // Run IPLD converter on the resolved data to process ipfs_url fields
-          const conversionResult =
-            await services.ipldConverterService.convertToIPLD(
-              resolvedData,
-              fileEntry.filePath,
-              schema
-            );
-          dataToUpload = conversionResult.convertedData;
-
-          // Validate again after conversion
-          logger.debug(`Re-validating after IPLD conversion...`);
-          validationResult = await services.jsonValidatorService.validate(
-            dataToUpload,
-            schema,
-            fileEntry.filePath,
-            false // allow resolution of file references
-          );
-
-          logger.debug(
-            `Re-validation result: ${validationResult.valid ? 'PASSED' : 'FAILED'}`
-          );
-          if (!validationResult.valid && validationResult.errors) {
-            logger.debug(
-              `Re-validation errors: ${JSON.stringify(validationResult.errors.map((e) => ({ path: e.path, message: e.message })))}`
-            );
-          }
-
-          if (conversionResult.hasLinks) {
-            logger.debug(
-              `Converted ${conversionResult.linkedCIDs.length} image paths to IPFS URIs`
-            );
-          }
-        } catch (conversionError) {
-          const errorMsg =
-            conversionError instanceof Error
-              ? conversionError.message
-              : String(conversionError);
-          logger.error(
-            `Failed to convert image paths for ${fileEntry.filePath}: ${errorMsg}`
-          );
-          // Continue with original validation errors
-        }
-      }
-    }
 
     if (!validationResult.valid) {
       const errorMessages: Array<{ path: string; message: string }> =

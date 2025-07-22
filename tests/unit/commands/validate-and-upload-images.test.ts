@@ -105,16 +105,7 @@ describe('validate-and-upload with image support', () => {
     mockJsonValidatorService = {
       validate: vi
         .fn()
-        .mockResolvedValueOnce({
-          valid: false,
-          errors: [
-            {
-              message: 'must be a valid IPFS URI',
-              path: '/relationships/0/ipfs_url',
-            },
-          ],
-        }) // First validation fails
-        .mockResolvedValueOnce({ valid: true }) // After IPLD conversion
+        .mockResolvedValueOnce({ valid: true }) // First file valid after IPLD conversion
         .mockResolvedValueOnce({ valid: true }), // Second file already valid
       getErrorMessages: vi.fn().mockReturnValue([
         {
@@ -221,7 +212,7 @@ describe('validate-and-upload with image support', () => {
     mockIpldConverterService.hasIPLDLinks = vi
       .fn()
       .mockReturnValueOnce(true) // jsonData1 has links
-      .mockReturnValueOnce(true); // jsonData2 has links
+      .mockReturnValueOnce(false); // jsonData2 already has IPFS URI
 
     mockIpldConverterService.convertToIPLD = vi
       .fn()

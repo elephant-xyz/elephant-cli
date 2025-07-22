@@ -187,17 +187,22 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     });
   });
 
-  describe('IPLD file references (not converted)', () => {
-    it('should not convert IPLD file references', async () => {
+  describe('IPLD file references (should be converted)', () => {
+    it('should convert IPLD file references to CIDs', async () => {
       const dataWithIpldRef = {
         reference: { '/': './referenced.json' },
       };
 
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        JSON.stringify({ data: 'referenced content' }) as any
+      );
+
       const result = await ipldConverterService.convertToIPLD(dataWithIpldRef);
 
-      expect(result.hasLinks).toBe(false);
+      expect(result.hasLinks).toBe(true);
+      expect(result.linkedCIDs).toHaveLength(1);
       expect(result.convertedData.reference).toEqual({
-        '/': './referenced.json',
+        '/': 'QmMockUploadedCID1234567890123456789012345678',
       });
     });
   });
