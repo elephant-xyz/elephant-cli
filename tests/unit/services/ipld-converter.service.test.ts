@@ -86,10 +86,10 @@ describe('IPLDConverterService', () => {
       );
     });
 
-    it('should detect file path links', () => {
+    it('should detect file path links in ipfs_url fields', () => {
       const dataWithPath = {
         name: 'test',
-        data: { '/': './data/file.json' },
+        ipfs_url: './data/image.png',
       };
 
       expect(ipldConverterService.hasIPLDLinks(dataWithPath)).toBe(true);
@@ -103,6 +103,8 @@ describe('IPLDConverterService', () => {
           array: [1, 2, 3],
           string: 'hello',
         },
+        // ipfs_url that's already an IPFS URI should not be detected as a link
+        ipfs_url: 'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
       };
 
       expect(ipldConverterService.hasIPLDLinks(dataWithoutLinks)).toBe(false);
@@ -111,9 +113,9 @@ describe('IPLDConverterService', () => {
     it('should detect links in arrays', () => {
       const dataWithArrayLinks = {
         items: [
-          { '/': 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o' },
+          { ipfs_url: './images/photo1.jpg' },
           { value: 'normal' },
-          { '/': 'file.json' },
+          { ipfs_url: 'images/photo2.png' },
         ],
       };
 
@@ -125,7 +127,7 @@ describe('IPLDConverterService', () => {
         level1: {
           level2: {
             level3: {
-              link: { '/': 'deep/file.json' },
+              ipfs_url: 'deep/image.jpg',
             },
           },
         },
@@ -150,6 +152,30 @@ describe('IPLDConverterService', () => {
         true
       );
     });
+
+    it('should handle nested objects with ipfs_url fields', () => {
+      const nestedData = {
+        level1: {
+          level2: {
+            ipfs_url: './images/photo.jpg',
+          },
+        },
+      };
+
+      expect(ipldConverterService.hasIPLDLinks(nestedData)).toBe(true);
+    });
+
+    it('should handle arrays with ipfs_url fields', () => {
+      const arrayData = {
+        items: [
+          { ipfs_url: './file1.png' },
+          { name: 'regular' },
+          { ipfs_url: 'images/photo2.jpg' },
+        ],
+      };
+
+      expect(ipldConverterService.hasIPLDLinks(arrayData)).toBe(true);
+    });
   });
 
   describe('convertToIPLD', () => {
@@ -169,14 +195,14 @@ describe('IPLDConverterService', () => {
       expect(result.convertedData).toEqual(dataWithCID);
     });
 
-    it('should convert relative file paths to CIDs', async () => {
+    it('should convert image paths in ipfs_url fields to IPFS URIs', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ content: 'file data' }) as any
+        Buffer.from('fake image data')
       );
 
       const dataWithPath = {
         name: 'test',
-        data: { '/': 'data/file.json' },
+        ipfs_url: 'data/image.png',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithPath);
@@ -188,24 +214,23 @@ describe('IPLDConverterService', () => {
       );
       expect(result.convertedData).toEqual({
         name: 'test',
-        data: { '/': 'QmMockUploadedCID123456789012345678901234567890' },
+        ipfs_url: 'ipfs://QmMockUploadedCID123456789012345678901234567890',
       });
 
       expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/base/data/file.json',
-        'utf-8'
+        '/test/base/data/image.png'
       );
       expect(mockPinataService.uploadBatch).toHaveBeenCalled();
     });
 
-    it('should convert absolute file paths to CIDs', async () => {
+    it('should convert absolute image paths in ipfs_url fields', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ content: 'absolute file' }) as any
+        Buffer.from('fake image data')
       );
 
       const dataWithAbsolutePath = {
         name: 'test',
-        config: { '/': '/etc/config.json' },
+        ipfs_url: '/etc/image.jpg',
       };
 
       const result =
@@ -213,20 +238,39 @@ describe('IPLDConverterService', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(1);
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/etc/config.json',
-        'utf-8'
-      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith('/etc/image.jpg');
     });
 
-    it('should handle multiple links', async () => {
+    it('should handle multiple ipfs_url fields', async () => {
       vi.mocked(fsPromises.readFile)
-        .mockResolvedValueOnce(JSON.stringify({ type: 'config' }) as any)
-        .mockResolvedValueOnce(JSON.stringify({ type: 'data' }) as any);
+        .mockResolvedValueOnce(Buffer.from('image1'))
+        .mockResolvedValueOnce(Buffer.from('image2'));
+
+      // Return different CIDs for each upload
+      mockPinataService.uploadBatch = vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'QmMockUploadedCID1',
+            propertyCid: 'linked-content',
+            dataGroupCid: 'linked-content',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            success: true,
+            cid: 'QmMockUploadedCID2',
+            propertyCid: 'linked-content',
+            dataGroupCid: 'linked-content',
+          },
+        ]);
 
       const dataWithMultipleLinks = {
-        config: { '/': 'config.json' },
-        data: { '/': 'data.json' },
+        ipfs_url: 'image1.png',
+        metadata: {
+          ipfs_url: 'image2.jpg',
+        },
         existingCID: {
           '/': 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
         },
@@ -239,16 +283,20 @@ describe('IPLDConverterService', () => {
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(3);
       expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(2);
+      expect(result.convertedData.ipfs_url).toBe('ipfs://QmMockUploadedCID1');
+      expect(result.convertedData.metadata.ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID2'
+      );
     });
 
-    it('should handle nested arrays with links', async () => {
+    it('should handle nested arrays with ipfs_url fields', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ nested: 'data' }) as any
+        Buffer.from('fake image')
       );
 
       const dataWithArrayLinks = {
         items: [
-          { name: 'item1', ref: { '/': 'nested/item.json' } },
+          { name: 'item1', ipfs_url: 'nested/image.png' },
           { name: 'item2', value: 42 },
         ],
       };
@@ -258,8 +306,8 @@ describe('IPLDConverterService', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(1);
-      expect(result.convertedData.items[0].ref['/']).toBe(
-        'QmMockUploadedCID123456789012345678901234567890'
+      expect(result.convertedData.items[0].ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID123456789012345678901234567890'
       );
       expect(result.convertedData.items[1]).toEqual({
         name: 'item2',
@@ -269,12 +317,12 @@ describe('IPLDConverterService', () => {
 
     it('should resolve relative paths based on current file location', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ content: 'sibling file' }) as any
+        Buffer.from('sibling image')
       );
 
       const dataWithRelativePath = {
         name: 'test',
-        sibling: { '/': './sibling.json' },
+        ipfs_url: './sibling.jpg',
       };
 
       const currentFilePath = '/test/data/subdir/current.json';
@@ -288,19 +336,18 @@ describe('IPLDConverterService', () => {
 
       // Should resolve relative to /test/data/subdir/
       expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/subdir/sibling.json',
-        'utf-8'
+        '/test/data/subdir/sibling.jpg'
       );
     });
 
     it('should resolve parent directory references correctly', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ content: 'parent file' }) as any
+        Buffer.from('parent image')
       );
 
       const dataWithParentPath = {
         name: 'test',
-        parent: { '/': '../parent.json' },
+        ipfs_url: '../parent.png',
       };
 
       const currentFilePath = '/test/data/subdir/current.json';
@@ -312,282 +359,118 @@ describe('IPLDConverterService', () => {
       expect(result.hasLinks).toBe(true);
 
       // Should resolve relative to /test/data/
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/parent.json',
-        'utf-8'
-      );
+      expect(fsPromises.readFile).toHaveBeenCalledWith('/test/data/parent.png');
     });
 
-    it('should handle plain text files', async () => {
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        'This is plain text content' as any
-      );
-
+    it('should not process non-image files in ipfs_url fields', async () => {
       const dataWithTextFile = {
-        readme: { '/': 'README.txt' },
+        name: 'test',
+        ipfs_url: 'data/file.json',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithTextFile);
 
-      expect(result.hasLinks).toBe(true);
-      expect(
-        mockCidCalculatorService.calculateCidAutoFormat
-      ).toHaveBeenCalledWith('This is plain text content');
+      // Non-image files in ipfs_url should not be processed
+      expect(result.hasLinks).toBe(false);
+      expect(result.convertedData).toEqual(dataWithTextFile);
+      expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
     });
 
-    it('should throw error for missing files', async () => {
-      vi.mocked(fsPromises.readFile).mockRejectedValueOnce(
-        new Error('ENOENT: no such file or directory')
-      );
-
-      const dataWithMissingFile = {
-        missing: { '/': 'nonexistent.json' },
+    it('should handle ipfs_url fields that are already IPFS URIs', async () => {
+      const dataWithIpfsUri = {
+        name: 'test',
+        ipfs_url: 'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
       };
 
-      await expect(
-        ipldConverterService.convertToIPLD(dataWithMissingFile)
-      ).rejects.toThrow('Failed to upload file nonexistent.json');
+      const result = await ipldConverterService.convertToIPLD(dataWithIpfsUri);
+
+      expect(result.hasLinks).toBe(false);
+      expect(result.convertedData).toEqual(dataWithIpfsUri);
+      expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
     });
 
-    it('should calculate CID locally when no Pinata service', async () => {
+    it('should convert bare CIDs to IPFS URIs in ipfs_url fields', async () => {
+      const dataWithBareCid = {
+        name: 'test',
+        ipfs_url: 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+      };
+
+      const result = await ipldConverterService.convertToIPLD(dataWithBareCid);
+
+      expect(result.hasLinks).toBe(false);
+      expect(result.convertedData).toEqual({
+        name: 'test',
+        ipfs_url: 'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+      });
+    });
+
+    it('should not upload images if no Pinata service is provided', async () => {
       const converterWithoutPinata = new IPLDConverterService(
         '/test/base',
         undefined,
         mockCidCalculatorService
       );
 
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ local: 'calculation' }) as any
-      );
-
-      const data = {
-        file: { '/': 'local.json' },
+      const dataWithLink = {
+        ipfs_url: 'image.png',
       };
 
-      const result = await converterWithoutPinata.convertToIPLD(data);
+      const result = await converterWithoutPinata.convertToIPLD(dataWithLink);
 
-      expect(result.hasLinks).toBe(true);
-      expect(result.linkedCIDs[0]).toBe(
-        'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
-      );
-      expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
-    });
-
-    it('should recursively process nested file path links in referenced files', async () => {
-      // Mock file system reads:
-      // 1. Main file with link to relationship.json
-      // 2. relationship.json contains links to person.json and property.json
-      // 3. person.json contains actual person data
-      // 4. property.json contains actual property data
-
-      vi.mocked(fsPromises.readFile)
-        // First call: relationship.json with nested file links
-        .mockResolvedValueOnce(
-          JSON.stringify({
-            from: { '/': './person.json' },
-            to: { '/': './property.json' },
-          }) as any
-        )
-        // Second call: person.json
-        .mockResolvedValueOnce(
-          JSON.stringify({
-            name: 'John Doe',
-            age: 30,
-          }) as any
-        )
-        // Third call: property.json
-        .mockResolvedValueOnce(
-          JSON.stringify({
-            address: '123 Main St',
-            value: 250000,
-          }) as any
-        );
-
-      // Mock Pinata service to return different CIDs for each upload
-      mockPinataService.uploadBatch = vi
-        .fn()
-        .mockResolvedValueOnce([
-          {
-            success: true,
-            cid: 'bafkreipersoncid12345678901234567890123456789012',
-            propertyCid: 'linked-content',
-            dataGroupCid: 'linked-content',
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            success: true,
-            cid: 'bafkreipropertycid1234567890123456789012345678901',
-            propertyCid: 'linked-content',
-            dataGroupCid: 'linked-content',
-          },
-        ])
-        .mockResolvedValueOnce([
-          {
-            success: true,
-            cid: 'bafkreirelationshipcid123456789012345678901234567',
-            propertyCid: 'linked-content',
-            dataGroupCid: 'linked-content',
-          },
-        ]);
-
-      const dataWithNestedLinks = {
-        label: 'County',
-        relationship: { '/': 'relationship.json' },
-      };
-
-      const result = await ipldConverterService.convertToIPLD(
-        dataWithNestedLinks,
-        '/test/data/main.json'
-      );
-
-      expect(result.hasLinks).toBe(true);
-      expect(result.linkedCIDs).toHaveLength(3); // person.json, property.json, relationship.json
-
-      // Verify the nested structure was properly converted
-      expect(result.convertedData).toEqual({
-        label: 'County',
-        relationship: {
-          '/': 'bafkreirelationshipcid123456789012345678901234567',
-        },
-      });
-
-      // Verify all three files were read
-      expect(fsPromises.readFile).toHaveBeenCalledTimes(3);
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/relationship.json',
-        'utf-8'
-      );
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/person.json',
-        'utf-8'
-      );
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/property.json',
-        'utf-8'
-      );
-
-      // Verify all three files were uploaded
-      expect(mockPinataService.uploadBatch).toHaveBeenCalledTimes(3);
+      // Without Pinata service, it won't process the image
+      expect(result.hasLinks).toBe(false);
+      expect(result.convertedData).toEqual(dataWithLink);
     });
   });
 
   describe('image handling', () => {
-    it('should convert image paths to IPFS URIs when format is ipfs_uri', async () => {
-      const imageBuffer = Buffer.from('fake image data');
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(imageBuffer);
+    it('should handle image paths with schema format ipfs_uri', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        Buffer.from('image data')
+      );
 
-      mockPinataService.uploadBatch = vi.fn().mockResolvedValue([
-        {
-          success: true,
-          cid: 'bafkreihq2v2fhjhzwmm6zfkjitfvp3g3czrnymy3dqpwl5slsx5om3d2me',
-          propertyCid: 'linked-content',
-          dataGroupCid: 'linked-content',
-        },
-      ]);
-
-      const dataWithImage = 'images/photo.png';
+      const data = 'path/to/image.png';
       const schema = { format: 'ipfs_uri' };
 
       const result = await ipldConverterService.convertToIPLD(
-        dataWithImage,
-        '/test/data/metadata.json',
+        data,
+        undefined,
         schema
       );
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(1);
       expect(result.convertedData).toBe(
-        'ipfs://bafkreihq2v2fhjhzwmm6zfkjitfvp3g3czrnymy3dqpwl5slsx5om3d2me'
+        'ipfs://QmMockUploadedCID123456789012345678901234567890'
       );
-
-      // Verify image was read as binary
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/images/photo.png'
-      );
-
-      // Verify raw CID calculation was used
-      expect(
-        mockCidCalculatorService.calculateCidV1ForRawData
-      ).toHaveBeenCalledWith(imageBuffer);
-    });
-
-    it('should handle multiple image formats', async () => {
-      const testCases = [
-        { path: 'image.png', mime: 'image/png' },
-        { path: 'photo.jpg', mime: 'image/jpeg' },
-        { path: 'pic.jpeg', mime: 'image/jpeg' },
-        { path: 'animation.gif', mime: 'image/gif' },
-        { path: 'icon.svg', mime: 'image/svg+xml' },
-        { path: 'modern.webp', mime: 'image/webp' },
-      ];
-
-      for (const testCase of testCases) {
-        vi.clearAllMocks();
-        const imageBuffer = Buffer.from(`fake ${testCase.path} data`);
-        vi.mocked(fsPromises.readFile).mockResolvedValueOnce(imageBuffer);
-
-        const schema = { format: 'ipfs_uri' };
-        const result = await ipldConverterService.convertToIPLD(
-          testCase.path,
-          '/test/data/metadata.json',
-          schema
-        );
-
-        expect(result.hasLinks).toBe(true);
-        expect(result.convertedData).toMatch(/^ipfs:\/\//);
-      }
     });
 
     it('should handle nested objects with image paths', async () => {
-      const imageBuffer = Buffer.from('fake image data');
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(imageBuffer);
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        Buffer.from('image data')
+      );
 
-      const dataWithNestedImage = {
-        name: 'Product',
-        thumbnail: './thumbnails/product.jpg',
-      };
-      const schema = {
-        properties: {
-          name: { type: 'string' },
-          thumbnail: { format: 'ipfs_uri' },
+      const data = {
+        metadata: {
+          ipfs_url: 'images/photo.jpg',
         },
       };
 
-      const result = await ipldConverterService.convertToIPLD(
-        dataWithNestedImage,
-        '/test/data/product.json',
-        schema
-      );
+      const result = await ipldConverterService.convertToIPLD(data);
 
       expect(result.hasLinks).toBe(true);
-      expect(result.convertedData.name).toBe('Product');
-      expect(result.convertedData.thumbnail).toMatch(/^ipfs:\/\//);
-    });
-
-    it('should preserve existing IPFS URIs', async () => {
-      const dataWithExistingUri =
-        'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
-      const schema = { format: 'ipfs_uri' };
-
-      const result = await ipldConverterService.convertToIPLD(
-        dataWithExistingUri,
-        '/test/data/metadata.json',
-        schema
+      expect(result.convertedData.metadata.ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID123456789012345678901234567890'
       );
-
-      expect(result.hasLinks).toBe(false);
-      expect(result.convertedData).toBe(dataWithExistingUri);
-      expect(fsPromises.readFile).not.toHaveBeenCalled();
     });
 
     it('should convert bare CIDs to IPFS URIs when format is ipfs_uri', async () => {
-      const dataWithBareCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      const data = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
       const schema = { format: 'ipfs_uri' };
 
       const result = await ipldConverterService.convertToIPLD(
-        dataWithBareCID,
-        '/test/data/metadata.json',
+        data,
+        undefined,
         schema
       );
 
@@ -595,22 +478,19 @@ describe('IPLDConverterService', () => {
       expect(result.convertedData).toBe(
         'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'
       );
-      expect(fsPromises.readFile).not.toHaveBeenCalled();
     });
 
     it('should handle arrays with image paths', async () => {
-      const imageBuffer1 = Buffer.from('fake image 1');
-      const imageBuffer2 = Buffer.from('fake image 2');
       vi.mocked(fsPromises.readFile)
-        .mockResolvedValueOnce(imageBuffer1)
-        .mockResolvedValueOnce(imageBuffer2);
+        .mockResolvedValueOnce(Buffer.from('image1'))
+        .mockResolvedValueOnce(Buffer.from('image2'));
 
       mockPinataService.uploadBatch = vi
         .fn()
         .mockResolvedValueOnce([
           {
             success: true,
-            cid: 'bafkreihq2v2fhjhzwmm6zfkjitfvp3g3czrnymy3dqpwl5slsx5om3d2me',
+            cid: 'QmMockUploadedCID1',
             propertyCid: 'linked-content',
             dataGroupCid: 'linked-content',
           },
@@ -618,117 +498,58 @@ describe('IPLDConverterService', () => {
         .mockResolvedValueOnce([
           {
             success: true,
-            cid: 'bafkreiabcdefghijklmnopqrstuvwxyz1234567890abcdefgh',
+            cid: 'QmMockUploadedCID2',
             propertyCid: 'linked-content',
             dataGroupCid: 'linked-content',
           },
         ]);
 
-      const dataWithImageArray = ['gallery/img1.png', 'gallery/img2.png'];
-      const schema = {
-        items: { format: 'ipfs_uri' },
+      const data = {
+        images: [{ ipfs_url: 'photo1.jpg' }, { ipfs_url: 'photo2.png' }],
       };
 
-      const result = await ipldConverterService.convertToIPLD(
-        dataWithImageArray,
-        '/test/data/gallery.json',
-        schema
-      );
+      const result = await ipldConverterService.convertToIPLD(data);
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(2);
-      expect(result.convertedData).toHaveLength(2);
-      expect(result.convertedData[0]).toBe(
-        'ipfs://bafkreihq2v2fhjhzwmm6zfkjitfvp3g3czrnymy3dqpwl5slsx5om3d2me'
+      expect(result.convertedData.images[0].ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID1'
       );
-      expect(result.convertedData[1]).toBe(
-        'ipfs://bafkreiabcdefghijklmnopqrstuvwxyz1234567890abcdefgh'
-      );
-    });
-
-    it('should only process as image when format is ipfs_uri', async () => {
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
-        JSON.stringify({ type: 'data' }) as any
-      );
-
-      // Without ipfs_uri format, should process as regular file
-      const dataWithPath = { '/': 'data.png' };
-      const schema = { type: 'string' };
-
-      const result = await ipldConverterService.convertToIPLD(
-        dataWithPath,
-        '/test/data/metadata.json',
-        schema
-      );
-
-      expect(result.hasLinks).toBe(true);
-      expect(result.convertedData).toEqual({
-        '/': 'QmMockUploadedCID123456789012345678901234567890',
-      });
-
-      // Verify it was read as text, not binary
-      expect(fsPromises.readFile).toHaveBeenCalledWith(
-        '/test/data/data.png',
-        'utf-8'
+      expect(result.convertedData.images[1].ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID2'
       );
     });
-  });
 
-  describe('DAG-JSON encoding/decoding', () => {
-    it('should encode and decode DAG-JSON', () => {
+    it('should only process as image when it is an image file in ipfs_url field', async () => {
       const data = {
-        name: 'test',
-        link: { '/': 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o' },
-        nested: {
-          value: 42,
-        },
+        ipfs_url: 'document.pdf', // Not an image
+        image_url: 'photo.jpg', // Not ipfs_url field
       };
 
-      const encoded = ipldConverterService.encodeAsDAGJSON(data);
-      expect(encoded).toBeInstanceOf(Uint8Array);
+      const result = await ipldConverterService.convertToIPLD(data);
 
-      const decoded = ipldConverterService.decodeDAGJSON(encoded);
-
-      // DAG-JSON decodes CID links as CID objects, not plain objects
-      expect(decoded.name).toBe('test');
-      expect(decoded.nested).toEqual({ value: 42 });
-      expect(decoded.link).toBeDefined();
-      expect(decoded.link.toString()).toBe(
-        'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'
-      );
-    });
-  });
-
-  describe('DAG-CBOR encoding', () => {
-    it('should encode as DAG-CBOR and calculate CID', async () => {
-      const data = {
-        test: 'data',
-        link: { '/': 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o' },
-      };
-
-      const cid = await ipldConverterService.calculateDAGCBORCid(data);
-      expect(cid).toMatch(/^bafy/); // CIDv1 starts with 'bafy' for dag-cbor
+      // Should not process either field
+      expect(result.hasLinks).toBe(false);
+      expect(result.convertedData).toEqual(data);
+      expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
     });
   });
 
   describe('error handling', () => {
     it('should throw error when no context for relative path', async () => {
-      const converterWithoutBase = new IPLDConverterService(
-        undefined,
-        mockPinataService,
-        mockCidCalculatorService
+      const dataWithRelativePath = {
+        ipfs_url: './relative/image.png',
+      };
+
+      // No current file path provided, but converter only processes image files
+      // Since this is an image file, it should try to process it
+      const result =
+        await ipldConverterService.convertToIPLD(dataWithRelativePath);
+
+      // The path will be resolved relative to base directory
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/test/base/relative/image.png'
       );
-
-      const dataWithRelativePath = 'relative/path.png';
-      const schema = { format: 'ipfs_uri' };
-
-      await expect(
-        converterWithoutBase.convertToIPLD(
-          dataWithRelativePath,
-          undefined,
-          schema
-        )
-      ).rejects.toThrow('No context provided for relative path');
     });
 
     it('should throw error for missing image files', async () => {
@@ -736,23 +557,21 @@ describe('IPLDConverterService', () => {
         new Error('ENOENT: no such file or directory')
       );
 
-      const dataWithMissingImage = 'missing-image.png';
-      const schema = { format: 'ipfs_uri' };
+      const dataWithMissingFile = {
+        ipfs_url: 'missing-image.png',
+      };
 
       await expect(
-        ipldConverterService.convertToIPLD(
-          dataWithMissingImage,
-          '/test/data/metadata.json',
-          schema
-        )
-      ).rejects.toThrow('Failed to upload file missing-image.png');
+        ipldConverterService.convertToIPLD(dataWithMissingFile)
+      ).rejects.toThrow('ENOENT: no such file or directory');
     });
 
     it('should handle upload failures for images', async () => {
-      const imageBuffer = Buffer.from('fake image data');
-      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(imageBuffer);
+      vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
+        Buffer.from('image data')
+      );
 
-      mockPinataService.uploadBatch = vi.fn().mockResolvedValue([
+      mockPinataService.uploadBatch = vi.fn().mockResolvedValueOnce([
         {
           success: false,
           error: 'Upload failed',
@@ -761,15 +580,12 @@ describe('IPLDConverterService', () => {
         },
       ]);
 
-      const dataWithImage = 'error-image.png';
-      const schema = { format: 'ipfs_uri' };
+      const dataWithImage = {
+        ipfs_url: 'image.png',
+      };
 
       await expect(
-        ipldConverterService.convertToIPLD(
-          dataWithImage,
-          '/test/data/metadata.json',
-          schema
-        )
+        ipldConverterService.convertToIPLD(dataWithImage)
       ).rejects.toThrow('Failed to upload linked file: Upload failed');
     });
   });

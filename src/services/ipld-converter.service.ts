@@ -75,8 +75,11 @@ export class IPLDConverterService {
     schema?: any,
     fieldName?: string
   ): Promise<any> {
-    // Handle string values for ipfs_url fields
-    if (typeof data === 'string' && fieldName === 'ipfs_url') {
+    // Handle string values for ipfs_url fields or ipfs_uri format
+    if (
+      typeof data === 'string' &&
+      (fieldName === 'ipfs_url' || schema?.format === 'ipfs_uri')
+    ) {
       // Check if it's already an IPFS URI
       if (data.startsWith('ipfs://')) {
         return data;
@@ -91,8 +94,8 @@ export class IPLDConverterService {
         // Not a CID, treat as local path
       }
 
-      // It's a local path, upload as image
-      if (this.isImageFile(data)) {
+      // It's a local path, upload as image if Pinata service is available
+      if (this.isImageFile(data) && this.pinataService) {
         const cid = await this.uploadFileAndGetCID(
           data,
           currentFilePath,
@@ -103,7 +106,7 @@ export class IPLDConverterService {
         return `ipfs://${cid}`;
       }
 
-      // Not an image file, return as-is
+      // Not an image file or no Pinata service, return as-is
       return data;
     }
 

@@ -116,14 +116,12 @@ describe('validate-and-upload with image support', () => {
         }) // First validation fails
         .mockResolvedValueOnce({ valid: true }) // After IPLD conversion
         .mockResolvedValueOnce({ valid: true }), // Second file already valid
-      getErrorMessages: vi
-        .fn()
-        .mockReturnValue([
-          {
-            path: '/relationships/0/ipfs_url',
-            message: 'must be a valid IPFS URI',
-          },
-        ]),
+      getErrorMessages: vi.fn().mockReturnValue([
+        {
+          path: '/relationships/0/ipfs_url',
+          message: 'must be a valid IPFS URI',
+        },
+      ]),
       resolveData: vi.fn().mockImplementation((data) => Promise.resolve(data)),
     } as any;
 
