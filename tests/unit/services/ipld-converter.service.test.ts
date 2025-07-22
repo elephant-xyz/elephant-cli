@@ -71,14 +71,19 @@ describe('IPLDConverterService', () => {
       const dataWithIpfsUri = 'path/to/image.png';
       const schema = { format: 'ipfs_uri' };
 
-      expect(ipldConverterService.hasIPLDLinks(dataWithIpfsUri, schema)).toBe(true);
+      expect(ipldConverterService.hasIPLDLinks(dataWithIpfsUri, schema)).toBe(
+        true
+      );
     });
 
     it('should not detect string values with ipfs_uri format if already IPFS URI', () => {
-      const dataWithIpfsUri = 'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      const dataWithIpfsUri =
+        'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
       const schema = { format: 'ipfs_uri' };
 
-      expect(ipldConverterService.hasIPLDLinks(dataWithIpfsUri, schema)).toBe(false);
+      expect(ipldConverterService.hasIPLDLinks(dataWithIpfsUri, schema)).toBe(
+        false
+      );
     });
 
     it('should detect file path links', () => {
@@ -141,7 +146,9 @@ describe('IPLDConverterService', () => {
         },
       };
 
-      expect(ipldConverterService.hasIPLDLinks(dataWithSchema, schema)).toBe(true);
+      expect(ipldConverterService.hasIPLDLinks(dataWithSchema, schema)).toBe(
+        true
+      );
     });
   });
 
@@ -500,9 +507,9 @@ describe('IPLDConverterService', () => {
       );
 
       // Verify raw CID calculation was used
-      expect(mockCidCalculatorService.calculateCidV1ForRawData).toHaveBeenCalledWith(
-        imageBuffer
-      );
+      expect(
+        mockCidCalculatorService.calculateCidV1ForRawData
+      ).toHaveBeenCalledWith(imageBuffer);
     });
 
     it('should handle multiple image formats', async () => {
@@ -559,7 +566,8 @@ describe('IPLDConverterService', () => {
     });
 
     it('should preserve existing IPFS URIs', async () => {
-      const dataWithExistingUri = 'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      const dataWithExistingUri =
+        'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
       const schema = { format: 'ipfs_uri' };
 
       const result = await ipldConverterService.convertToIPLD(
@@ -715,7 +723,11 @@ describe('IPLDConverterService', () => {
       const schema = { format: 'ipfs_uri' };
 
       await expect(
-        converterWithoutBase.convertToIPLD(dataWithRelativePath, undefined, schema)
+        converterWithoutBase.convertToIPLD(
+          dataWithRelativePath,
+          undefined,
+          schema
+        )
       ).rejects.toThrow('No context provided for relative path');
     });
 

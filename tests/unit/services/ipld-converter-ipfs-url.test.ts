@@ -47,7 +47,7 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it('should convert ipfs_url field with local image path to IPFS URI', async () => {
       const dataWithIpfsUrl = {
         name: 'Test Product',
-        ipfs_url: './image.png'
+        ipfs_url: './image.png',
       };
 
       // Mock file read for image
@@ -59,7 +59,9 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(1);
-      expect(result.convertedData.ipfs_url).toBe('ipfs://QmMockUploadedCID1234567890123456789012345678');
+      expect(result.convertedData.ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID1234567890123456789012345678'
+      );
       expect(result.convertedData.name).toBe('Test Product');
     });
 
@@ -67,10 +69,11 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
       const dataWithOtherFields = {
         name: 'Test Product',
         image: './image.png',
-        description: './description.txt'
+        description: './description.txt',
       };
 
-      const result = await ipldConverterService.convertToIPLD(dataWithOtherFields);
+      const result =
+        await ipldConverterService.convertToIPLD(dataWithOtherFields);
 
       expect(result.hasLinks).toBe(false);
       expect(result.linkedCIDs).toHaveLength(0);
@@ -80,7 +83,7 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it('should not convert ipfs_url field if already an IPFS URI', async () => {
       const dataWithIpfsUri = {
         name: 'Test Product',
-        ipfs_url: 'ipfs://bafkreiexistingcid'
+        ipfs_url: 'ipfs://bafkreiexistingcid',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithIpfsUri);
@@ -92,7 +95,7 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it.skip('should convert bare CID in ipfs_url field to IPFS URI - not implemented', async () => {
       const dataWithCid = {
         name: 'Test Product',
-        ipfs_url: 'bafkreiexistingcid'
+        ipfs_url: 'bafkreiexistingcid',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithCid);
@@ -104,10 +107,12 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it('should handle nested ipfs_url fields', async () => {
       const nestedData = {
         label: 'Product',
-        relationships: [{
-          name: 'Relation 1',
-          ipfs_url: './nested-image.jpg'
-        }]
+        relationships: [
+          {
+            name: 'Relation 1',
+            ipfs_url: './nested-image.jpg',
+          },
+        ],
       };
 
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
@@ -118,17 +123,19 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(1);
-      expect(result.convertedData.relationships[0].ipfs_url).toBe('ipfs://QmMockUploadedCID1234567890123456789012345678');
+      expect(result.convertedData.relationships[0].ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID1234567890123456789012345678'
+      );
     });
 
     it('should handle multiple ipfs_url fields', async () => {
       const dataWithMultiple = {
         primary: {
-          ipfs_url: './image1.png'
+          ipfs_url: './image1.png',
         },
         secondary: {
-          ipfs_url: './image2.jpg'
-        }
+          ipfs_url: './image2.jpg',
+        },
       };
 
       vi.mocked(fsPromises.readFile)
@@ -139,14 +146,18 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
 
       expect(result.hasLinks).toBe(true);
       expect(result.linkedCIDs).toHaveLength(2);
-      expect(result.convertedData.primary.ipfs_url).toBe('ipfs://QmMockUploadedCID1234567890123456789012345678');
-      expect(result.convertedData.secondary.ipfs_url).toBe('ipfs://QmMockUploadedCID1234567890123456789012345678');
+      expect(result.convertedData.primary.ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID1234567890123456789012345678'
+      );
+      expect(result.convertedData.secondary.ipfs_url).toBe(
+        'ipfs://QmMockUploadedCID1234567890123456789012345678'
+      );
     });
 
     it('should not convert ipfs_url field if value is not an image', async () => {
       const dataWithNonImage = {
         name: 'Test',
-        ipfs_url: './document.txt'
+        ipfs_url: './document.txt',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithNonImage);
@@ -158,7 +169,7 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it('should check hasIPLDLinks correctly for ipfs_url fields', () => {
       const dataWithIpfsUrl = {
         name: 'Test',
-        ipfs_url: './image.png'
+        ipfs_url: './image.png',
       };
 
       const hasLinks = ipldConverterService.hasIPLDLinks(dataWithIpfsUrl);
@@ -168,7 +179,7 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     it('should not detect links when ipfs_url already has IPFS URI', () => {
       const dataWithIpfsUri = {
         name: 'Test',
-        ipfs_url: 'ipfs://bafkreiexisting'
+        ipfs_url: 'ipfs://bafkreiexisting',
       };
 
       const hasLinks = ipldConverterService.hasIPLDLinks(dataWithIpfsUri);
@@ -179,13 +190,15 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
   describe('IPLD file references (not converted)', () => {
     it('should not convert IPLD file references', async () => {
       const dataWithIpldRef = {
-        reference: { '/': './referenced.json' }
+        reference: { '/': './referenced.json' },
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithIpldRef);
 
       expect(result.hasLinks).toBe(false);
-      expect(result.convertedData.reference).toEqual({ '/': './referenced.json' });
+      expect(result.convertedData.reference).toEqual({
+        '/': './referenced.json',
+      });
     });
   });
 });

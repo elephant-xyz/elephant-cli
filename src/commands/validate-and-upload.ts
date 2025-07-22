@@ -816,18 +816,20 @@ async function processFileAndGetUploadPromise(
 
     // If validation fails with ipfs_url errors, try IPLD conversion
     if (!validationResult.valid && services.ipldConverterService) {
-      const hasIpfsUrlError = validationResult.errors?.some(
-        error => error.message?.includes('must be a valid IPFS URI')
+      const hasIpfsUrlError = validationResult.errors?.some((error) =>
+        error.message?.includes('must be a valid IPFS URI')
       );
-      
+
       logger.debug(`Validation failed. Has ipfs_url error: ${hasIpfsUrlError}`);
-      logger.debug(`Checking if data has IPLD links: ${services.ipldConverterService.hasIPLDLinks(jsonData, schema)}`);
-      
+      logger.debug(
+        `Checking if data has IPLD links: ${services.ipldConverterService.hasIPLDLinks(jsonData, schema)}`
+      );
+
       if (hasIpfsUrlError) {
         logger.debug(
           `Found ipfs_url validation errors, converting image paths for ${fileEntry.filePath}`
         );
-        
+
         try {
           // First, get the fully resolved data from the validator
           const resolvedData = await services.jsonValidatorService.resolveData(
@@ -835,7 +837,7 @@ async function processFileAndGetUploadPromise(
             schema,
             fileEntry.filePath
           );
-          
+
           // Run IPLD converter on the resolved data to process ipfs_url fields
           const conversionResult =
             await services.ipldConverterService.convertToIPLD(
@@ -853,12 +855,16 @@ async function processFileAndGetUploadPromise(
             fileEntry.filePath,
             false // allow resolution of file references
           );
-          
-          logger.debug(`Re-validation result: ${validationResult.valid ? 'PASSED' : 'FAILED'}`);
+
+          logger.debug(
+            `Re-validation result: ${validationResult.valid ? 'PASSED' : 'FAILED'}`
+          );
           if (!validationResult.valid && validationResult.errors) {
-            logger.debug(`Re-validation errors: ${JSON.stringify(validationResult.errors.map(e => ({path: e.path, message: e.message})))}`);
+            logger.debug(
+              `Re-validation errors: ${JSON.stringify(validationResult.errors.map((e) => ({ path: e.path, message: e.message })))}`
+            );
           }
-          
+
           if (conversionResult.hasLinks) {
             logger.debug(
               `Converted ${conversionResult.linkedCIDs.length} image paths to IPFS URIs`

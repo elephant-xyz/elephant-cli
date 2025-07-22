@@ -81,7 +81,7 @@ export class IPLDConverterService {
       if (data.startsWith('ipfs://')) {
         return data;
       }
-      
+
       // Check if it's a valid CID
       try {
         CID.parse(data);
@@ -90,7 +90,7 @@ export class IPLDConverterService {
       } catch {
         // Not a CID, treat as local path
       }
-      
+
       // It's a local path, upload as image
       if (this.isImageFile(data)) {
         const cid = await this.uploadFileAndGetCID(
@@ -102,11 +102,11 @@ export class IPLDConverterService {
         linkedCIDs.push(cid);
         return `ipfs://${cid}`;
       }
-      
+
       // Not an image file, return as-is
       return data;
     }
-    
+
     if (!data || typeof data !== 'object') {
       return data;
     }
@@ -137,7 +137,7 @@ export class IPLDConverterService {
         // Leave other file references as-is for the validator to resolve
         const isIpfsUriFormat = schema?.format === 'ipfs_uri';
         const isImageFile = this.isImageFile(pointerValue);
-        
+
         if (isIpfsUriFormat || isImageFile) {
           // It's an image file or specifically marked as ipfs_uri, upload and convert
           const cid = await this.uploadFileAndGetCID(
@@ -160,7 +160,13 @@ export class IPLDConverterService {
       const itemSchema = schema?.items;
       return Promise.all(
         data.map((item) =>
-          this.processDataForIPLD(item, linkedCIDs, currentFilePath, itemSchema, fieldName)
+          this.processDataForIPLD(
+            item,
+            linkedCIDs,
+            currentFilePath,
+            itemSchema,
+            fieldName
+          )
         )
       );
     }
@@ -202,7 +208,7 @@ export class IPLDConverterService {
       '.jpeg': 'image/jpeg',
       '.gif': 'image/gif',
       '.svg': 'image/svg+xml',
-      '.webp': 'image/webp'
+      '.webp': 'image/webp',
     };
     return mimeTypes[ext] || 'application/octet-stream';
   }
@@ -243,22 +249,22 @@ export class IPLDConverterService {
 
       // Check if it's an image file and schema expects IPFS URI
       const isImage = this.isImageFile(resolvedPath) && isIpfsUriFormat;
-      
+
       // Read the file (binary for images, utf-8 for text)
-      const fileContent = isImage 
+      const fileContent = isImage
         ? await fsPromises.readFile(resolvedPath)
         : await fsPromises.readFile(resolvedPath, 'utf-8');
 
       // Handle based on file type
       let dataToUpload: any;
       let uploadMetadata: any = {};
-      
+
       if (isImage) {
         // For images, use the binary data directly
         dataToUpload = fileContent;
         uploadMetadata = {
           mimeType: this.getImageMimeType(resolvedPath),
-          isImage: true
+          isImage: true,
         };
       } else {
         // Try to parse as JSON
@@ -270,7 +276,7 @@ export class IPLDConverterService {
             linkedCIDs || [],
             resolvedPath,
             undefined, // No schema for nested files
-            undefined  // No field name context
+            undefined // No field name context
           );
         } catch {
           // If not JSON, treat as raw text
@@ -284,13 +290,14 @@ export class IPLDConverterService {
 
         let processedFile: any;
         let expectedCid: string;
-        
+
         if (uploadMetadata.isImage) {
           // For images, upload as binary with raw codec
-          expectedCid = await this.cidCalculatorService.calculateCidV1ForRawData(
-            dataToUpload as Buffer
-          );
-          
+          expectedCid =
+            await this.cidCalculatorService.calculateCidV1ForRawData(
+              dataToUpload as Buffer
+            );
+
           processedFile = {
             propertyCid: 'linked-content',
             dataGroupCid: 'linked-content',
@@ -298,20 +305,23 @@ export class IPLDConverterService {
             binaryData: dataToUpload,
             calculatedCid: expectedCid,
             validationPassed: true,
-            metadata: uploadMetadata
+            metadata: uploadMetadata,
           };
         } else {
           // For JSON/text, use canonical JSON
           const canonicalJson = JSON.stringify(dataToUpload);
-          expectedCid = await this.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
-          
+          expectedCid =
+            await this.cidCalculatorService.calculateCidAutoFormat(
+              dataToUpload
+            );
+
           processedFile = {
             propertyCid: 'linked-content',
             dataGroupCid: 'linked-content',
             filePath: resolvedPath,
             canonicalJson,
             calculatedCid: expectedCid,
-            validationPassed: true
+            validationPassed: true,
           };
         }
 
@@ -342,7 +352,7 @@ export class IPLDConverterService {
         logger.warn(
           'No Pinata service provided, calculating CID v1 locally without upload'
         );
-        
+
         if (uploadMetadata.isImage) {
           // For images, calculate CID from binary data
           return await this.cidCalculatorService.calculateCidV1ForRawData(
@@ -417,15 +427,15 @@ export class IPLDConverterService {
       if (data.startsWith('ipfs://')) {
         return false;
       }
-      
+
       // Check various conditions for when to process
       return (
-        schema?.format === 'ipfs_uri' || 
-        fieldName === 'ipfs_url' || 
+        schema?.format === 'ipfs_uri' ||
+        fieldName === 'ipfs_url' ||
         this.isImageFile(data)
       );
     }
-    
+
     if (!data || typeof data !== 'object') {
       return false;
     }
@@ -448,7 +458,9 @@ export class IPLDConverterService {
     // Check arrays
     if (Array.isArray(data)) {
       const itemSchema = schema?.items;
-      return data.some((item) => this.hasIPLDLinks(item, itemSchema, fieldName));
+      return data.some((item) =>
+        this.hasIPLDLinks(item, itemSchema, fieldName)
+      );
     }
 
     // Check object properties

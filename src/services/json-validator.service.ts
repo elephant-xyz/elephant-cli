@@ -113,7 +113,7 @@ export class JsonValidatorService {
           if (cid.version === 0) {
             return false;
           }
-          
+
           // Accept raw codec (0x55) or DAG-PB codec (0x70) with sha256
           const isValidCodec = cid.code === raw_codec.code || cid.code === 0x70; // 0x70 is DAG-PB
           // sha2-256 is 0x12

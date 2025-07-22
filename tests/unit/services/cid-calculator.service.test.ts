@@ -274,7 +274,7 @@ describe('CidCalculatorService', () => {
 
       // CID v1 should be base32 encoded and start with 'bafkrei'
       expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
-      
+
       // Verify it's a valid CID
       const parsedCid = CID.parse(cid);
       expect(parsedCid.version).toBe(1);
@@ -335,11 +335,11 @@ describe('CidCalculatorService', () => {
 
       // Raw and UnixFS CIDs should be different
       expect(rawCid).not.toBe(unixfsCid);
-      
+
       // Raw CID uses raw codec, UnixFS uses dag-pb
       const rawParsed = CID.parse(rawCid);
       const unixfsParsed = CID.parse(unixfsCid);
-      
+
       expect(rawParsed.code).toBe(0x55); // raw codec
       expect(unixfsParsed.code).toBe(0x70); // dag-pb codec
     });

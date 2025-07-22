@@ -51,7 +51,9 @@ describe('validate-and-upload with image support', () => {
         .fn()
         .mockResolvedValue({ isValid: true, errors: [] }),
       countTotalFiles: vi.fn().mockResolvedValue(2),
-      getAllDataGroupCids: vi.fn().mockResolvedValue(new Set(['bafkreischema'])),
+      getAllDataGroupCids: vi
+        .fn()
+        .mockResolvedValue(new Set(['bafkreischema'])),
       scanDirectory: vi.fn().mockImplementation(async function* () {
         yield [
           {
@@ -75,45 +77,53 @@ describe('validate-and-upload with image support', () => {
         type: 'object',
         properties: {
           label: { type: 'string' },
-          relationships: { 
+          relationships: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
                 name: { type: 'string' },
-                image: { 
+                image: {
                   type: 'string',
-                  format: 'ipfs_uri'
+                  format: 'ipfs_uri',
                 },
                 gallery: {
                   type: 'array',
                   items: {
                     type: 'string',
-                    format: 'ipfs_uri'
-                  }
-                }
-              }
-            }
-          }
+                    format: 'ipfs_uri',
+                  },
+                },
+              },
+            },
+          },
         },
       }),
     } as any;
 
     // Mock JSON validator service
     mockJsonValidatorService = {
-      validate: vi.fn()
-        .mockResolvedValueOnce({ 
-          valid: false, 
-          errors: [{ 
-            message: 'must be a valid IPFS URI', 
-            path: '/relationships/0/ipfs_url' 
-          }] 
+      validate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          valid: false,
+          errors: [
+            {
+              message: 'must be a valid IPFS URI',
+              path: '/relationships/0/ipfs_url',
+            },
+          ],
         }) // First validation fails
         .mockResolvedValueOnce({ valid: true }) // After IPLD conversion
         .mockResolvedValueOnce({ valid: true }), // Second file already valid
-      getErrorMessages: vi.fn().mockReturnValue([
-        { path: '/relationships/0/ipfs_url', message: 'must be a valid IPFS URI' }
-      ]),
+      getErrorMessages: vi
+        .fn()
+        .mockReturnValue([
+          {
+            path: '/relationships/0/ipfs_url',
+            message: 'must be a valid IPFS URI',
+          },
+        ]),
       resolveData: vi.fn().mockImplementation((data) => Promise.resolve(data)),
     } as any;
 
@@ -137,7 +147,7 @@ describe('validate-and-upload with image support', () => {
       uploadBatch: vi.fn().mockImplementation((files) =>
         files.map((file: any) => ({
           success: true,
-          cid: file.metadata?.isImage 
+          cid: file.metadata?.isImage
             ? 'bafkreiuploadedimage123'
             : 'bafkreiuploadedjson123',
           propertyCid: file.propertyCid,
@@ -186,18 +196,22 @@ describe('validate-and-upload with image support', () => {
     // Data must match the schema format (label + relationships)
     const jsonData1 = {
       label: 'Product 1',
-      relationships: [{
-        name: 'Product 1',
-        ipfs_url: './images/product1.jpg'
-      }]
+      relationships: [
+        {
+          name: 'Product 1',
+          ipfs_url: './images/product1.jpg',
+        },
+      ],
     };
 
     const jsonData2 = {
       label: 'Product 2',
-      relationships: [{
-        name: 'Product 2',
-        ipfs_url: 'ipfs://bafkreiexistingimage' // Already an IPFS URI
-      }]
+      relationships: [
+        {
+          name: 'Product 2',
+          ipfs_url: 'ipfs://bafkreiexistingimage', // Already an IPFS URI
+        },
+      ],
     };
 
     // Mock file reads
@@ -206,19 +220,23 @@ describe('validate-and-upload with image support', () => {
       .mockResolvedValueOnce(JSON.stringify(jsonData2));
 
     // Mock IPLD converter to detect and convert links
-    mockIpldConverterService.hasIPLDLinks = vi.fn()
+    mockIpldConverterService.hasIPLDLinks = vi
+      .fn()
       .mockReturnValueOnce(true) // jsonData1 has links
       .mockReturnValueOnce(true); // jsonData2 has links
 
-    mockIpldConverterService.convertToIPLD = vi.fn()
+    mockIpldConverterService.convertToIPLD = vi
+      .fn()
       .mockResolvedValueOnce({
         originalData: jsonData1,
         convertedData: {
           label: 'Product 1',
-          relationships: [{
-            name: 'Product 1',
-            ipfs_url: 'ipfs://bafkreiimage1'
-          }]
+          relationships: [
+            {
+              name: 'Product 1',
+              ipfs_url: 'ipfs://bafkreiimage1',
+            },
+          ],
         },
         hasLinks: true,
         linkedCIDs: ['bafkreiimage1'],
@@ -266,12 +284,12 @@ describe('validate-and-upload with image support', () => {
               properties: expect.objectContaining({
                 image: { type: 'string', format: 'ipfs_uri' },
                 gallery: expect.objectContaining({
-                  items: { type: 'string', format: 'ipfs_uri' }
-                })
-              })
-            })
-          })
-        })
+                  items: { type: 'string', format: 'ipfs_uri' },
+                }),
+              }),
+            }),
+          }),
+        }),
       })
     );
 
@@ -281,17 +299,21 @@ describe('validate-and-upload with image support', () => {
     // Verify CSV output includes converted data
     expect(mockedWriteFileSync).toHaveBeenCalledWith(
       '/test/output.csv',
-      expect.stringContaining('propertyCid,dataGroupCid,dataCid,filePath,uploadedAt')
+      expect.stringContaining(
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      )
     );
   });
 
   it('should handle dry-run mode with image conversions', async () => {
     const jsonData = {
       label: 'Test Product',
-      relationships: [{
-        name: 'Test Product',
-        ipfs_url: './image.png'
-      }]
+      relationships: [
+        {
+          name: 'Test Product',
+          ipfs_url: './image.png',
+        },
+      ],
     };
 
     vi.mocked(fsPromises.readFile).mockResolvedValue(JSON.stringify(jsonData));
@@ -301,10 +323,12 @@ describe('validate-and-upload with image support', () => {
       originalData: jsonData,
       convertedData: {
         label: 'Test Product',
-        relationships: [{
-          name: 'Test Product',
-          ipfs_url: 'ipfs://bafkreicalculatedimage'
-        }]
+        relationships: [
+          {
+            name: 'Test Product',
+            ipfs_url: 'ipfs://bafkreicalculatedimage',
+          },
+        ],
       },
       hasLinks: true,
       linkedCIDs: ['bafkreicalculatedimage'],
@@ -312,13 +336,17 @@ describe('validate-and-upload with image support', () => {
 
     // Update mock file scanner to return single file
     mockFileScannerService.countTotalFiles = vi.fn().mockResolvedValue(1);
-    mockFileScannerService.scanDirectory = vi.fn().mockImplementation(async function* () {
-      yield [{
-        propertyCid: 'property1',
-        dataGroupCid: 'bafkreischema',
-        filePath: '/test/dir/property1/bafkreischema.json',
-      }];
-    });
+    mockFileScannerService.scanDirectory = vi
+      .fn()
+      .mockImplementation(async function* () {
+        yield [
+          {
+            propertyCid: 'property1',
+            dataGroupCid: 'bafkreischema',
+            filePath: '/test/dir/property1/bafkreischema.json',
+          },
+        ];
+      });
 
     const options = {
       inputDir: '/test/dir',
@@ -346,13 +374,17 @@ describe('validate-and-upload with image support', () => {
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
 
     // Verify calculated CIDs are included in output
-    expect(mockCidCalculatorService.calculateCidAutoFormat).toHaveBeenCalledWith(
+    expect(
+      mockCidCalculatorService.calculateCidAutoFormat
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         label: 'Test Product',
-        relationships: expect.arrayContaining([{
-          name: 'Test Product',
-          ipfs_url: 'ipfs://bafkreicalculatedimage'
-        }])
+        relationships: expect.arrayContaining([
+          {
+            name: 'Test Product',
+            ipfs_url: 'ipfs://bafkreicalculatedimage',
+          },
+        ]),
       })
     );
   });
@@ -360,39 +392,50 @@ describe('validate-and-upload with image support', () => {
   it('should handle validation errors for invalid image paths', async () => {
     const jsonData = {
       label: 'Invalid Product',
-      relationships: [{
-        name: 'Invalid Product',
-        ipfs_url: './non-existent-image.jpg'
-      }]
+      relationships: [
+        {
+          name: 'Invalid Product',
+          ipfs_url: './non-existent-image.jpg',
+        },
+      ],
     };
 
     vi.mocked(fsPromises.readFile).mockResolvedValue(JSON.stringify(jsonData));
 
     // Mock validation to fail with ipfs_url error
-    mockJsonValidatorService.validate = vi.fn()
-      .mockResolvedValueOnce({ 
-        valid: false, 
-        errors: [{ 
-          message: 'must be a valid IPFS URI', 
-          path: '/relationships/0/ipfs_url' 
-        }] 
-      });
-    
+    mockJsonValidatorService.validate = vi.fn().mockResolvedValueOnce({
+      valid: false,
+      errors: [
+        {
+          message: 'must be a valid IPFS URI',
+          path: '/relationships/0/ipfs_url',
+        },
+      ],
+    });
+
     // Mock IPLD converter to throw error for missing file
     mockIpldConverterService.hasIPLDLinks = vi.fn().mockReturnValue(true);
-    mockIpldConverterService.convertToIPLD = vi.fn().mockRejectedValue(
-      new Error('Failed to upload file ./non-existent-image.jpg: ENOENT: no such file or directory')
-    );
+    mockIpldConverterService.convertToIPLD = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'Failed to upload file ./non-existent-image.jpg: ENOENT: no such file or directory'
+        )
+      );
 
     // Update mock file scanner to return single file
     mockFileScannerService.countTotalFiles = vi.fn().mockResolvedValue(1);
-    mockFileScannerService.scanDirectory = vi.fn().mockImplementation(async function* () {
-      yield [{
-        propertyCid: 'property1',
-        dataGroupCid: 'bafkreischema',
-        filePath: '/test/dir/property1/bafkreischema.json',
-      }];
-    });
+    mockFileScannerService.scanDirectory = vi
+      .fn()
+      .mockImplementation(async function* () {
+        yield [
+          {
+            propertyCid: 'property1',
+            dataGroupCid: 'bafkreischema',
+            filePath: '/test/dir/property1/bafkreischema.json',
+          },
+        ];
+      });
 
     // Update progress tracker to reflect error
     mockProgressTracker.getMetrics = vi.fn().mockReturnValue({
@@ -429,7 +472,7 @@ describe('validate-and-upload with image support', () => {
     expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
       expect.objectContaining({
         errorMessage: 'must be a valid IPFS URI',
-        errorPath: '/relationships/0/ipfs_url'
+        errorPath: '/relationships/0/ipfs_url',
       })
     );
 
@@ -440,23 +483,28 @@ describe('validate-and-upload with image support', () => {
   it('should only process fields named ipfs_url', async () => {
     const jsonData = {
       label: 'Product',
-      relationships: [{
-        name: 'Product',
-        description: './description.txt', // Not named ipfs_url
-        ipfs_url: './image.png' // Named ipfs_url
-      }]
+      relationships: [
+        {
+          name: 'Product',
+          description: './description.txt', // Not named ipfs_url
+          ipfs_url: './image.png', // Named ipfs_url
+        },
+      ],
     };
 
     vi.mocked(fsPromises.readFile).mockResolvedValue(JSON.stringify(jsonData));
 
     // Mock validation to fail first, then succeed after conversion
-    mockJsonValidatorService.validate = vi.fn()
-      .mockResolvedValueOnce({ 
-        valid: false, 
-        errors: [{ 
-          message: 'must be a valid IPFS URI', 
-          path: '/relationships/0/ipfs_url' 
-        }] 
+    mockJsonValidatorService.validate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        valid: false,
+        errors: [
+          {
+            message: 'must be a valid IPFS URI',
+            path: '/relationships/0/ipfs_url',
+          },
+        ],
       })
       .mockResolvedValueOnce({ valid: true });
 
@@ -465,11 +513,13 @@ describe('validate-and-upload with image support', () => {
       originalData: jsonData,
       convertedData: {
         label: 'Product',
-        relationships: [{
-          name: 'Product',
-          description: './description.txt', // Unchanged
-          ipfs_url: 'ipfs://bafkreiimage123' // Converted
-        }]
+        relationships: [
+          {
+            name: 'Product',
+            description: './description.txt', // Unchanged
+            ipfs_url: 'ipfs://bafkreiimage123', // Converted
+          },
+        ],
       },
       hasLinks: true,
       linkedCIDs: ['bafkreiimage123'],
@@ -477,13 +527,17 @@ describe('validate-and-upload with image support', () => {
 
     // Update mock file scanner to return single file
     mockFileScannerService.countTotalFiles = vi.fn().mockResolvedValue(1);
-    mockFileScannerService.scanDirectory = vi.fn().mockImplementation(async function* () {
-      yield [{
-        propertyCid: 'property1',
-        dataGroupCid: 'bafkreischema',
-        filePath: '/test/dir/property1/bafkreischema.json',
-      }];
-    });
+    mockFileScannerService.scanDirectory = vi
+      .fn()
+      .mockImplementation(async function* () {
+        yield [
+          {
+            propertyCid: 'property1',
+            dataGroupCid: 'bafkreischema',
+            filePath: '/test/dir/property1/bafkreischema.json',
+          },
+        ];
+      });
 
     const options = {
       inputDir: '/test/dir',

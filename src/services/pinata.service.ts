@@ -36,10 +36,11 @@ export class PinataService {
     try {
       // Determine if this is a binary file (e.g., image)
       const isBinary = fileToProcess.binaryData !== undefined;
-      const fileExtension = isBinary && fileToProcess.metadata?.isImage 
-        ? path.extname(fileToProcess.filePath)
-        : '.json';
-      
+      const fileExtension =
+        isBinary && fileToProcess.metadata?.isImage
+          ? path.extname(fileToProcess.filePath)
+          : '.json';
+
       const metadata: PinMetadata = {
         name: `${fileToProcess.dataGroupCid}${fileExtension}`,
         keyvalues: {
@@ -49,10 +50,10 @@ export class PinataService {
         },
       };
 
-      const fileBuffer = isBinary 
+      const fileBuffer = isBinary
         ? fileToProcess.binaryData!
         : Buffer.from(fileToProcess.canonicalJson);
-      
+
       const mimeType = fileToProcess.metadata?.mimeType || 'application/json';
 
       return await this.uploadFileInternal(
@@ -176,7 +177,9 @@ export class PinataService {
     return this.uploadFileInternal(data, metadata, dummyFileInfo);
   }
 
-  public async uploadBatch(files: (ProcessedFile & { binaryData?: Buffer; metadata?: any })[]): Promise<UploadResult[]> {
+  public async uploadBatch(
+    files: (ProcessedFile & { binaryData?: Buffer; metadata?: any })[]
+  ): Promise<UploadResult[]> {
     if (files.length === 0) {
       return [];
     }
