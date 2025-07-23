@@ -3,13 +3,12 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import 'dotenv/config';
 
 const execAsync = promisify(exec);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = process.cwd();
 const RPC_URL = process.env.RPC_URL || 'https://polygon-rpc.com';
 
 // Helper function to generate CIDv1 from test data
@@ -25,7 +24,7 @@ describe('Split Commands Integration Tests', () => {
   const testDataDir = path.join(__dirname, 'test-data');
   const outputDir = path.join(__dirname, 'test-output');
   const csvOutputPath = path.join(outputDir, 'upload-results.csv');
-  const cliPath = path.join(__dirname, '../../bin/elephant-cli');
+  const cliPath = path.join(__dirname, 'bin/elephant-cli');
 
   beforeAll(async () => {
     // Create test directories
@@ -91,11 +90,11 @@ describe('Split Commands Integration Tests', () => {
       // Read and verify CSV content - should be empty except for headers since schema fetching fails
       const csvContent = await fs.promises.readFile(csvOutputPath, 'utf-8');
       expect(csvContent).toContain(
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
       );
       // CSV should only contain headers since schema downloads fail with fake CIDs
       expect(csvContent.trim()).toBe(
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
       );
     });
 
