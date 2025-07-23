@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.15.0...v1.16.0) (2025-07-23)
+
+
+### Features
+
+* include all site assets to the ipfs upload ([#58](https://github.com/elephant-xyz/elephant-cli/issues/58)) ([32efd91](https://github.com/elephant-xyz/elephant-cli/commit/32efd91cf64b5d20ceaaee04760d1ef286ba3176))
+
 # [1.15.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.14.0...v1.15.0) (2025-07-23)
 
 
