@@ -31,9 +31,33 @@ async function checkFactSheetInstalled(): Promise<boolean> {
     logger.debug(`fact-sheet found at: ${path}`);
     return true;
   } catch {
-    logger.debug('fact-sheet not found in PATH');
+    // Check if it exists in the expected installation location
+    const expectedPath = path.join(os.homedir(), '.local', 'bin', 'fact-sheet');
+    if (existsSync(expectedPath)) {
+      logger.debug(`fact-sheet found at expected location: ${expectedPath}`);
+      return true;
+    }
+    logger.debug('fact-sheet not found in PATH or expected location');
     return false;
   }
+}
+
+function getFactSheetPath(): string {
+  // First try to find it in PATH
+  try {
+    const pathInSystem = execSync('which fact-sheet', {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    }).trim();
+    if (pathInSystem) {
+      return 'fact-sheet'; // Use the command directly if it's in PATH
+    }
+  } catch {
+    // Not in PATH, use the expected installation location
+  }
+
+  // Return the full path where the install script places it
+  return path.join(os.homedir(), '.local', 'bin', 'fact-sheet');
 }
 
 async function installOrUpdateFactSheet(): Promise<void> {
@@ -136,9 +160,12 @@ async function generateHTMLFiles(
     await fsPromises.mkdir(outputDir, { recursive: true });
     logger.debug(`Created output directory: ${outputDir}`);
 
+    // Get the fact-sheet command path
+    const factSheetCmd = getFactSheetPath();
+
     // Check if fact-sheet command is available
     try {
-      const version = execSync('fact-sheet --version', {
+      const version = execSync(`${factSheetCmd} --version`, {
         encoding: 'utf8',
       }).trim();
       logger.debug(`Using fact-sheet version: ${version}`);
@@ -147,7 +174,7 @@ async function generateHTMLFiles(
     }
 
     // Run fact-sheet generate command with inline assets
-    const command = `fact-sheet generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css`;
+    const command = `${factSheetCmd} generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css`;
     logger.debug(`Running command: ${command}`);
 
     try {
