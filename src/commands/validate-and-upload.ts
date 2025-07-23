@@ -808,7 +808,9 @@ async function processFileAndGetUploadPromise(
     // Check if data has IPLD links that need conversion
     let dataToUpload = jsonData;
 
+    // Skip IPLD conversion in dry-run mode to avoid validation issues with non-existent CIDs
     if (
+      !options.dryRun &&
       services.ipldConverterService &&
       services.ipldConverterService.hasIPLDLinks(jsonData, schema)
     ) {
@@ -843,7 +845,7 @@ async function processFileAndGetUploadPromise(
       }
     }
 
-    // Validate the data (potentially after IPLD conversion)
+    // Validate the data
     const validationResult = await services.jsonValidatorService.validate(
       dataToUpload,
       schema,

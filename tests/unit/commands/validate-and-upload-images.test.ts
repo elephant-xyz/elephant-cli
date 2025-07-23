@@ -361,8 +361,11 @@ describe('validate-and-upload with image support', () => {
 
     // Verify no actual uploads occurred
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
+    
+    // Verify IPLD converter was not called in dry-run mode
+    expect(mockIpldConverterService.convertToIPLD).not.toHaveBeenCalled();
 
-    // Verify calculated CIDs are included in output
+    // In dry-run mode, IPLD conversion is skipped, so CID is calculated with original data
     expect(
       mockCidCalculatorService.calculateCidAutoFormat
     ).toHaveBeenCalledWith(
@@ -371,7 +374,7 @@ describe('validate-and-upload with image support', () => {
         relationships: expect.arrayContaining([
           {
             name: 'Test Product',
-            ipfs_url: 'ipfs://bafkreicalculatedimage',
+            ipfs_url: './image.png',
           },
         ]),
       })
