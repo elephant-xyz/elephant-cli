@@ -1,3 +1,24 @@
+# [1.15.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.14.0...v1.15.0) (2025-07-23)
+
+
+### Features
+
+* **validate-and-upload:** add fallback fact-sheet path ([#55](https://github.com/elephant-xyz/elephant-cli/issues/55)) ([56a7d4d](https://github.com/elephant-xyz/elephant-cli/commit/56a7d4d67abc110092ab55cfcf59e5ffd59430a8))
+
+# [1.14.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.13.1...v1.14.0) (2025-07-23)
+
+
+### Features
+
+* generate html during validate-and-upload ([#54](https://github.com/elephant-xyz/elephant-cli/issues/54)) ([e4fe805](https://github.com/elephant-xyz/elephant-cli/commit/e4fe805b7af75b3c77a79c8676c352a3eba11ae4))
+
+## [1.13.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.13.0...v1.13.1) (2025-07-23)
+
+
+### Bug Fixes
+
+* update seed CID ([139946d](https://github.com/elephant-xyz/elephant-cli/commit/139946daa28563480ca8adb4f1715bb4c56edb6f))
+
 # [1.13.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.12.0...v1.13.0) (2025-07-22)
 
 

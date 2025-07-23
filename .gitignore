@@ -72,3 +72,5 @@ elephant-web-app/
 optional-relationships-data/
 test-seeding/
 transaction-status.csv
+collected_data/
+collected_output.csv

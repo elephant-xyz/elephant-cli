@@ -237,7 +237,46 @@ elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
 
 - Validates all your data files
 - Uploads valid files to IPFS via Pinata
-- Creates a CSV file with upload results (needed for next step)
+- **NEW**: Automatically generates HTML fact sheets for each property
+- Uploads HTML files to IPFS for easy web viewing
+- Creates a CSV file with upload results and HTML links (needed for next step)
+
+**HTML Fact Sheet Generation:**
+
+The CLI now automatically generates beautiful HTML fact sheets for your properties:
+
+- Installs/updates the fact-sheet tool automatically
+- Generates self-contained HTML files with inline CSS and JavaScript
+- Uploads HTML files to IPFS in parallel for faster processing
+- Provides web-accessible links in the format: `http://dweb.link/ipfs/<cid>`
+- Shows the first 5 property links in the console output
+- All HTML links are saved in the CSV file for reference
+
+Example output:
+```
+🌐 Property Fact Sheet Links:
+  (Note: It may take a few minutes for pages to propagate through IPFS gateways)
+
+  1. Property: bafkreitest1
+     http://dweb.link/ipfs/bafkreihtmlcid1
+
+  2. Property: bafkreitest2
+     http://dweb.link/ipfs/bafkreihtmlcid2
+
+  3. Property: bafkreitest3
+     http://dweb.link/ipfs/bafkreihtmlcid3
+
+  4. Property: bafkreitest4
+     http://dweb.link/ipfs/bafkreihtmlcid4
+
+  5. Property: bafkreitest5
+     http://dweb.link/ipfs/bafkreihtmlcid5
+
+  ... and 15 more properties.
+
+📄 All HTML links have been saved to: upload-results.csv
+  Please check this file for the complete list of property fact sheet URLs.
+```
 
 ## Workflow 2: Submitting to Blockchain
 
@@ -249,6 +288,7 @@ Check the CSV file from the previous step (`upload-results.csv`). It contains:
 - Data group CIDs
 - Your uploaded data CIDs
 - File paths and timestamps
+- HTML fact sheet links for web viewing
 
 ### Step 2: Submit to Contract (Dry Run First)
 

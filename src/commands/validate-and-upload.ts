@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { promises as fsPromises, writeFileSync } from 'fs';
+import { promises as fsPromises, writeFileSync, existsSync } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
@@ -21,6 +21,326 @@ import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
+
+async function checkFactSheetInstalled(): Promise<boolean> {
+  try {
+    const path = execSync('which fact-sheet', {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    }).trim();
+    logger.debug(`fact-sheet found at: ${path}`);
+    return true;
+  } catch {
+    // Check if it exists in the expected installation location
+    const expectedPath = path.join(os.homedir(), '.local', 'bin', 'fact-sheet');
+    if (existsSync(expectedPath)) {
+      logger.debug(`fact-sheet found at expected location: ${expectedPath}`);
+      return true;
+    }
+    logger.debug('fact-sheet not found in PATH or expected location');
+    return false;
+  }
+}
+
+function getFactSheetPath(): string {
+  // First try to find it in PATH
+  try {
+    const pathInSystem = execSync('which fact-sheet', {
+      stdio: 'pipe',
+      encoding: 'utf8',
+    }).trim();
+    if (pathInSystem) {
+      return 'fact-sheet'; // Use the command directly if it's in PATH
+    }
+  } catch {
+    // Not in PATH, use the expected installation location
+  }
+
+  // Return the full path where the install script places it
+  return path.join(os.homedir(), '.local', 'bin', 'fact-sheet');
+}
+
+async function installOrUpdateFactSheet(): Promise<void> {
+  const isInstalled = await checkFactSheetInstalled();
+
+  try {
+    if (isInstalled) {
+      logger.info('Fact-sheet tool found, updating to latest version...');
+      const updateScript =
+        'https://raw.githubusercontent.com/elephant-xyz/fact-sheet-template/main/update.sh';
+      logger.debug(`Running update command: curl -fsSL ${updateScript} | bash`);
+
+      try {
+        const output = execSync(`curl -fsSL ${updateScript} | bash`, {
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+        logger.debug(`Update script output: ${output}`);
+        logger.success('Fact-sheet tool updated successfully');
+      } catch (execError) {
+        const stderr =
+          execError instanceof Error && 'stderr' in execError
+            ? (execError as any).stderr
+            : '';
+        const stdout =
+          execError instanceof Error && 'stdout' in execError
+            ? (execError as any).stdout
+            : '';
+
+        // Check for common git errors
+        if (
+          stderr.includes('cannot pull with rebase') ||
+          stderr.includes('unstaged changes')
+        ) {
+          logger.error(
+            'The fact-sheet tool has local modifications that prevent updating.'
+          );
+          logger.info('To fix this, run the following commands:');
+          logger.info('  cd ~/.elephant-fact-sheet');
+          logger.info('  git stash');
+          logger.info('  bash update.sh');
+          logger.info('  git stash pop');
+          logger.warn('Attempting to continue with the current version...');
+          return; // Continue without updating
+        }
+
+        logger.error(
+          `Update script failed. stdout: ${stdout}, stderr: ${stderr}`
+        );
+        throw execError;
+      }
+    } else {
+      logger.info('Fact-sheet tool not found, installing...');
+      const installScript =
+        'https://raw.githubusercontent.com/elephant-xyz/fact-sheet-template/main/install.sh';
+      logger.debug(
+        `Running install command: curl -fsSL ${installScript} | bash`
+      );
+
+      try {
+        const output = execSync(`curl -fsSL ${installScript} | bash`, {
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+        logger.debug(`Install script output: ${output}`);
+        logger.success('Fact-sheet tool installed successfully');
+      } catch (execError) {
+        const stderr =
+          execError instanceof Error && 'stderr' in execError
+            ? (execError as any).stderr
+            : '';
+        const stdout =
+          execError instanceof Error && 'stdout' in execError
+            ? (execError as any).stdout
+            : '';
+        logger.error(
+          `Install script failed. stdout: ${stdout}, stderr: ${stderr}`
+        );
+        throw execError;
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorDetails =
+      error instanceof Error && error.stack ? error.stack : '';
+    logger.error(`Failed to install/update fact-sheet tool: ${errorMsg}`);
+    logger.debug(`Error stack trace: ${errorDetails}`);
+    throw new Error(`Failed to install/update fact-sheet tool: ${errorMsg}`);
+  }
+}
+
+async function generateHTMLFiles(
+  inputDir: string,
+  outputDir: string
+): Promise<void> {
+  try {
+    logger.info(`Generating HTML files from ${inputDir} to ${outputDir}...`);
+
+    // Ensure output directory exists
+    await fsPromises.mkdir(outputDir, { recursive: true });
+    logger.debug(`Created output directory: ${outputDir}`);
+
+    // Get the fact-sheet command path
+    const factSheetCmd = getFactSheetPath();
+
+    // Check if fact-sheet command is available
+    try {
+      const version = execSync(`${factSheetCmd} --version`, {
+        encoding: 'utf8',
+      }).trim();
+      logger.debug(`Using fact-sheet version: ${version}`);
+    } catch (versionError) {
+      logger.warn('Could not determine fact-sheet version');
+    }
+
+    // Run fact-sheet generate command with inline assets
+    const command = `${factSheetCmd} generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css`;
+    logger.debug(`Running command: ${command}`);
+
+    try {
+      const output = execSync(command, {
+        encoding: 'utf8',
+        cwd: process.cwd(),
+        stdio: 'pipe',
+      });
+      logger.debug(`Fact-sheet generate output: ${output}`);
+      logger.success('HTML files generated successfully');
+    } catch (execError) {
+      const stderr =
+        execError instanceof Error && 'stderr' in execError
+          ? (execError as any).stderr
+          : '';
+      const stdout =
+        execError instanceof Error && 'stdout' in execError
+          ? (execError as any).stdout
+          : '';
+      logger.error(
+        `Fact-sheet generate failed. stdout: ${stdout}, stderr: ${stderr}`
+      );
+      throw execError;
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error && error.stack ? error.stack : '';
+    logger.error(`Failed to generate HTML files: ${errorMsg}`);
+    logger.debug(`Error stack trace: ${errorStack}`);
+    throw new Error(`Failed to generate HTML files: ${errorMsg}`);
+  }
+}
+
+interface HTMLUploadResult {
+  propertyCid: string;
+  htmlCid: string;
+  htmlLink: string;
+}
+
+async function scanAndUploadHTMLFiles(
+  htmlDir: string,
+  pinataService: PinataService | undefined,
+  progressTracker: SimpleProgress,
+  dryRun: boolean
+): Promise<Map<string, HTMLUploadResult>> {
+  const htmlUploadMap = new Map<string, HTMLUploadResult>();
+
+  try {
+    // Get all directories in the HTML output directory
+    const entries = await fsPromises.readdir(htmlDir, { withFileTypes: true });
+    const directories = entries.filter((entry) => entry.isDirectory());
+
+    logger.info(
+      `Found ${directories.length} property directories with HTML files`
+    );
+
+    // Prepare files for batch processing
+    const filesToUpload: Array<{
+      dirName: string;
+      htmlContent: string;
+      htmlBuffer?: Buffer;
+    }> = [];
+
+    for (const dir of directories) {
+      const dirName = dir.name;
+      const htmlFilePath = path.join(htmlDir, dirName, 'index.html');
+
+      try {
+        // Check if index.html exists
+        const htmlExists = existsSync(htmlFilePath);
+        if (!htmlExists) {
+          logger.warn(`No index.html found in directory ${dirName}`);
+          progressTracker.increment('errors');
+          continue;
+        }
+
+        // Read HTML file
+        const htmlContent = await fsPromises.readFile(htmlFilePath, 'utf-8');
+        filesToUpload.push({
+          dirName,
+          htmlContent,
+          htmlBuffer: Buffer.from(htmlContent, 'utf-8'),
+        });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error(
+          `Error reading HTML for directory ${dirName}: ${errorMsg}`
+        );
+        progressTracker.increment('errors');
+      }
+    }
+
+    if (dryRun) {
+      // In dry-run mode, simulate uploads
+      for (const file of filesToUpload) {
+        const calculatedCid = `bafybeig${file.dirName.toLowerCase().substring(7, 20)}htmldryrun`;
+        const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
+
+        logger.info(`[DRY RUN] Would upload HTML for property ${file.dirName}`);
+
+        htmlUploadMap.set(file.dirName, {
+          propertyCid: file.dirName,
+          htmlCid: calculatedCid,
+          htmlLink,
+        });
+
+        progressTracker.increment('processed');
+      }
+    } else {
+      if (!pinataService) {
+        throw new Error('Pinata service not available for HTML upload');
+      }
+
+      // Prepare batch upload using existing PinataService mechanism
+      const processedFiles = filesToUpload.map((file) => ({
+        propertyCid: file.dirName,
+        dataGroupCid: 'html-fact-sheet',
+        filePath: `${file.dirName}/index.html`,
+        canonicalJson: file.htmlContent,
+        calculatedCid: '', // Not used for HTML
+        validationPassed: true,
+        binaryData: file.htmlBuffer,
+        metadata: {
+          isImage: false,
+          mimeType: 'text/html',
+        },
+      }));
+
+      // Use the existing batch upload mechanism with parallel processing
+      logger.info(
+        `Uploading ${processedFiles.length} HTML files in parallel...`
+      );
+      const uploadResults = await pinataService.uploadBatch(processedFiles);
+
+      // Process results
+      for (let i = 0; i < uploadResults.length; i++) {
+        const result = uploadResults[i];
+        const dirName = filesToUpload[i].dirName;
+
+        if (result.success && result.cid) {
+          const htmlLink = `http://dweb.link/ipfs/${result.cid}`;
+
+          htmlUploadMap.set(dirName, {
+            propertyCid: dirName,
+            htmlCid: result.cid,
+            htmlLink,
+          });
+
+          logger.debug(`Uploaded HTML for directory ${dirName}: ${result.cid}`);
+          progressTracker.increment('processed');
+        } else {
+          logger.error(
+            `Failed to upload HTML for directory ${dirName}: ${result.error}`
+          );
+          progressTracker.increment('errors');
+        }
+      }
+    }
+
+    return htmlUploadMap;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error(`Error scanning HTML directory: ${errorMsg}`);
+    return htmlUploadMap;
+  }
+}
 
 function validateDataGroupSchema(schema: any): {
   valid: boolean;
@@ -88,6 +408,7 @@ interface UploadRecord {
   dataCid: string;
   filePath: string;
   uploadedAt: string;
+  htmlLink?: string;
 }
 
 export function registerValidateAndUploadCommand(program: Command) {
@@ -530,6 +851,126 @@ export async function handleValidateAndUpload(
       await Promise.all(allOperationPromises);
     }
 
+    // Phase 3: Generate and upload HTML files
+    let htmlUploadMap: Map<string, HTMLUploadResult> = new Map();
+
+    if (uploadRecords.length > 0) {
+      try {
+        // Install or update fact-sheet tool (skip in dry-run mode)
+        if (!options.dryRun) {
+          progressTracker.setPhase('Installing/Updating Fact Sheet Tool', 1);
+
+          // Check if curl is available
+          try {
+            execSync('which curl', { stdio: 'pipe' });
+            logger.debug('curl is available');
+          } catch {
+            logger.error(
+              'curl is not available. Please install curl to use HTML generation feature.'
+            );
+            throw new Error(
+              'curl is required for fact-sheet installation but was not found'
+            );
+          }
+
+          try {
+            await installOrUpdateFactSheet();
+          } catch (installError) {
+            logger.warn(
+              'Failed to install/update fact-sheet tool, but will attempt to continue with existing version if available'
+            );
+
+            // Check if fact-sheet is available despite update failure
+            const isInstalled = await checkFactSheetInstalled();
+            if (!isInstalled) {
+              throw new Error(
+                'fact-sheet tool is not installed and installation failed'
+              );
+            }
+            logger.info('Using existing fact-sheet installation');
+          }
+          progressTracker.increment('processed');
+        }
+
+        // Generate HTML files
+        progressTracker.setPhase('Generating HTML Files', 1);
+        const htmlOutputDir = path.join(
+          path.dirname(options.inputDir),
+          'htmls'
+        );
+        await generateHTMLFiles(options.inputDir, htmlOutputDir);
+        progressTracker.increment('processed');
+
+        // Upload HTML files
+        const htmlDirs = await fsPromises.readdir(htmlOutputDir, {
+          withFileTypes: true,
+        });
+        const htmlDirCount = htmlDirs.filter((d) => d.isDirectory()).length;
+
+        if (htmlDirCount > 0) {
+          progressTracker.setPhase('Uploading HTML Files', htmlDirCount);
+          htmlUploadMap = await scanAndUploadHTMLFiles(
+            htmlOutputDir,
+            pinataService,
+            progressTracker,
+            options.dryRun
+          );
+        }
+
+        // Update upload records with HTML links
+        // Create a map of directory paths to property CIDs for matching
+        const dirToPropertyMap = new Map<string, string>();
+        for (const record of uploadRecords) {
+          const dirName = path.basename(path.dirname(record.filePath));
+          dirToPropertyMap.set(dirName, record.propertyCid);
+        }
+
+        // Match HTML results to upload records
+        for (const record of uploadRecords) {
+          // Try to find HTML result by property CID first
+          let htmlResult = htmlUploadMap.get(record.propertyCid);
+
+          // If not found, try to find by directory name
+          if (!htmlResult) {
+            const dirName = path.basename(path.dirname(record.filePath));
+            htmlResult = htmlUploadMap.get(dirName);
+          }
+
+          if (htmlResult) {
+            record.htmlLink = htmlResult.htmlLink;
+          }
+        }
+
+        // Clean up HTML directory after upload
+        if (!options.dryRun && existsSync(htmlOutputDir)) {
+          try {
+            await fsPromises.rm(htmlOutputDir, {
+              recursive: true,
+              force: true,
+            });
+            logger.debug('Cleaned up temporary HTML directory');
+          } catch (cleanupError) {
+            logger.warn(
+              `Failed to clean up HTML directory: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
+            );
+          }
+        }
+      } catch (htmlError) {
+        const errorMsg =
+          htmlError instanceof Error ? htmlError.message : String(htmlError);
+        const errorStack =
+          htmlError instanceof Error && htmlError.stack
+            ? htmlError.stack
+            : 'No stack trace available';
+        logger.error(`HTML generation/upload failed: ${errorMsg}`);
+        logger.debug(`HTML generation error details: ${errorStack}`);
+        logger.warn(
+          'Continuing with the process despite HTML generation failure'
+        );
+        // Continue with the process even if HTML generation fails
+      }
+    }
+
     if (progressTracker) {
       progressTracker.stop();
     }
@@ -592,16 +1033,67 @@ export async function handleValidateAndUpload(
 
     try {
       const csvHeader =
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink\n';
       const csvContent = uploadRecords
         .map(
           (record) =>
-            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
+            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt},${record.htmlLink || ''}`
         )
         .join('\n');
 
       writeFileSync(options.outputCsv, csvHeader + csvContent);
       logger.success(`Upload results saved to: ${options.outputCsv}`);
+
+      // Display first 5 unique HTML links (based on the link itself, not property CID)
+      const uniqueHtmlLinks = new Map<
+        string,
+        { propertyCid: string; dirName: string }
+      >();
+      for (const record of uploadRecords) {
+        if (record.htmlLink && !uniqueHtmlLinks.has(record.htmlLink)) {
+          const dirName = path.basename(path.dirname(record.filePath));
+          uniqueHtmlLinks.set(record.htmlLink, {
+            propertyCid: record.propertyCid,
+            dirName: dirName,
+          });
+        }
+      }
+
+      if (uniqueHtmlLinks.size > 0) {
+        console.log(chalk.bold('\n🌐 Property Fact Sheet Links:'));
+        console.log(
+          chalk.gray(
+            '  (Note: It may take a few minutes for pages to propagate through IPFS gateways)\n'
+          )
+        );
+
+        const linksArray = Array.from(uniqueHtmlLinks.entries());
+        const displayCount = Math.min(5, linksArray.length);
+
+        for (let i = 0; i < displayCount; i++) {
+          const [htmlLink, info] = linksArray[i];
+          // Display directory name and property CID on one line and full URL on the next
+          console.log(`  ${i + 1}. Directory: ${info.dirName}`);
+          console.log(`     ${chalk.cyan(htmlLink)}\n`);
+        }
+
+        if (linksArray.length > 5) {
+          console.log(
+            chalk.yellow(`  ... and ${linksArray.length - 5} more fact sheets.`)
+          );
+        }
+
+        console.log(
+          chalk.bold(
+            `\n📄 All HTML links have been saved to: ${chalk.green(options.outputCsv)}`
+          )
+        );
+        console.log(
+          chalk.gray(
+            '  Please check this file for the complete list of property fact sheet URLs.'
+          )
+        );
+      }
     } catch (writeCsvError) {
       const errMsg =
         writeCsvError instanceof Error
