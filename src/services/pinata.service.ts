@@ -285,33 +285,18 @@ export class PinataService {
           type: 'application/octet-stream',
         });
 
+        logger.info(`relativePath is ${relativePath}`);
         // Append with the filepath parameter to preserve directory structure
         form.append('file', file, relativePath);
       }
 
-      // Add Pinata options for CID v1
-      const pinataOptions = new Blob(
-        [
-          JSON.stringify({
-            cidVersion: 1,
-            wrapWithDirectory: true,
-          }),
-        ],
-        { type: 'application/json' }
-      );
-      form.append('pinataOptions', pinataOptions);
-
-      // Add metadata if provided
+      // Use CID v1 by default for all uploads
+      form.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
       if (metadata) {
-        const pinataMetadata = new Blob(
-          [
-            JSON.stringify({
-              name: metadata.name || path.basename(directoryPath),
-              keyvalues: metadata.keyvalues || {},
-            }),
-          ],
-          { type: 'application/json' }
-        );
+        const pinataMetadata = JSON.stringify({
+          name: metadata.name || path.basename(directoryPath),
+          keyvalues: metadata.keyvalues || {},
+        });
         form.append('pinataMetadata', pinataMetadata);
       }
 
