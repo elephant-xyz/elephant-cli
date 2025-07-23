@@ -229,13 +229,22 @@ export class PinataService {
    * Get relative path from base directory
    * @param base - Base directory path
    * @param file - File path
-   * @returns Relative path
+   * @returns Relative path with only parent directory and filename
    */
   private getRelativePath(base: string, file: string): string {
-    return path.relative(base, file).replace(/\\/g, '/'); // Ensure forward slashes
-  }
+    const relativePath = path.relative(base, file);
+    const parsed = path.parse(relativePath);
 
-  /**
+    // If file is in a subdirectory, use its immediate parent directory
+    if (parsed.dir) {
+      const parentDir = path.basename(parsed.dir);
+      return path.posix.join(parentDir, parsed.base);
+    }
+
+    // If file is directly in the base directory, use the base directory name
+    const baseDirName = path.basename(base);
+    return path.posix.join(baseDirName, parsed.base);
+  } /**
    * Upload an entire directory to Pinata, preserving the directory structure.
    * @param directoryPath - The absolute path to the directory to upload
    * @param metadata - Optional metadata for the upload
