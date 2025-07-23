@@ -2,8 +2,7 @@ import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
 import path from 'path';
-import fs from 'fs';
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, readFile } from 'fs/promises';
 
 export interface PinMetadata {
   name?: string;
@@ -270,7 +269,7 @@ export class PinataService {
       // Add each file to the form data with its relative path
       for (const filePath of files) {
         const relativePath = this.getRelativePath(directoryPath, filePath);
-        const fileContent = await fs.promises.readFile(filePath);
+        const fileContent = await readFile(filePath);
 
         // Create a File object with the relative path
         const file = new File([fileContent], relativePath, {

@@ -28,6 +28,55 @@ vi.mock('../../../src/utils/logger', () => ({
   }
 };
 
+// Mock Blob (Web API) for Node
+(global as any).Blob = class MockBlob {
+  buffer: Buffer;
+  type: string;
+  constructor(parts: (string | Buffer)[], opts: { type?: string } = {}) {
+    const buffers = parts.map((part) =>
+      typeof part === 'string' ? Buffer.from(part) : part
+    );
+    this.buffer = Buffer.concat(buffers);
+    this.type = opts.type || '';
+  }
+};
+
+// Mock FormData (Web API) for Node
+(global as any).FormData = class MockFormData {
+  private data: Map<string, any> = new Map();
+
+  append(key: string, value: any, filename?: string) {
+    if (!this.data.has(key)) {
+      this.data.set(key, []);
+    }
+    this.data.get(key).push({ value, filename });
+  }
+
+  get(key: string) {
+    const items = this.data.get(key);
+    return items ? items[0].value : null;
+  }
+
+  getAll(key: string) {
+    const items = this.data.get(key);
+    return items ? items.map((item: any) => item.value) : [];
+  }
+
+  has(key: string) {
+    return this.data.has(key);
+  }
+
+  delete(key: string) {
+    this.data.delete(key);
+  }
+
+  forEach(callback: (value: any, key: string, parent: any) => void) {
+    this.data.forEach((items, key) => {
+      items.forEach((item: any) => callback(item.value, key, this));
+    });
+  }
+};
+
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -236,7 +285,7 @@ describe('PinataService', () => {
       await writeFile(join(subDirPath, 'script.js'), 'console.log("test");');
     });
 
-    it.skip('should successfully upload a directory with all files', async () => {
+    it('should successfully upload a directory with all files', async () => {
       const mockPinataResponse = {
         IpfsHash: 'bafyDirectoryHash',
         PinSize: 500,
@@ -257,6 +306,10 @@ describe('PinataService', () => {
       };
 
       const result = await pinataService.uploadDirectory(testDirPath, metadata);
+
+      if (!result.success) {
+        console.error('Upload failed:', result.error);
+      }
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result.success).toBe(true);
@@ -294,7 +347,7 @@ describe('PinataService', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it.skip('should handle upload failure', async () => {
+    it('should handle upload failure', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -309,7 +362,7 @@ describe('PinataService', () => {
       expect(result.error).toContain('Pinata API error');
     });
 
-    it.skip('should use default metadata when not provided', async () => {
+    it('should use default metadata when not provided', async () => {
       const mockPinataResponse = {
         IpfsHash: 'bafyDefaultMetadataHash',
         PinSize: 300,
