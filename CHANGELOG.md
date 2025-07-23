@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.13.1...v1.14.0) (2025-07-23)
+
+
+### Features
+
+* generate html during validate-and-upload ([#54](https://github.com/elephant-xyz/elephant-cli/issues/54)) ([e4fe805](https://github.com/elephant-xyz/elephant-cli/commit/e4fe805b7af75b3c77a79c8676c352a3eba11ae4))
+
 ## [1.13.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.13.0...v1.13.1) (2025-07-23)
 
 
