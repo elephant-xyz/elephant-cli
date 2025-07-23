@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { promises as fsPromises, writeFileSync } from 'fs';
-import { handleValidateAndUpload } from '../../../src/commands/validate-and-upload';
-import { FileScannerService } from '../../../src/services/file-scanner.service';
-import { SchemaCacheService } from '../../../src/services/schema-cache.service';
-import { JsonValidatorService } from '../../../src/services/json-validator.service';
-import { IPLDCanonicalizerService } from '../../../src/services/ipld-canonicalizer.service';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service';
-import { PinataService } from '../../../src/services/pinata.service';
-import { CsvReporterService } from '../../../src/services/csv-reporter.service';
-import { SimpleProgress } from '../../../src/utils/simple-progress';
-import { IPFSService } from '../../../src/services/ipfs.service';
-import { IPLDConverterService } from '../../../src/services/ipld-converter.service';
+import { handleValidateAndUpload } from '../../../src/commands/validate-and-upload.js';
+import { FileScannerService } from '../../../src/services/file-scanner.service.js';
+import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
+import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
+import { IPLDCanonicalizerService } from '../../../src/services/ipld-canonicalizer.service.js';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
+import { PinataService } from '../../../src/services/pinata.service.js';
+import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
+import { SimpleProgress } from '../../../src/utils/simple-progress.js';
+import { IPFSService } from '../../../src/services/ipfs.service.js';
+import { IPLDConverterService } from '../../../src/services/ipld-converter.service.js';
 
 vi.mock('fs', () => ({
   promises: {
@@ -361,7 +361,7 @@ describe('validate-and-upload with image support', () => {
 
     // Verify no actual uploads occurred
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
-    
+
     // Verify IPLD converter was not called in dry-run mode
     expect(mockIpldConverterService.convertToIPLD).not.toHaveBeenCalled();
 
