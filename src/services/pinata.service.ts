@@ -211,10 +211,10 @@ export class PinataService {
   ): Promise<UploadResult> {
     try {
       logger.info(`Uploading directory ${directoryName} to IPFS...`);
-      
+
       // Create a mapping of all files in the directory
       const files = await this.scanDirectory(directoryPath);
-      
+
       if (files.length === 0) {
         return {
           success: false,
@@ -227,11 +227,11 @@ export class PinataService {
       // Upload all files individually first
       const uploadResults = new Map<string, string>();
       const errors: string[] = [];
-      
+
       for (const file of files) {
         const fileBuffer = await fsPromises.readFile(file.absolutePath);
         const relativePath = path.relative(directoryPath, file.absolutePath);
-        
+
         const fileMetadata: PinMetadata = {
           name: `${directoryName}/${relativePath}`,
           keyvalues: {
@@ -240,9 +240,9 @@ export class PinataService {
             relativePath: relativePath,
           },
         };
-        
+
         const result = await this.uploadFile(fileBuffer, fileMetadata);
-        
+
         if (result.success && result.cid) {
           uploadResults.set(relativePath, result.cid);
           logger.debug(`Uploaded ${relativePath}: ${result.cid}`);
@@ -250,11 +250,11 @@ export class PinataService {
           errors.push(`Failed to upload ${relativePath}: ${result.error}`);
         }
       }
-      
+
       if (errors.length > 0) {
         logger.error(`Errors during directory upload: ${errors.join(', ')}`);
       }
-      
+
       // Create an index file that maps the directory structure
       const indexData = {
         type: 'directory',
@@ -262,7 +262,7 @@ export class PinataService {
         files: Object.fromEntries(uploadResults),
         timestamp: new Date().toISOString(),
       };
-      
+
       const indexBuffer = Buffer.from(JSON.stringify(indexData, null, 2));
       const indexMetadata: PinMetadata = {
         name: `${directoryName}/_directory_index.json`,
@@ -272,10 +272,10 @@ export class PinataService {
           directory: directoryName,
         },
       };
-      
+
       // Upload the index file
       const indexResult = await this.uploadFile(indexBuffer, indexMetadata);
-      
+
       if (indexResult.success && indexResult.cid) {
         // Return the index CID as the directory CID
         return {
@@ -308,13 +308,15 @@ export class PinataService {
     dirPath: string
   ): Promise<Array<{ absolutePath: string; relativePath: string }>> {
     const files: Array<{ absolutePath: string; relativePath: string }> = [];
-    
+
     async function scan(currentPath: string) {
-      const items = await fsPromises.readdir(currentPath, { withFileTypes: true });
-      
+      const items = await fsPromises.readdir(currentPath, {
+        withFileTypes: true,
+      });
+
       for (const item of items) {
         const itemPath = path.join(currentPath, item.name);
-        
+
         if (item.isFile()) {
           files.push({
             absolutePath: itemPath,
@@ -325,7 +327,7 @@ export class PinataService {
         }
       }
     }
-    
+
     await scan(dirPath);
     return files;
   }

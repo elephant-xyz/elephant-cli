@@ -120,14 +120,16 @@ describe('validate-and-upload HTML generation', () => {
         success: true,
         cid: 'bafkreihtmlcid',
       }),
-      uploadDirectory: vi.fn().mockImplementation(async (dirPath: string, dirName: string) => {
-        return {
-          success: true,
-          cid: `bafkreidirectory${dirName}`,
-          propertyCid: dirName,
-          dataGroupCid: 'html-fact-sheet',
-        };
-      }),
+      uploadDirectory: vi
+        .fn()
+        .mockImplementation(async (dirPath: string, dirName: string) => {
+          return {
+            success: true,
+            cid: `bafkreidirectory${dirName}`,
+            propertyCid: dirName,
+            dataGroupCid: 'html-fact-sheet',
+          };
+        }),
     } as unknown as PinataService;
 
     mockCsvReporterService = {
@@ -521,9 +523,7 @@ describe('validate-and-upload HTML generation', () => {
     readdirMock.mockImplementation(async (path: string) => {
       if (path.includes('htmls')) {
         // Return property directories
-        return [
-          { name: 'bafkreitest1', isDirectory: () => true },
-        ] as any;
+        return [{ name: 'bafkreitest1', isDirectory: () => true }] as any;
       } else {
         // Return files in property directory
         return ['index.html', 'data.json', 'style.css'];

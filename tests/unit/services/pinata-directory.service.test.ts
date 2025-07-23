@@ -31,10 +31,10 @@ describe('PinataService - Directory Upload', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Mock fetch globally
     global.fetch = vi.fn();
-    
+
     pinataService = new PinataService(mockJwt);
   });
 
@@ -50,12 +50,14 @@ describe('PinataService - Directory Upload', () => {
     ];
 
     // Mock readdir to return files
-    (fsPromises.readdir as any).mockImplementation(async (path: string, options?: any) => {
-      if (options?.withFileTypes) {
-        return mockFiles;
+    (fsPromises.readdir as any).mockImplementation(
+      async (path: string, options?: any) => {
+        if (options?.withFileTypes) {
+          return mockFiles;
+        }
+        return mockFiles.map((f) => f.name);
       }
-      return mockFiles.map(f => f.name);
-    });
+    );
 
     // Mock readFile to return content for each file
     (fsPromises.readFile as any).mockImplementation(async (path: string) => {
@@ -124,14 +126,18 @@ describe('PinataService - Directory Upload', () => {
       { name: 'index.html', isFile: () => true, isDirectory: () => false },
     ];
 
-    (fsPromises.readdir as any).mockImplementation(async (path: string, options?: any) => {
-      if (options?.withFileTypes) {
-        return mockFiles;
+    (fsPromises.readdir as any).mockImplementation(
+      async (path: string, options?: any) => {
+        if (options?.withFileTypes) {
+          return mockFiles;
+        }
+        return mockFiles.map((f) => f.name);
       }
-      return mockFiles.map(f => f.name);
-    });
+    );
 
-    (fsPromises.readFile as any).mockResolvedValue(Buffer.from('<html></html>'));
+    (fsPromises.readFile as any).mockResolvedValue(
+      Buffer.from('<html></html>')
+    );
 
     // Mock the uploadFile method to fail
     pinataService.uploadFile = vi.fn().mockResolvedValue({
@@ -160,12 +166,18 @@ describe('PinataService - Directory Upload', () => {
       { name: 'style.css', isFile: () => true, isDirectory: () => false },
     ];
 
-    (fsPromises.readdir as any).mockImplementation(async (path: string, options?: any) => {
-      if (path.includes('assets')) {
-        return options?.withFileTypes ? mockAssets : mockAssets.map(f => f.name);
+    (fsPromises.readdir as any).mockImplementation(
+      async (path: string, options?: any) => {
+        if (path.includes('assets')) {
+          return options?.withFileTypes
+            ? mockAssets
+            : mockAssets.map((f) => f.name);
+        }
+        return options?.withFileTypes
+          ? mockStructure
+          : mockStructure.map((f) => f.name);
       }
-      return options?.withFileTypes ? mockStructure : mockStructure.map(f => f.name);
-    });
+    );
 
     (fsPromises.readFile as any).mockResolvedValue(Buffer.from('test content'));
 
@@ -185,7 +197,7 @@ describe('PinataService - Directory Upload', () => {
     );
 
     expect(result.success).toBe(true);
-    
+
     // Should upload 3 files (index.html, logo.png, style.css) + 1 index
     const fetchCalls = (global.fetch as any).mock.calls;
     expect(fetchCalls.length).toBe(4);

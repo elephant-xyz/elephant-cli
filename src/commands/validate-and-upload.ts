@@ -249,7 +249,9 @@ async function scanAndUploadHTMLFiles(
           const calculatedCid = `bafybeig${dirName.toLowerCase().substring(0, 13)}dirdryrun`;
           const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
 
-          logger.info(`[DRY RUN] Would upload HTML directory for property ${dirName}`);
+          logger.info(
+            `[DRY RUN] Would upload HTML directory for property ${dirName}`
+          );
 
           htmlUploadMap.set(dirName, {
             propertyCid: dirName,
@@ -265,7 +267,7 @@ async function scanAndUploadHTMLFiles(
 
           // Upload the entire directory
           logger.info(`Uploading HTML directory for property ${dirName}...`);
-          
+
           const metadata: PinMetadata = {
             name: `fact-sheet-${dirName}`,
             keyvalues: {
@@ -291,7 +293,9 @@ async function scanAndUploadHTMLFiles(
               htmlLink,
             });
 
-            logger.debug(`Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`);
+            logger.debug(
+              `Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`
+            );
             progressTracker.increment('processed');
           } else {
             logger.error(
@@ -302,9 +306,7 @@ async function scanAndUploadHTMLFiles(
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.error(
-          `Error processing HTML directory ${dirName}: ${errorMsg}`
-        );
+        logger.error(`Error processing HTML directory ${dirName}: ${errorMsg}`);
         progressTracker.increment('errors');
       }
     }

@@ -38,7 +38,7 @@ export class DirectoryUploadService {
     const encoded = dagPB.encode(node);
     const hash = await sha256.digest(encoded);
     const cid = CID.create(1, 0x70, hash); // dag-pb codec
-    
+
     return {
       cid,
       size: encoded.length,
@@ -55,20 +55,20 @@ export class DirectoryUploadService {
   }> {
     const files = new Map<string, CID>();
     const directories = new Map<string, dagPB.PBNode>();
-    
+
     // First, create all file nodes
     for (const entry of entries) {
       const fileInfo = await this.createFileNode(entry.content);
       files.set(entry.path, fileInfo.cid);
-      
+
       // Add file to its parent directory
       const dirPath = path.dirname(entry.path);
       const fileName = path.basename(entry.path);
-      
+
       if (!directories.has(dirPath)) {
         directories.set(dirPath, this.createDirectoryNode());
       }
-      
+
       const dir = directories.get(dirPath)!;
       dir.Links.push({
         Name: fileName,
@@ -76,18 +76,18 @@ export class DirectoryUploadService {
         Hash: fileInfo.cid,
       });
     }
-    
+
     // Sort links in each directory (IPFS canonical order)
     for (const [, dir] of directories) {
       dir.Links.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }
-    
+
     // Calculate CID for root directory
     const rootDir = directories.get('.') || this.createDirectoryNode();
     const encoded = dagPB.encode(rootDir);
     const hash = await sha256.digest(encoded);
     const rootCid = CID.create(1, 0x70, hash);
-    
+
     return {
       rootCid,
       files,
@@ -99,14 +99,16 @@ export class DirectoryUploadService {
    */
   async prepareDirectoryForUpload(dirPath: string): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = [];
-    
+
     async function scanDir(currentPath: string, relativePath: string) {
-      const items = await fsPromises.readdir(currentPath, { withFileTypes: true });
-      
+      const items = await fsPromises.readdir(currentPath, {
+        withFileTypes: true,
+      });
+
       for (const item of items) {
         const itemPath = path.join(currentPath, item.name);
         const relativeItemPath = path.join(relativePath, item.name);
-        
+
         if (item.isFile()) {
           const content = await fsPromises.readFile(itemPath);
           entries.push({
@@ -118,7 +120,7 @@ export class DirectoryUploadService {
         }
       }
     }
-    
+
     await scanDir(dirPath, '');
     return entries;
   }
@@ -133,10 +135,12 @@ export class DirectoryUploadService {
   }> {
     // For now, we'll create individual file uploads and link them
     // Full CAR implementation would require additional dependencies
-    logger.warn('CAR creation not fully implemented - using alternative approach');
-    
+    logger.warn(
+      'CAR creation not fully implemented - using alternative approach'
+    );
+
     const { rootCid } = await this.buildDirectoryStructure(entries);
-    
+
     return {
       carData: Buffer.from(''), // Placeholder
       rootCid,
