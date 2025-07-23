@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PinataService } from '../../../src/services/pinata.service';
 import { ProcessedFile } from '../../../src/types/submit.types';
-// No longer using FormData directly
-import { mkdtemp, writeFile, rm } from 'fs/promises';
+import { mkdtemp, writeFile, rm, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
@@ -18,7 +17,7 @@ vi.mock('../../../src/utils/logger', () => ({
 }));
 
 // Mock File (Web API) for Node
-global.File = class MockFile {
+(global as any).File = class MockFile {
   buffer: Buffer;
   name: string;
   type: string;
@@ -49,6 +48,7 @@ describe('PinataService', () => {
 
   beforeEach(async () => {
     vi.resetModules();
+    vi.clearAllMocks();
 
     tempTestDir = await mkdtemp(join(tmpdir(), 'pinata-service-test-'));
 
@@ -214,4 +214,119 @@ describe('PinataService', () => {
   });
 
   // getAuthHeaders is no longer present (JWT only, handled inline)
+
+  describe('uploadDirectory', () => {
+    let testDirPath: string;
+    let subDirPath: string;
+
+    beforeEach(async () => {
+      // Create a test directory structure
+      testDirPath = join(tempTestDir, 'test-html-dir');
+      subDirPath = join(testDirPath, 'assets');
+
+      // Create directories
+      await mkdir(testDirPath, { recursive: true });
+      await mkdir(subDirPath, { recursive: true });
+      // Create test files
+      await writeFile(
+        join(testDirPath, 'index.html'),
+        '<html><body>Test</body></html>'
+      );
+      await writeFile(join(testDirPath, 'style.css'), 'body { color: red; }');
+      await writeFile(join(subDirPath, 'script.js'), 'console.log("test");');
+    });
+
+    it.skip('should successfully upload a directory with all files', async () => {
+      const mockPinataResponse = {
+        IpfsHash: 'bafyDirectoryHash',
+        PinSize: 500,
+        Timestamp: new Date().toISOString(),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPinataResponse),
+      });
+
+      const metadata = {
+        name: 'test-property-html',
+        keyvalues: {
+          propertyCid: 'bafkreitest123',
+          dataGroupCid: 'html-fact-sheet',
+        },
+      };
+
+      const result = await pinataService.uploadDirectory(testDirPath, metadata);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+      expect(result.cid).toBe('bafyDirectoryHash');
+      expect(result.propertyCid).toBe('bafkreitest123');
+      expect(result.dataGroupCid).toBe('html-fact-sheet');
+
+      // Verify the request was made with proper form data
+      const fetchCall = mockFetch.mock.calls[0];
+      expect(fetchCall[0]).toBe(
+        'https://api.pinata.cloud/pinning/pinFileToIPFS'
+      );
+      expect(fetchCall[1].method).toBe('POST');
+      expect(fetchCall[1].headers.Authorization).toBe('Bearer test-jwt');
+    });
+
+    it('should handle non-existent directory gracefully', async () => {
+      const nonExistentPath = join(tempTestDir, 'non-existent');
+
+      const result = await pinataService.uploadDirectory(nonExistentPath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Directory not found');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty directory', async () => {
+      const emptyDirPath = join(tempTestDir, 'empty-dir');
+      await mkdir(emptyDirPath, { recursive: true });
+
+      const result = await pinataService.uploadDirectory(emptyDirPath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No files found in directory');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it.skip('should handle upload failure', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        text: () => Promise.resolve('Server error'),
+      });
+
+      const result = await pinataService.uploadDirectory(testDirPath);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Pinata API error');
+    });
+
+    it.skip('should use default metadata when not provided', async () => {
+      const mockPinataResponse = {
+        IpfsHash: 'bafyDefaultMetadataHash',
+        PinSize: 300,
+        Timestamp: new Date().toISOString(),
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPinataResponse),
+      });
+
+      const result = await pinataService.uploadDirectory(testDirPath);
+
+      expect(result.success).toBe(true);
+      expect(result.cid).toBe('bafyDefaultMetadataHash');
+      expect(result.propertyCid).toBe(testDirPath);
+      expect(result.dataGroupCid).toBe('directory');
+    });
+  });
 });

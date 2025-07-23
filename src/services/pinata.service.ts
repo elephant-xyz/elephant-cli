@@ -3,11 +3,7 @@ import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
 import path from 'path';
 import fs from 'fs';
-import FormDataNode from 'form-data';
-// @ts-ignore - no types available
-import rfs from 'recursive-fs';
-// @ts-ignore - no types available
-import basePathConverter from 'base-path-converter';
+import { readdir, stat } from 'fs/promises';
 
 export interface PinMetadata {
   name?: string;
@@ -205,6 +201,42 @@ export class PinataService {
   // No longer needed: getAuthHeaders (JWT only, handled inline)
 
   /**
+   * Recursively get all files in a directory
+   * @param dir - Directory path
+   * @returns Array of file paths
+   */
+  private async getAllFiles(dir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    async function walk(currentPath: string) {
+      const entries = await readdir(currentPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+
+        if (entry.isDirectory()) {
+          await walk(fullPath);
+        } else if (entry.isFile()) {
+          files.push(fullPath);
+        }
+      }
+    }
+
+    await walk(dir);
+    return files;
+  }
+
+  /**
+   * Get relative path from base directory
+   * @param base - Base directory path
+   * @param file - File path
+   * @returns Relative path
+   */
+  private getRelativePath(base: string, file: string): string {
+    return path.relative(base, file).replace(/\\/g, '/'); // Ensure forward slashes
+  }
+
+  /**
    * Upload an entire directory to Pinata, preserving the directory structure.
    * @param directoryPath - The absolute path to the directory to upload
    * @param metadata - Optional metadata for the upload
@@ -218,67 +250,71 @@ export class PinataService {
       logger.debug(`Starting directory upload for: ${directoryPath}`);
 
       // Check if directory exists
-      if (!fs.existsSync(directoryPath)) {
+      const dirStats = await stat(directoryPath).catch(() => null);
+      if (!dirStats || !dirStats.isDirectory()) {
         throw new Error(`Directory not found: ${directoryPath}`);
       }
 
       // Read all files in the directory recursively
-      const { dirs, files } = await rfs.read(directoryPath);
+      const files = await this.getAllFiles(directoryPath);
 
       if (files.length === 0) {
         throw new Error(`No files found in directory: ${directoryPath}`);
       }
 
-      logger.debug(`Found ${files.length} files in ${dirs.length} directories`);
+      logger.debug(`Found ${files.length} files to upload`);
 
-      // Create form data with the form-data package
-      const form = new FormDataNode();
+      // Create form data using native FormData
+      const form = new FormData();
 
       // Add each file to the form data with its relative path
       for (const filePath of files) {
-        const relativePath = basePathConverter(directoryPath, filePath);
-        form.append('file', fs.createReadStream(filePath), {
-          filepath: relativePath,
+        const relativePath = this.getRelativePath(directoryPath, filePath);
+        const fileContent = await fs.promises.readFile(filePath);
+
+        // Create a File object with the relative path
+        const file = new File([fileContent], relativePath, {
+          type: 'application/octet-stream',
         });
+
+        // Append with the filepath parameter to preserve directory structure
+        form.append('file', file, relativePath);
       }
 
       // Add Pinata options for CID v1
-      form.append(
-        'pinataOptions',
-        JSON.stringify({
-          cidVersion: 1,
-          wrapWithDirectory: true,
-        })
+      const pinataOptions = new Blob(
+        [
+          JSON.stringify({
+            cidVersion: 1,
+            wrapWithDirectory: true,
+          }),
+        ],
+        { type: 'application/json' }
       );
+      form.append('pinataOptions', pinataOptions);
 
       // Add metadata if provided
       if (metadata) {
-        const pinataMetadata = JSON.stringify({
-          name: metadata.name || path.basename(directoryPath),
-          keyvalues: metadata.keyvalues || {},
-        });
+        const pinataMetadata = new Blob(
+          [
+            JSON.stringify({
+              name: metadata.name || path.basename(directoryPath),
+              keyvalues: metadata.keyvalues || {},
+            }),
+          ],
+          { type: 'application/json' }
+        );
         form.append('pinataMetadata', pinataMetadata);
       }
 
-      // Get form headers (includes boundary for multipart)
-      const formHeaders = form.getHeaders();
-
-      // Convert form to buffer for fetch compatibility
-      const formBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        form.on('data', (chunk: Buffer) => chunks.push(chunk));
-        form.on('end', () => resolve(Buffer.concat(chunks)));
-        form.on('error', reject);
-      });
-
-      // Make the request using fetch
+      // Make the request using fetch with native FormData
       const response = await fetch(this.pinataApiUrl, {
         method: 'POST',
         headers: {
-          ...formHeaders,
           Authorization: `Bearer ${this.pinataJwt}`,
+          // Let fetch set the Content-Type with boundary
         },
-        body: formBuffer,
+        body: form,
       });
 
       if (!response.ok) {

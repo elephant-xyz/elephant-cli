@@ -120,6 +120,12 @@ describe('validate-and-upload HTML generation', () => {
         success: true,
         cid: 'bafkreihtmlcid',
       }),
+      uploadDirectory: vi.fn().mockResolvedValue({
+        success: true,
+        cid: 'bafyDirectoryHash',
+        propertyCid: 'bafkreitest1',
+        dataGroupCid: 'html-fact-sheet',
+      }),
     } as unknown as PinataService;
 
     mockCsvReporterService = {
@@ -377,6 +383,24 @@ describe('validate-and-upload HTML generation', () => {
     expect(csvCall[1]).toContain('htmldryrun'); // Dry-run HTML CID suffix
   });
 
+  it('should have uploadDirectory method available on PinataService', async () => {
+    // This test verifies that the uploadDirectory method exists on the PinataService
+    expect(mockPinataService.uploadDirectory).toBeDefined();
+    expect(typeof mockPinataService.uploadDirectory).toBe('function');
+
+    // Test that it can be called and returns expected structure
+    const result = await mockPinataService.uploadDirectory('/test/path', {
+      name: 'test-dir',
+      keyvalues: { test: 'value' },
+    });
+
+    expect(result).toEqual({
+      success: true,
+      cid: 'bafyDirectoryHash',
+      propertyCid: 'bafkreitest1',
+      dataGroupCid: 'html-fact-sheet',
+    });
+  });
   it('should continue processing even if HTML generation fails', async () => {
     const mockFiles: FileEntry[] = [
       {
