@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.14.0...v1.15.0) (2025-07-23)
+
+
+### Features
+
+* **validate-and-upload:** add fallback fact-sheet path ([#55](https://github.com/elephant-xyz/elephant-cli/issues/55)) ([56a7d4d](https://github.com/elephant-xyz/elephant-cli/commit/56a7d4d67abc110092ab55cfcf59e5ffd59430a8))
+
 # [1.14.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.13.1...v1.14.0) (2025-07-23)
 
 
