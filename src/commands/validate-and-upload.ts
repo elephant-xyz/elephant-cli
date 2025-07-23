@@ -14,7 +14,7 @@ import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
-import { PinataService } from '../services/pinata.service.js';
+import { PinataService, PinMetadata } from '../services/pinata.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
@@ -231,106 +231,81 @@ async function scanAndUploadHTMLFiles(
       `Found ${directories.length} property directories with HTML files`
     );
 
-    // Prepare files for batch processing
-    const filesToUpload: Array<{
-      dirName: string;
-      htmlContent: string;
-      htmlBuffer?: Buffer;
-    }> = [];
-
     for (const dir of directories) {
       const dirName = dir.name;
-      const htmlFilePath = path.join(htmlDir, dirName, 'index.html');
+      const dirPath = path.join(htmlDir, dirName);
 
       try {
-        // Check if index.html exists
-        const htmlExists = existsSync(htmlFilePath);
-        if (!htmlExists) {
-          logger.warn(`No index.html found in directory ${dirName}`);
+        // Check if directory has any files
+        const dirContents = await fsPromises.readdir(dirPath);
+        if (dirContents.length === 0) {
+          logger.warn(`Directory ${dirName} is empty`);
           progressTracker.increment('errors');
           continue;
         }
 
-        // Read HTML file
-        const htmlContent = await fsPromises.readFile(htmlFilePath, 'utf-8');
-        filesToUpload.push({
-          dirName,
-          htmlContent,
-          htmlBuffer: Buffer.from(htmlContent, 'utf-8'),
-        });
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.error(
-          `Error reading HTML for directory ${dirName}: ${errorMsg}`
-        );
-        progressTracker.increment('errors');
-      }
-    }
+        if (dryRun) {
+          // In dry-run mode, simulate directory upload
+          const calculatedCid = `bafybeig${dirName.toLowerCase().substring(0, 13)}dirdryrun`;
+          const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
 
-    if (dryRun) {
-      // In dry-run mode, simulate uploads
-      for (const file of filesToUpload) {
-        const calculatedCid = `bafybeig${file.dirName.toLowerCase().substring(7, 20)}htmldryrun`;
-        const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
-
-        logger.info(`[DRY RUN] Would upload HTML for property ${file.dirName}`);
-
-        htmlUploadMap.set(file.dirName, {
-          propertyCid: file.dirName,
-          htmlCid: calculatedCid,
-          htmlLink,
-        });
-
-        progressTracker.increment('processed');
-      }
-    } else {
-      if (!pinataService) {
-        throw new Error('Pinata service not available for HTML upload');
-      }
-
-      // Prepare batch upload using existing PinataService mechanism
-      const processedFiles = filesToUpload.map((file) => ({
-        propertyCid: file.dirName,
-        dataGroupCid: 'html-fact-sheet',
-        filePath: `${file.dirName}/index.html`,
-        canonicalJson: file.htmlContent,
-        calculatedCid: '', // Not used for HTML
-        validationPassed: true,
-        binaryData: file.htmlBuffer,
-        metadata: {
-          isImage: false,
-          mimeType: 'text/html',
-        },
-      }));
-
-      // Use the existing batch upload mechanism with parallel processing
-      logger.info(
-        `Uploading ${processedFiles.length} HTML files in parallel...`
-      );
-      const uploadResults = await pinataService.uploadBatch(processedFiles);
-
-      // Process results
-      for (let i = 0; i < uploadResults.length; i++) {
-        const result = uploadResults[i];
-        const dirName = filesToUpload[i].dirName;
-
-        if (result.success && result.cid) {
-          const htmlLink = `http://dweb.link/ipfs/${result.cid}`;
+          logger.info(`[DRY RUN] Would upload HTML directory for property ${dirName}`);
 
           htmlUploadMap.set(dirName, {
             propertyCid: dirName,
-            htmlCid: result.cid,
+            htmlCid: calculatedCid,
             htmlLink,
           });
 
-          logger.debug(`Uploaded HTML for directory ${dirName}: ${result.cid}`);
           progressTracker.increment('processed');
         } else {
-          logger.error(
-            `Failed to upload HTML for directory ${dirName}: ${result.error}`
+          if (!pinataService) {
+            throw new Error('Pinata service not available for HTML upload');
+          }
+
+          // Upload the entire directory
+          logger.info(`Uploading HTML directory for property ${dirName}...`);
+          
+          const metadata: PinMetadata = {
+            name: `fact-sheet-${dirName}`,
+            keyvalues: {
+              type: 'fact-sheet-html',
+              propertyCid: dirName,
+            },
+          };
+
+          const uploadResult = await pinataService.uploadDirectory(
+            dirPath,
+            dirName,
+            metadata
           );
-          progressTracker.increment('errors');
+
+          if (uploadResult.success && uploadResult.cid) {
+            // The CID returned is for the directory index
+            // The actual HTML can be accessed via IPFS gateway with path
+            const htmlLink = `http://dweb.link/ipfs/${uploadResult.cid}`;
+
+            htmlUploadMap.set(dirName, {
+              propertyCid: dirName,
+              htmlCid: uploadResult.cid,
+              htmlLink,
+            });
+
+            logger.debug(`Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`);
+            progressTracker.increment('processed');
+          } else {
+            logger.error(
+              `Failed to upload HTML directory for ${dirName}: ${uploadResult.error}`
+            );
+            progressTracker.increment('errors');
+          }
         }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error(
+          `Error processing HTML directory ${dirName}: ${errorMsg}`
+        );
+        progressTracker.increment('errors');
       }
     }
 

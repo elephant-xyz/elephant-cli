@@ -120,6 +120,14 @@ describe('validate-and-upload HTML generation', () => {
         success: true,
         cid: 'bafkreihtmlcid',
       }),
+      uploadDirectory: vi.fn().mockImplementation(async (dirPath: string, dirName: string) => {
+        return {
+          success: true,
+          cid: `bafkreidirectory${dirName}`,
+          propertyCid: dirName,
+          dataGroupCid: 'html-fact-sheet',
+        };
+      }),
     } as unknown as PinataService;
 
     mockCsvReporterService = {
@@ -154,10 +162,20 @@ describe('validate-and-upload HTML generation', () => {
     );
 
     vi.spyOn(fsPromises, 'mkdir').mockResolvedValue(undefined);
-    vi.spyOn(fsPromises, 'readdir').mockResolvedValue([
-      { name: 'bafkreitest1', isDirectory: () => true },
-      { name: 'bafkreitest2', isDirectory: () => true },
-    ] as any);
+    // Mock for readdir - needs to handle both HTML directory scan and content scan
+    const readdirMock = vi.spyOn(fsPromises, 'readdir');
+    readdirMock.mockImplementation(async (path: string) => {
+      if (path.includes('htmls')) {
+        // Return property directories
+        return [
+          { name: 'bafkreitest1', isDirectory: () => true },
+          { name: 'bafkreitest2', isDirectory: () => true },
+        ] as any;
+      } else {
+        // Return files in property directory
+        return ['index.html', 'data.json'];
+      }
+    });
 
     vi.spyOn(fsPromises, 'rm').mockResolvedValue(undefined);
 
@@ -169,19 +187,29 @@ describe('validate-and-upload HTML generation', () => {
       if (cmd === 'which fact-sheet') {
         throw new Error('fact-sheet not found');
       }
+      if (cmd === 'which curl') {
+        return '/usr/bin/curl'; // curl is available
+      }
       if (cmd.includes('curl -fsSL')) {
         return ''; // Installation/update successful
       }
       if (cmd.includes('fact-sheet generate')) {
         return ''; // HTML generation successful
       }
-      if (cmd === 'fact-sheet --version') {
+      if (cmd.includes('fact-sheet --version')) {
         return '1.0.0';
       }
       return '';
     });
 
-    mockExistsSync.mockReturnValue(true);
+    mockExistsSync.mockImplementation((path: string) => {
+      // Return true for fact-sheet installation check
+      if (path.includes('.local/bin/fact-sheet')) {
+        return false; // Not installed locally
+      }
+      // Return true for HTML directory checks
+      return true;
+    });
   });
 
   afterEach(() => {
@@ -189,6 +217,18 @@ describe('validate-and-upload HTML generation', () => {
   });
 
   it('should install fact-sheet tool and generate HTML files', async () => {
+    // Track calls to uploadDirectory
+    let uploadDirectoryCalls = 0;
+    mockPinataService.uploadDirectory = vi.fn().mockImplementation(async () => {
+      uploadDirectoryCalls++;
+      return {
+        success: true,
+        cid: `bafkreidirectory${uploadDirectoryCalls}`,
+        propertyCid: `test${uploadDirectoryCalls}`,
+        dataGroupCid: 'html-fact-sheet',
+      };
+    });
+
     const mockFiles: FileEntry[] = [
       {
         propertyCid: 'bafkreitest1',
@@ -237,6 +277,20 @@ describe('validate-and-upload HTML generation', () => {
     const csvCall = mockWriteFileSync.mock.calls[0];
     expect(csvCall[0]).toBe('/test/output.csv');
     expect(csvCall[1]).toContain('htmlLink');
+
+    // Verify uploadDirectory was called for each property directory
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(2);
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
+      expect.stringContaining('bafkreitest1'),
+      'bafkreitest1',
+      expect.objectContaining({
+        name: 'fact-sheet-bafkreitest1',
+        keyvalues: expect.objectContaining({
+          type: 'fact-sheet-html',
+          propertyCid: 'bafkreitest1',
+        }),
+      })
+    );
   });
 
   it('should update fact-sheet tool if already installed', async () => {
@@ -248,13 +302,16 @@ describe('validate-and-upload HTML generation', () => {
       if (cmd === 'which fact-sheet') {
         return '/usr/local/bin/fact-sheet';
       }
+      if (cmd === 'which curl') {
+        return '/usr/bin/curl'; // curl is available
+      }
       if (cmd.includes('curl -fsSL')) {
         return ''; // Update successful
       }
       if (cmd.includes('fact-sheet generate')) {
         return ''; // HTML generation successful
       }
-      if (cmd === 'fact-sheet --version') {
+      if (cmd.includes('fact-sheet --version')) {
         return '1.0.0';
       }
       return '';
@@ -367,14 +424,15 @@ describe('validate-and-upload HTML generation', () => {
       expect.any(Object)
     );
 
-    // In dry-run mode, uploadBatch should not be called at all
+    // In dry-run mode, neither uploadBatch nor uploadDirectory should be called
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
+    expect(mockPinataService.uploadDirectory).not.toHaveBeenCalled();
 
     // CSV should contain dry-run HTML links
     const csvCall = mockWriteFileSync.mock.calls[0];
     expect(csvCall[1]).toContain('htmlLink');
     expect(csvCall[1]).toContain('bafybeig'); // Dry-run HTML CID prefix
-    expect(csvCall[1]).toContain('htmldryrun'); // Dry-run HTML CID suffix
+    expect(csvCall[1]).toContain('dirdryrun'); // Dry-run directory CID suffix
   });
 
   it('should continue processing even if HTML generation fails', async () => {
@@ -441,5 +499,72 @@ describe('validate-and-upload HTML generation', () => {
       const dataLine = csvLines[1]; // First data line after header
       expect(dataLine).toMatch(/,$/); // Should end with comma (empty htmlLink)
     }
+  });
+
+  it('should upload HTML directories with all files', async () => {
+    const mockFiles: FileEntry[] = [
+      {
+        propertyCid: 'bafkreitest1',
+        dataGroupCid: 'bafkreitest',
+        filePath: '/test/bafkreitest1/data.json',
+      },
+    ];
+
+    mockFileScannerService.scanDirectory = vi
+      .fn()
+      .mockImplementation(async function* () {
+        yield mockFiles;
+      });
+
+    // Override readdir mock for this test
+    const readdirMock = vi.spyOn(fsPromises, 'readdir');
+    readdirMock.mockImplementation(async (path: string) => {
+      if (path.includes('htmls')) {
+        // Return property directories
+        return [
+          { name: 'bafkreitest1', isDirectory: () => true },
+        ] as any;
+      } else {
+        // Return files in property directory
+        return ['index.html', 'data.json', 'style.css'];
+      }
+    });
+
+    const options: ValidateAndUploadCommandOptions = {
+      inputDir: '/test',
+      outputCsv: '/test/output.csv',
+      pinataJwt: 'test-jwt',
+      dryRun: false,
+    };
+
+    await handleValidateAndUpload(options, {
+      fileScannerService: mockFileScannerService,
+      schemaCacheService: mockSchemaCacheService,
+      jsonValidatorService: mockJsonValidatorService,
+      jsonCanonicalizerService: mockCanonicalizerService,
+      cidCalculatorService: mockCidCalculatorService,
+      pinataService: mockPinataService,
+      csvReporterService: mockCsvReporterService,
+      progressTracker: mockProgressTracker,
+      ipfsServiceForSchemas: mockIpfsService,
+    });
+
+    // Verify uploadDirectory was called with correct parameters
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
+      expect.stringContaining('bafkreitest1'),
+      'bafkreitest1',
+      expect.objectContaining({
+        name: 'fact-sheet-bafkreitest1',
+        keyvalues: expect.objectContaining({
+          type: 'fact-sheet-html',
+          propertyCid: 'bafkreitest1',
+        }),
+      })
+    );
+
+    // Verify CSV contains the directory CID
+    const csvCall = mockWriteFileSync.mock.calls[0];
+    expect(csvCall[1]).toContain('bafkreidirectorybafkreitest1'); // Directory CID from mock
   });
 });

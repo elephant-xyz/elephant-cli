@@ -2,6 +2,7 @@ import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
 import path from 'path';
+import { promises as fsPromises } from 'fs';
 
 export interface PinMetadata {
   name?: string;
@@ -197,4 +198,135 @@ export class PinataService {
   }
 
   // No longer needed: getAuthHeaders (JWT only, handled inline)
+
+  /**
+   * Upload a directory structure as a single IPFS object
+   * Since Pinata doesn't support direct directory uploads via API,
+   * this method creates an index file that represents the directory structure
+   */
+  public async uploadDirectory(
+    directoryPath: string,
+    directoryName: string,
+    metadata?: PinMetadata
+  ): Promise<UploadResult> {
+    try {
+      logger.info(`Uploading directory ${directoryName} to IPFS...`);
+      
+      // Create a mapping of all files in the directory
+      const files = await this.scanDirectory(directoryPath);
+      
+      if (files.length === 0) {
+        return {
+          success: false,
+          error: 'No files found in directory',
+          propertyCid: directoryName,
+          dataGroupCid: 'html-fact-sheet',
+        };
+      }
+
+      // Upload all files individually first
+      const uploadResults = new Map<string, string>();
+      const errors: string[] = [];
+      
+      for (const file of files) {
+        const fileBuffer = await fsPromises.readFile(file.absolutePath);
+        const relativePath = path.relative(directoryPath, file.absolutePath);
+        
+        const fileMetadata: PinMetadata = {
+          name: `${directoryName}/${relativePath}`,
+          keyvalues: {
+            ...metadata?.keyvalues,
+            directory: directoryName,
+            relativePath: relativePath,
+          },
+        };
+        
+        const result = await this.uploadFile(fileBuffer, fileMetadata);
+        
+        if (result.success && result.cid) {
+          uploadResults.set(relativePath, result.cid);
+          logger.debug(`Uploaded ${relativePath}: ${result.cid}`);
+        } else {
+          errors.push(`Failed to upload ${relativePath}: ${result.error}`);
+        }
+      }
+      
+      if (errors.length > 0) {
+        logger.error(`Errors during directory upload: ${errors.join(', ')}`);
+      }
+      
+      // Create an index file that maps the directory structure
+      const indexData = {
+        type: 'directory',
+        name: directoryName,
+        files: Object.fromEntries(uploadResults),
+        timestamp: new Date().toISOString(),
+      };
+      
+      const indexBuffer = Buffer.from(JSON.stringify(indexData, null, 2));
+      const indexMetadata: PinMetadata = {
+        name: `${directoryName}/_directory_index.json`,
+        keyvalues: {
+          ...metadata?.keyvalues,
+          type: 'directory_index',
+          directory: directoryName,
+        },
+      };
+      
+      // Upload the index file
+      const indexResult = await this.uploadFile(indexBuffer, indexMetadata);
+      
+      if (indexResult.success && indexResult.cid) {
+        // Return the index CID as the directory CID
+        return {
+          ...indexResult,
+          propertyCid: directoryName,
+          dataGroupCid: 'html-fact-sheet',
+        };
+      } else {
+        return {
+          success: false,
+          error: `Failed to upload directory index: ${indexResult.error}`,
+          propertyCid: directoryName,
+          dataGroupCid: 'html-fact-sheet',
+        };
+      }
+    } catch (error) {
+      logger.error(
+        `Error uploading directory ${directoryName}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        propertyCid: directoryName,
+        dataGroupCid: 'html-fact-sheet',
+      };
+    }
+  }
+
+  private async scanDirectory(
+    dirPath: string
+  ): Promise<Array<{ absolutePath: string; relativePath: string }>> {
+    const files: Array<{ absolutePath: string; relativePath: string }> = [];
+    
+    async function scan(currentPath: string) {
+      const items = await fsPromises.readdir(currentPath, { withFileTypes: true });
+      
+      for (const item of items) {
+        const itemPath = path.join(currentPath, item.name);
+        
+        if (item.isFile()) {
+          files.push({
+            absolutePath: itemPath,
+            relativePath: path.relative(dirPath, itemPath),
+          });
+        } else if (item.isDirectory()) {
+          await scan(itemPath);
+        }
+      }
+    }
+    
+    await scan(dirPath);
+    return files;
+  }
 }
