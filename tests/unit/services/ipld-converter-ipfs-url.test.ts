@@ -92,16 +92,18 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
       expect(result.convertedData.ipfs_url).toBe('ipfs://bafkreiexistingcid');
     });
 
-    it.skip('should convert bare CID in ipfs_url field to IPFS URI - not implemented', async () => {
+    it('should convert bare CID in ipfs_url field to IPFS URI', async () => {
       const dataWithCid = {
         name: 'Test Product',
-        ipfs_url: 'bafkreiexistingcid',
+        ipfs_url: 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
       };
 
       const result = await ipldConverterService.convertToIPLD(dataWithCid);
 
       expect(result.hasLinks).toBe(false); // No file uploads, just formatting
-      expect(result.convertedData.ipfs_url).toBe('ipfs://bafkreiexistingcid');
+      expect(result.convertedData.ipfs_url).toBe(
+        'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+      );
     });
 
     it('should handle nested ipfs_url fields', async () => {

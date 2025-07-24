@@ -32,7 +32,7 @@ describe('IPLD Conversion Integration', () => {
     }
   });
 
-  it.skip('should convert file path links to IPFS CIDs during validation and upload - skipped: only ipfs_url fields are converted now', async () => {
+  it('should convert file path links to IPFS CIDs during validation and upload for ipfs_url fields', async () => {
     // Create test directory structure following expected pattern
     const propertyDir = path.join(
       testDir,
@@ -40,28 +40,21 @@ describe('IPLD Conversion Integration', () => {
     );
     await fsPromises.mkdir(propertyDir, { recursive: true });
 
-    // Create a referenced file in property directory
-    const referencedData = {
-      name: 'Referenced Document',
-      type: 'supporting',
-      metadata: {
-        created: '2024-01-01',
-        version: '1.0',
-      },
-    };
+    // Create a referenced image file in property directory
+    const fakeImageData = Buffer.from('fake image data');
     await fsPromises.writeFile(
-      path.join(propertyDir, 'referenced.json'),
-      JSON.stringify(referencedData, null, 2)
+      path.join(propertyDir, 'referenced.png'),
+      fakeImageData
     );
 
-    // Create main data file with file path link (with CID filename)
+    // Create main data file with ipfs_url fields for image file links
     const mainData = {
       title: 'Main Document',
       type: 'primary',
-      supportingDoc: { '/': './referenced.json' },
+      ipfs_url: './referenced.png',
       nestedData: {
-        description: 'This has a link to supporting document',
-        reference: { '/': './referenced.json' },
+        description: 'This has a link to supporting image',
+        ipfs_url: './referenced.png',
       },
     };
     await fsPromises.writeFile(
@@ -155,18 +148,18 @@ describe('IPLD Conversion Integration', () => {
     // Parse the uploaded content to verify links were converted
     const uploadedContent = JSON.parse(mainFileUpload.canonicalJson);
 
-    // The supporting doc link should now be a CID
-    expect(uploadedContent.supportingDoc).toBeDefined();
-    expect(uploadedContent.supportingDoc['/']).toMatch(/^QmMocked/);
+    // The ipfs_url field should now be an IPFS URI
+    expect(uploadedContent.ipfs_url).toBeDefined();
+    expect(uploadedContent.ipfs_url).toMatch(/^ipfs:\/\/QmMocked/);
 
-    // The nested reference should also be converted
-    expect(uploadedContent.nestedData.reference).toBeDefined();
-    expect(uploadedContent.nestedData.reference['/']).toMatch(/^QmMocked/);
+    // The nested ipfs_url should also be converted
+    expect(uploadedContent.nestedData.ipfs_url).toBeDefined();
+    expect(uploadedContent.nestedData.ipfs_url).toMatch(/^ipfs:\/\/QmMocked/);
 
     // Both references should point to the same CID (same file)
-    expect(uploadedContent.supportingDoc['/']).toBe(
-      uploadedContent.nestedData.reference['/']
-    );
+    const cid1 = uploadedContent.ipfs_url.replace('ipfs://', '');
+    const cid2 = uploadedContent.nestedData.ipfs_url.replace('ipfs://', '');
+    expect(cid1).toBe(cid2);
 
     // Verify CSV was created
     const csvExists = await fsPromises
@@ -176,7 +169,7 @@ describe('IPLD Conversion Integration', () => {
     expect(csvExists).toBe(true);
   });
 
-  it.skip('should handle mixed CID and file path links - skipped: only ipfs_url fields are converted now', async () => {
+  it('should handle mixed CID and file path links in ipfs_url fields', async () => {
     // Create test structure following expected pattern
     const propertyDir = path.join(
       testDir,
@@ -184,20 +177,24 @@ describe('IPLD Conversion Integration', () => {
     );
     await fsPromises.mkdir(propertyDir, { recursive: true });
 
-    // Create a local file to reference
+    // Create a local image file to reference
     await fsPromises.writeFile(
-      path.join(propertyDir, 'local.json'),
-      JSON.stringify({ local: 'data' })
+      path.join(propertyDir, 'local.jpg'),
+      Buffer.from('fake jpg data')
     );
 
-    // Create data with both CID and file path links
+    // Create data with both CID and file path links in ipfs_url fields
     const mixedData = {
       name: 'Mixed Links Document',
-      existingIPFS: {
-        '/': 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+      ipfs_url: 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+      data: {
+        localFile: {
+          ipfs_url: './local.jpg',
+        },
+        absolutePath: {
+          ipfs_url: path.join(propertyDir, 'local.jpg'),
+        },
       },
-      localFile: { '/': './local.json' },
-      absolutePath: { '/': path.join(propertyDir, 'local.json') },
     };
 
     await fsPromises.writeFile(
@@ -270,20 +267,30 @@ describe('IPLD Conversion Integration', () => {
     // Verify the uploaded content
     expect(uploadedContent).toBeDefined();
 
-    // Existing CID should be preserved
-    expect(uploadedContent.existingIPFS['/']).toBe(
-      'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'
+    // Existing CID should be converted to IPFS URI
+    expect(uploadedContent.ipfs_url).toBe(
+      'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'
     );
 
-    // Local file should be converted to CID
-    expect(uploadedContent.localFile['/']).toMatch(/^QmMocked/);
+    // Local file should be converted to IPFS URI
+    expect(uploadedContent.data.localFile.ipfs_url).toMatch(
+      /^ipfs:\/\/QmMocked/
+    );
 
-    // Absolute path should also be converted
-    expect(uploadedContent.absolutePath['/']).toMatch(/^QmMocked/);
+    // Absolute path should also be converted to IPFS URI
+    expect(uploadedContent.data.absolutePath.ipfs_url).toMatch(
+      /^ipfs:\/\/QmMocked/
+    );
 
     // Both local references should have the same CID
-    expect(uploadedContent.localFile['/']).toBe(
-      uploadedContent.absolutePath['/']
+    const localCid = uploadedContent.data.localFile.ipfs_url.replace(
+      'ipfs://',
+      ''
     );
+    const absoluteCid = uploadedContent.data.absolutePath.ipfs_url.replace(
+      'ipfs://',
+      ''
+    );
+    expect(localCid).toBe(absoluteCid);
   });
 });

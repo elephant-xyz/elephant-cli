@@ -54,7 +54,8 @@ export class IPLDConverterService {
       data,
       linkedCIDs,
       currentFilePath,
-      schema
+      schema,
+      undefined // No fieldName for top-level processing
     );
 
     return {
@@ -89,6 +90,7 @@ export class IPLDConverterService {
       try {
         CID.parse(data);
         // It's a CID, convert to IPFS URI
+        // Don't add to linkedCIDs as this is just formatting, not a new upload
         return `ipfs://${data}`;
       } catch {
         // Not a CID, treat as local path
