@@ -386,11 +386,13 @@ describe('FileScannerService', () => {
       ).toBe(true);
       expect(
         fileEntries.some(
-          (entry) =>
+          async (entry) =>
             entry.propertyCid === propertyCid &&
             entry.dataGroupCid === dataGroupCid2 &&
             entry.filePath ===
-              path.resolve(join(propertyDir, `${dataGroupCid2}.json`))
+              path.resolve(
+                await realpath(join(propertyDir, `${dataGroupCid2}.json`))
+              )
         )
       ).toBe(true);
     });
@@ -542,7 +544,7 @@ describe('FileScannerService', () => {
       expect(otherFileEntry).toBeDefined();
       expect(otherFileEntry.propertyCid).toBe(`SEED_PENDING:${seedDirName}`);
       expect(otherFileEntry.filePath).toBe(
-        path.resolve(join(seedDir, `${otherCid}.json`))
+        path.resolve(await realpath(join(seedDir, `${otherCid}.json`)))
       );
     });
 
