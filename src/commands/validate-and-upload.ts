@@ -640,6 +640,7 @@ export async function handleValidateAndUpload(
     );
     if (!initialValidation.isValid) {
       console.log(chalk.red('❌ Directory structure is invalid:'));
+      console.log(`Errors found: ${initialValidation.errors}`);
       initialValidation.errors.forEach((err) =>
         console.log(chalk.red(`   • ${err}`))
       );
