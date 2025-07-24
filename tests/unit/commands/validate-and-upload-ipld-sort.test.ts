@@ -211,10 +211,10 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
     expect(parsed.references[3]).toEqual({ not: 'ipld' });
   });
 
-  it.skip('should work with IPLD conversion when file paths are converted to CIDs - skipped: only ipfs_url fields are converted now', async () => {
-    // Create test data with file path links
+  it('should work with IPLD conversion when ipfs_url fields are converted to CIDs', async () => {
+    // Create test data with ipfs_url fields for images
     const testData = {
-      links: [{ '/': './file2.json' }, { '/': './file1.json' }],
+      items: [{ ipfs_url: './file2.png' }, { ipfs_url: './file1.jpg' }],
     };
 
     // Mock IPLD converter to simulate conversion
@@ -223,12 +223,14 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
       .fn()
       .mockResolvedValue({
         convertedData: {
-          links: [
+          items: [
             {
-              '/': 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+              ipfs_url:
+                'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
             },
             {
-              '/': 'bafybeibazaarhe5qpbgvfwqnteba5hbgzvqcajqgfgxnhpdvfnqweabk4u',
+              ipfs_url:
+                'ipfs://bafybeibazaarhe5qpbgvfwqnteba5hbgzvqcajqgfgxnhpdvfnqweabk4u',
             },
           ],
         },
@@ -279,12 +281,12 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
     expect(capturedCanonicalJson).toBeDefined();
     const parsed = JSON.parse(capturedCanonicalJson!);
 
-    // Links should be sorted alphabetically by CID after conversion
-    expect(parsed.links[0]['/']).toBe(
-      'bafybeibazaarhe5qpbgvfwqnteba5hbgzvqcajqgfgxnhpdvfnqweabk4u'
+    // Items should remain in their original order (no sorting for non-IPLD arrays)
+    expect(parsed.items[0].ipfs_url).toBe(
+      'ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
     );
-    expect(parsed.links[1]['/']).toBe(
-      'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+    expect(parsed.items[1].ipfs_url).toBe(
+      'ipfs://bafybeibazaarhe5qpbgvfwqnteba5hbgzvqcajqgfgxnhpdvfnqweabk4u'
     );
   });
 });
