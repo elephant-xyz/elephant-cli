@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.0...v1.16.1) (2025-07-24)
+
+
+### Bug Fixes
+
+* **file-scanner:** handle symlinks and empty dirs ([#59](https://github.com/elephant-xyz/elephant-cli/issues/59)) ([75ae44d](https://github.com/elephant-xyz/elephant-cli/commit/75ae44d9a34ba13607bd1fe56b833bbce941328e))
+
 # [1.16.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.15.0...v1.16.0) (2025-07-23)
 
 
