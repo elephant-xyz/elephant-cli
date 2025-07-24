@@ -4,6 +4,7 @@ import path from 'path';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import { realpath } from 'fs/promises';
 import { FileScannerService } from '../../../src/services/file-scanner.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 
@@ -374,11 +375,13 @@ describe('FileScannerService', () => {
       expect(fileEntries).toHaveLength(2);
       expect(
         fileEntries.some(
-          (entry) =>
+          async (entry) =>
             entry.propertyCid === propertyCid &&
             entry.dataGroupCid === dataGroupCid1 &&
             entry.filePath ===
-              path.resolve(join(propertyDir, `${dataGroupCid1}.json`))
+              path.resolve(
+                await realpath(join(propertyDir, `${dataGroupCid1}.json`))
+              )
         )
       ).toBe(true);
       expect(
@@ -531,7 +534,9 @@ describe('FileScannerService', () => {
       expect(seedFileEntry).toBeDefined();
       expect(seedFileEntry.propertyCid).toBe(`SEED_PENDING:${seedDirName}`);
       expect(seedFileEntry.filePath).toBe(
-        path.resolve(join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`))
+        path.resolve(
+          await realpath(join(seedDir, `${SEED_DATAGROUP_SCHEMA_CID}.json`))
+        )
       );
 
       expect(otherFileEntry).toBeDefined();
