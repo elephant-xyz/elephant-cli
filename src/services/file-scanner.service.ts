@@ -1,4 +1,5 @@
-import { stat, readdir } from 'fs/promises';
+import { stat, readdir, realpath } from 'fs/promises';
+import path from 'path';
 import { join, extname } from 'path';
 import { FileEntry } from '../types/submit.types.js';
 import { logger } from '../utils/logger.js';
@@ -34,24 +35,41 @@ export class FileScannerService {
       // Check each entry
       let validPropertyDirs = 0;
       for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const propertyDirPath = join(directoryPath, entry.name);
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+          continue;
+        }
 
-          // Check if this is a valid CID directory OR a seed datagroup directory
-          if (this.isValidCid(entry.name)) {
-            // Standard CID directory
-            validPropertyDirs++;
-            const propertyValidation =
-              await this.validatePropertyDirectory(propertyDirPath);
-            errors.push(...propertyValidation.errors);
-          } else {
-            // Check if this is a seed datagroup directory
-            const seedValidation =
-              await this.validateSeedDatagroupDirectory(propertyDirPath);
-            if (seedValidation.isValid) {
+        const fullPath = path.join(directoryPath, entry.name);
+        try {
+          const stats = await stat(fullPath);
+          if (stats.isDirectory()) {
+            const propertyDirPath = join(directoryPath, entry.name);
+
+            // Check if this is a valid CID directory OR a seed datagroup directory
+            if (this.isValidCid(entry.name)) {
+              // Standard CID directory
               validPropertyDirs++;
-              errors.push(...seedValidation.errors);
+              const propertyValidation =
+                await this.validatePropertyDirectory(propertyDirPath);
+              errors.push(...propertyValidation.errors);
+            } else {
+              // Check if this is a seed datagroup directory
+              const seedValidation =
+                await this.validateSeedDatagroupDirectory(propertyDirPath);
+              if (seedValidation.isValid) {
+                validPropertyDirs++;
+                errors.push(...seedValidation.errors);
+              }
             }
+          }
+        } catch (error) {
+          console.error(`Error accessing ${fullPath}:`, error);
+          if (entry.isSymbolicLink()) {
+            errors.push(`Broken symbolic link: ${entry.name}`);
+          } else {
+            errors.push(
+              `Cannot access directory ${entry.name}: ${error instanceof Error ? error.message : String(error)}`
+            );
           }
         }
         // Ignore files in root directory
@@ -59,12 +77,12 @@ export class FileScannerService {
 
       if (validPropertyDirs === 0) {
         errors.push(
-          'No valid property CID directories found. Expected directories with CID names (e.g., QmXXX...)'
+          'No valid property CID directories found. Expected directories with CID names (e.g., bafkr...) or with a seed datagroup file.'
         );
       }
 
       return {
-        isValid: errors.length === 0,
+        isValid: validPropertyDirs > 0,
         errors,
       };
     } catch (error) {
@@ -81,7 +99,8 @@ export class FileScannerService {
     const errors: string[] = [];
 
     try {
-      const files = await readdir(propertyDirPath, { withFileTypes: true });
+      const realPath = await realpath(propertyDirPath);
+      const files = await readdir(realPath, { withFileTypes: true });
 
       if (files.length === 0) {
         errors.push(`Property directory ${propertyDirPath} is empty`);
@@ -225,12 +244,12 @@ export class FileScannerService {
       let batch: FileEntry[] = [];
 
       for (const propertyDir of propertyDirs) {
-        if (!propertyDir.isDirectory()) {
+        if (!propertyDir.isDirectory() && !propertyDir.isSymbolicLink()) {
           continue; // Skip non-directories
         }
 
         const dirName = propertyDir.name;
-        const propertyDirPath = join(directoryPath, dirName);
+        const propertyDirPath = await realpath(join(directoryPath, dirName));
 
         try {
           const files = await readdir(propertyDirPath, { withFileTypes: true });
