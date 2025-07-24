@@ -249,9 +249,7 @@ export class FileScannerService {
         }
 
         const dirName = propertyDir.name;
-        const propertyDirPath = path.resolve(
-          await realpath(join(directoryPath, dirName))
-        );
+        const propertyDirPath = await realpath(join(directoryPath, dirName));
 
         try {
           const files = await readdir(propertyDirPath, { withFileTypes: true });
