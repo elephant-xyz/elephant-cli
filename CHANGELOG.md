@@ -1,3 +1,10 @@
+## [1.16.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.1...v1.16.2) (2025-07-25)
+
+
+### Bug Fixes
+
+* resolve 504 error ([adb41e1](https://github.com/elephant-xyz/elephant-cli/commit/adb41e173e11c14f108f66fda85d53f93c2e2a01))
+
 ## [1.16.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.0...v1.16.1) (2025-07-24)
 
 
