@@ -99,6 +99,11 @@ export class JsonValidatorService {
     this.ajv.addFormat('ipfs_uri', {
       type: 'string',
       validate: (value: string): boolean => {
+        // Check if it's a relative path
+        if (value.startsWith('./')) {
+          // Ensure there's content after './'
+          return value.length > 2;
+        }
         const ipfsUriPattern = /^ipfs:\/\/[A-Za-z0-9]{46,59}$/;
         if (!ipfsUriPattern.test(value)) {
           return false;
@@ -722,7 +727,7 @@ export class JsonValidatorService {
         case 'currency':
           return 'must be a positive number with at most 2 decimal places';
         case 'ipfs_uri':
-          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw or DAG-PB codec and sha256';
+          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256 or a relative file path starting with ./';
         case 'rate_percent':
           return 'must be a percentage rate with exactly 3 decimal places (e.g., "12.345")';
         default:
@@ -812,39 +817,6 @@ export class JsonValidatorService {
       return true;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Resolve file references in data without validating
-   * Used to get fully resolved data for further processing
-   */
-  async resolveData(
-    data: any,
-    schema: JSONSchema,
-    currentFilePath?: string
-  ): Promise<any> {
-    try {
-      // Resolve any CID references in the schema first
-      const cidAllowedMap = new Map<string, boolean>();
-      const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
-        schema,
-        cidAllowedMap
-      );
-
-      // Resolve CID pointers in data
-      const resolvedData = await this.resolveCIDPointers(
-        data,
-        currentFilePath,
-        resolvedSchema,
-        cidAllowedMap
-      );
-
-      return resolvedData;
-    } catch (error) {
-      throw new Error(
-        `Failed to resolve data: ${error instanceof Error ? error.message : String(error)}`
-      );
     }
   }
 }

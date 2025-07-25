@@ -218,9 +218,11 @@ async function scanAndUploadHTMLFiles(
   htmlDir: string,
   pinataService: PinataService | undefined,
   progressTracker: SimpleProgress,
-  dryRun: boolean
+  dryRun: boolean,
+  maxConcurrentUploads: number = 5 // Default to 5 concurrent uploads
 ): Promise<Map<string, HTMLUploadResult>> {
   const htmlUploadMap = new Map<string, HTMLUploadResult>();
+  const uploadSemaphore = new Semaphore(maxConcurrentUploads);
 
   try {
     // Get all directories in the HTML output directory
@@ -231,93 +233,113 @@ async function scanAndUploadHTMLFiles(
       `Found ${directories.length} property directories with HTML files`
     );
 
-    for (const dir of directories) {
-      const dirName = dir.name;
-      const dirPath = path.join(htmlDir, dirName);
+    // Process directories with controlled concurrency
+    const uploadPromises = directories.map((dir) =>
+      uploadSemaphore.runExclusive(async () => {
+        const dirName = dir.name;
+        const dirPath = path.join(htmlDir, dirName);
 
-      try {
-        // Check if directory has any files
-        const dirContents = await fsPromises.readdir(dirPath);
-        if (dirContents.length === 0) {
-          logger.warn(`Directory ${dirName} is empty`);
-          progressTracker.increment('errors');
-          continue;
-        }
-
-        // Check if index.html exists
-        const indexPath = path.join(dirPath, 'index.html');
-        if (!existsSync(indexPath)) {
-          logger.warn(`No index.html found in directory ${dirName}`);
-          progressTracker.increment('errors');
-          continue;
-        }
-
-        if (dryRun) {
-          // In dry-run mode, simulate uploads
-          const calculatedCid = `bafybeig${dirName.toLowerCase().substring(0, 20).padEnd(20, '0')}htmldryrun`;
-          const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
-
-          logger.info(
-            `[DRY RUN] Would upload HTML directory for property ${dirName}`
-          );
-
-          htmlUploadMap.set(dirName, {
-            propertyCid: dirName,
-            htmlCid: calculatedCid,
-            htmlLink,
-          });
-
-          progressTracker.increment('processed');
-        } else {
-          if (!pinataService) {
-            throw new Error('Pinata service not available for HTML upload');
-          }
-
-          // Upload the entire directory
-          logger.debug(`Uploading HTML directory for property ${dirName}`);
-
-          const metadata = {
-            name: `${dirName}-html`,
-            keyvalues: {
-              propertyCid: dirName,
-              dataGroupCid: 'html-fact-sheet',
-              type: 'property-fact-sheet',
-            },
-          };
-
-          const uploadResult = await pinataService.uploadDirectory(
-            dirPath,
-            metadata
-          );
-
-          if (uploadResult.success && uploadResult.cid) {
-            // For directory uploads, the link points to the directory root
-            // The gateway will automatically serve index.html
-            const htmlLink = `http://dweb.link/ipfs/${uploadResult.cid}`;
-
-            htmlUploadMap.set(dirName, {
-              propertyCid: dirName,
-              htmlCid: uploadResult.cid,
-              htmlLink,
-            });
-
-            logger.debug(
-              `Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`
-            );
-            progressTracker.increment('processed');
-          } else {
-            logger.error(
-              `Failed to upload HTML directory for ${dirName}: ${uploadResult.error}`
-            );
+        try {
+          // Check if directory has any files
+          const dirContents = await fsPromises.readdir(dirPath);
+          if (dirContents.length === 0) {
+            logger.warn(`Directory ${dirName} is empty`);
             progressTracker.increment('errors');
+            return null;
           }
+
+          // Check if index.html exists
+          const indexPath = path.join(dirPath, 'index.html');
+          if (!existsSync(indexPath)) {
+            logger.warn(`No index.html found in directory ${dirName}`);
+            progressTracker.increment('errors');
+            return null;
+          }
+
+          if (dryRun) {
+            // In dry-run mode, simulate uploads
+            const calculatedCid = `bafybeig${dirName.toLowerCase().substring(0, 20).padEnd(20, '0')}htmldryrun`;
+            const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
+
+            logger.info(
+              `[DRY RUN] Would upload HTML directory for property ${dirName}`
+            );
+
+            const result: HTMLUploadResult = {
+              propertyCid: dirName,
+              htmlCid: calculatedCid,
+              htmlLink,
+            };
+
+            progressTracker.increment('processed');
+            return { dirName, result };
+          } else {
+            if (!pinataService) {
+              throw new Error('Pinata service not available for HTML upload');
+            }
+
+            // Upload the entire directory
+            logger.debug(`Uploading HTML directory for property ${dirName}`);
+
+            const metadata = {
+              name: `${dirName}-html`,
+              keyvalues: {
+                propertyCid: dirName,
+                dataGroupCid: 'html-fact-sheet',
+                type: 'property-fact-sheet',
+              },
+            };
+
+            const uploadResult = await pinataService.uploadDirectory(
+              dirPath,
+              metadata
+            );
+
+            if (uploadResult.success && uploadResult.cid) {
+              // For directory uploads, the link points to the directory root
+              // The gateway will automatically serve index.html
+              const htmlLink = `http://dweb.link/ipfs/${uploadResult.cid}`;
+
+              const result: HTMLUploadResult = {
+                propertyCid: dirName,
+                htmlCid: uploadResult.cid,
+                htmlLink,
+              };
+
+              logger.debug(
+                `Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`
+              );
+              progressTracker.increment('processed');
+              return { dirName, result };
+            } else {
+              logger.error(
+                `Failed to upload HTML directory for ${dirName}: ${uploadResult.error}`
+              );
+              progressTracker.increment('errors');
+              return null;
+            }
+          }
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            `Error processing HTML directory ${dirName}: ${errorMsg}`
+          );
+          progressTracker.increment('errors');
+          return null;
         }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.error(`Error processing HTML directory ${dirName}: ${errorMsg}`);
-        progressTracker.increment('errors');
+      })
+    );
+
+    // Wait for all uploads to complete
+    const results = await Promise.all(uploadPromises);
+
+    // Populate the map with successful results
+    results.forEach((result) => {
+      if (result && result.dirName && result.result) {
+        htmlUploadMap.set(result.dirName, result.result);
       }
-    }
+    });
 
     return htmlUploadMap;
   } catch (error) {
@@ -899,7 +921,8 @@ export async function handleValidateAndUpload(
             htmlOutputDir,
             pinataService,
             progressTracker,
-            options.dryRun
+            options.dryRun,
+            effectiveConcurrency // Use the same concurrency limit as file processing
           );
         }
 
@@ -1286,6 +1309,34 @@ async function processFileAndGetUploadPromise(
     // Check if data has IPLD links that need conversion
     let dataToUpload = jsonData;
 
+    // Validate the data (potentially after IPLD conversion)
+    const validationResult = await services.jsonValidatorService.validate(
+      dataToUpload,
+      schema,
+      fileEntry.filePath,
+      false // allow resolution of file references
+    );
+
+    if (!validationResult.valid) {
+      const errorMessages: Array<{ path: string; message: string }> =
+        services.jsonValidatorService.getErrorMessages(
+          validationResult.errors || []
+        );
+
+      for (const errorInfo of errorMessages) {
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          errorPath: errorInfo.path,
+          errorMessage: errorInfo.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      services.progressTracker.increment('errors');
+      return;
+    }
+
     if (
       services.ipldConverterService &&
       services.ipldConverterService.hasIPLDLinks(jsonData, schema)
@@ -1319,34 +1370,6 @@ async function processFileAndGetUploadPromise(
         );
         // Continue with original data
       }
-    }
-
-    // Validate the data (potentially after IPLD conversion)
-    const validationResult = await services.jsonValidatorService.validate(
-      dataToUpload,
-      schema,
-      fileEntry.filePath,
-      false // allow resolution of file references
-    );
-
-    if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
-
-      for (const errorInfo of errorMessages) {
-        await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
-          dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: errorInfo.path,
-          errorMessage: errorInfo.message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      services.progressTracker.increment('errors');
-      return;
     }
 
     const canonicalJson =
