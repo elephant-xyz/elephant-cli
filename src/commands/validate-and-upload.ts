@@ -815,7 +815,7 @@ export async function handleValidateAndUpload(
       .filter((file) => {
         // Skip files from directories with failed seed validation
         if (file.propertyCid.startsWith('SEED_PENDING:')) {
-          const dirPath = file.filePath.split('/').slice(0, -1).join('/');
+          const dirPath = path.dirname(file.filePath);
           if (failedSeedDirectories.has(dirPath)) {
             logger.warn(
               `Skipping file ${file.filePath} because seed validation failed for directory ${dirPath}`
@@ -828,7 +828,7 @@ export async function handleValidateAndUpload(
       .map((file) => {
         if (file.propertyCid.startsWith('SEED_PENDING:')) {
           const dirName = file.propertyCid.replace('SEED_PENDING:', '');
-          const dirPath = file.filePath.split('/').slice(0, -1).join('/');
+          const dirPath = path.dirname(file.filePath);
           const seedCid = seedCidMap.get(dirPath);
           if (seedCid) {
             return { ...file, propertyCid: seedCid };

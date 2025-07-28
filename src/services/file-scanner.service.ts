@@ -261,7 +261,7 @@ export class FileScannerService {
           );
 
           // Use directory name as propertyCid for now
-          // For seed datagroup directories, this will be updated later after upload
+          // For seed datagroup directories, ALL files get SEED_PENDING prefix
           const propertyCid = this.isValidCid(dirName)
             ? dirName
             : hasSeedFile
