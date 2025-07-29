@@ -53,7 +53,7 @@ your-data/
 - Files must contain valid JSON data
 - Schema CIDs must point to valid data group schemas (see [Data Group Schema Requirements](#data-group-schema-requirements))
 
-**Seed Datagroup Support:**
+### **Seed Datagroup Support:**
 
 Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json`
 
