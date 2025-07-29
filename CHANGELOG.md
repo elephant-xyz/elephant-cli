@@ -1,3 +1,10 @@
+## [1.16.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.2...v1.16.3) (2025-07-29)
+
+
+### Bug Fixes
+
+* resolve county datagroup files getting folder names instead of s… ([#61](https://github.com/elephant-xyz/elephant-cli/issues/61)) ([38a7046](https://github.com/elephant-xyz/elephant-cli/commit/38a7046c9066b0ce667a1f836ad7d19f8b22ab87))
+
 ## [1.16.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.1...v1.16.2) (2025-07-25)
 
 
