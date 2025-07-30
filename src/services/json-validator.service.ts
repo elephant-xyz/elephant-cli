@@ -5,7 +5,7 @@ import * as raw_codec from 'multiformats/codecs/raw';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
-import { JSONSchema } from './schema-cache.service.js';
+import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
 import { IPFSService } from './ipfs.service.js';
 import { logger } from '../utils/logger.js';
 
@@ -26,12 +26,18 @@ export class JsonValidatorService {
   private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
   private ipfsService: IPFSService;
+  private schemaCacheService?: SchemaCacheService;
   private schemaCache: Map<string, JSONSchema> = new Map();
   private baseDirectory?: string;
 
-  constructor(ipfsService: IPFSService, baseDirectory?: string) {
+  constructor(
+    ipfsService: IPFSService,
+    baseDirectory?: string,
+    schemaCacheService?: SchemaCacheService
+  ) {
     this.ipfsService = ipfsService;
     this.baseDirectory = baseDirectory;
+    this.schemaCacheService = schemaCacheService;
     this.ajv = new Ajv({
       allErrors: true,
       loadSchema: this.loadSchemaFromCID.bind(this),
@@ -158,9 +164,22 @@ export class JsonValidatorService {
   }
 
   private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
-    // Check cache first
+    // Check local cache first
     if (this.schemaCache.has(cidStr)) {
       return this.schemaCache.get(cidStr)!;
+    }
+
+    // Try schema cache service first (handles special schemas)
+    if (this.schemaCacheService) {
+      try {
+        const schema = await this.schemaCacheService.getSchema(cidStr);
+        if (schema) {
+          this.schemaCache.set(cidStr, schema);
+          return schema;
+        }
+      } catch (e) {
+        // If schema cache service fails, continue to IPFS fetch
+      }
     }
 
     try {
