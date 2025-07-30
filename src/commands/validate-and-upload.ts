@@ -632,7 +632,8 @@ export async function handleValidateAndUpload(
     new IPLDConverterService(
       options.inputDir,
       pinataService,
-      cidCalculatorService
+      cidCalculatorService,
+      jsonCanonicalizerService
     );
 
   let progressTracker: SimpleProgress | undefined =
@@ -1375,9 +1376,12 @@ async function processFileAndGetUploadPromise(
     const canonicalJson =
       services.jsonCanonicalizerService.canonicalize(dataToUpload);
 
-    // Use appropriate CID format based on content
+    // Calculate CID from the canonical JSON string directly
     const calculatedCid =
-      await services.cidCalculatorService.calculateCidAutoFormat(dataToUpload);
+      await services.cidCalculatorService.calculateCidFromCanonicalJson(
+        canonicalJson,
+        dataToUpload
+      );
 
     const processedFile: ProcessedFile = {
       propertyCid: fileEntry.propertyCid,
