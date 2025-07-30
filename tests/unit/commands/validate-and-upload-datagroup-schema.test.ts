@@ -100,6 +100,9 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
 
     mockCidCalculatorService = {
       calculateCidAutoFormat: vi.fn().mockResolvedValue('QmTestCid12345'),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('QmTestCid12345'),
     } as any;
 
     mockPinataService = {} as any;

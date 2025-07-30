@@ -45,6 +45,9 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
     },
     cidCalculatorService: {
       calculateCidAutoFormat: vi.fn().mockResolvedValue('QmCalculatedCID'),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('QmCalculatedCID'),
     },
     csvReporterService: {
       initialize: vi.fn(),
