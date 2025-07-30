@@ -86,8 +86,8 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       isDirectory: () => true,
     } as any);
 
-    // Track what data was passed to calculateCidAutoFormat
-    const calculatedCidCalls: any[] = [];
+    // Track what was passed to calculateCidFromCanonicalJson
+    const calculatedCidCalls: { canonical: string; data: any }[] = [];
 
     // Mock services
     const mockFileScannerService = {
@@ -138,8 +138,6 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
 
     const mockCidCalculatorService = {
       calculateCidAutoFormat: vi.fn().mockImplementation(async (data: any) => {
-        // Capture the data passed to calculate CID
-        calculatedCidCalls.push(data);
         // Return a deterministic CID based on the canonicalized data
         const dataStr = JSON.stringify(data);
         return `bafybeig${dataStr.length}canonicalized`;
@@ -147,13 +145,8 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       calculateCidFromCanonicalJson: vi
         .fn()
         .mockImplementation(async (canonicalJson: string, data?: any) => {
-          // Capture the data if provided
-          if (data) {
-            calculatedCidCalls.push(data);
-          } else {
-            // Parse the canonical JSON to capture it
-            calculatedCidCalls.push(JSON.parse(canonicalJson));
-          }
+          // Capture both the canonical JSON and the original data
+          calculatedCidCalls.push({ canonical: canonicalJson, data });
           // Return a deterministic CID based on the canonical JSON
           return `bafybeig${canonicalJson.length}canonicalized`;
         }),
@@ -240,16 +233,26 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       mockCidCalculatorService.calculateCidFromCanonicalJson
     ).toHaveBeenCalled();
 
-    // The data passed to calculateCidFromCanonicalJson should be captured
+    // Verify the arguments passed to calculateCidFromCanonicalJson
     expect(calculatedCidCalls).toHaveLength(1);
-    const cidCalculationData = calculatedCidCalls[0];
+    const { canonical, data } = calculatedCidCalls[0];
 
-    // Verify the data has both expected properties
-    expect(cidCalculationData).toHaveProperty('label', 'My Seed Data');
-    expect(cidCalculationData).toHaveProperty('relationships', [
-      'rel1',
-      'rel2',
-    ]);
+    // Verify the canonical JSON string has properties in sorted order
+    expect(canonical).toBe(
+      JSON.stringify(
+        {
+          relationships: ['rel1', 'rel2'],
+          label: 'My Seed Data',
+        },
+        ['label', 'relationships'] // Keys sorted alphabetically
+      )
+    );
+
+    // Verify the original data was passed as well
+    expect(data).toEqual({
+      relationships: ['rel1', 'rel2'],
+      label: 'My Seed Data',
+    });
 
     // Verify upload was called with correct data
     expect(mockPinataService.uploadBatch).toHaveBeenCalled();
@@ -279,7 +282,7 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
     } as any);
 
     // Track CID calculations
-    const calculatedCidCalls: any[] = [];
+    const calculatedCidCalls: { canonical: string; data: any }[] = [];
 
     // Mock services
     const mockFileScannerService = {
@@ -343,18 +346,13 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
 
     const mockCidCalculatorService = {
       calculateCidAutoFormat: vi.fn().mockImplementation(async (data: any) => {
-        calculatedCidCalls.push(data);
         const dataStr = JSON.stringify(data);
         return `bafybeig${dataStr.length}canonicalized`;
       }),
       calculateCidFromCanonicalJson: vi
         .fn()
         .mockImplementation(async (canonicalJson: string, data?: any) => {
-          if (data) {
-            calculatedCidCalls.push(data);
-          } else {
-            calculatedCidCalls.push(JSON.parse(canonicalJson));
-          }
+          calculatedCidCalls.push({ canonical: canonicalJson, data });
           return `bafybeig${canonicalJson.length}canonicalized`;
         }),
     } as any;
@@ -446,8 +444,15 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
     ).toHaveBeenCalledTimes(2);
     expect(calculatedCidCalls).toHaveLength(2);
 
-    // Both should have the expected properties
-    calculatedCidCalls.forEach((data) => {
+    // Verify the arguments for each call
+    calculatedCidCalls.forEach((call, index) => {
+      const { canonical, data } = call;
+
+      // Each canonical JSON should be properly formatted
+      expect(canonical).toContain('"label":"Data ' + (index + 1) + '"');
+      expect(canonical).toContain('"relationships":{}');
+
+      // Original data should be preserved
       expect(data).toHaveProperty('label');
       expect(data).toHaveProperty('relationships');
     });
@@ -465,6 +470,7 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
 
     // Track CID calculations
     const calculatedCids: string[] = [];
+    const canonicalJsonCalls: { canonical: string; data: any }[] = [];
 
     // Mock services
     const mockFileScannerService = {
@@ -520,7 +526,9 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       }),
       calculateCidFromCanonicalJson: vi
         .fn()
-        .mockImplementation(async (canonicalJson: string) => {
+        .mockImplementation(async (canonicalJson: string, data?: any) => {
+          // Capture the calls for verification
+          canonicalJsonCalls.push({ canonical: canonicalJson, data });
           // Generate a deterministic CID based on the canonical JSON
           const cid = `bafybeig${Buffer.from(canonicalJson).toString('base64').substring(0, 20)}`;
           calculatedCids.push(cid);
@@ -594,5 +602,23 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
     // Both files should have the same CID after canonicalization
     expect(calculatedCids).toHaveLength(2);
     expect(calculatedCids[0]).toBe(calculatedCids[1]);
+
+    // Verify that the canonical JSON was the same for both files
+    expect(canonicalJsonCalls).toHaveLength(2);
+    expect(canonicalJsonCalls[0].canonical).toBe(
+      canonicalJsonCalls[1].canonical
+    );
+
+    // The canonical JSON should have keys in alphabetical order
+    const expectedCanonical = JSON.stringify(
+      {
+        label: 'Same Data',
+        relationships: ['rel1', 'rel2'],
+      },
+      null,
+      0
+    );
+    expect(canonicalJsonCalls[0].canonical).toBe(expectedCanonical);
+    expect(canonicalJsonCalls[1].canonical).toBe(expectedCanonical);
   });
 });
