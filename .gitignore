@@ -60,7 +60,7 @@ submit_errors.csv
 submit_warnings.csv
 test_data
 mapped_33901
-upload-results.csv
+upload-results*.csv
 output_33901.csv
 demo_data/
 tmp/
