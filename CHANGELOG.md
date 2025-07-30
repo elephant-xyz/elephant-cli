@@ -1,3 +1,10 @@
+## [1.16.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.3...v1.16.4) (2025-07-30)
+
+
+### Bug Fixes
+
+* Fix JSON canonicalization for Seed data ([#62](https://github.com/elephant-xyz/elephant-cli/issues/62)) ([f462a91](https://github.com/elephant-xyz/elephant-cli/commit/f462a9116e25c4b158680a7ae3d41cd559603386))
+
 ## [1.16.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.2...v1.16.3) (2025-07-29)
 
 
