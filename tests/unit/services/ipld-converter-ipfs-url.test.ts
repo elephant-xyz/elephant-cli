@@ -30,6 +30,9 @@ describe('IPLDConverterService - ipfs_url field handling', () => {
     mockCidCalculatorService = {
       calculateCidAutoFormat: vi.fn().mockResolvedValue('QmMockCalculatedCID'),
       calculateCidV1ForRawData: vi.fn().mockResolvedValue('bafkreimockrawcid'),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('QmMockCalculatedCID'),
     } as any;
 
     ipldConverterService = new IPLDConverterService(

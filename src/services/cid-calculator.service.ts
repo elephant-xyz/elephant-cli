@@ -148,6 +148,28 @@ export class CidCalculatorService {
   }
 
   /**
+   * Calculate CID from canonical JSON string
+   * This ensures the CID is calculated from the exact canonical representation
+   */
+  async calculateCidFromCanonicalJson(
+    canonicalJson: string,
+    data?: any
+  ): Promise<string> {
+    // If data is provided, check if it contains IPLD links
+    if (data && this.hasIPLDLinks(data)) {
+      // For IPLD data, we need to use DAG-JSON encoding
+      // Parse and re-encode to ensure proper DAG-JSON format
+      const parsedData = JSON.parse(canonicalJson);
+      return this.calculateCidV1ForDagJson(parsedData);
+    } else {
+      // Use UnixFS format for regular data
+      // Use the canonical JSON string directly
+      const buffer = Buffer.from(canonicalJson, 'utf-8');
+      return this.calculateCidV1(buffer);
+    }
+  }
+
+  /**
    * Check if data contains IPLD links
    */
   hasIPLDLinks(data: any): boolean {

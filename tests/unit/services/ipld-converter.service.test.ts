@@ -46,6 +46,9 @@ describe('IPLDConverterService', () => {
         .mockResolvedValue(
           'bafkreihq2v2fhjhzwmm6zfkjitfvp3g3czrnymy3dqpwl5slsx5om3d2me'
         ),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('QmMockCalculatedCID123456789012345678901234567'),
     } as any;
 
     ipldConverterService = new IPLDConverterService(

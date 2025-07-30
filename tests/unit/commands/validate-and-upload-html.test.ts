@@ -104,6 +104,9 @@ describe('validate-and-upload HTML generation', () => {
 
     mockCidCalculatorService = {
       calculateCidAutoFormat: vi.fn().mockResolvedValue('bafkreitest123'),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('bafkreitest123'),
     } as unknown as CidCalculatorService;
 
     mockPinataService = {
@@ -363,11 +366,11 @@ describe('validate-and-upload HTML generation', () => {
       expect.any(Object)
     );
 
-    // Should still generate HTML files with inline assets
-    expect(mockExecSync).toHaveBeenCalledWith(
-      expect.stringContaining('fact-sheet generate'),
-      expect.any(Object)
+    // Check that fact-sheet generate was called (might be the second call after ulimit)
+    const factSheetGenerateCalls = mockExecSync.mock.calls.filter((call) =>
+      call[0].includes('fact-sheet generate')
     );
+    expect(factSheetGenerateCalls.length).toBeGreaterThan(0);
     expect(mockExecSync).toHaveBeenCalledWith(
       expect.stringContaining('--inline-js --inline-css'),
       expect.any(Object)

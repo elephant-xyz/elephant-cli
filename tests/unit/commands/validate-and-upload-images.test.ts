@@ -129,6 +129,9 @@ describe('validate-and-upload with image support', () => {
       calculateCidV1ForRawData: vi
         .fn()
         .mockResolvedValue('bafkreiimage1234567890'),
+      calculateCidFromCanonicalJson: vi
+        .fn()
+        .mockResolvedValue('bafkreiabcd1234567890'),
     } as any;
 
     // Mock Pinata service
@@ -364,8 +367,9 @@ describe('validate-and-upload with image support', () => {
 
     // Verify calculated CIDs are included in output
     expect(
-      mockCidCalculatorService.calculateCidAutoFormat
+      mockCidCalculatorService.calculateCidFromCanonicalJson
     ).toHaveBeenCalledWith(
+      expect.any(String),
       expect.objectContaining({
         label: 'Test Product',
         relationships: expect.arrayContaining([

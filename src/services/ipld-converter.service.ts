@@ -7,6 +7,8 @@ import path from 'path';
 import { logger } from '../utils/logger.js';
 import { PinataService } from './pinata.service.js';
 import { CidCalculatorService } from './cid-calculator.service.js';
+import { IPLDCanonicalizerService } from './ipld-canonicalizer.service.js';
+import { JsonCanonicalizerService } from './json-canonicalizer.service.cjs';
 
 export interface IPLDConversionResult {
   originalData: any;
@@ -25,16 +27,22 @@ export class IPLDConverterService {
   private baseDirectory?: string;
   private pinataService?: PinataService;
   private cidCalculatorService: CidCalculatorService;
+  private canonicalizerService:
+    | IPLDCanonicalizerService
+    | JsonCanonicalizerService;
 
   constructor(
     baseDirectory?: string,
     pinataService?: PinataService,
-    cidCalculatorService?: CidCalculatorService
+    cidCalculatorService?: CidCalculatorService,
+    canonicalizerService?: IPLDCanonicalizerService | JsonCanonicalizerService
   ) {
     this.baseDirectory = baseDirectory;
     this.pinataService = pinataService;
     this.cidCalculatorService =
       cidCalculatorService || new CidCalculatorService();
+    this.canonicalizerService =
+      canonicalizerService || new IPLDCanonicalizerService();
   }
 
   /**
@@ -302,9 +310,11 @@ export class IPLDConverterService {
           };
         } else {
           // For JSON/text, use canonical JSON
-          const canonicalJson = JSON.stringify(dataToUpload);
+          const canonicalJson =
+            this.canonicalizerService.canonicalize(dataToUpload);
           expectedCid =
-            await this.cidCalculatorService.calculateCidAutoFormat(
+            await this.cidCalculatorService.calculateCidFromCanonicalJson(
+              canonicalJson,
               dataToUpload
             );
 
@@ -353,9 +363,12 @@ export class IPLDConverterService {
           );
         } else {
           // For JSON/text, use canonical JSON
-          const canonicalJson = JSON.stringify(dataToUpload);
-          const buffer = Buffer.from(canonicalJson, 'utf-8');
-          return await this.cidCalculatorService.calculateCidV1(buffer);
+          const canonicalJson =
+            this.canonicalizerService.canonicalize(dataToUpload);
+          return await this.cidCalculatorService.calculateCidFromCanonicalJson(
+            canonicalJson,
+            dataToUpload
+          );
         }
       }
     } catch (error) {
