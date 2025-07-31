@@ -178,6 +178,9 @@ export class JsonValidatorService {
           return schema;
         }
       } catch (e) {
+        logger.error(
+          `Schema cache service failed to fetch schema for CID ${cidStr}: ${e instanceof Error ? e.message : String(e)}`
+        );
         // If schema cache service fails, continue to IPFS fetch
       }
     }
