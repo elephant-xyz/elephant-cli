@@ -19,21 +19,21 @@ export class PinataService {
 
   private readonly pinataApiUrl =
     'https://api.pinata.cloud/pinning/pinFileToIPFS';
-  private readonly PINATA_RATE_LIMIT = 300; // 300 requests per minute (conservative to avoid 429s)
 
   constructor(
     pinataJwt: string,
     _pinataSecretApiKey?: string,
-    maxConcurrentUploads = 10
+    maxConcurrentUploads = 10,
+    rateLimitPerMinute = 500
   ) {
     if (!pinataJwt) {
       throw new Error('Pinata JWT is required for authentication.');
     }
     this.pinataJwt = pinataJwt;
     this.semaphore = new Semaphore(maxConcurrentUploads);
-    this.rateLimiter = new RateLimiter(this.PINATA_RATE_LIMIT);
+    this.rateLimiter = new RateLimiter(rateLimitPerMinute);
     logger.info(
-      `PinataService initialized with rate limit: ${this.PINATA_RATE_LIMIT} requests/minute`
+      `PinataService initialized with rate limit: ${rateLimitPerMinute} requests/minute`
     );
   }
 
@@ -170,13 +170,6 @@ export class PinataService {
             delay = Math.pow(2, attempt) * 5000; // 5s, 10s, 20s, 40s...
             logger.warn(
               `Rate limit hit (429). Backing off for ${delay / 1000}s before retry...`
-            );
-
-            // Also add some tokens back to the rate limiter to slow down overall
-            const tokensToAdd = Math.min(50, attempt * 10);
-            (this.rateLimiter as any).tokens = Math.min(
-              (this.rateLimiter as any).tokens + tokensToAdd,
-              (this.rateLimiter as any).maxTokens
             );
           } else {
             // For other errors, use normal exponential backoff

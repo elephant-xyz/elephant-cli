@@ -59,10 +59,13 @@ describe('PinataService Rate Limiting', () => {
 
   it('should wait appropriately between requests when rate limit is exceeded', async () => {
     // Create a service with very low rate limit for testing
-    const lowRatePinataService = new PinataService(mockPinataJwt, undefined, 1);
-    // Manually set rate limit to 60 per minute (1 per second) for easier testing
-    const { RateLimiter } = await import('../../../src/utils/rate-limiter.js');
-    (lowRatePinataService as any).rateLimiter = new RateLimiter(60);
+    // 60 per minute = 1 per second
+    const lowRatePinataService = new PinataService(
+      mockPinataJwt,
+      undefined,
+      1,
+      60
+    );
 
     const file1: ProcessedFile = {
       propertyCid: 'property1',
