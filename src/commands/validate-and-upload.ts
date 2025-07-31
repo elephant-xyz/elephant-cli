@@ -610,7 +610,11 @@ export async function handleValidateAndUpload(
     new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
   const jsonValidatorService =
     serviceOverrides.jsonValidatorService ??
-    new JsonValidatorService(ipfsServiceForSchemas, options.inputDir);
+    new JsonValidatorService(
+      ipfsServiceForSchemas,
+      options.inputDir,
+      schemaCacheService
+    );
   const jsonCanonicalizerService =
     serviceOverrides.jsonCanonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
