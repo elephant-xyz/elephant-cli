@@ -1,3 +1,10 @@
+## [1.16.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.4...v1.16.5) (2025-07-31)
+
+
+### Bug Fixes
+
+* Fix Seed datagroup validation against the schema. ([#63](https://github.com/elephant-xyz/elephant-cli/issues/63)) ([37c3e7c](https://github.com/elephant-xyz/elephant-cli/commit/37c3e7c4b1b88cdfbc76d8f537eda60d18f63e3a))
+
 ## [1.16.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.3...v1.16.4) (2025-07-30)
 
 
