@@ -21,6 +21,7 @@ import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
+import { BatchDirectoryUploadService } from '../services/batch-directory-upload.service.js';
 
 async function checkFactSheetInstalled(): Promise<boolean> {
   try {
@@ -629,7 +630,7 @@ export async function handleValidateAndUpload(
     serviceOverrides.pinataService ??
     (options.dryRun
       ? undefined
-      : new PinataService(options.pinataJwt!, undefined, 18));
+      : new PinataService(options.pinataJwt!, undefined, 200));
 
   const ipldConverterService =
     serviceOverrides.ipldConverterService ??
@@ -782,38 +783,51 @@ export async function handleValidateAndUpload(
     // Set to track directories with failed seed validation
     const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
 
-    // Phase 1: Process all seed files first
+    // Phase 1: Process all seed files first (but don't upload them yet)
     const seedFiles = allFiles.filter(
       (file) => file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
     );
 
+    const processedSeedFiles: ProcessedFile[] = [];
+    const seedFileMapping = new Map<string, ProcessedFile>(); // dirPath -> ProcessedFile
+
     if (seedFiles.length > 0) {
       logger.info(`Processing ${seedFiles.length} seed files first...`);
 
-      const seedPromises: Promise<void>[] = [];
+      const seedPromises: Promise<ProcessedFile | null>[] = [];
       for (const seedFile of seedFiles) {
         seedPromises.push(
           localProcessingSemaphore.runExclusive(async () => {
-            await processSeedFile(
+            return await processSeedFile(
               seedFile,
               servicesForProcessing,
-              options,
-              uploadRecords,
-              seedCidMap,
               failedSeedDirectories
             );
           })
         );
       }
 
-      await Promise.all(seedPromises);
-      logger.info(`Completed processing ${seedFiles.length} seed files`);
+      const seedResults = await Promise.all(seedPromises);
+      
+      // Collect successfully processed seed files
+      for (let i = 0; i < seedResults.length; i++) {
+        const result = seedResults[i];
+        if (result) {
+          processedSeedFiles.push(result);
+          const dirPath = path.dirname(seedFiles[i].filePath);
+          seedFileMapping.set(dirPath, result);
+        }
+      }
+      
+      logger.info(`Successfully processed ${processedSeedFiles.length} seed files out of ${seedFiles.length}`);
     }
 
     // Phase 2: Process all non-seed files with updated propertyCids
     const nonSeedFiles = allFiles.filter(
       (file) => file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
     );
+
+    let processedFiles: ProcessedFile[] = [];
 
     // Update propertyCids for files in seed datagroup directories, but skip directories with failed seeds
     const updatedFiles = nonSeedFiles
@@ -847,21 +861,130 @@ export async function handleValidateAndUpload(
     if (updatedFiles.length > 0) {
       logger.info(`Processing ${updatedFiles.length} non-seed files...`);
 
-      const allOperationPromises: Promise<void>[] = [];
+      // Phase 2a: Process all files to collect ProcessedFile objects
+      const processedFilesPromises: Promise<ProcessedFile | null>[] = [];
       for (const fileEntry of updatedFiles) {
-        allOperationPromises.push(
+        processedFilesPromises.push(
           localProcessingSemaphore.runExclusive(async () =>
-            processFileAndGetUploadPromise(
-              fileEntry,
-              servicesForProcessing,
-              options,
-              uploadRecords
-            )
+            processFileAndReturnProcessed(fileEntry, servicesForProcessing)
           )
         );
       }
 
-      await Promise.all(allOperationPromises);
+      const processedResults = await Promise.all(processedFilesPromises);
+      processedFiles = processedResults.filter(
+        (file): file is ProcessedFile => file !== null
+      );
+
+      logger.info(
+        `Successfully processed ${processedFiles.length} files out of ${updatedFiles.length}`
+      );
+    }
+
+    // Combine seed files and non-seed files for batch upload
+    const allProcessedFiles = [...processedSeedFiles, ...processedFiles];
+    
+    // Phase 2b: Upload all processed files in batches as directories
+    if (allProcessedFiles.length > 0 && !options.dryRun && pinataService) {
+        progressTracker.setPhase(
+          'Uploading Files to IPFS',
+          allProcessedFiles.length
+        );
+
+        // Use the batch directory upload service
+        const batchUploadService = new BatchDirectoryUploadService(
+          pinataService,
+          {
+            batchSize: 200,
+            dryRun: options.dryRun,
+          }
+        );
+
+        const uploadResults =
+          await batchUploadService.uploadInBatches(allProcessedFiles);
+
+        // Process upload results
+        for (let i = 0; i < uploadResults.length; i++) {
+          const result = uploadResults[i];
+          const processedFile = allProcessedFiles[i];
+
+          if (result.success && result.cid) {
+            const ipfsCid = result.cid;
+
+            // For seed files, the propertyCid should be the same as dataCid
+            const isSeedFile =
+              processedFile.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+            const finalPropertyCid = isSeedFile
+              ? ipfsCid
+              : processedFile.propertyCid;
+
+            uploadRecords.push({
+              propertyCid: finalPropertyCid,
+              dataGroupCid: processedFile.dataGroupCid,
+              dataCid: ipfsCid,
+              filePath: processedFile.filePath,
+              uploadedAt: new Date().toISOString(),
+            });
+            
+            // Update seedCidMap if this is a seed file
+            if (isSeedFile) {
+              const dirPath = path.dirname(processedFile.filePath);
+              seedCidMap.set(dirPath, ipfsCid);
+              logger.debug(
+                `Stored seed CID ${ipfsCid} for directory ${dirPath}`
+              );
+            }
+            
+            progressTracker.increment('processed');
+            logger.debug(
+              `Successfully uploaded ${processedFile.filePath} to IPFS. CID: ${ipfsCid}`
+            );
+          } else {
+            const errorMsg = `Upload failed for ${processedFile.filePath}: ${
+              result.error || 'Unknown error'
+            }`;
+            logger.error(errorMsg);
+            csvReporterService.logError({
+              propertyCid: processedFile.propertyCid,
+              dataGroupCid: processedFile.dataGroupCid,
+              filePath: processedFile.filePath,
+              errorPath: 'root',
+              errorMessage: `Upload failed: ${result.error || 'Unknown error'}`,
+              timestamp: new Date().toISOString(),
+            });
+            progressTracker.increment('errors');
+          }
+        }
+    } else if (options.dryRun && allProcessedFiles.length > 0) {
+      // Handle dry run mode
+      for (const processedFile of allProcessedFiles) {
+        logger.info(
+          `[DRY RUN] Would upload ${processedFile.filePath} (Calculated CID: ${processedFile.calculatedCid})`
+        );
+
+        // For seed files, the propertyCid should be the same as dataCid
+        const isSeedFile =
+          processedFile.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+        const finalPropertyCid = isSeedFile
+          ? processedFile.calculatedCid
+          : processedFile.propertyCid;
+
+        uploadRecords.push({
+          propertyCid: finalPropertyCid,
+          dataGroupCid: processedFile.dataGroupCid,
+          dataCid: processedFile.calculatedCid,
+          filePath: processedFile.filePath,
+          uploadedAt: new Date().toISOString(),
+        });
+        
+        // Update seedCidMap if this is a seed file
+        if (isSeedFile) {
+          const dirPath = path.dirname(processedFile.filePath);
+          seedCidMap.set(dirPath, processedFile.calculatedCid);
+        }
+        
+        progressTracker.increment('processed');
+      }
     }
 
     // Phase 3: Generate and upload HTML files
@@ -1175,58 +1298,32 @@ async function processSeedFile(
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
     progressTracker: SimpleProgress;
-    pinataService: PinataService | undefined;
     ipldConverterService: IPLDConverterService;
   },
-  options: ValidateAndUploadCommandOptions,
-  uploadRecords: UploadRecord[],
-  seedCidMap: Map<string, string>,
   failedSeedDirectories: Set<string>
-): Promise<void> {
+): Promise<ProcessedFile | null> {
   const dirPath = path.dirname(fileEntry.filePath);
-  const uploadRecordsCountBefore = uploadRecords.length;
-  const errorsCountBefore = services.progressTracker.getMetrics().errors;
 
   try {
-    // Process the seed file exactly like a normal file
-    await processFileAndGetUploadPromise(
+    // Process the seed file but don't upload it yet
+    const processedFile = await processFileAndReturnProcessed(
       fileEntry,
-      services,
-      options,
-      uploadRecords
+      services
     );
 
-    // Check if processing was successful by checking if:
-    // 1. A new record was added (successful validation and upload/dry-run), OR
-    // 2. No new errors were recorded (indicating successful processing)
-    const latestRecord = uploadRecords[uploadRecords.length - 1];
-    const recordAdded =
-      uploadRecords.length > uploadRecordsCountBefore &&
-      latestRecord &&
-      latestRecord.filePath === fileEntry.filePath;
-
-    const errorsCountAfter = services.progressTracker.getMetrics().errors;
-    const newErrorsOccurred = errorsCountAfter > errorsCountBefore;
-
-    if (recordAdded) {
-      // Successful upload/dry-run
-      seedCidMap.set(dirPath, latestRecord.dataCid);
+    if (processedFile) {
       logger.debug(
-        `Stored seed CID ${latestRecord.dataCid} for directory ${dirPath}`
+        `Successfully processed seed file ${fileEntry.filePath}`
       );
-    } else if (newErrorsOccurred) {
+      return processedFile;
+    } else {
       // Validation or processing failed
       failedSeedDirectories.add(dirPath);
       logger.error(
-        `Seed validation/upload failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
-      );
-    } else {
-      // No record added and no errors - this shouldn't happen, but treat as failure
-      failedSeedDirectories.add(dirPath);
-      logger.error(
-        `Seed processing completed without success or error for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+        `Seed validation failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
       );
     }
+    return null;
   } catch (error) {
     // Mark this directory as having a failed seed
     failedSeedDirectories.add(dirPath);
@@ -1234,6 +1331,184 @@ async function processSeedFile(
       `Seed processing failed for ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}. All other files in directory ${dirPath} will be skipped.`
     );
     throw error; // Re-throw to maintain error reporting
+  }
+}
+
+async function processFileAndReturnProcessed(
+  fileEntry: FileEntry,
+  services: {
+    schemaCacheService: SchemaCacheService;
+    jsonValidatorService: JsonValidatorService;
+    jsonCanonicalizerService:
+      | JsonCanonicalizerService
+      | IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+    csvReporterService: CsvReporterService;
+    progressTracker: SimpleProgress;
+    ipldConverterService: IPLDConverterService;
+  }
+): Promise<ProcessedFile | null> {
+  let jsonData;
+  try {
+    const fileContentStr = await fsPromises.readFile(
+      fileEntry.filePath,
+      'utf-8'
+    );
+    jsonData = JSON.parse(fileContentStr);
+  } catch (readOrParseError) {
+    const errorMsg =
+      readOrParseError instanceof Error
+        ? readOrParseError.message
+        : String(readOrParseError);
+    await services.csvReporterService.logError({
+      propertyCid: fileEntry.propertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      filePath: fileEntry.filePath,
+      errorPath: 'root',
+      errorMessage: `File read/parse error: ${errorMsg}`,
+      timestamp: new Date().toISOString(),
+    });
+    services.progressTracker.increment('errors');
+    return null;
+  }
+
+  try {
+    const schemaCid = fileEntry.dataGroupCid;
+    const schema = await services.schemaCacheService.getSchema(schemaCid);
+    if (!schema) {
+      const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
+      await services.csvReporterService.logError({
+        propertyCid: fileEntry.propertyCid,
+        dataGroupCid: fileEntry.dataGroupCid,
+        filePath: fileEntry.filePath,
+        errorPath: 'root',
+        errorMessage: error,
+        timestamp: new Date().toISOString(),
+      });
+      services.progressTracker.increment('errors');
+      return null;
+    }
+
+    // Validate that the schema is a valid data group schema
+    const schemaValidation = validateDataGroupSchema(schema);
+    if (!schemaValidation.valid) {
+      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
+      await services.csvReporterService.logError({
+        propertyCid: fileEntry.propertyCid,
+        dataGroupCid: fileEntry.dataGroupCid,
+        filePath: fileEntry.filePath,
+        errorPath: 'root',
+        errorMessage: error,
+        timestamp: new Date().toISOString(),
+      });
+      services.progressTracker.increment('errors');
+      return null;
+    }
+
+    // Check if data has IPLD links that need conversion
+    let dataToUpload = jsonData;
+
+    // Validate the data (potentially after IPLD conversion)
+    const validationResult = await services.jsonValidatorService.validate(
+      dataToUpload,
+      schema,
+      fileEntry.filePath,
+      false // allow resolution of file references
+    );
+
+    if (!validationResult.valid) {
+      const errorMessages: Array<{ path: string; message: string }> =
+        services.jsonValidatorService.getErrorMessages(
+          validationResult.errors || []
+        );
+
+      for (const errorInfo of errorMessages) {
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          errorPath: errorInfo.path,
+          errorMessage: errorInfo.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      services.progressTracker.increment('errors');
+      return null;
+    }
+
+    if (
+      services.ipldConverterService &&
+      services.ipldConverterService.hasIPLDLinks(jsonData, schema)
+    ) {
+      logger.debug(
+        `Data has IPLD links, running IPLD converter for ${fileEntry.filePath}`
+      );
+
+      try {
+        // Run IPLD converter to process file references and ipfs_url fields
+        const conversionResult =
+          await services.ipldConverterService.convertToIPLD(
+            jsonData,
+            fileEntry.filePath,
+            schema
+          );
+        dataToUpload = conversionResult.convertedData;
+
+        if (conversionResult.hasLinks) {
+          logger.debug(
+            `Converted ${conversionResult.linkedCIDs.length} links to IPFS CIDs`
+          );
+        }
+      } catch (conversionError) {
+        const errorMsg =
+          conversionError instanceof Error
+            ? conversionError.message
+            : String(conversionError);
+        logger.error(
+          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+        );
+        // Continue with original data
+      }
+    }
+
+    const canonicalJson =
+      services.jsonCanonicalizerService.canonicalize(dataToUpload);
+
+    // Calculate CID from the canonical JSON string directly
+    const calculatedCid =
+      await services.cidCalculatorService.calculateCidFromCanonicalJson(
+        canonicalJson,
+        dataToUpload
+      );
+
+    // For seed files, the propertyCid should be the calculated CID
+    const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+    
+    const processedFile: ProcessedFile = {
+      propertyCid: isSeedFile ? calculatedCid : fileEntry.propertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      filePath: fileEntry.filePath,
+      canonicalJson,
+      calculatedCid,
+      validationPassed: true,
+    };
+
+    return processedFile;
+  } catch (processingError) {
+    const errorMsg =
+      processingError instanceof Error
+        ? processingError.message
+        : String(processingError);
+    await services.csvReporterService.logError({
+      propertyCid: fileEntry.propertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      filePath: fileEntry.filePath,
+      errorPath: 'root',
+      errorMessage: `Processing error: ${errorMsg}`,
+      timestamp: new Date().toISOString(),
+    });
+    services.progressTracker.increment('errors');
+    return null;
   }
 }
 
