@@ -1,6 +1,7 @@
 import { UploadResult, ProcessedFile } from '../types/submit.types.js';
 import { Semaphore } from 'async-mutex';
 import { logger } from '../utils/logger.js';
+import { RateLimiter } from '../utils/rate-limiter.js';
 import path from 'path';
 import { readdir, stat, readFile } from 'fs/promises';
 
@@ -12,20 +13,28 @@ export interface PinMetadata {
 export class PinataService {
   private pinataJwt: string;
   private semaphore: Semaphore;
+  private rateLimiter: RateLimiter;
+  private requestCount: number = 0;
+  private lastCountReset: number = Date.now();
 
   private readonly pinataApiUrl =
     'https://api.pinata.cloud/pinning/pinFileToIPFS';
+  private readonly PINATA_RATE_LIMIT = 300; // 300 requests per minute (conservative to avoid 429s)
 
   constructor(
     pinataJwt: string,
     _pinataSecretApiKey?: string,
-    maxConcurrentUploads = 18
+    maxConcurrentUploads = 10
   ) {
     if (!pinataJwt) {
       throw new Error('Pinata JWT is required for authentication.');
     }
     this.pinataJwt = pinataJwt;
     this.semaphore = new Semaphore(maxConcurrentUploads);
+    this.rateLimiter = new RateLimiter(this.PINATA_RATE_LIMIT);
+    logger.info(
+      `PinataService initialized with rate limit: ${this.PINATA_RATE_LIMIT} requests/minute`
+    );
   }
 
   private async processUpload(
@@ -107,6 +116,12 @@ export class PinataService {
         });
         form.append('pinataMetadata', pinataMetadata);
 
+        // Wait for rate limit before making the request
+        await this.rateLimiter.waitForToken();
+
+        // Track request count
+        this.trackRequest();
+
         const response = await fetch(this.pinataApiUrl, {
           method: 'POST',
           headers: {
@@ -141,9 +156,34 @@ export class PinataService {
         logger.debug(
           `Upload attempt ${attempt + 1} for ${metadata.name} failed: ${lastError.message}`
         );
+
+        // Check if it's a 429 rate limit error
+        const is429Error =
+          lastError.message.includes('429') ||
+          lastError.message.includes('RATE_LIMITED');
+
         if (attempt < retries) {
-          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-          logger.debug(`Retrying upload in ${delay / 1000}s...`);
+          let delay: number;
+
+          if (is429Error) {
+            // For 429 errors, use longer exponential backoff starting at 5s
+            delay = Math.pow(2, attempt) * 5000; // 5s, 10s, 20s, 40s...
+            logger.warn(
+              `Rate limit hit (429). Backing off for ${delay / 1000}s before retry...`
+            );
+
+            // Also add some tokens back to the rate limiter to slow down overall
+            const tokensToAdd = Math.min(50, attempt * 10);
+            (this.rateLimiter as any).tokens = Math.min(
+              (this.rateLimiter as any).tokens + tokensToAdd,
+              (this.rateLimiter as any).maxTokens
+            );
+          } else {
+            // For other errors, use normal exponential backoff
+            delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s...
+            logger.debug(`Retrying upload in ${delay / 1000}s...`);
+          }
+
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
@@ -198,6 +238,33 @@ export class PinataService {
   }
 
   // No longer needed: getAuthHeaders (JWT only, handled inline)
+
+  /**
+   * Track request count and log statistics
+   */
+  private trackRequest(): void {
+    this.requestCount++;
+
+    // Reset counter every minute and log stats
+    const now = Date.now();
+    const elapsed = now - this.lastCountReset;
+
+    if (elapsed >= 60000) {
+      // 1 minute
+      logger.info(
+        `Pinata request stats: ${this.requestCount} requests in the last ${(elapsed / 1000).toFixed(1)}s ` +
+          `(${(this.requestCount / (elapsed / 60000)).toFixed(1)} req/min)`
+      );
+      this.requestCount = 0;
+      this.lastCountReset = now;
+    } else if (this.requestCount % 50 === 0) {
+      // Log every 50 requests
+      logger.info(
+        `Pinata requests: ${this.requestCount} in ${(elapsed / 1000).toFixed(1)}s ` +
+          `(current rate: ${(this.requestCount / (elapsed / 60000)).toFixed(1)} req/min)`
+      );
+    }
+  }
 
   /**
    * Recursively get all files in a directory
@@ -299,6 +366,12 @@ export class PinataService {
         });
         form.append('pinataMetadata', pinataMetadata);
       }
+
+      // Wait for rate limit before making the request
+      await this.rateLimiter.waitForToken();
+
+      // Track request count
+      this.trackRequest();
 
       // Make the request using fetch with native FormData
       const response = await fetch(this.pinataApiUrl, {
