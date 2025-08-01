@@ -24,7 +24,7 @@ export class PinataService {
     pinataJwt: string,
     _pinataSecretApiKey?: string,
     maxConcurrentUploads = 10,
-    rateLimitPerMinute = 500
+    rateLimitPerMinute = 450
   ) {
     if (!pinataJwt) {
       throw new Error('Pinata JWT is required for authentication.');
