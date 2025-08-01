@@ -629,7 +629,7 @@ export async function handleValidateAndUpload(
     serviceOverrides.pinataService ??
     (options.dryRun
       ? undefined
-      : new PinataService(options.pinataJwt!, undefined, 18));
+      : new PinataService(options.pinataJwt!, undefined, 10)); // Reduced from 18 to prevent bursts
 
   const ipldConverterService =
     serviceOverrides.ipldConverterService ??
