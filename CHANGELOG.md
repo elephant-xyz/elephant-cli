@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.5...v1.17.0) (2025-08-01)
+
+
+### Features
+
+* Implement rate limiting for Pinata uploads to prevent bursts and 429 errors ([#64](https://github.com/elephant-xyz/elephant-cli/issues/64)) ([778f829](https://github.com/elephant-xyz/elephant-cli/commit/778f8298cd68ee2d7af453eb9310cd35f19566e0))
+
 ## [1.16.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.4...v1.16.5) (2025-07-31)
 
 
