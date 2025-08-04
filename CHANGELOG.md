@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.18.0...v1.18.1) (2025-08-04)
+
+
+### Bug Fixes
+
+* increase transaction wait timeout ([#67](https://github.com/elephant-xyz/elephant-cli/issues/67)) ([7de0b0b](https://github.com/elephant-xyz/elephant-cli/commit/7de0b0b5f7c164c1d438a45f86781f9c56bd31b3))
+
 # [1.18.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.17.0...v1.18.0) (2025-08-04)
 
 
