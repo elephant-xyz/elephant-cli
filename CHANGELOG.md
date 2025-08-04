@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.17.0...v1.18.0) (2025-08-04)
+
+
+### Features
+
+* Add `validate` command and tests for file validation against schemas. ([518f73a](https://github.com/elephant-xyz/elephant-cli/commit/518f73afe46de79ba7df378f1fa88f2cc689645f))
+
 # [1.17.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.16.5...v1.17.0) (2025-08-01)
 
 

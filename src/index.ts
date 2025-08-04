@@ -14,6 +14,7 @@ import {
 } from './config/constants.js';
 import { listAssignments } from './commands/list-assignments.js';
 // import { registerSubmitFilesCommand } from './commands/submit-files-optimized.js';
+import { registerValidateCommand } from './commands/validate.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
 
@@ -51,6 +52,7 @@ program
 // registerSubmitFilesCommand(program);
 
 // Register new split commands
+registerValidateCommand(program);
 registerValidateAndUploadCommand(program);
 registerSubmitToContractCommand(program);
 
