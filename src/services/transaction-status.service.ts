@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 export class TransactionStatusService {
   private provider: ethers.JsonRpcProvider;
   private pollingInterval: number = 2000; // 2 seconds
-  private maxPollingTime: number = 900000; // 15 minutes
+  private maxPollingTime: number = 15 * 60 * 1000; // 15 minutes
 
   constructor(rpcUrl: string) {
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
