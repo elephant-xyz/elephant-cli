@@ -75,7 +75,19 @@ const txResponse: TransactionResponse = await this.contract.submitBatch(
 
 ## New Split Workflow Commands
 
-The file submission process has been split into two commands for better control:
+The file submission process has been split into three commands for better control:
+
+### validate Command
+
+This command:
+1. Validates file structure in the input directory
+2. Uses filenames as Schema CIDs to validate JSON data
+3. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+4. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
+5. Writes validation errors to CSV file (default: `submit_errors.csv`)
+6. Shows validation summary
+7. **Does NOT upload anything to IPFS**
+8. **Does NOT calculate CIDs or generate HTML files**
 
 ### validate-and-upload Command
 
@@ -169,6 +181,10 @@ npm run dev
 # Test the CLI - List assignments
 ./bin/elephant-cli list-assignments --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
 
+# Test the CLI - Validate only (no upload)
+./bin/elephant-cli validate ./test-data \
+  --output-csv validation_errors.csv
+
 # Test the CLI - Validate and upload
 ./bin/elephant-cli validate-and-upload ./test-data \
   --private-key "0x..." \
@@ -196,6 +212,7 @@ npm run clean
 npm run test
 
 # Run specific test files or patterns
+npm run test -- tests/unit/commands/validate.test.ts
 npm run test -- tests/unit/commands/validate-and-upload.test.ts
 npm run test -- tests/integration/split-commands.test.ts
 npm run test -- json-validator
@@ -211,6 +228,7 @@ npm run test:coverage
 
 - `src/index.ts` - CLI entry point and command definitions
 - `src/commands/list-assignments.ts` - List assignments command
+- `src/commands/validate.ts` - Validate data without uploading
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction

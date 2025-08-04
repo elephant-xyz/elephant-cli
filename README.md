@@ -26,10 +26,11 @@ To use this tool, the oracle needs to have:
 
 ## What You Can Do
 
-The Elephant Network CLI provides two main workflows:
+The Elephant Network CLI provides three main workflows:
 
-1. **✅ Validate & Upload** - Process and upload your data files
-2. **🔗 Submit to Blockchain** - Register your submissions on-chain
+1. **🔍 Validate Only** - Check your data files for errors without uploading
+2. **✅ Validate & Upload** - Process and upload your data files
+3. **🔗 Submit to Blockchain** - Register your submissions on-chain
 
 ## Workflow 1: Preparing and Uploading Data
 
@@ -136,7 +137,25 @@ All schema CIDs used as file names must point to valid **data group schemas**. A
 
 Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid data group schemas for your use case.
 
-### Step 2: Get Your Credentials
+### Step 2: Validate Your Data (Optional but Recommended)
+
+Before uploading, you can validate your data files without any credentials:
+
+```bash
+# Validate all files in your data directory
+elephant-cli validate ./your-data
+```
+
+This command:
+- Checks directory structure
+- Validates JSON syntax
+- Verifies data against schemas
+- Reports all errors to `submit_errors.csv`
+- Shows validation summary
+
+No Pinata JWT or private key needed for validation!
+
+### Step 3: Get Your Credentials
 
 You'll need:
 
@@ -151,7 +170,7 @@ echo "ELEPHANT_PRIVATE_KEY=your_private_key_here" >> .env
 echo "PINATA_JWT=your_pinata_jwt_here" >> .env
 ```
 
-### Step 3: Validate and Upload (Dry Run First)
+### Step 4: Validate and Upload (Dry Run First)
 
 Always test first with `--dry-run`:
 
@@ -225,7 +244,7 @@ The CLI automatically:
 
 Learn more: [IPLD Course](https://proto.school/course/ipld) | [IPFS Course](https://proto.school/course/ipfs)
 
-### Step 4: Upload for Real
+### Step 5: Upload for Real
 
 If dry run succeeds, upload your data:
 
@@ -401,6 +420,11 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 
 ## Common Command Options
 
+### Validate Options
+
+- `--output-csv <file>` - Error report file name (default: submit_errors.csv)
+- `--max-concurrent-tasks <num>` - Control validation speed
+
 ### Validate and Upload Options
 
 - `--pinata-jwt <token>` - Pinata API token (or use PINATA_JWT env var)
@@ -463,6 +487,7 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 elephant-cli --help
 
 # Get help for specific command
+elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 ```
