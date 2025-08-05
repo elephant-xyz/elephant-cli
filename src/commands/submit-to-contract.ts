@@ -765,6 +765,8 @@ export async function handleSubmitToContract(
 
           // Log all results to transaction status CSV (including failures)
           for (const result of apiResults) {
+            const currentTimestamp = new Date().toISOString();
+
             await transactionStatusReporter.logTransaction({
               batchIndex: result.batchIndex,
               transactionHash: result.transactionHash || '',
@@ -773,7 +775,7 @@ export async function handleSubmitToContract(
               gasUsed: result.status.gasUsed,
               itemCount: result.itemCount,
               error: result.status.error,
-              timestamp: new Date().toISOString(),
+              timestamp: currentTimestamp,
             });
 
             if (result.transactionHash) {
@@ -781,7 +783,7 @@ export async function handleSubmitToContract(
                 transactionHash: result.transactionHash,
                 batchIndex: result.batchIndex,
                 itemCount: result.itemCount,
-                timestamp: new Date().toISOString(),
+                timestamp: currentTimestamp,
                 status: result.status.status,
               });
             }
@@ -893,8 +895,8 @@ export async function handleSubmitToContract(
       if (!options.transactionIdsCsv) {
         const timestamp = new Date()
           .toISOString()
-          .replace(/[:.]/g, '-')
-          .slice(0, -5);
+          .slice(0, 19)
+          .replace(/:/g, '-');
         const reportsDir = path.dirname(config.errorCsvPath);
         transactionIdsCsvPath = path.join(
           reportsDir,
