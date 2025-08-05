@@ -16,6 +16,7 @@ import { SimpleProgress } from '../utils/simple-progress.js';
 import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
+import { ZipExtractorService } from '../services/zip-extractor.service.js';
 
 function validateDataGroupSchema(schema: any): {
   valid: boolean;
@@ -77,8 +78,10 @@ export interface ValidateCommandOptions {
 
 export function registerValidateCommand(program: Command) {
   program
-    .command('validate <inputDir>')
-    .description('Validate files against schemas without uploading to IPFS')
+    .command('validate <input>')
+    .description(
+      'Validate files against schemas without uploading to IPFS. Input can be a directory or ZIP file.'
+    )
     .option(
       '-o, --output-csv <path>',
       'Output CSV file path for validation errors',
@@ -89,13 +92,13 @@ export function registerValidateCommand(program: Command) {
       "Target maximum concurrent validation tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
       undefined
     )
-    .action(async (inputDir, options) => {
+    .action(async (input, options) => {
       options.maxConcurrentTasks =
         parseInt(options.maxConcurrentTasks, 10) || undefined;
 
       const commandOptions: ValidateCommandOptions = {
         ...options,
-        inputDir: path.resolve(inputDir),
+        inputDir: path.resolve(input),
       };
 
       await handleValidate(commandOptions);
@@ -118,7 +121,28 @@ export async function handleValidate(
   console.log(chalk.bold.blue('🐘 Elephant Network CLI - Validate'));
   console.log();
 
-  logger.technical(`Input directory: ${options.inputDir}`);
+  // Initialize services
+  const zipExtractor = new ZipExtractorService();
+  let actualInputDir = options.inputDir;
+  let tempDir: string | null = null;
+
+  try {
+    // Check if input is a ZIP file
+    const isZip = await zipExtractor.isZipFile(options.inputDir);
+    if (isZip) {
+      logger.info(`Detected ZIP file: ${options.inputDir}`);
+      actualInputDir = await zipExtractor.extractZip(options.inputDir);
+      tempDir = zipExtractor.getTempRootDir(actualInputDir);
+      logger.info(`Extracted to: ${actualInputDir}`);
+    }
+  } catch (error) {
+    logger.error(
+      `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
+    );
+    process.exit(1);
+  }
+
+  logger.technical(`Input directory: ${actualInputDir}`);
   logger.technical(`Output CSV: ${options.outputCsv || 'submit_errors.csv'}`);
 
   const FALLBACK_LOCAL_CONCURRENCY = 10;
@@ -209,15 +233,17 @@ export async function handleValidate(
   );
 
   try {
-    const stats = await fsPromises.stat(options.inputDir);
+    const stats = await fsPromises.stat(actualInputDir);
     if (!stats.isDirectory()) {
-      logger.error(`Input path ${options.inputDir} is not a directory.`);
+      logger.error(`Input path ${actualInputDir} is not a directory.`);
+      if (tempDir) await zipExtractor.cleanup(tempDir);
       process.exit(1);
     }
   } catch (error) {
     logger.error(
-      `Error accessing input directory ${options.inputDir}: ${error instanceof Error ? error.message : String(error)}`
+      `Error accessing input directory ${actualInputDir}: ${error instanceof Error ? error.message : String(error)}`
     );
+    if (tempDir) await zipExtractor.cleanup(tempDir);
     process.exit(1);
   }
 
@@ -241,7 +267,7 @@ export async function handleValidate(
     serviceOverrides.jsonValidatorService ??
     new JsonValidatorService(
       ipfsServiceForSchemas,
-      options.inputDir,
+      actualInputDir,
       schemaCacheService
     );
 
@@ -265,9 +291,8 @@ export async function handleValidate(
     );
 
     logger.info('Validating directory structure...');
-    const initialValidation = await fileScannerService.validateStructure(
-      options.inputDir
-    );
+    const initialValidation =
+      await fileScannerService.validateStructure(actualInputDir);
     if (!initialValidation.isValid) {
       console.log(chalk.red('❌ Directory structure is invalid:'));
       console.log(`Errors found: ${initialValidation.errors}`);
@@ -275,14 +300,13 @@ export async function handleValidate(
         console.log(chalk.red(`   • ${err}`))
       );
       await csvReporterService.finalize();
+      if (tempDir) await zipExtractor.cleanup(tempDir);
       process.exit(1);
     }
     logger.success('Directory structure valid');
 
     logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(
-      options.inputDir
-    );
+    const totalFiles = await fileScannerService.countTotalFiles(actualInputDir);
     logger.info(
       `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to validate`
     );
@@ -292,6 +316,7 @@ export async function handleValidate(
       if (csvReporterServiceInstance) {
         await csvReporterServiceInstance.finalize();
       }
+      if (tempDir) await zipExtractor.cleanup(tempDir);
       return;
     }
 
@@ -305,9 +330,8 @@ export async function handleValidate(
     progressTracker.setPhase('Pre-fetching Schemas', 1);
     logger.info('Discovering all unique schema CIDs...');
     try {
-      const allDataGroupCids = await fileScannerService.getAllDataGroupCids(
-        options.inputDir
-      );
+      const allDataGroupCids =
+        await fileScannerService.getAllDataGroupCids(actualInputDir);
       const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
       logger.info(
         `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
@@ -350,7 +374,7 @@ export async function handleValidate(
     // Collect all files first to handle seed files in two phases
     const allFiles: FileEntry[] = [];
     for await (const fileBatch of fileScannerService.scanDirectory(
-      options.inputDir,
+      actualInputDir,
       config.fileScanBatchSize
     )) {
       allFiles.push(...fileBatch);
@@ -486,6 +510,11 @@ export async function handleValidate(
     } else {
       console.log(chalk.green('\n✅ All files passed validation!'));
     }
+
+    // Clean up temporary directory if it was created
+    if (tempDir) {
+      await zipExtractor.cleanup(tempDir);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`CRITICAL_ERROR_VALIDATE: ${errorMessage}`));
@@ -521,6 +550,12 @@ export async function handleValidate(
         )
       );
     }
+
+    // Clean up temporary directory if it was created
+    if (tempDir) {
+      await zipExtractor.cleanup(tempDir);
+    }
+
     process.exit(1);
   }
 }
