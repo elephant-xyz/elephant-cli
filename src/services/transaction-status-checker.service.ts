@@ -1,4 +1,4 @@
-import pLimit from 'p-limit';
+import pLimit, { type LimitFunction } from 'p-limit';
 import { TransactionStatusService } from './transaction-status.service.js';
 import { logger } from '../utils/logger.js';
 
@@ -19,7 +19,7 @@ export interface TransactionStatusResult extends TransactionRecord {
 
 export class TransactionStatusCheckerService {
   private statusService: TransactionStatusService;
-  private limit: any;
+  private limit: LimitFunction;
 
   constructor(rpcUrl: string, maxConcurrent: number = 10) {
     this.statusService = new TransactionStatusService(rpcUrl);
