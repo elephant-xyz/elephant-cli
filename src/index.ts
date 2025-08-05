@@ -18,6 +18,8 @@ import { registerValidateCommand } from './commands/validate.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
 import { registerCheckTransactionStatusCommand } from './commands/check-transaction-status.js';
+import { registerHexToCidCommand } from './commands/hex-to-cid.js';
+import { registerCidToHexCommand } from './commands/cid-to-hex.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -57,5 +59,7 @@ registerValidateCommand(program);
 registerValidateAndUploadCommand(program);
 registerSubmitToContractCommand(program);
 registerCheckTransactionStatusCommand(program);
+registerHexToCidCommand(program);
+registerCidToHexCommand(program);
 
 program.parse();
