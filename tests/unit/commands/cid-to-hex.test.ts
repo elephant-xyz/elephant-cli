@@ -119,8 +119,9 @@ describe('cid-to-hex command', () => {
       'Process exited with code 1'
     );
 
+    // Now shows consistent error message
     expect(mockConsoleError).toHaveBeenCalledWith(
-      expect.stringContaining('Error: Failed to convert CID to hex')
+      expect.stringContaining('✗ Invalid CID format:')
     );
     expect(mockExit).toHaveBeenCalledWith(1);
   });
@@ -133,8 +134,11 @@ describe('cid-to-hex command', () => {
       'Process exited with code 1'
     );
 
+    // Now shows consistent error message
     expect(mockConsoleError).toHaveBeenCalledWith(
-      expect.stringContaining('Error: Failed to convert CID to hex')
+      expect.stringContaining(
+        '✗ Invalid CID format: CID must be a non-empty string'
+      )
     );
     expect(mockExit).toHaveBeenCalledWith(1);
   });

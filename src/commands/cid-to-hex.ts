@@ -15,19 +15,21 @@ export async function cidToHexHandler(
   try {
     const converter = new CidHexConverterService();
 
-    // Validate if requested
-    if (options.validate) {
-      const validation = converter.validateCidFormat(cid);
-      if (!validation.valid) {
-        console.error(chalk.red(`✗ Invalid CID format: ${validation.error}`));
-        process.exit(1);
-      }
-      if (!options.quiet) {
-        console.log(chalk.green('✓ Valid CID format'));
-      }
+    // Always validate first for consistent error messages
+    const validation = converter.validateCidFormat(cid);
+    if (!validation.valid) {
+      const errorMessage = `Invalid CID format: ${validation.error}`;
+      logger.error(`cid-to-hex command failed: ${errorMessage}`);
+      console.error(chalk.red(`✗ ${errorMessage}`));
+      process.exit(1);
     }
 
-    // Convert CID to hex
+    if (options.validate && !options.quiet) {
+      console.log(chalk.green('✓ Valid CID format'));
+    }
+
+    // The service's cidToHex method also validates, which is redundant but safe
+    // This could be optimized in a future refactor
     const hex = converter.cidToHex(cid);
 
     // Output result
@@ -37,6 +39,8 @@ export async function cidToHexHandler(
       console.log(chalk.blue('Hex:'), hex);
     }
   } catch (error) {
+    // This will now only catch unexpected errors during conversion itself,
+    // as validation errors are handled above
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`cid-to-hex command failed: ${errorMessage}`);
     console.error(chalk.red(`Error: ${errorMessage}`));

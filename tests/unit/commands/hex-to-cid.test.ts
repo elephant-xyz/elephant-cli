@@ -92,7 +92,7 @@ describe('hex-to-cid command', () => {
 
     expect(mockConsoleError).toHaveBeenCalledWith(
       expect.stringContaining(
-        'Invalid hex format: Invalid hex string format or incorrect length (expected 32 bytes)'
+        '✗ Invalid hex format: Invalid hex string format or incorrect length (expected 32 bytes)'
       )
     );
     expect(mockExit).toHaveBeenCalledWith(1);
@@ -106,9 +106,10 @@ describe('hex-to-cid command', () => {
       'Process exited with code 1'
     );
 
+    // Now both cases show the same consistent error message
     expect(mockConsoleError).toHaveBeenCalledWith(
       expect.stringContaining(
-        'Error: Failed to convert hex to CID: Invalid hex string format or incorrect length (expected 32 bytes)'
+        '✗ Invalid hex format: Invalid hex string format or incorrect length (expected 32 bytes)'
       )
     );
     expect(mockExit).toHaveBeenCalledWith(1);
