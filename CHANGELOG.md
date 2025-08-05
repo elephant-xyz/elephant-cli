@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.19.0...v1.20.0) (2025-08-05)
+
+
+### Features
+
+* Allow Zip file input for multiple property objects ([#69](https://github.com/elephant-xyz/elephant-cli/issues/69)) ([e1175e9](https://github.com/elephant-xyz/elephant-cli/commit/e1175e96b7fdb3d944423e5e9cd4044b32cd728e))
+
 # [1.19.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.18.1...v1.19.0) (2025-08-05)
 
 
