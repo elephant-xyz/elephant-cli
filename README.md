@@ -61,7 +61,6 @@ zip -r your-data.zip your-data/
 
 # Use the ZIP file with the CLI
 elephant-cli validate your-data.zip
-elephant-cli validate-and-upload your-data.zip
 ```
 
 **Important:**
@@ -197,9 +196,6 @@ Always test first with `--dry-run`:
 ```bash
 # Test without uploading (from directory)
 elephant-cli validate-and-upload ./your-data --dry-run --output-csv test-results.csv
-
-# Or test from a ZIP file
-elephant-cli validate-and-upload ./your-data.zip --dry-run --output-csv test-results.csv
 ```
 
 **What this does:**
@@ -274,9 +270,6 @@ If dry run succeeds, upload your data:
 ```bash
 # Upload from directory
 elephant-cli validate-and-upload ./your-data --output-csv upload-results.csv
-
-# Or upload from ZIP file
-elephant-cli validate-and-upload ./your-data.zip --output-csv upload-results.csv
 ```
 
 **What this does:**
@@ -369,9 +362,8 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 ### Custom Configuration
 
 ```bash
-# Control upload concurrency (works with both directories and ZIP files)
+# Control upload concurrency
 elephant-cli validate-and-upload ./data --max-concurrent-uploads 5
-elephant-cli validate-and-upload ./data.zip --max-concurrent-uploads 5
 
 # Custom gas price for submissions
 elephant-cli submit-to-contract results.csv --gas-price 50
@@ -527,9 +519,6 @@ Set `DEBUG=elephant:*` environment variable for detailed logging:
 ```bash
 # Debug with directory input
 DEBUG=elephant:* elephant-cli validate-and-upload ./your-data
-
-# Debug with ZIP file input
-DEBUG=elephant:* elephant-cli validate-and-upload ./your-data.zip
 ```
 
 ## Network Information

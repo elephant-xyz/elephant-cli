@@ -93,7 +93,7 @@ This command:
 ### validate-and-upload Command
 
 This command:
-1. Validates file structure in the input directory or ZIP file
+1. Validates file structure in the input directory
 2. Confirms file assignments to the user
 3. Uses filenames as Schema CIDs to validate JSON data
 4. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
@@ -101,7 +101,6 @@ This command:
 6. Canonicalizes validated data
 7. Uploads canonicalized files to IPFS via Pinata
 8. Generates a CSV file with upload results
-9. **Supports both directory and ZIP file inputs**
 
 ### submit-to-contract Command
 
@@ -127,7 +126,7 @@ When adding features, follow these patterns:
 
 The CLI now supports processing ZIP files containing the expected directory structure:
 
-- Both `validate` and `validate-and-upload` commands accept ZIP files as input
+- `validate` command accepts ZIP files as input
 - ZIP files are automatically detected by file extension and magic bytes
 - Files are extracted to a temporary directory that's cleaned up after processing
 - The same validation and upload logic applies to extracted files
@@ -204,13 +203,6 @@ npm run dev
 
 # Test the CLI - Validate and upload
 ./bin/elephant-cli validate-and-upload ./test-data \
-  --private-key "0x..." \
-  --pinata-jwt "..." \
-  --output-csv results.csv \
-  --dry-run
-
-# Test the CLI - Validate and upload from ZIP file
-./bin/elephant-cli validate-and-upload ./test-data.zip \
   --private-key "0x..." \
   --pinata-jwt "..." \
   --output-csv results.csv \

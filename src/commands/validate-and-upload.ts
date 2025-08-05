@@ -21,7 +21,6 @@ import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-import { ZipExtractorService } from '../services/zip-extractor.service.js';
 
 async function checkFactSheetInstalled(): Promise<boolean> {
   try {
@@ -421,9 +420,9 @@ interface UploadRecord {
 
 export function registerValidateAndUploadCommand(program: Command) {
   program
-    .command('validate-and-upload <input>')
+    .command('validate-and-upload <inputDir>')
     .description(
-      'Validate files against schemas and upload to IPFS, generating a CSV report. Input can be a directory or ZIP file.'
+      'Validate files against schemas and upload to IPFS, generating a CSV report'
     )
     .option(
       '-j, --pinata-jwt <jwt>',
@@ -440,7 +439,7 @@ export function registerValidateAndUploadCommand(program: Command) {
       undefined
     )
     .option('--dry-run', 'Perform validation without uploading to IPFS.', false)
-    .action(async (input, options) => {
+    .action(async (inputDir, options) => {
       options.pinataJwt = options.pinataJwt || process.env.PINATA_JWT;
 
       if (!options.pinataJwt && !options.dryRun) {
@@ -457,7 +456,7 @@ export function registerValidateAndUploadCommand(program: Command) {
 
       const commandOptions: ValidateAndUploadCommandOptions = {
         ...options,
-        inputDir: path.resolve(input),
+        inputDir: path.resolve(inputDir),
       };
 
       await handleValidateAndUpload(commandOptions);
@@ -490,28 +489,7 @@ export async function handleValidateAndUpload(
     logger.warn('DRY RUN MODE: No files will be uploaded');
   }
 
-  // Initialize services
-  const zipExtractor = new ZipExtractorService();
-  let actualInputDir = options.inputDir;
-  let tempDir: string | null = null;
-
-  try {
-    // Check if input is a ZIP file
-    const isZip = await zipExtractor.isZipFile(options.inputDir);
-    if (isZip) {
-      logger.info(`Detected ZIP file: ${options.inputDir}`);
-      actualInputDir = await zipExtractor.extractZip(options.inputDir);
-      tempDir = zipExtractor.getTempRootDir(actualInputDir);
-      logger.info(`Extracted to: ${actualInputDir}`);
-    }
-  } catch (error) {
-    logger.error(
-      `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
-    );
-    process.exit(1);
-  }
-
-  logger.technical(`Input directory: ${actualInputDir}`);
+  logger.technical(`Input directory: ${options.inputDir}`);
   logger.technical(`Output CSV: ${options.outputCsv}`);
 
   const FALLBACK_LOCAL_CONCURRENCY = 10;
@@ -602,17 +580,15 @@ export async function handleValidateAndUpload(
   );
 
   try {
-    const stats = await fsPromises.stat(actualInputDir);
+    const stats = await fsPromises.stat(options.inputDir);
     if (!stats.isDirectory()) {
-      logger.error(`Input path ${actualInputDir} is not a directory.`);
-      if (tempDir) await zipExtractor.cleanup(tempDir);
+      logger.error(`Input path ${options.inputDir} is not a directory.`);
       process.exit(1);
     }
   } catch (error) {
     logger.error(
-      `Error accessing input directory ${actualInputDir}: ${error instanceof Error ? error.message : String(error)}`
+      `Error accessing input directory ${options.inputDir}: ${error instanceof Error ? error.message : String(error)}`
     );
-    if (tempDir) await zipExtractor.cleanup(tempDir);
     process.exit(1);
   }
 
@@ -636,7 +612,7 @@ export async function handleValidateAndUpload(
     serviceOverrides.jsonValidatorService ??
     new JsonValidatorService(
       ipfsServiceForSchemas,
-      actualInputDir,
+      options.inputDir,
       schemaCacheService
     );
   const jsonCanonicalizerService =
@@ -658,7 +634,7 @@ export async function handleValidateAndUpload(
   const ipldConverterService =
     serviceOverrides.ipldConverterService ??
     new IPLDConverterService(
-      actualInputDir,
+      options.inputDir,
       pinataService,
       cidCalculatorService,
       jsonCanonicalizerService
@@ -686,8 +662,9 @@ export async function handleValidateAndUpload(
     );
 
     logger.info('Validating directory structure...');
-    const initialValidation =
-      await fileScannerService.validateStructure(actualInputDir);
+    const initialValidation = await fileScannerService.validateStructure(
+      options.inputDir
+    );
     if (!initialValidation.isValid) {
       console.log(chalk.red('❌ Directory structure is invalid:'));
       console.log(`Errors found: ${initialValidation.errors}`);
@@ -695,13 +672,14 @@ export async function handleValidateAndUpload(
         console.log(chalk.red(`   • ${err}`))
       );
       await csvReporterService.finalize();
-      if (tempDir) await zipExtractor.cleanup(tempDir);
       process.exit(1);
     }
     logger.success('Directory structure valid');
 
     logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(actualInputDir);
+    const totalFiles = await fileScannerService.countTotalFiles(
+      options.inputDir
+    );
     logger.info(
       `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
     );
@@ -711,7 +689,6 @@ export async function handleValidateAndUpload(
       if (csvReporterServiceInstance) {
         await csvReporterServiceInstance.finalize();
       }
-      if (tempDir) await zipExtractor.cleanup(tempDir);
       return;
     }
 
@@ -728,8 +705,9 @@ export async function handleValidateAndUpload(
     progressTracker.setPhase('Pre-fetching Schemas', 1); // Treat as a single step for overall progress
     logger.info('Discovering all unique schema CIDs...');
     try {
-      const allDataGroupCids =
-        await fileScannerService.getAllDataGroupCids(actualInputDir);
+      const allDataGroupCids = await fileScannerService.getAllDataGroupCids(
+        options.inputDir
+      );
       const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
       logger.info(
         `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
@@ -776,7 +754,7 @@ export async function handleValidateAndUpload(
     // Collect all files first to handle seed files in two phases
     const allFiles: FileEntry[] = [];
     for await (const fileBatch of fileScannerService.scanDirectory(
-      actualInputDir,
+      options.inputDir,
       config.fileScanBatchSize
     )) {
       allFiles.push(...fileBatch);
@@ -929,8 +907,11 @@ export async function handleValidateAndUpload(
 
         // Generate HTML files
         progressTracker.setPhase('Generating HTML Files', 1);
-        const htmlOutputDir = path.join(path.dirname(actualInputDir), 'htmls');
-        await generateHTMLFiles(actualInputDir, htmlOutputDir);
+        const htmlOutputDir = path.join(
+          path.dirname(options.inputDir),
+          'htmls'
+        );
+        await generateHTMLFiles(options.inputDir, htmlOutputDir);
         progressTracker.increment('processed');
 
         // Upload HTML files
@@ -1139,11 +1120,6 @@ export async function handleValidateAndUpload(
       );
       throw new Error(`Main CSV output failed: ${errMsg}`); // Re-throw
     }
-
-    // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(
@@ -1184,12 +1160,6 @@ export async function handleValidateAndUpload(
         )
       );
     }
-
-    // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
-
     process.exit(1);
   }
 }
