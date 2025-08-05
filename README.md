@@ -166,6 +166,7 @@ elephant-cli validate ./your-data.zip
 ```
 
 This command:
+
 - Checks directory structure
 - Validates JSON syntax
 - Verifies data against schemas
@@ -356,7 +357,7 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 
 - Submits your data hashes to the Elephant Network smart contract
 - Groups submissions into batches for efficiency
-- Provides transaction confirmations
+- **NEW**: Returns immediately after submission (no waiting for confirmations)
 - **NEW**: Saves transaction IDs to a CSV file for tracking
 - **NEW**: Displays transaction IDs in console when less than 5 transactions
 
@@ -368,6 +369,7 @@ The CLI now automatically tracks all submitted transactions:
 - Default filename: `transaction-ids-{timestamp}.csv` in the reports directory
 - Use `--transaction-ids-csv` to specify a custom output path
 - When submitting less than 5 transactions, IDs are displayed directly in the console
+- **All transactions are marked as "pending" - use `check-transaction-status` to check their status**
 
 Example output for small submissions:
 
@@ -376,6 +378,34 @@ Example output for small submissions:
   0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
   0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
   0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
+```
+
+### Step 4: Check Transaction Status
+
+Check the status of your submitted transactions:
+
+```bash
+elephant-cli check-transaction-status transaction-ids.csv
+```
+
+**What this does:**
+
+- Reads transaction IDs from the CSV file
+- Checks current status on the blockchain (success/failed/pending)
+- Updates the CSV with current status, block numbers, and gas used
+- Shows a summary of transaction statuses
+
+**Options:**
+
+```bash
+# Specify output file
+elephant-cli check-transaction-status transaction-ids.csv --output-csv status-update.csv
+
+# Control concurrent checks
+elephant-cli check-transaction-status transaction-ids.csv --max-concurrent 20
+
+# Use custom RPC
+elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://polygon-rpc.com
 ```
 
 ## Advanced Features
@@ -424,8 +454,9 @@ This mode:
 
 - Generates unsigned transactions locally
 - Submits them to the API for signing
-- Monitors transaction confirmation
-- Reports status in `transaction-status.csv`
+- **NEW**: Returns immediately after submission (no waiting)
+- Reports status as "pending" in `transaction-status.csv`
+- Use `check-transaction-status` command to check transaction status
 
 See [API Submission Documentation](./docs/API-SUBMISSION.md) for details.
 

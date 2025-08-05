@@ -100,11 +100,6 @@ QmProperty2,QmDataGroup2,QmData2,/path/to/file2.json,2024-01-01T00:00:01Z`;
     // Verify API submission was called
     expect(mockApiService.submitTransaction).toHaveBeenCalled();
 
-    // Verify transaction status was checked
-    expect(mockStatusService.waitForTransaction).toHaveBeenCalledWith(
-      '0xmocktxhash'
-    );
-
     // Verify status was logged
     expect(mockStatusReporter.logTransaction).toHaveBeenCalled();
   });

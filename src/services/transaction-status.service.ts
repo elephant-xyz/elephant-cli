@@ -111,4 +111,46 @@ export class TransactionStatusService {
 
     return results;
   }
+
+  /**
+   * Get current transaction status without waiting
+   */
+  async getTransactionStatus(txHash: string): Promise<TransactionStatus> {
+    try {
+      const receipt = await this.provider.getTransactionReceipt(txHash);
+
+      if (receipt) {
+        return {
+          hash: txHash,
+          status: receipt.status === 1 ? 'success' : 'failed',
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed.toString(),
+        };
+      }
+
+      const tx = await this.provider.getTransaction(txHash);
+
+      if (tx) {
+        return {
+          hash: txHash,
+          status: 'pending',
+        };
+      }
+
+      return {
+        hash: txHash,
+        status: 'pending',
+        error: 'Transaction not found on chain',
+      };
+    } catch (error) {
+      logger.warn(
+        `Error checking transaction ${txHash}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return {
+        hash: txHash,
+        status: 'pending',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 }
