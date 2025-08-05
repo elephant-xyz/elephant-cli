@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.20.1...v1.21.0) (2025-08-05)
+
+
+### Features
+
+* **cli:** add check-transaction-status command ([#72](https://github.com/elephant-xyz/elephant-cli/issues/72)) ([c1c82ae](https://github.com/elephant-xyz/elephant-cli/commit/c1c82aec63b357ee22d1f731641dc9596bc06bb7))
+
 ## [1.20.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.20.0...v1.20.1) (2025-08-05)
 
 
