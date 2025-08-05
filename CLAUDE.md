@@ -50,20 +50,20 @@ The `submit-to-contract` command includes a `--gas-price` option that accepts a 
 ```typescript
 // src/services/transaction-batcher.service.ts
 const txOptions: Overrides = {
-   gasLimit:
-           estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)),
+  gasLimit: 
+    estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)),
 };
 
 if (this.gasPrice !== 'auto') {
-   txOptions.gasPrice = ethers.parseUnits(
-           this.gasPrice.toString(),
-           'gwei'
+  txOptions.gasPrice = ethers.parseUnits(
+    this.gasPrice.toString(),
+      'gwei'
    );
 }
 //...
 const txResponse: TransactionResponse = await this.contract.submitBatch(
-        preparedBatch,
-        txOptions
+  preparedBatch, 
+  txOptions
 );
 ```
 
