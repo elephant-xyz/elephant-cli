@@ -111,6 +111,24 @@ This command:
 4. Submits data hashes to the smart contract in batches
 5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
+### reconstruct-data Command
+
+This command:
+1. Downloads data from IPFS starting from a root CID
+2. Fetches schema manifest from Elephant Network API to get datagroup CIDs
+3. Recursively follows all CID references in the data
+4. Replaces CID references with local file paths
+5. Saves all data locally in a structured directory
+6. Names root datagroup files using their schema CID from manifest
+
+Key features:
+- **Automatic CID Resolution**: Handles `{"/": "CID"}` references automatically
+- **Path Replacement**: Converts CID pointers to relative file paths
+- **Rate Limiting**: Handles IPFS gateway rate limits with exponential backoff
+- **Progress Tracking**: Shows detailed download progress
+- **Schema Manifest Integration**: Fetches datagroup CIDs from `https://lexicon.elephant.xyz/json-schemas/schema-manifest.json`
+- **Smart Filename Mapping**: Uses datagroup schema CIDs for root files based on their label
+
 ## Common Tasks for AI Assistants
 
 ### Adding New Features
@@ -221,6 +239,11 @@ npm run dev
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
 
+# Test the CLI - Reconstruct data from IPFS
+./bin/elephant-cli reconstruct-data QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU \
+  --gateway https://gateway.pinata.cloud/ipfs \
+  --output-dir ./reconstructed-data
+
 # Clean build artifacts
 npm run clean
 
@@ -247,6 +270,7 @@ npm run test:coverage
 - `src/commands/validate.ts` - Validate data without uploading
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
+- `src/commands/reconstruct-data.ts` - Reconstruct data from IPFS command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
@@ -255,6 +279,7 @@ npm run test:coverage
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
 - `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
+- `src/services/ipfs-reconstructor.service.ts` - IPFS data reconstruction service
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations

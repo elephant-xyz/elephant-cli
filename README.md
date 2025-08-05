@@ -378,6 +378,59 @@ Example output for small submissions:
   0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
 ```
 
+## Workflow 3: Reconstructing Data from IPFS
+
+The `reconstruct-data` command allows you to download and reconstruct a complete data tree from an IPFS CID, resolving all linked data references.
+
+### Usage
+
+```bash
+# Basic usage - reconstruct data from a CID
+elephant-cli reconstruct-data <cid>
+
+# Specify custom IPFS gateway
+elephant-cli reconstruct-data <cid> --gateway https://ipfs.io/ipfs
+
+# Specify custom output directory
+elephant-cli reconstruct-data <cid> --output-dir ./reconstructed-data
+```
+
+### What It Does
+
+This command:
+- Downloads the initial CID content from IPFS
+- Recursively follows and downloads all CID references in the data
+- Replaces CID references with local file paths
+- Preserves the data structure and relationships
+- Saves all files locally for offline access
+
+### Example
+
+```bash
+# Reconstruct data from a known CID
+elephant-cli reconstruct-data QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU
+
+# Output structure:
+# data/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU/
+# ├── QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU.json
+# ├── relationships_child1.json
+# ├── relationships_child2.json
+# └── ...
+```
+
+### Features
+
+- **Automatic CID Resolution**: Follows `{"/": "CID"}` references
+- **Path Replacement**: Converts CID references to relative file paths
+- **Datagroup Mapping**: Uses `datagroups_cids.json` for human-readable filenames
+- **Rate Limiting**: Handles IPFS gateway rate limits with exponential backoff
+- **Progress Tracking**: Shows download progress and status
+
+### Options
+
+- `-g, --gateway <url>`: IPFS gateway URL (default: `https://gateway.pinata.cloud/ipfs`)
+- `-o, --output-dir <path>`: Output directory for reconstructed data (default: `data`)
+
 ## Advanced Features
 
 ### Custom Configuration
@@ -535,6 +588,7 @@ elephant-cli --help
 elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
+elephant-cli reconstruct-data --help
 ```
 
 ### Debug Mode

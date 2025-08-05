@@ -17,6 +17,7 @@ import { listAssignments } from './commands/list-assignments.js';
 import { registerValidateCommand } from './commands/validate.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
+import { registerReconstructDataCommand } from './commands/reconstruct-data.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -55,5 +56,8 @@ program
 registerValidateCommand(program);
 registerValidateAndUploadCommand(program);
 registerSubmitToContractCommand(program);
+
+// Register reconstruct-data command
+registerReconstructDataCommand(program);
 
 program.parse();
