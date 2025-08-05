@@ -79,13 +79,39 @@ export class ZipExtractorService {
   }
 
   /**
+   * Check if a path is a subdirectory of a base path
+   * @param basePath The base directory path
+   * @param targetPath The path to check
+   * @returns true if targetPath is within basePath
+   */
+  private isSubPath(basePath: string, targetPath: string): boolean {
+    const resolvedBase = path.resolve(basePath);
+    const resolvedTarget = path.resolve(targetPath);
+    const relative = path.relative(resolvedBase, resolvedTarget);
+    return !relative.startsWith('..') && !path.isAbsolute(relative);
+  }
+
+  /**
    * Clean up a temporary directory
    * @param tempDir Path to the temporary directory to remove
    */
   async cleanup(tempDir: string): Promise<void> {
     try {
-      // Only clean up directories that contain our specific pattern
-      if (!tempDir.includes('elephant-cli-zip-')) {
+      // Get the expected base directory for our temp files
+      const tempDirBase = path.join(tmpdir(), 'elephant-cli-zip-');
+      const resolvedTempDir = path.resolve(tempDir);
+      const resolvedBase = path.resolve(path.dirname(tempDirBase));
+
+      // Check if the resolved path is within our temp directory
+      if (!this.isSubPath(resolvedBase, resolvedTempDir)) {
+        logger.warn(
+          `Refusing to clean up directory outside of temp area: ${tempDir}`
+        );
+        return;
+      }
+
+      // Additional check: ensure the directory name contains our pattern
+      if (!path.basename(resolvedTempDir).startsWith('elephant-cli-zip-')) {
         logger.warn(
           `Refusing to clean up non-elephant-cli directory: ${tempDir}`
         );
