@@ -35,6 +35,7 @@ elephant-cli submit-to-contract <csv-file> \
 - `--from-address`: The address to use as the transaction sender (defaults to zero address if not provided)
 - `--gas-price`: Gas price in Gwei or 'auto' (default: 30)
 - `--dry-run`: Test mode without actually submitting transactions
+- `--transaction-ids-csv`: Output CSV file for transaction IDs (default: transaction-ids-{timestamp}.csv)
 
 ### Important Notes
 
@@ -63,7 +64,11 @@ elephant-cli submit-to-contract ./results.csv \
 
 ## Output
 
-The command generates a transaction status CSV file (`transaction-status.csv`) containing:
+The command generates two CSV files:
+
+### 1. Transaction Status CSV (`transaction-status.csv`)
+
+Contains detailed status information:
 
 - Batch index
 - Transaction hash
@@ -73,6 +78,20 @@ The command generates a transaction status CSV file (`transaction-status.csv`) c
 - Item count
 - Error message (if any)
 - Timestamp
+
+### 2. Transaction IDs CSV
+
+Contains simplified transaction tracking:
+
+- Transaction hash
+- Batch index
+- Item count
+- Timestamp
+- Status
+
+Default filename: `transaction-ids-{timestamp}.csv` (or specify with `--transaction-ids-csv`)
+
+When submitting less than 5 transactions, the transaction IDs are also displayed in the console for quick reference.
 
 ## API Endpoint
 

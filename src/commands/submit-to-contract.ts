@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { parse } from 'csv-parse/sync';
@@ -38,6 +38,7 @@ export interface SubmitToContractCommandOptions {
   apiKey?: string;
   oracleKeyId?: string;
   checkEligibility?: boolean;
+  transactionIdsCsv?: string;
 }
 
 interface CsvRecord {
@@ -52,6 +53,14 @@ interface SubmissionCheckResult {
   canSubmit: boolean;
   reason?: string;
   dataItem?: DataItem;
+}
+
+interface TransactionRecord {
+  transactionHash: string;
+  batchIndex: number;
+  itemCount: number;
+  timestamp: string;
+  status: string;
 }
 
 export function registerSubmitToContractCommand(program: Command) {
@@ -106,6 +115,10 @@ export function registerSubmitToContractCommand(program: Command) {
       '--check-eligibility',
       'Enable eligibility checks to verify if data has reached consensus or if user has already submitted (slower but safer)',
       false
+    )
+    .option(
+      '--transaction-ids-csv <path>',
+      'Output CSV file for transaction IDs (default: transaction-ids-{timestamp}.csv in reports directory)'
     )
     .action(async (csvFile, options) => {
       if (
@@ -220,6 +233,9 @@ export function registerSubmitToContractCommand(program: Command) {
         apiKey: options.apiKey,
         oracleKeyId: options.oracleKeyId,
         checkEligibility: options.checkEligibility || false,
+        transactionIdsCsv: options.transactionIdsCsv
+          ? path.resolve(options.transactionIdsCsv)
+          : undefined,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -633,12 +649,13 @@ export async function handleSubmitToContract(
     }
 
     // Submit transactions
-    progressTracker.setPhase(
-      'Submitting Transactions',
-      dataItemsForTransaction.length
+    const totalTransactions = Math.ceil(
+      dataItemsForTransaction.length / (options.transactionBatchSize || 200)
     );
+    progressTracker.setPhase('Submitting Transactions', totalTransactions);
     let submittedTransactionCount = 0;
     let totalItemsSubmitted = 0;
+    const submittedTransactions: TransactionRecord[] = [];
 
     if (!options.dryRun && dataItemsForTransaction.length > 0) {
       if (
@@ -748,6 +765,8 @@ export async function handleSubmitToContract(
 
           // Log all results to transaction status CSV (including failures)
           for (const result of apiResults) {
+            const currentTimestamp = new Date().toISOString();
+
             await transactionStatusReporter.logTransaction({
               batchIndex: result.batchIndex,
               transactionHash: result.transactionHash || '',
@@ -756,8 +775,18 @@ export async function handleSubmitToContract(
               gasUsed: result.status.gasUsed,
               itemCount: result.itemCount,
               error: result.status.error,
-              timestamp: new Date().toISOString(),
+              timestamp: currentTimestamp,
             });
+
+            if (result.transactionHash) {
+              submittedTransactions.push({
+                transactionHash: result.transactionHash,
+                batchIndex: result.batchIndex,
+                itemCount: result.itemCount,
+                timestamp: currentTimestamp,
+                status: result.status.status,
+              });
+            }
           }
 
           logger.success('API submission process completed.');
@@ -777,15 +806,24 @@ export async function handleSubmitToContract(
       } else {
         // Direct blockchain submission mode
         try {
+          let batchIndex = 0;
           for await (const batchResult of transactionBatcherService.submitAll(
             dataItemsForTransaction
           )) {
             logger.info(
               `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
             );
+            submittedTransactions.push({
+              transactionHash: batchResult.transactionHash,
+              batchIndex,
+              itemCount: batchResult.itemsSubmitted,
+              timestamp: new Date().toISOString(),
+              status: 'submitted',
+            });
+            batchIndex++;
             submittedTransactionCount++;
             totalItemsSubmitted += batchResult.itemsSubmitted;
-            progressTracker.increase('processed', batchResult.itemsSubmitted);
+            progressTracker.increment('processed');
           }
           logger.success('All transaction batches submitted successfully.');
         } catch (error) {
@@ -850,6 +888,46 @@ export async function handleSubmitToContract(
 
     progressTracker.stop();
 
+    // Write transaction IDs CSV if transactions were submitted
+    let transactionIdsCsvPath: string | undefined;
+    if (submittedTransactions.length > 0 && !options.dryRun) {
+      // Generate default filename if not provided
+      if (!options.transactionIdsCsv) {
+        const timestamp = new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/:/g, '-');
+        const reportsDir = path.dirname(config.errorCsvPath);
+        transactionIdsCsvPath = path.join(
+          reportsDir,
+          `transaction-ids-${timestamp}.csv`
+        );
+      } else {
+        transactionIdsCsvPath = options.transactionIdsCsv;
+      }
+
+      // Create CSV content
+      const csvHeader =
+        'transactionHash,batchIndex,itemCount,timestamp,status\n';
+      const csvContent = submittedTransactions
+        .map(
+          (tx) =>
+            `${tx.transactionHash},${tx.batchIndex},${tx.itemCount},${tx.timestamp},${tx.status}`
+        )
+        .join('\n');
+
+      writeFileSync(transactionIdsCsvPath, csvHeader + csvContent);
+      logger.success(`Transaction IDs saved to: ${transactionIdsCsvPath}`);
+
+      // Display transaction IDs if less than 5
+      if (submittedTransactions.length < 5) {
+        console.log(chalk.bold('\n📝 Transaction IDs:'));
+        submittedTransactions.forEach((tx) => {
+          console.log(`  ${tx.transactionHash}`);
+        });
+      }
+    }
+
     // Final summary
     await csvReporterService.finalize();
     if (transactionStatusReporter) {
@@ -889,6 +967,9 @@ export async function handleSubmitToContract(
       console.log(
         `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
       );
+    }
+    if (transactionIdsCsvPath) {
+      console.log(`  Transaction IDs: ${transactionIdsCsvPath}`);
     }
   } catch (error) {
     logger.error(

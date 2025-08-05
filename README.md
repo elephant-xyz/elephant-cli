@@ -292,6 +292,7 @@ The CLI now automatically generates beautiful HTML fact sheets for your properti
 - All HTML links are saved in the CSV file for reference
 
 Example output:
+
 ```
 🌐 Property Fact Sheet Links:
   (Note: It may take a few minutes for pages to propagate through IPFS gateways)
@@ -356,6 +357,26 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 - Submits your data hashes to the Elephant Network smart contract
 - Groups submissions into batches for efficiency
 - Provides transaction confirmations
+- **NEW**: Saves transaction IDs to a CSV file for tracking
+- **NEW**: Displays transaction IDs in console when less than 5 transactions
+
+**Transaction Tracking:**
+
+The CLI now automatically tracks all submitted transactions:
+
+- Generates a CSV file with transaction details (hash, batch index, item count, timestamp, status)
+- Default filename: `transaction-ids-{timestamp}.csv` in the reports directory
+- Use `--transaction-ids-csv` to specify a custom output path
+- When submitting less than 5 transactions, IDs are displayed directly in the console
+
+Example output for small submissions:
+
+```
+📝 Transaction IDs:
+  0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+  0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+  0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
+```
 
 ## Advanced Features
 
@@ -369,6 +390,9 @@ elephant-cli validate-and-upload ./data --max-concurrent-uploads 5
 elephant-cli submit-to-contract results.csv --gas-price 50
 # Or let the network decide
 elephant-cli submit-to-contract results.csv --gas-price auto
+
+# Save transaction IDs to a specific file
+elephant-cli submit-to-contract results.csv --transaction-ids-csv my-transactions.csv
 ```
 
 ### Cold Wallet & External Signing
@@ -462,6 +486,7 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 - `--dry-run` - Test without submitting
 - `--unsigned-transactions-json <file>` - Generate unsigned transactions for external signing (dry-run only)
 - `--from-address <address>` - Specify sender address for unsigned transactions (makes private key optional)
+- `--transaction-ids-csv <file>` - Output CSV file for transaction IDs (default: transaction-ids-{timestamp}.csv)
 
 ## Troubleshooting
 

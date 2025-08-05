@@ -13,6 +13,7 @@ import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 vi.mock('fs', () => ({
   ...vi.importActual('fs'),
   readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 vi.mock('../../../src/services/transaction-batcher.service.js');
@@ -540,6 +541,284 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       // Verified by checking that Wallet constructor was called with private key
       const { Wallet } = await import('ethers');
       expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+    });
+  });
+
+  describe('transaction ID CSV functionality', () => {
+    it('should write transaction IDs to CSV file when transactions are submitted', async () => {
+      const mockTransactionBatcher = {
+        submitAll: vi.fn().mockImplementation(async function* () {
+          yield { itemsSubmitted: 2, transactionHash: '0xabc123' };
+          yield { itemsSubmitted: 1, transactionHash: '0xdef456' };
+        }),
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+          const batches = [];
+          for (let i = 0; i < items.length; i += 2) {
+            batches.push(items.slice(i, i + 2));
+          }
+          return batches;
+        }),
+      };
+
+      vi.mocked(TransactionBatcherService).mockImplementation(
+        () => mockTransactionBatcher as any
+      );
+
+      const optionsWithTransactionCsv = {
+        ...mockOptions,
+        transactionIdsCsv: '/tmp/transaction-ids.csv',
+      };
+
+      await handleSubmitToContract(optionsWithTransactionCsv, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify writeFileSync was called with correct CSV content
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/tmp/transaction-ids.csv',
+        expect.stringContaining(
+          'transactionHash,batchIndex,itemCount,timestamp,status'
+        )
+      );
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/tmp/transaction-ids.csv',
+        expect.stringContaining('0xabc123,0,2,')
+      );
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/tmp/transaction-ids.csv',
+        expect.stringContaining('0xdef456,1,1,')
+      );
+    });
+
+    it('should display transaction IDs in console when less than 5 transactions', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+
+      const mockTransactionBatcher = {
+        submitAll: vi.fn().mockImplementation(async function* () {
+          yield { itemsSubmitted: 2, transactionHash: '0xabc123' };
+          yield { itemsSubmitted: 1, transactionHash: '0xdef456' };
+        }),
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+          const batches = [];
+          for (let i = 0; i < items.length; i += 2) {
+            batches.push(items.slice(i, i + 2));
+          }
+          return batches;
+        }),
+      };
+
+      vi.mocked(TransactionBatcherService).mockImplementation(
+        () => mockTransactionBatcher as any
+      );
+
+      await handleSubmitToContract(mockOptions, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify transaction IDs were displayed
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('📝 Transaction IDs:')
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('0xabc123')
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('0xdef456')
+      );
+    });
+
+    it('should not display transaction IDs in console when 5 or more transactions', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+
+      const mockTransactionBatcher = {
+        submitAll: vi.fn().mockImplementation(async function* () {
+          for (let i = 0; i < 5; i++) {
+            yield { itemsSubmitted: 1, transactionHash: `0x${i}00000` };
+          }
+        }),
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+          return items.map((item) => [item]);
+        }),
+      };
+
+      vi.mocked(TransactionBatcherService).mockImplementation(
+        () => mockTransactionBatcher as any
+      );
+
+      await handleSubmitToContract(mockOptions, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify transaction IDs header was NOT displayed
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('📝 Transaction IDs:')
+      );
+    });
+
+    it('should track progress by number of transactions, not items', async () => {
+      const mockCsvWith6Items = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+item1,group1,data1,/test/1.json,2024-01-01T00:00:00Z
+item2,group2,data2,/test/2.json,2024-01-01T00:00:00Z
+item3,group3,data3,/test/3.json,2024-01-01T00:00:00Z
+item4,group4,data4,/test/4.json,2024-01-01T00:00:00Z
+item5,group5,data5,/test/5.json,2024-01-01T00:00:00Z
+item6,group6,data6,/test/6.json,2024-01-01T00:00:00Z`;
+
+      vi.mocked(fs.readFileSync).mockReturnValue(mockCsvWith6Items);
+
+      const optionsWithBatchSize = {
+        ...mockOptions,
+        transactionBatchSize: 2, // 6 items / 2 = 3 transactions
+      };
+
+      await handleSubmitToContract(optionsWithBatchSize, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify setPhase was called with 3 transactions, not 6 items
+      expect(mockProgressTracker.setPhase).toHaveBeenCalledWith(
+        'Submitting Transactions',
+        3 // 3 transactions, not 6 items
+      );
+    });
+
+    it('should generate default transaction CSV filename when not provided', async () => {
+      const mockTransactionBatcher = {
+        submitAll: vi.fn().mockImplementation(async function* () {
+          yield { itemsSubmitted: 1, transactionHash: '0xabc123' };
+        }),
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+          return [items];
+        }),
+      };
+
+      vi.mocked(TransactionBatcherService).mockImplementation(
+        () => mockTransactionBatcher as any
+      );
+
+      // Options without transactionIdsCsv
+      const optionsWithoutCsvPath = { ...mockOptions };
+
+      await handleSubmitToContract(optionsWithoutCsvPath, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify writeFileSync was called with a generated filename
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /transaction-ids-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.csv$/
+        ),
+        expect.any(String)
+      );
+    });
+
+    it('should not write transaction CSV in dry-run mode', async () => {
+      const dryRunOptions = {
+        ...mockOptions,
+        dryRun: true,
+        transactionIdsCsv: '/tmp/transaction-ids.csv',
+      };
+
+      await handleSubmitToContract(dryRunOptions, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+      });
+
+      // Verify writeFileSync was NOT called for transaction IDs
+      expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalledWith(
+        expect.stringContaining('transaction-ids'),
+        expect.any(String)
+      );
+    });
+
+    it('should collect transaction IDs from API submission mode', async () => {
+      // Clear writeFileSync mock to ensure clean state
+      vi.mocked(fs.writeFileSync).mockClear();
+
+      const apiOptions = {
+        ...mockOptions,
+        domain: 'test.api.com',
+        apiKey: 'test-key',
+        oracleKeyId: 'oracle-123',
+        transactionIdsCsv: '/tmp/api-transaction-ids.csv',
+      };
+
+      // Need to mock TransactionBatcherService for API mode to group items
+      const mockTransactionBatcher = {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+          const batches = [];
+          for (let i = 0; i < items.length; i += 2) {
+            batches.push(items.slice(i, i + 2));
+          }
+          return batches;
+        }),
+      };
+
+      vi.mocked(TransactionBatcherService).mockImplementation(
+        () => mockTransactionBatcher as any
+      );
+
+      const mockApiSubmissionService = {
+        submitTransaction: vi
+          .fn()
+          .mockResolvedValueOnce({ transaction_hash: '0xapi123' })
+          .mockResolvedValueOnce({ transaction_hash: '0xapi456' }),
+      };
+
+      const mockTransactionStatusService = {
+        waitForTransaction: vi
+          .fn()
+          .mockResolvedValueOnce({ hash: '0xapi123', status: 'success' })
+          .mockResolvedValueOnce({ hash: '0xapi456', status: 'success' }),
+      };
+
+      const mockTransactionStatusReporter = {
+        initialize: vi.fn(),
+        logTransaction: vi.fn(),
+        finalize: vi.fn(),
+      };
+
+      // Mock UnsignedTransactionJsonService for API mode
+      const mockUnsignedTxService = {
+        generateUnsignedTransactions: vi.fn().mockResolvedValue([
+          { data: '0x123', to: '0xcontract', from: '0xuser' },
+          { data: '0x456', to: '0xcontract', from: '0xuser' },
+        ]),
+      };
+
+      vi.mocked(UnsignedTransactionJsonService).mockImplementation(
+        () => mockUnsignedTxService as any
+      );
+
+      await handleSubmitToContract(apiOptions, {
+        chainStateService: mockChainStateService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        apiSubmissionService: mockApiSubmissionService as any,
+        transactionStatusService: mockTransactionStatusService as any,
+        transactionStatusReporter: mockTransactionStatusReporter as any,
+      });
+
+      // Verify transaction IDs CSV was written with API transactions
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/tmp/api-transaction-ids.csv',
+        expect.stringContaining('0xapi123,0,')
+      );
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/tmp/api-transaction-ids.csv',
+        expect.stringContaining('0xapi456,1,')
+      );
     });
   });
 });
