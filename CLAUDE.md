@@ -44,25 +44,25 @@ The `submit-to-contract` command includes a `--gas-price` option that accepts a 
 2.  **Service Layer**: The `gasPrice` value is passed to the `TransactionBatcherService` constructor.
 
 3.  **Transaction Creation**: Inside `TransactionBatcherService.submitBatch`, the `gasPrice` is used to construct the transaction options:
-    *   If `gasPrice` is a number, it's converted to Wei and set as the `gasPrice` in the transaction overrides. This forces a legacy-style transaction with a fixed gas price.
-    *   If `gasPrice` is `'auto'`, no gas-related options are set in the overrides, allowing `ethers.js` to automatically determine the optimal gas price from the RPC provider (usually using EIP-1559 fee mechanism if available).
+   *   If `gasPrice` is a number, it's converted to Wei and set as the `gasPrice` in the transaction overrides. This forces a legacy-style transaction with a fixed gas price.
+   *   If `gasPrice` is `'auto'`, no gas-related options are set in the overrides, allowing `ethers.js` to automatically determine the optimal gas price from the RPC provider (usually using EIP-1559 fee mechanism if available).
 
 ```typescript
 // src/services/transaction-batcher.service.ts
 const txOptions: Overrides = {
-  gasLimit:
+  gasLimit: 
     estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)),
 };
 
 if (this.gasPrice !== 'auto') {
   txOptions.gasPrice = ethers.parseUnits(
     this.gasPrice.toString(),
-    'gwei'
-  );
+      'gwei'
+   );
 }
 //...
 const txResponse: TransactionResponse = await this.contract.submitBatch(
-  preparedBatch,
+  preparedBatch, 
   txOptions
 );
 ```
@@ -75,7 +75,20 @@ const txResponse: TransactionResponse = await this.contract.submitBatch(
 
 ## New Split Workflow Commands
 
-The file submission process has been split into two commands for better control:
+The file submission process has been split into three commands for better control:
+
+### validate Command
+
+This command:
+1. Validates file structure in the input directory or ZIP file
+2. Uses filenames as Schema CIDs to validate JSON data
+3. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+4. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
+5. Writes validation errors to CSV file (default: `submit_errors.csv`)
+6. Shows validation summary
+7. **Does NOT upload anything to IPFS**
+8. **Does NOT calculate CIDs or generate HTML files**
+9. **Supports both directory and ZIP file inputs**
 
 ### validate-and-upload Command
 
@@ -109,6 +122,16 @@ When adding features, follow these patterns:
 3. Add command options in `src/index.ts`
 4. Update command handler in `src/commands/`
 
+### ZIP File Support
+
+The CLI now supports processing ZIP files containing the expected directory structure:
+
+- `validate` command accepts ZIP files as input
+- ZIP files are automatically detected by file extension and magic bytes
+- Files are extracted to a temporary directory that's cleaned up after processing
+- The same validation and upload logic applies to extracted files
+- Temporary directories are properly cleaned up even if errors occur
+
 ### Debugging Issues
 
 Common issues to check:
@@ -134,6 +157,7 @@ Common issues to check:
 3. **Event Decoder**: Handles contract-specific data encoding
 4. **Validation**: Input validation before processing
 5. **JSON Validator with CID Support**: Advanced schema validation with IPFS integration
+6. **ZIP File Support**: Allows users to provide data as ZIP files for easier distribution
 
 ## Improvement Opportunities
 
@@ -169,6 +193,14 @@ npm run dev
 # Test the CLI - List assignments
 ./bin/elephant-cli list-assignments --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
 
+# Test the CLI - Validate only (no upload)
+./bin/elephant-cli validate ./test-data \
+  --output-csv validation_errors.csv
+
+# Test the CLI - Validate only from ZIP file
+./bin/elephant-cli validate ./test-data.zip \
+  --output-csv validation_errors.csv
+
 # Test the CLI - Validate and upload
 ./bin/elephant-cli validate-and-upload ./test-data \
   --private-key "0x..." \
@@ -196,6 +228,7 @@ npm run clean
 npm run test
 
 # Run specific test files or patterns
+npm run test -- tests/unit/commands/validate.test.ts
 npm run test -- tests/unit/commands/validate-and-upload.test.ts
 npm run test -- tests/integration/split-commands.test.ts
 npm run test -- json-validator
@@ -211,6 +244,7 @@ npm run test:coverage
 
 - `src/index.ts` - CLI entry point and command definitions
 - `src/commands/list-assignments.ts` - List assignments command
+- `src/commands/validate.ts` - Validate data without uploading
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
@@ -220,6 +254,7 @@ npm run test:coverage
 - `src/services/chain-state.service.ts` - Chain state queries
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
 - `src/services/json-validator.service.ts` - JSON validation with CID support
+- `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations
@@ -363,4 +398,5 @@ The unsigned transactions JSON contains an array of EIP-1474 compliant transacti
 - No private keys or sensitive data handled
 - Downloads files only from IPFS (content-addressed)
 - Uses HTTPS for all external connections
-
+- ZIP files are extracted to temporary directories that are automatically cleaned up
+- ZIP extraction validates file structure before processing
