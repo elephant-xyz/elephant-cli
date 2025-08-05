@@ -5,8 +5,6 @@ import { tmpdir } from 'os';
 import { logger } from '../utils/logger.js';
 
 export class ZipExtractorService {
-  constructor() {}
-
   /**
    * Check if a file is a ZIP archive
    * @param filePath Path to the file to check
