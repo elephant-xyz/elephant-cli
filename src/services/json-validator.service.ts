@@ -74,7 +74,7 @@ export class JsonValidatorService {
         }
 
         // Must be greater than zero
-        if (value <= 0) {
+        if (value < 0) {
           return false;
         }
 

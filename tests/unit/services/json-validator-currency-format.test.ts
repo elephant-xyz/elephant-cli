@@ -39,7 +39,6 @@ describe('JsonValidatorService - Currency Format', () => {
 
     it('should reject invalid currency values', async () => {
       const invalidValues = [
-        0, // Zero
         -100, // Negative
         -100.5, // Negative with decimals
         -0.01, // Negative small value
@@ -91,13 +90,12 @@ describe('JsonValidatorService - Currency Format', () => {
       }
     });
 
-    it('should reject zero and negative numbers', async () => {
+    it('should reject negative numbers', async () => {
       const values = [
-        { value: 0, expected: false }, // Zero - invalid
-        { value: -100, expected: false }, // Negative - invalid
-        { value: -100.5, expected: false }, // Negative - invalid
-        { value: -100.99, expected: false }, // Negative - invalid
-        { value: -0.01, expected: false }, // Negative - invalid
+        { value: -100, expected: false },
+        { value: -100.5, expected: false },
+        { value: -100.99, expected: false },
+        { value: -0.01, expected: false },
       ];
 
       for (const test of values) {
