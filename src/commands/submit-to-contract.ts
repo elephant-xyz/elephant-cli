@@ -731,35 +731,15 @@ export async function handleSubmitToContract(
             }
           }
 
-          // Wait for transaction confirmations
-          if (apiResults.some((r) => r.transactionHash)) {
-            progressTracker.setPhase(
-              'Waiting for Confirmations',
-              apiResults.filter((r) => r.transactionHash).length
-            );
-
-            for (const result of apiResults) {
-              if (result.transactionHash) {
-                try {
-                  const status =
-                    await transactionStatusService.waitForTransaction(
-                      result.transactionHash
-                    );
-                  result.status = status;
-
-                  if (status.status === 'success') {
-                    submittedTransactionCount++;
-                    totalItemsSubmitted += result.itemCount;
-                  }
-
-                  progressTracker.increment('processed');
-                } catch (error) {
-                  result.status.status = 'failed';
-                  result.status.error =
-                    error instanceof Error ? error.message : String(error);
-                  progressTracker.increment('errors');
-                }
-              }
+          // Mark all transactions as pending (no waiting)
+          for (const result of apiResults) {
+            if (result.transactionHash) {
+              result.status = {
+                hash: result.transactionHash,
+                status: 'pending',
+              };
+              submittedTransactionCount++;
+              totalItemsSubmitted += result.itemCount;
             }
           }
 
@@ -784,7 +764,7 @@ export async function handleSubmitToContract(
                 batchIndex: result.batchIndex,
                 itemCount: result.itemCount,
                 timestamp: currentTimestamp,
-                status: result.status.status,
+                status: 'pending',
               });
             }
           }
@@ -818,7 +798,7 @@ export async function handleSubmitToContract(
               batchIndex,
               itemCount: batchResult.itemsSubmitted,
               timestamp: new Date().toISOString(),
-              status: 'submitted',
+              status: 'pending',
             });
             batchIndex++;
             submittedTransactionCount++;
