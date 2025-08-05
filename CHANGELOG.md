@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.18.1...v1.19.0) (2025-08-05)
+
+
+### Features
+
+* Add CSV export for submitted transaction IDs ([#70](https://github.com/elephant-xyz/elephant-cli/issues/70)) ([59fa08c](https://github.com/elephant-xyz/elephant-cli/commit/59fa08caf91f5959181c46509a4ddb073b9bb682))
+
 ## [1.18.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.18.0...v1.18.1) (2025-08-04)
 
 
