@@ -115,7 +115,7 @@ describe('TransactionStatusService', () => {
       const txHashes = ['0x111', '0x222', '0x333'];
 
       mockProvider.getTransaction.mockResolvedValue({ hash: 'mock' });
-      mockProvider.getTransactionReceipt.mockImplementation((hash: string) =>
+      mockProvider.getTransactionReceipt.mockImplementation(() =>
         Promise.resolve({
           status: 1,
           blockNumber: 12345,
@@ -144,6 +144,83 @@ describe('TransactionStatusService', () => {
 
       expect(progressCallback).toHaveBeenCalledWith(1, 2);
       expect(progressCallback).toHaveBeenCalledWith(2, 2);
+    });
+  });
+
+  describe('getTransactionStatus', () => {
+    const mockTxHash = '0x1234567890abcdef';
+
+    it('should return success status for mined transaction', async () => {
+      mockProvider.getTransactionReceipt.mockResolvedValue({
+        status: 1,
+        blockNumber: 12345,
+        gasUsed: BigInt(21000),
+      });
+
+      const result = await service.getTransactionStatus(mockTxHash);
+
+      expect(result).toEqual({
+        hash: mockTxHash,
+        status: 'success',
+        blockNumber: 12345,
+        gasUsed: '21000',
+      });
+    });
+
+    it('should return failed status for reverted transaction', async () => {
+      mockProvider.getTransactionReceipt.mockResolvedValue({
+        status: 0,
+        blockNumber: 12345,
+        gasUsed: BigInt(21000),
+      });
+
+      const result = await service.getTransactionStatus(mockTxHash);
+
+      expect(result).toEqual({
+        hash: mockTxHash,
+        status: 'failed',
+        blockNumber: 12345,
+        gasUsed: '21000',
+      });
+    });
+
+    it('should return pending status for unmined transaction', async () => {
+      mockProvider.getTransactionReceipt.mockResolvedValue(null);
+      mockProvider.getTransaction.mockResolvedValue({ hash: mockTxHash });
+
+      const result = await service.getTransactionStatus(mockTxHash);
+
+      expect(result).toEqual({
+        hash: mockTxHash,
+        status: 'pending',
+      });
+    });
+
+    it('should return pending with error for non-existent transaction', async () => {
+      mockProvider.getTransactionReceipt.mockResolvedValue(null);
+      mockProvider.getTransaction.mockResolvedValue(null);
+
+      const result = await service.getTransactionStatus(mockTxHash);
+
+      expect(result).toEqual({
+        hash: mockTxHash,
+        status: 'pending',
+        error: 'Transaction not found on chain',
+      });
+    });
+
+    it('should handle provider errors gracefully', async () => {
+      mockProvider.getTransactionReceipt.mockRejectedValue(
+        new Error('Network error')
+      );
+
+      const result = await service.getTransactionStatus(mockTxHash);
+
+      expect(result).toEqual({
+        hash: mockTxHash,
+        status: 'pending',
+        error: 'Network error',
+      });
     });
   });
 });

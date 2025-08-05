@@ -166,6 +166,7 @@ elephant-cli validate ./your-data.zip
 ```
 
 This command:
+
 - Checks directory structure
 - Validates JSON syntax
 - Verifies data against schemas
@@ -356,7 +357,7 @@ elephant-cli submit-to-contract upload-results.csv --gas-price 30
 
 - Submits your data hashes to the Elephant Network smart contract
 - Groups submissions into batches for efficiency
-- Provides transaction confirmations
+- **NEW**: Returns immediately after submission (no waiting for confirmations)
 - **NEW**: Saves transaction IDs to a CSV file for tracking
 - **NEW**: Displays transaction IDs in console when less than 5 transactions
 
@@ -368,6 +369,7 @@ The CLI now automatically tracks all submitted transactions:
 - Default filename: `transaction-ids-{timestamp}.csv` in the reports directory
 - Use `--transaction-ids-csv` to specify a custom output path
 - When submitting less than 5 transactions, IDs are displayed directly in the console
+- **All transactions are marked as "pending" - use `check-transaction-status` to check their status**
 
 Example output for small submissions:
 
@@ -378,58 +380,33 @@ Example output for small submissions:
   0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
 ```
 
-## Workflow 3: Reconstructing Data from IPFS
+### Step 4: Check Transaction Status
 
-The `reconstruct-data` command allows you to download and reconstruct a complete data tree from an IPFS CID, resolving all linked data references.
-
-### Usage
+Check the status of your submitted transactions:
 
 ```bash
-# Basic usage - reconstruct data from a CID
-elephant-cli reconstruct-data <cid>
-
-# Specify custom IPFS gateway
-elephant-cli reconstruct-data <cid> --gateway https://ipfs.io/ipfs
-
-# Specify custom output directory
-elephant-cli reconstruct-data <cid> --output-dir ./reconstructed-data
+elephant-cli check-transaction-status transaction-ids.csv
 ```
 
-### What It Does
+**What this does:**
 
-This command:
-- Downloads the initial CID content from IPFS
-- Recursively follows and downloads all CID references in the data
-- Replaces CID references with local file paths
-- Preserves the data structure and relationships
-- Saves all files locally for offline access
+- Reads transaction IDs from the CSV file
+- Checks current status on the blockchain (success/failed/pending)
+- Updates the CSV with current status, block numbers, and gas used
+- Shows a summary of transaction statuses
 
-### Example
+**Options:**
 
 ```bash
-# Reconstruct data from a known CID
-elephant-cli reconstruct-data QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU
+# Specify output file
+elephant-cli check-transaction-status transaction-ids.csv --output-csv status-update.csv
 
-# Output structure:
-# data/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU/
-# ├── QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU.json
-# ├── relationships_child1.json
-# ├── relationships_child2.json
-# └── ...
+# Control concurrent checks
+elephant-cli check-transaction-status transaction-ids.csv --max-concurrent 20
+
+# Use custom RPC
+elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://polygon-rpc.com
 ```
-
-### Features
-
-- **Automatic CID Resolution**: Follows `{"/": "CID"}` references
-- **Path Replacement**: Converts CID references to relative file paths
-- **Datagroup Mapping**: Uses `datagroups_cids.json` for human-readable filenames
-- **Rate Limiting**: Handles IPFS gateway rate limits with exponential backoff
-- **Progress Tracking**: Shows download progress and status
-
-### Options
-
-- `-g, --gateway <url>`: IPFS gateway URL (default: `https://gateway.pinata.cloud/ipfs`)
-- `-o, --output-dir <path>`: Output directory for reconstructed data (default: `data`)
 
 ## Advanced Features
 
@@ -477,8 +454,9 @@ This mode:
 
 - Generates unsigned transactions locally
 - Submits them to the API for signing
-- Monitors transaction confirmation
-- Reports status in `transaction-status.csv`
+- **NEW**: Returns immediately after submission (no waiting)
+- Reports status as "pending" in `transaction-status.csv`
+- Use `check-transaction-status` command to check transaction status
 
 See [API Submission Documentation](./docs/API-SUBMISSION.md) for details.
 

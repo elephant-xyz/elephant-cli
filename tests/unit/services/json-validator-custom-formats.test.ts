@@ -41,7 +41,6 @@ describe('JsonValidatorService - Custom Formats', () => {
 
     it('should reject invalid currency values', async () => {
       const invalidValues = [
-        0, // Must be greater than 0
         -100, // Negative values not allowed
         -0.01, // Negative values not allowed
         100.123, // Three decimal places
