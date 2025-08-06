@@ -2,20 +2,22 @@ import { Command } from 'commander';
 import { IPFSReconstructorService } from '../services/ipfs-reconstructor.service.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
-import { isValidUrl } from '../utils/validation.js';
-import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
+import { isValidUrl, isValidCID } from '../utils/validation.js';
+import { DEFAULT_IPFS_GATEWAY, DEFAULT_RPC_URL } from '../config/constants.js';
+import { isHexString } from 'ethers';
 import chalk from 'chalk';
 
 export interface ReconstructDataOptions {
   gateway?: string;
   outputDir?: string;
+  rpcUrl?: string;
 }
 
 export function registerReconstructDataCommand(program: Command) {
   program
-    .command('reconstruct-data <cid>')
+    .command('reconstruct-data <input>')
     .description(
-      'Reconstruct data tree from an IPFS CID, downloading all linked data'
+      'Reconstruct data tree from an IPFS CID or transaction hash, downloading all linked data'
     )
     .option(
       '-g, --gateway <url>',
@@ -27,13 +29,18 @@ export function registerReconstructDataCommand(program: Command) {
       'Output directory for reconstructed data',
       'data'
     )
-    .action(async (cid: string, options: ReconstructDataOptions) => {
-      await reconstructData(cid, options);
+    .option(
+      '-r, --rpc-url <url>',
+      'RPC URL for fetching transaction data',
+      process.env.RPC_URL || DEFAULT_RPC_URL
+    )
+    .action(async (input: string, options: ReconstructDataOptions) => {
+      await reconstructData(input, options);
     });
 }
 
 async function reconstructData(
-  cid: string,
+  input: string,
   options: ReconstructDataOptions
 ): Promise<void> {
   const spinner = createSpinner('Initializing...');
@@ -45,21 +52,42 @@ async function reconstructData(
       process.exit(1);
     }
 
+    // Validate RPC URL if provided
+    if (options.rpcUrl && !isValidUrl(options.rpcUrl)) {
+      logger.error(`Invalid RPC URL: ${options.rpcUrl}`);
+      process.exit(1);
+    }
+
     const gatewayUrl = options.gateway || DEFAULT_IPFS_GATEWAY;
     const outputDir = options.outputDir || 'data';
+    const rpcUrl = options.rpcUrl || DEFAULT_RPC_URL;
 
     spinner.start('Initializing IPFS reconstructor service...');
-    const reconstructor = new IPFSReconstructorService(gatewayUrl);
+    const reconstructor = new IPFSReconstructorService(gatewayUrl, rpcUrl);
     spinner.succeed('Service initialized.');
 
-    spinner.start(`Starting reconstruction from CID: ${cid}`);
+    // Determine if input is a CID or transaction hash
+    const isTransactionHash = isHexString(input, 32);
+    const isCid = !isTransactionHash && isValidCID(input);
 
-    const resultDir = await reconstructor.reconstructData(cid, outputDir);
+    if (!isCid && !isTransactionHash) {
+      throw new Error(
+        'Input must be either a valid IPFS CID or a transaction hash (32 bytes hex string)'
+      );
+    }
 
-    spinner.succeed('Data reconstruction complete!');
+    if (isTransactionHash) {
+      spinner.start(`Fetching transaction data for: ${input}`);
+      await reconstructor.reconstructFromTransaction(input, outputDir);
+      spinner.succeed('Transaction data reconstruction complete!');
+    } else {
+      spinner.start(`Starting reconstruction from CID: ${input}`);
+      const resultDir = await reconstructor.reconstructData(input, outputDir);
+      spinner.succeed('Data reconstruction complete!');
+      logger.log(chalk.blue(`Data saved in: ${resultDir}`));
+    }
 
     logger.log(chalk.green('\n✓ Reconstruction successful!'));
-    logger.log(chalk.blue(`Data saved in: ${resultDir}`));
   } catch (error: unknown) {
     spinner.fail('Reconstruction failed');
 

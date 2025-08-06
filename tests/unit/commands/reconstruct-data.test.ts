@@ -5,12 +5,16 @@ import { IPFSReconstructorService } from '../../../src/services/ipfs-reconstruct
 import { logger } from '../../../src/utils/logger.js';
 import * as progress from '../../../src/utils/progress.js';
 import * as validation from '../../../src/utils/validation.js';
+import { isHexString } from 'ethers';
 
 // Mock dependencies
 vi.mock('../../../src/services/ipfs-reconstructor.service.js');
 vi.mock('../../../src/utils/logger.js');
 vi.mock('../../../src/utils/progress.js');
 vi.mock('../../../src/utils/validation.js');
+vi.mock('ethers', () => ({
+  isHexString: vi.fn(),
+}));
 
 describe('reconstruct-data command', () => {
   let program: Command;
@@ -36,6 +40,8 @@ describe('reconstruct-data command', () => {
 
     // Mock validation
     vi.mocked(validation.isValidUrl).mockReturnValue(true);
+    vi.mocked(validation.isValidCID).mockReturnValue(true);
+    vi.mocked(isHexString).mockReturnValue(false);
 
     // Setup command
     program = new Command();
@@ -52,15 +58,17 @@ describe('reconstruct-data command', () => {
       const cmd = program.commands.find((c) => c.name() === 'reconstruct-data');
       expect(cmd).toBeDefined();
       expect(cmd?.description()).toBe(
-        'Reconstruct data tree from an IPFS CID, downloading all linked data'
+        'Reconstruct data tree from an IPFS CID or transaction hash, downloading all linked data'
       );
 
       const options = cmd?.options;
-      expect(options).toHaveLength(2);
+      expect(options).toHaveLength(3);
       expect(options?.[0].short).toBe('-g');
       expect(options?.[0].long).toBe('--gateway');
       expect(options?.[1].short).toBe('-o');
       expect(options?.[1].long).toBe('--output-dir');
+      expect(options?.[2].short).toBe('-r');
+      expect(options?.[2].long).toBe('--rpc-url');
     });
   });
 
@@ -69,7 +77,7 @@ describe('reconstruct-data command', () => {
       const mockReconstructData = vi
         .fn()
         .mockResolvedValue(
-          'data/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+          'data/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
         );
       vi.mocked(IPFSReconstructorService).mockImplementation(
         () =>
@@ -105,7 +113,7 @@ describe('reconstruct-data command', () => {
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
         expect.stringContaining(
-          'Data saved in: data/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+          'Data saved in: data/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
         )
       );
     });
@@ -225,6 +233,76 @@ describe('reconstruct-data command', () => {
 
       expect(mockSpinner.fail).toHaveBeenCalledWith('Reconstruction failed');
       expect(vi.mocked(logger.error)).toHaveBeenCalledWith('String error');
+      expect(mockProcess.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('should handle transaction hash input', async () => {
+      const mockReconstructFromTransaction = vi
+        .fn()
+        .mockResolvedValue(undefined);
+      vi.mocked(IPFSReconstructorService).mockImplementation(
+        () =>
+          ({
+            reconstructData: vi.fn(),
+            reconstructFromTransaction: mockReconstructFromTransaction,
+          }) as any
+      );
+
+      // Mock isHexString to return true for transaction hash
+      vi.mocked(isHexString).mockReturnValue(true);
+      vi.mocked(validation.isValidCID).mockReturnValue(false);
+
+      await program.parseAsync([
+        'node',
+        'test',
+        'reconstruct-data',
+        '0x1234567890123456789012345678901234567890123456789012345678901234',
+      ]);
+
+      expect(mockReconstructFromTransaction).toHaveBeenCalledWith(
+        '0x1234567890123456789012345678901234567890123456789012345678901234',
+        'data'
+      );
+      expect(mockSpinner.succeed).toHaveBeenCalledWith(
+        'Transaction data reconstruction complete!'
+      );
+    });
+
+    it('should validate RPC URL when provided', async () => {
+      vi.mocked(validation.isValidUrl).mockImplementation((url) => {
+        return url !== 'invalid-rpc';
+      });
+
+      await program.parseAsync([
+        'node',
+        'test',
+        'reconstruct-data',
+        'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
+        '--rpc-url',
+        'invalid-rpc',
+      ]);
+
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        'Invalid RPC URL: invalid-rpc'
+      );
+      expect(mockProcess.exit).toHaveBeenCalledWith(1);
+    });
+
+    it('should throw error for invalid input', async () => {
+      vi.mocked(isHexString).mockReturnValue(false);
+      vi.mocked(validation.isValidCID).mockReturnValue(false);
+
+      await program.parseAsync([
+        'node',
+        'test',
+        'reconstruct-data',
+        'invalid-input',
+      ]);
+
+      expect(mockSpinner.fail).toHaveBeenCalledWith('Reconstruction failed');
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        'Input must be either a valid IPFS CID or a transaction hash (32 bytes hex string)'
+      );
       expect(mockProcess.exit).toHaveBeenCalledWith(1);
     });
   });

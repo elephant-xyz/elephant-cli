@@ -150,6 +150,35 @@ The CLI now supports processing ZIP files containing the expected directory stru
 - The same validation and upload logic applies to extracted files
 - Temporary directories are properly cleaned up even if errors occur
 
+### Data Reconstruction Command
+
+The `reconstruct-data` command supports two modes:
+
+1. **CID Mode**: Reconstructs data tree from an IPFS CID
+   - Downloads the root CID and recursively follows all CID references
+   - Replaces CID references with local file paths
+   - Uses schema manifest for proper file naming
+   - Creates directory: `output-dir/<CID>/` (no "data_" prefix)
+
+2. **Transaction Hash Mode**: Extracts and reconstructs data from blockchain transactions
+   - Fetches transaction data from blockchain using RPC
+   - Decodes `submitBatchData` calls to extract property, data group, and data hashes
+   - Converts hashes to CIDs using `CidHexConverterService.hexToCid` (raw codec, base32 encoding)
+   - Creates directory structure: `output-dir/propertyCID/` with dataGroup and referenced files directly inside
+   - Downloads and reconstructs data for each item in the transaction
+
+Key implementation details:
+- Transaction decoding uses ethers.js Interface to parse ABI-encoded data
+- Hash-to-CID conversion uses `CidHexConverterService` which creates CID v1 with raw codec (0x55)
+- Each property in a transaction gets its own directory
+- DataGroup files are saved directly in the property directory with their CID as filename
+- Referenced files (e.g., property_seed) are named based on their field names in the data structure
+
+File naming convention:
+- Root dataGroup file: `<dataGroupCid>.json`
+- Direct CID references: `<fieldName>.json` (e.g., `property_seed.json`)
+- Nested references: `<fieldName>_<subKey>.json` (e.g., `property_seed_from.json`, `property_seed_to.json`)
+
 ### Debugging Issues
 
 Common issues to check:
@@ -239,10 +268,16 @@ npm run dev
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
 
-# Test the CLI - Reconstruct data from IPFS
-./bin/elephant-cli reconstruct-data QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU \
-  --gateway https://gateway.pinata.cloud/ipfs \
-  --output-dir ./reconstructed-data
+# Test the CLI - Reconstruct data from CID
+./bin/elephant-cli reconstruct-data bafybeiabc123... \
+  --gateway https://ipfs.io/ipfs/ \
+  --output-dir ./reconstructed
+
+# Test the CLI - Reconstruct data from transaction hash
+./bin/elephant-cli reconstruct-data 0x1234567890abcdef... \
+  --rpc-url https://polygon-rpc.com \
+  --gateway https://ipfs.io/ipfs/ \
+  --output-dir ./tx-data
 
 # Clean build artifacts
 npm run clean
