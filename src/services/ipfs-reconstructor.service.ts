@@ -1,4 +1,5 @@
 import { writeFileSync, mkdirSync } from 'fs';
+import { readdir, rmdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { CID } from 'multiformats/cid';
 import { logger } from '../utils/logger.js';
@@ -81,13 +82,12 @@ export class IPFSReconstructorService {
       return false;
     }
 
-    // Additional validation using multiformats
+    // Validate using multiformats CID parser
     try {
       CID.parse(cid);
       return true;
     } catch {
-      // Fallback to basic validation
-      return cid.startsWith('Qm') || cid.startsWith('ba');
+      return false;
     }
   }
 
@@ -128,40 +128,9 @@ export class IPFSReconstructorService {
       const content = await response.json();
       return content;
     } catch (error) {
-      if (
-        attempt < this.maxRetries - 1 &&
-        error instanceof Error &&
-        error.message.includes('429')
-      ) {
-        const waitTime = this.rateLimitDelay * Math.pow(2, attempt);
-        logger.warn(
-          `Rate limited. Waiting ${waitTime / 1000} seconds before retry...`
-        );
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-        return this.fetchContent(cid, attempt + 1);
-      }
-
       logger.error(`Error fetching CID ${cid}: ${error}`);
       throw error;
     }
-  }
-
-  private findCidsInContent(content: any): Set<string> {
-    const cids = new Set<string>();
-    const contentStr = JSON.stringify(content);
-
-    // Find CIDs in the format {"/": "cid"}
-    const regex = /"(\/?)"\s*:\s*"([a-zA-Z0-9]{46,59})"/g;
-    let match;
-
-    while ((match = regex.exec(contentStr)) !== null) {
-      const potentialCid = match[2];
-      if (this.isValidCid(potentialCid)) {
-        cids.add(potentialCid);
-      }
-    }
-
-    return cids;
   }
 
   private replaceCidsWithPaths(
@@ -442,10 +411,9 @@ export class IPFSReconstructorService {
     if (!result) {
       // Clean up empty directory
       try {
-        const fs = await import('fs/promises');
-        const files = await fs.readdir(dataDir);
+        const files = await readdir(dataDir);
         if (files.length === 0) {
-          await fs.rmdir(dataDir);
+          await rmdir(dataDir);
           logger.info(`Removed empty directory: ${dataDir}`);
         }
       } catch (error) {

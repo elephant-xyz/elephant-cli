@@ -112,7 +112,9 @@ describe('IPFSReconstructorService', () => {
         service['isValidCid']('QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU')
       ).toBe(true);
       expect(
-        service['isValidCid']('bafkreitest123456789012345678901234567890123456')
+        service['isValidCid'](
+          'bafkreigvblf5zafojx6zbak6zvph2c2ita56uodqqykmwe3wuz3bco2hy4'
+        )
       ).toBe(true);
     });
 

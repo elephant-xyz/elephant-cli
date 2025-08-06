@@ -58,9 +58,9 @@ async function reconstructData(
       process.exit(1);
     }
 
-    const gatewayUrl = options.gateway || DEFAULT_IPFS_GATEWAY;
-    const outputDir = options.outputDir || 'data';
-    const rpcUrl = options.rpcUrl || DEFAULT_RPC_URL;
+    const gatewayUrl = options.gateway!;
+    const outputDir = options.outputDir!;
+    const rpcUrl = options.rpcUrl!;
 
     spinner.start('Initializing IPFS reconstructor service...');
     const reconstructor = new IPFSReconstructorService(gatewayUrl, rpcUrl);
