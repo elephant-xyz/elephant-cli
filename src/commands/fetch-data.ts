@@ -86,8 +86,8 @@ async function fetchData(
       spinner.succeed('Data fetch complete!');
     }
 
-    logger.log(chalk.green('\n✓ Fetch successful!'));
-    logger.log(chalk.blue(`\n📦 Fetched data is located in: ${outputZip}`));
+    console.log(chalk.green('\n✓ Fetch successful!'));
+    console.log(chalk.blue(`\n📦 Fetched data is located in: ${outputZip}`));
   } catch (error: unknown) {
     spinner.fail('Fetch failed');
 

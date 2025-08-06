@@ -20,9 +20,13 @@ describe('fetch-data command', () => {
   let program: Command;
   let mockSpinner: any;
   let mockProcess: any;
+  let consoleLogSpy: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Mock console.log
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     // Mock process.exit
     mockProcess = {
@@ -102,10 +106,10 @@ describe('fetch-data command', () => {
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'fetched-data.zip'
       );
-      expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
+      expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining('✓ Fetch successful!')
       );
-      expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
+      expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining(
           '📦 Fetched data is located in: fetched-data.zip'
         )
