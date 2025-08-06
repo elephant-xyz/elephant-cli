@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync } from 'fs';
-import { readdir, rmdir } from 'fs/promises';
+import { readdir, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 import { CID } from 'multiformats/cid';
 import { logger } from '../utils/logger.js';
@@ -413,7 +413,7 @@ export class IPFSReconstructorService {
       try {
         const files = await readdir(dataDir);
         if (files.length === 0) {
-          await rmdir(dataDir);
+          await rm(dataDir, { recursive: true, force: true });
           logger.info(`Removed empty directory: ${dataDir}`);
         }
       } catch (error) {
