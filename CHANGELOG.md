@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.22.0...v1.23.0) (2025-08-06)
+
+
+### Features
+
+* Add `fetch-data` command ([#74](https://github.com/elephant-xyz/elephant-cli/issues/74)) ([5baed62](https://github.com/elephant-xyz/elephant-cli/commit/5baed6264507fbaa66cf05858afb1237f90c358e))
+
 # [1.22.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.21.0...v1.22.0) (2025-08-05)
 
 
