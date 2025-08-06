@@ -414,6 +414,74 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ## Utility Commands
 
+### Data Fetching
+
+The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively. It supports two input modes:
+
+#### Mode 1: Fetch from CID
+
+Download data starting from a root CID:
+
+```bash
+# Basic usage
+elephant-cli fetch-data bafybeiabc123...
+
+# With custom output directory
+elephant-cli fetch-data bafybeiabc123... --output-dir ./my-data
+
+# With custom IPFS gateway
+elephant-cli fetch-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
+```
+
+#### Mode 2: Fetch from Transaction Hash
+
+Extract and download data from a blockchain transaction (must be a submitBatchData transaction):
+
+```bash
+# Basic usage (requires RPC access)
+# Transaction hash must be 32 bytes (64 hex characters)
+elephant-cli fetch-data 0x1234567890abcdef...
+
+# With custom RPC URL
+elephant-cli fetch-data 0x1234567890abcdef... --rpc-url https://polygon-rpc.com
+
+# With all options
+elephant-cli fetch-data 0x1234567890abcdef... \
+  --rpc-url https://polygon-rpc.com \
+  --gateway https://ipfs.io/ipfs/ \
+  --output-dir ./tx-data
+```
+
+**Transaction Mode Details:**
+- Fetches transaction data from the blockchain
+- Decodes `submitBatchData` calls to extract property, data group, and data hashes
+- Converts hashes to CIDs using the `CidHexConverterService` (raw codec, base32 encoding)
+- Creates folder structure: `output-dir/propertyCID/` with data files directly inside
+- Downloads all referenced data recursively
+
+**Features:**
+- Recursively follows all CID references in JSON data
+- Replaces CID references with local file paths
+- Preserves data structure and relationships
+- Supports rate limiting with automatic retries
+- Uses schema manifest from Elephant Network for proper file naming
+
+**Output Structure:**
+```
+data/
+├── bafybeiabc123.../           # Property CID (transaction mode)
+│   ├── bafkreidef456.json     # Data group file
+│   ├── property_seed.json     # Referenced files
+│   ├── property_seed_from.json
+│   └── property_seed_to.json
+├── bafybeiabc456.../           # Another property
+│   ├── bafkreidef789.json     # Data group file
+│   └── other_data.json        # Referenced files
+└── bafybeicid123.../          # CID mode output (no data_ prefix)
+    ├── bafkreiroot.json        # Root data file
+    └── bafkreiref456.json      # Referenced files
+```
+
 ### CID-Hex Conversion
 
 The CLI provides utilities to convert between IPFS CIDs and Ethereum hex hashes:
@@ -631,6 +699,7 @@ elephant-cli --help
 elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
+elephant-cli fetch-data --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```

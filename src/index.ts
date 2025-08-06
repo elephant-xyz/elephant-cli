@@ -17,6 +17,7 @@ import { listAssignments } from './commands/list-assignments.js';
 import { registerValidateCommand } from './commands/validate.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
+import { registerFetchDataCommand } from './commands/fetch-data.js';
 import { registerCheckTransactionStatusCommand } from './commands/check-transaction-status.js';
 import { registerHexToCidCommand } from './commands/hex-to-cid.js';
 import { registerCidToHexCommand } from './commands/cid-to-hex.js';
@@ -61,5 +62,8 @@ registerSubmitToContractCommand(program);
 registerCheckTransactionStatusCommand(program);
 registerHexToCidCommand(program);
 registerCidToHexCommand(program);
+
+// Register fetch-data command
+registerFetchDataCommand(program);
 
 program.parse();

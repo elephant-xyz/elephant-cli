@@ -111,6 +111,24 @@ This command:
 4. Submits data hashes to the smart contract in batches
 5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
+### fetch-data Command
+
+This command:
+1. Downloads data from IPFS starting from a root CID
+2. Fetches schema manifest from Elephant Network API to get datagroup CIDs
+3. Recursively follows all CID references in the data
+4. Replaces CID references with local file paths
+5. Saves all data locally in a structured directory
+6. Names root datagroup files using their schema CID from manifest
+
+Key features:
+- **Automatic CID Resolution**: Handles `{"/": "CID"}` references automatically
+- **Path Replacement**: Converts CID pointers to relative file paths
+- **Rate Limiting**: Handles IPFS gateway rate limits with exponential backoff
+- **Progress Tracking**: Shows detailed download progress
+- **Schema Manifest Integration**: Fetches datagroup CIDs from `https://lexicon.elephant.xyz/json-schemas/schema-manifest.json`
+- **Smart Filename Mapping**: Uses datagroup schema CIDs for root files based on their label
+
 ## Common Tasks for AI Assistants
 
 ### Adding New Features
@@ -131,6 +149,35 @@ The CLI now supports processing ZIP files containing the expected directory stru
 - Files are extracted to a temporary directory that's cleaned up after processing
 - The same validation and upload logic applies to extracted files
 - Temporary directories are properly cleaned up even if errors occur
+
+### Data Fetching Command
+
+The `fetch-data` command supports two modes:
+
+1. **CID Mode**: Fetches data tree from an IPFS CID
+   - Downloads the root CID and recursively follows all CID references
+   - Replaces CID references with local file paths
+   - Uses schema manifest for proper file naming
+   - Creates directory: `output-dir/<CID>/` (no "data_" prefix)
+
+2. **Transaction Hash Mode**: Extracts and fetches data from blockchain transactions
+   - Fetches transaction data from blockchain using RPC
+   - Decodes `submitBatchData` calls to extract property, data group, and data hashes
+   - Converts hashes to CIDs using `CidHexConverterService.hexToCid` (raw codec, base32 encoding)
+   - Creates directory structure: `output-dir/propertyCID/` with dataGroup and referenced files directly inside
+   - Downloads and fetches data for each item in the transaction
+
+Key implementation details:
+- Transaction decoding uses ethers.js Interface to parse ABI-encoded data
+- Hash-to-CID conversion uses `CidHexConverterService` which creates CID v1 with raw codec (0x55)
+- Each property in a transaction gets its own directory
+- DataGroup files are saved directly in the property directory with their CID as filename
+- Referenced files (e.g., property_seed) are named based on their field names in the data structure
+
+File naming convention:
+- Root dataGroup file: `<dataGroupCid>.json`
+- Direct CID references: `<fieldName>.json` (e.g., `property_seed.json`)
+- Nested references: `<fieldName>_<subKey>.json` (e.g., `property_seed_from.json`, `property_seed_to.json`)
 
 ### Debugging Issues
 
@@ -221,6 +268,17 @@ npm run dev
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
 
+# Test the CLI - Fetch data from CID
+./bin/elephant-cli fetch-data bafybeiabc123... \
+  --gateway https://ipfs.io/ipfs/ \
+  --output-dir ./fetched
+
+# Test the CLI - Fetch data from transaction hash
+./bin/elephant-cli fetch-data 0x1234567890abcdef... \
+  --rpc-url https://polygon-rpc.com \
+  --gateway https://ipfs.io/ipfs/ \
+  --output-dir ./tx-data
+
 # Clean build artifacts
 npm run clean
 
@@ -247,6 +305,7 @@ npm run test:coverage
 - `src/commands/validate.ts` - Validate data without uploading
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
+- `src/commands/fetch-data.ts` - Fetch data from IPFS command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
@@ -255,6 +314,7 @@ npm run test:coverage
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
 - `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
+- `src/services/ipfs-fetcher.service.ts` - IPFS data fetching service
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations
