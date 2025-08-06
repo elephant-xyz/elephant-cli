@@ -416,18 +416,18 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ### Data Fetching
 
-The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively. It supports two input modes:
+The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively and packaging them as a ZIP file. It supports two input modes:
 
 #### Mode 1: Fetch from CID
 
 Download data starting from a root CID:
 
 ```bash
-# Basic usage
+# Basic usage (outputs to fetched-data.zip by default)
 elephant-cli fetch-data bafybeiabc123...
 
-# With custom output directory
-elephant-cli fetch-data bafybeiabc123... --output-dir ./my-data
+# With custom output ZIP file
+elephant-cli fetch-data bafybeiabc123... --output-zip ./my-data.zip
 
 # With custom IPFS gateway
 elephant-cli fetch-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
@@ -449,14 +449,14 @@ elephant-cli fetch-data 0x1234567890abcdef... --rpc-url https://polygon-rpc.com
 elephant-cli fetch-data 0x1234567890abcdef... \
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
-  --output-dir ./tx-data
+  --output-zip ./tx-data.zip
 ```
 
 **Transaction Mode Details:**
 - Fetches transaction data from the blockchain
 - Decodes `submitBatchData` calls to extract property, data group, and data hashes
 - Converts hashes to CIDs using the `CidHexConverterService` (raw codec, base32 encoding)
-- Creates folder structure: `output-dir/propertyCID/` with data files directly inside
+- Creates folder structure inside ZIP: `propertyCID/` with data files directly inside
 - Downloads all referenced data recursively
 
 **Features:**
@@ -465,10 +465,11 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - Preserves data structure and relationships
 - Supports rate limiting with automatic retries
 - Uses schema manifest from Elephant Network for proper file naming
+- **Outputs as ZIP file** for easy distribution and archiving
 
-**Output Structure:**
+**ZIP File Structure:**
 ```
-data/
+my-data.zip/
 ├── bafybeiabc123.../           # Property CID (transaction mode)
 │   ├── bafkreidef456.json     # Data group file
 │   ├── property_seed.json     # Referenced files
@@ -477,7 +478,7 @@ data/
 ├── bafybeiabc456.../           # Another property
 │   ├── bafkreidef789.json     # Data group file
 │   └── other_data.json        # Referenced files
-└── bafybeicid123.../          # CID mode output (no data_ prefix)
+└── bafybeicid123.../          # CID mode output
     ├── bafkreiroot.json        # Root data file
     └── bafkreiref456.json      # Referenced files
 ```
