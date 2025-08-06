@@ -414,39 +414,39 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ## Utility Commands
 
-### Data Reconstruction
+### Data Fetching
 
-The `reconstruct-data` command allows you to download and reconstruct entire data trees from IPFS, following all CID references recursively. It supports two input modes:
+The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively. It supports two input modes:
 
-#### Mode 1: Reconstruct from CID
+#### Mode 1: Fetch from CID
 
 Download data starting from a root CID:
 
 ```bash
 # Basic usage
-elephant-cli reconstruct-data bafybeiabc123...
+elephant-cli fetch-data bafybeiabc123...
 
 # With custom output directory
-elephant-cli reconstruct-data bafybeiabc123... --output-dir ./my-data
+elephant-cli fetch-data bafybeiabc123... --output-dir ./my-data
 
 # With custom IPFS gateway
-elephant-cli reconstruct-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
+elephant-cli fetch-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
 ```
 
-#### Mode 2: Reconstruct from Transaction Hash
+#### Mode 2: Fetch from Transaction Hash
 
 Extract and download data from a blockchain transaction (must be a submitBatchData transaction):
 
 ```bash
 # Basic usage (requires RPC access)
 # Transaction hash must be 32 bytes (64 hex characters)
-elephant-cli reconstruct-data 0x1234567890abcdef...
+elephant-cli fetch-data 0x1234567890abcdef...
 
 # With custom RPC URL
-elephant-cli reconstruct-data 0x1234567890abcdef... --rpc-url https://polygon-rpc.com
+elephant-cli fetch-data 0x1234567890abcdef... --rpc-url https://polygon-rpc.com
 
 # With all options
-elephant-cli reconstruct-data 0x1234567890abcdef... \
+elephant-cli fetch-data 0x1234567890abcdef... \
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
   --output-dir ./tx-data
@@ -699,7 +699,7 @@ elephant-cli --help
 elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
-elephant-cli reconstruct-data --help
+elephant-cli fetch-data --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```

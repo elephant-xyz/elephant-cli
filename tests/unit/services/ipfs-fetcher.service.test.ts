@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { IPFSReconstructorService } from '../../../src/services/ipfs-reconstructor.service.js';
+import { IPFSFetcherService } from '../../../src/services/ipfs-fetcher.service.js';
 import { logger } from '../../../src/utils/logger.js';
 
 // Mock dependencies
@@ -32,8 +32,8 @@ const mockSchemaManifest = {
   },
 };
 
-describe('IPFSReconstructorService', () => {
-  let service: IPFSReconstructorService;
+describe('IPFSFetcherService', () => {
+  let service: IPFSFetcherService;
   const mockGatewayUrl = 'https://test.ipfs.io/ipfs';
 
   beforeEach(() => {
@@ -42,7 +42,7 @@ describe('IPFSReconstructorService', () => {
     vi.mocked(mkdirSync).mockImplementation(() => undefined);
     vi.mocked(writeFileSync).mockImplementation(() => undefined);
 
-    service = new IPFSReconstructorService(mockGatewayUrl);
+    service = new IPFSFetcherService(mockGatewayUrl);
   });
 
   afterEach(() => {
@@ -51,12 +51,10 @@ describe('IPFSReconstructorService', () => {
 
   describe('constructor', () => {
     it('should initialize with correct base URL', () => {
-      const service1 = new IPFSReconstructorService(
-        'https://gateway.com/ipfs/'
-      );
+      const service1 = new IPFSFetcherService('https://gateway.com/ipfs/');
       expect(service1['baseUrl']).toBe('https://gateway.com/ipfs');
 
-      const service2 = new IPFSReconstructorService('https://gateway.com/ipfs');
+      const service2 = new IPFSFetcherService('https://gateway.com/ipfs');
       expect(service2['baseUrl']).toBe('https://gateway.com/ipfs');
     });
   });
@@ -250,16 +248,16 @@ describe('IPFSReconstructorService', () => {
     });
   });
 
-  describe('reconstructData', () => {
+  describe('fetchData', () => {
     beforeEach(() => {
-      // Mock schema manifest fetch for all reconstructData tests
+      // Mock schema manifest fetch for all fetchData tests
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => mockSchemaManifest,
       });
     });
 
-    it('should reconstruct data successfully', async () => {
+    it('should fetch data successfully', async () => {
       const mockContent = {
         label: 'Test Data',
         value: 'test',
@@ -270,7 +268,7 @@ describe('IPFSReconstructorService', () => {
         json: async () => mockContent,
       });
 
-      const result = await service.reconstructData(
+      const result = await service.fetchData(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'output'
       );
@@ -314,7 +312,7 @@ describe('IPFSReconstructorService', () => {
           json: async () => childContent,
         });
 
-      await service.reconstructData(
+      await service.fetchData(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'output'
       );
@@ -345,7 +343,7 @@ describe('IPFSReconstructorService', () => {
         json: async () => mockContent,
       });
 
-      await service.reconstructData(
+      await service.fetchData(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'output'
       );
@@ -369,7 +367,7 @@ describe('IPFSReconstructorService', () => {
         json: async () => mockContent,
       });
 
-      await service.reconstructData(
+      await service.fetchData(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'output'
       );
@@ -383,16 +381,16 @@ describe('IPFSReconstructorService', () => {
     });
 
     it('should throw error for invalid CID', async () => {
-      await expect(
-        service.reconstructData('invalid', 'output')
-      ).rejects.toThrow('Invalid IPFS CID: invalid');
+      await expect(service.fetchData('invalid', 'output')).rejects.toThrow(
+        'Invalid IPFS CID: invalid'
+      );
     });
 
     it('should throw error if fetch fails', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       await expect(
-        service.reconstructData(
+        service.fetchData(
           'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
           'output'
         )
@@ -402,14 +400,14 @@ describe('IPFSReconstructorService', () => {
     });
   });
 
-  describe('reconstructFromTransaction', () => {
+  describe('fetchFromTransaction', () => {
     const mockRpcUrl = 'https://polygon-rpc.com';
     const mockTransactionHash =
       '0x1234567890123456789012345678901234567890123456789012345678901234';
 
     beforeEach(() => {
       // Create service with RPC URL
-      service = new IPFSReconstructorService(mockGatewayUrl, mockRpcUrl);
+      service = new IPFSFetcherService(mockGatewayUrl, mockRpcUrl);
 
       // Mock schema manifest loading
       mockFetch.mockResolvedValueOnce({
@@ -419,10 +417,10 @@ describe('IPFSReconstructorService', () => {
     });
 
     it('should throw error if RPC provider is not initialized', async () => {
-      const serviceWithoutRpc = new IPFSReconstructorService(mockGatewayUrl);
+      const serviceWithoutRpc = new IPFSFetcherService(mockGatewayUrl);
 
       await expect(
-        serviceWithoutRpc.reconstructFromTransaction(mockTransactionHash)
+        serviceWithoutRpc.fetchFromTransaction(mockTransactionHash)
       ).rejects.toThrow('RPC provider not initialized');
     });
 
@@ -436,7 +434,7 @@ describe('IPFSReconstructorService', () => {
       (service as any).provider = mockProvider;
 
       await expect(
-        service.reconstructFromTransaction(mockTransactionHash)
+        service.fetchFromTransaction(mockTransactionHash)
       ).rejects.toThrow(`Transaction not found: ${mockTransactionHash}`);
     });
 
@@ -453,7 +451,7 @@ describe('IPFSReconstructorService', () => {
       (service as any).provider = mockProvider;
 
       await expect(
-        service.reconstructFromTransaction(mockTransactionHash)
+        service.fetchFromTransaction(mockTransactionHash)
       ).rejects.toThrow('Transaction has no input data');
     });
 
@@ -489,10 +487,7 @@ describe('IPFSReconstructorService', () => {
         }),
       });
 
-      await service.reconstructFromTransaction(
-        mockTransactionHash,
-        'test-output'
-      );
+      await service.fetchFromTransaction(mockTransactionHash, 'test-output');
 
       // Verify transaction was fetched
       expect(mockProvider.getTransaction).toHaveBeenCalledWith(
@@ -552,7 +547,7 @@ describe('IPFSReconstructorService', () => {
         json: async () => ({ label: 'Data 2', content: 'test 2' }),
       });
 
-      await service.reconstructFromTransaction(mockTransactionHash);
+      await service.fetchFromTransaction(mockTransactionHash);
 
       // Verify correct number of items found
       expect(logger.info).toHaveBeenCalledWith(
@@ -577,7 +572,7 @@ describe('IPFSReconstructorService', () => {
       (service as any).provider = mockProvider;
 
       await expect(
-        service.reconstructFromTransaction(mockTransactionHash)
+        service.fetchFromTransaction(mockTransactionHash)
       ).rejects.toThrow('Failed to decode transaction data');
     });
   });

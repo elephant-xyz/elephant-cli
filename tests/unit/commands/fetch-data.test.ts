@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Command } from 'commander';
-import { registerReconstructDataCommand } from '../../../src/commands/reconstruct-data.js';
-import { IPFSReconstructorService } from '../../../src/services/ipfs-reconstructor.service.js';
+import { registerFetchDataCommand } from '../../../src/commands/fetch-data.js';
+import { IPFSFetcherService } from '../../../src/services/ipfs-fetcher.service.js';
 import { logger } from '../../../src/utils/logger.js';
 import * as progress from '../../../src/utils/progress.js';
 import * as validation from '../../../src/utils/validation.js';
 import { isHexString } from 'ethers';
 
 // Mock dependencies
-vi.mock('../../../src/services/ipfs-reconstructor.service.js');
+vi.mock('../../../src/services/ipfs-fetcher.service.js');
 vi.mock('../../../src/utils/logger.js');
 vi.mock('../../../src/utils/progress.js');
 vi.mock('../../../src/utils/validation.js');
@@ -16,7 +16,7 @@ vi.mock('ethers', () => ({
   isHexString: vi.fn(),
 }));
 
-describe('reconstruct-data command', () => {
+describe('fetch-data command', () => {
   let program: Command;
   let mockSpinner: any;
   let mockProcess: any;
@@ -46,7 +46,7 @@ describe('reconstruct-data command', () => {
     // Setup command
     program = new Command();
     program.exitOverride(); // Prevent actual process exit
-    registerReconstructDataCommand(program);
+    registerFetchDataCommand(program);
   });
 
   afterEach(() => {
@@ -55,10 +55,10 @@ describe('reconstruct-data command', () => {
 
   describe('command registration', () => {
     it('should register the command with correct options', () => {
-      const cmd = program.commands.find((c) => c.name() === 'reconstruct-data');
+      const cmd = program.commands.find((c) => c.name() === 'fetch-data');
       expect(cmd).toBeDefined();
       expect(cmd?.description()).toBe(
-        'Reconstruct data tree from an IPFS CID or transaction hash, downloading all linked data'
+        'Fetch data tree from an IPFS CID or transaction hash, downloading all linked data'
       );
 
       const options = cmd?.options;
@@ -73,43 +73,41 @@ describe('reconstruct-data command', () => {
   });
 
   describe('command execution', () => {
-    it('should reconstruct data successfully', async () => {
-      const mockReconstructData = vi
+    it('should fetch data successfully', async () => {
+      const mockFetchData = vi
         .fn()
         .mockResolvedValue(
           'data/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
         );
-      vi.mocked(IPFSReconstructorService).mockImplementation(
+      vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            reconstructData: mockReconstructData,
+            fetchData: mockFetchData,
           }) as any
       );
 
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
       ]);
 
       expect(mockSpinner.start).toHaveBeenCalledWith(
-        'Initializing IPFS reconstructor service...'
+        'Initializing IPFS fetcher service...'
       );
       expect(mockSpinner.succeed).toHaveBeenCalledWith('Service initialized.');
       expect(mockSpinner.start).toHaveBeenCalledWith(
-        'Starting reconstruction from CID: QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
+        'Starting fetch from CID: QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
       );
-      expect(mockSpinner.succeed).toHaveBeenCalledWith(
-        'Data reconstruction complete!'
-      );
+      expect(mockSpinner.succeed).toHaveBeenCalledWith('Data fetch complete!');
 
-      expect(mockReconstructData).toHaveBeenCalledWith(
+      expect(mockFetchData).toHaveBeenCalledWith(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'data'
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
-        expect.stringContaining('✓ Reconstruction successful!')
+        expect.stringContaining('✓ Fetch successful!')
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
         expect.stringContaining(
@@ -119,24 +117,20 @@ describe('reconstruct-data command', () => {
     });
 
     it('should use custom gateway URL', async () => {
-      const mockReconstructData = vi
-        .fn()
-        .mockResolvedValue('output/data_QmTest');
+      const mockFetchData = vi.fn().mockResolvedValue('output/data_QmTest');
       let capturedGatewayUrl: string | undefined;
 
-      vi.mocked(IPFSReconstructorService).mockImplementation(
-        (gatewayUrl: string) => {
-          capturedGatewayUrl = gatewayUrl;
-          return {
-            reconstructData: mockReconstructData,
-          } as any;
-        }
-      );
+      vi.mocked(IPFSFetcherService).mockImplementation((gatewayUrl: string) => {
+        capturedGatewayUrl = gatewayUrl;
+        return {
+          fetchData: mockFetchData,
+        } as any;
+      });
 
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         '--gateway',
         'https://custom.gateway.com/ipfs',
@@ -146,28 +140,28 @@ describe('reconstruct-data command', () => {
     });
 
     it('should use custom output directory', async () => {
-      const mockReconstructData = vi
+      const mockFetchData = vi
         .fn()
         .mockResolvedValue(
           'custom-output/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
         );
-      vi.mocked(IPFSReconstructorService).mockImplementation(
+      vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            reconstructData: mockReconstructData,
+            fetchData: mockFetchData,
           }) as any
       );
 
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         '--output-dir',
         'custom-output',
       ]);
 
-      expect(mockReconstructData).toHaveBeenCalledWith(
+      expect(mockFetchData).toHaveBeenCalledWith(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         'custom-output'
       );
@@ -179,7 +173,7 @@ describe('reconstruct-data command', () => {
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         '--gateway',
         'invalid-url',
@@ -191,24 +185,24 @@ describe('reconstruct-data command', () => {
       expect(mockProcess.exit).toHaveBeenCalledWith(1);
     });
 
-    it('should handle reconstruction errors', async () => {
+    it('should handle fetch errors', async () => {
       const error = new Error('Failed to fetch CID');
-      const mockReconstructData = vi.fn().mockRejectedValue(error);
-      vi.mocked(IPFSReconstructorService).mockImplementation(
+      const mockFetchData = vi.fn().mockRejectedValue(error);
+      vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            reconstructData: mockReconstructData,
+            fetchData: mockFetchData,
           }) as any
       );
 
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
       ]);
 
-      expect(mockSpinner.fail).toHaveBeenCalledWith('Reconstruction failed');
+      expect(mockSpinner.fail).toHaveBeenCalledWith('Fetch failed');
       expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
         'Failed to fetch CID'
       );
@@ -216,35 +210,33 @@ describe('reconstruct-data command', () => {
     });
 
     it('should handle non-Error exceptions', async () => {
-      const mockReconstructData = vi.fn().mockRejectedValue('String error');
-      vi.mocked(IPFSReconstructorService).mockImplementation(
+      const mockFetchData = vi.fn().mockRejectedValue('String error');
+      vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            reconstructData: mockReconstructData,
+            fetchData: mockFetchData,
           }) as any
       );
 
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
       ]);
 
-      expect(mockSpinner.fail).toHaveBeenCalledWith('Reconstruction failed');
+      expect(mockSpinner.fail).toHaveBeenCalledWith('Fetch failed');
       expect(vi.mocked(logger.error)).toHaveBeenCalledWith('String error');
       expect(mockProcess.exit).toHaveBeenCalledWith(1);
     });
 
     it('should handle transaction hash input', async () => {
-      const mockReconstructFromTransaction = vi
-        .fn()
-        .mockResolvedValue(undefined);
-      vi.mocked(IPFSReconstructorService).mockImplementation(
+      const mockFetchFromTransaction = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            reconstructData: vi.fn(),
-            reconstructFromTransaction: mockReconstructFromTransaction,
+            fetchData: vi.fn(),
+            fetchFromTransaction: mockFetchFromTransaction,
           }) as any
       );
 
@@ -255,16 +247,16 @@ describe('reconstruct-data command', () => {
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         '0x1234567890123456789012345678901234567890123456789012345678901234',
       ]);
 
-      expect(mockReconstructFromTransaction).toHaveBeenCalledWith(
+      expect(mockFetchFromTransaction).toHaveBeenCalledWith(
         '0x1234567890123456789012345678901234567890123456789012345678901234',
         'data'
       );
       expect(mockSpinner.succeed).toHaveBeenCalledWith(
-        'Transaction data reconstruction complete!'
+        'Transaction data fetch complete!'
       );
     });
 
@@ -276,7 +268,7 @@ describe('reconstruct-data command', () => {
       await program.parseAsync([
         'node',
         'test',
-        'reconstruct-data',
+        'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
         '--rpc-url',
         'invalid-rpc',
@@ -292,14 +284,9 @@ describe('reconstruct-data command', () => {
       vi.mocked(isHexString).mockReturnValue(false);
       vi.mocked(validation.isValidCID).mockReturnValue(false);
 
-      await program.parseAsync([
-        'node',
-        'test',
-        'reconstruct-data',
-        'invalid-input',
-      ]);
+      await program.parseAsync(['node', 'test', 'fetch-data', 'invalid-input']);
 
-      expect(mockSpinner.fail).toHaveBeenCalledWith('Reconstruction failed');
+      expect(mockSpinner.fail).toHaveBeenCalledWith('Fetch failed');
       expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
         'Input must be either a valid IPFS CID or a transaction hash (32 bytes hex string)'
       );

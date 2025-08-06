@@ -111,7 +111,7 @@ This command:
 4. Submits data hashes to the smart contract in batches
 5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
-### reconstruct-data Command
+### fetch-data Command
 
 This command:
 1. Downloads data from IPFS starting from a root CID
@@ -150,22 +150,22 @@ The CLI now supports processing ZIP files containing the expected directory stru
 - The same validation and upload logic applies to extracted files
 - Temporary directories are properly cleaned up even if errors occur
 
-### Data Reconstruction Command
+### Data Fetching Command
 
-The `reconstruct-data` command supports two modes:
+The `fetch-data` command supports two modes:
 
-1. **CID Mode**: Reconstructs data tree from an IPFS CID
+1. **CID Mode**: Fetches data tree from an IPFS CID
    - Downloads the root CID and recursively follows all CID references
    - Replaces CID references with local file paths
    - Uses schema manifest for proper file naming
    - Creates directory: `output-dir/<CID>/` (no "data_" prefix)
 
-2. **Transaction Hash Mode**: Extracts and reconstructs data from blockchain transactions
+2. **Transaction Hash Mode**: Extracts and fetches data from blockchain transactions
    - Fetches transaction data from blockchain using RPC
    - Decodes `submitBatchData` calls to extract property, data group, and data hashes
    - Converts hashes to CIDs using `CidHexConverterService.hexToCid` (raw codec, base32 encoding)
    - Creates directory structure: `output-dir/propertyCID/` with dataGroup and referenced files directly inside
-   - Downloads and reconstructs data for each item in the transaction
+   - Downloads and fetches data for each item in the transaction
 
 Key implementation details:
 - Transaction decoding uses ethers.js Interface to parse ABI-encoded data
@@ -268,13 +268,13 @@ npm run dev
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
 
-# Test the CLI - Reconstruct data from CID
-./bin/elephant-cli reconstruct-data bafybeiabc123... \
+# Test the CLI - Fetch data from CID
+./bin/elephant-cli fetch-data bafybeiabc123... \
   --gateway https://ipfs.io/ipfs/ \
-  --output-dir ./reconstructed
+  --output-dir ./fetched
 
-# Test the CLI - Reconstruct data from transaction hash
-./bin/elephant-cli reconstruct-data 0x1234567890abcdef... \
+# Test the CLI - Fetch data from transaction hash
+./bin/elephant-cli fetch-data 0x1234567890abcdef... \
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
   --output-dir ./tx-data
@@ -305,7 +305,7 @@ npm run test:coverage
 - `src/commands/validate.ts` - Validate data without uploading
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
-- `src/commands/reconstruct-data.ts` - Reconstruct data from IPFS command
+- `src/commands/fetch-data.ts` - Fetch data from IPFS command
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
@@ -314,7 +314,7 @@ npm run test:coverage
 - `src/services/transaction-batcher.service.ts` - Batch transaction handling
 - `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
-- `src/services/ipfs-reconstructor.service.ts` - IPFS data reconstruction service
+- `src/services/ipfs-fetcher.service.ts` - IPFS data fetching service
 - `src/utils/` - Logging, validation, and progress utilities
 
 ## Known Limitations

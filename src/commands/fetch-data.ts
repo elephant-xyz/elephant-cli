@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { IPFSReconstructorService } from '../services/ipfs-reconstructor.service.js';
+import { IPFSFetcherService } from '../services/ipfs-fetcher.service.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
 import { isValidUrl, isValidCID } from '../utils/validation.js';
@@ -7,17 +7,17 @@ import { DEFAULT_IPFS_GATEWAY, DEFAULT_RPC_URL } from '../config/constants.js';
 import { isHexString } from 'ethers';
 import chalk from 'chalk';
 
-export interface ReconstructDataOptions {
+export interface FetchDataOptions {
   gateway?: string;
   outputDir?: string;
   rpcUrl?: string;
 }
 
-export function registerReconstructDataCommand(program: Command) {
+export function registerFetchDataCommand(program: Command) {
   program
-    .command('reconstruct-data <input>')
+    .command('fetch-data <input>')
     .description(
-      'Reconstruct data tree from an IPFS CID or transaction hash, downloading all linked data'
+      'Fetch data tree from an IPFS CID or transaction hash, downloading all linked data'
     )
     .option(
       '-g, --gateway <url>',
@@ -26,7 +26,7 @@ export function registerReconstructDataCommand(program: Command) {
     )
     .option(
       '-o, --output-dir <path>',
-      'Output directory for reconstructed data',
+      'Output directory for fetched data',
       'data'
     )
     .option(
@@ -34,14 +34,14 @@ export function registerReconstructDataCommand(program: Command) {
       'RPC URL for fetching transaction data',
       process.env.RPC_URL || DEFAULT_RPC_URL
     )
-    .action(async (input: string, options: ReconstructDataOptions) => {
-      await reconstructData(input, options);
+    .action(async (input: string, options: FetchDataOptions) => {
+      await fetchData(input, options);
     });
 }
 
-async function reconstructData(
+async function fetchData(
   input: string,
-  options: ReconstructDataOptions
+  options: FetchDataOptions
 ): Promise<void> {
   const spinner = createSpinner('Initializing...');
 
@@ -62,8 +62,8 @@ async function reconstructData(
     const outputDir = options.outputDir!;
     const rpcUrl = options.rpcUrl!;
 
-    spinner.start('Initializing IPFS reconstructor service...');
-    const reconstructor = new IPFSReconstructorService(gatewayUrl, rpcUrl);
+    spinner.start('Initializing IPFS fetcher service...');
+    const fetcher = new IPFSFetcherService(gatewayUrl, rpcUrl);
     spinner.succeed('Service initialized.');
 
     // Determine if input is a CID or transaction hash
@@ -78,18 +78,18 @@ async function reconstructData(
 
     if (isTransactionHash) {
       spinner.start(`Fetching transaction data for: ${input}`);
-      await reconstructor.reconstructFromTransaction(input, outputDir);
-      spinner.succeed('Transaction data reconstruction complete!');
+      await fetcher.fetchFromTransaction(input, outputDir);
+      spinner.succeed('Transaction data fetch complete!');
     } else {
-      spinner.start(`Starting reconstruction from CID: ${input}`);
-      const resultDir = await reconstructor.reconstructData(input, outputDir);
-      spinner.succeed('Data reconstruction complete!');
+      spinner.start(`Starting fetch from CID: ${input}`);
+      const resultDir = await fetcher.fetchData(input, outputDir);
+      spinner.succeed('Data fetch complete!');
       logger.log(chalk.blue(`Data saved in: ${resultDir}`));
     }
 
-    logger.log(chalk.green('\n✓ Reconstruction successful!'));
+    logger.log(chalk.green('\n✓ Fetch successful!'));
   } catch (error: unknown) {
-    spinner.fail('Reconstruction failed');
+    spinner.fail('Fetch failed');
 
     if (error instanceof Error) {
       logger.error(error.message);

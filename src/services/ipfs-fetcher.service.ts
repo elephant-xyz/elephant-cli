@@ -21,7 +21,7 @@ interface BatchDataItem {
   dataHash: string;
 }
 
-export class IPFSReconstructorService {
+export class IPFSFetcherService {
   private readonly baseUrl: string;
   private processedCids: Set<string> = new Set();
   private cidToFilename: Map<string, string> = new Map();
@@ -373,7 +373,7 @@ export class IPFSReconstructorService {
     return relativePath;
   }
 
-  public async reconstructData(
+  public async fetchData(
     initialCid: string,
     baseDir?: string
   ): Promise<string> {
@@ -428,7 +428,7 @@ export class IPFSReconstructorService {
     return dataDir;
   }
 
-  public async reconstructFromTransaction(
+  public async fetchFromTransaction(
     transactionHash: string,
     baseDir: string = 'data'
   ): Promise<void> {
@@ -589,9 +589,7 @@ export class IPFSReconstructorService {
       }
     }
 
-    logger.info(
-      `\nTransaction reconstruction complete. Data saved in: ${baseDir}/`
-    );
+    logger.info(`\nTransaction fetch complete. Data saved in: ${baseDir}/`);
   }
 
   private async processNestedCids(
