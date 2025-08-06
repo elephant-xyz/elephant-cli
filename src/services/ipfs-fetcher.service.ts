@@ -1,10 +1,13 @@
 import { writeFileSync, mkdirSync } from 'fs';
 import { readdir, rm } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { CID } from 'multiformats/cid';
 import { logger } from '../utils/logger.js';
 import { ethers, JsonRpcProvider, TransactionResponse } from 'ethers';
 import { CidHexConverterService } from './cid-hex-converter.service.js';
+import AdmZip from 'adm-zip';
+import { tmpdir } from 'os';
+import { promises as fsPromises } from 'fs';
 
 interface SchemaManifestItem {
   ipfsCid: string;
@@ -150,7 +153,7 @@ export class IPFSFetcherService {
       ) {
         const cid = content['/'];
         if (cidToPath.has(cid)) {
-          return { path: cidToPath.get(cid)! };
+          return { '/': cidToPath.get(cid)! };
         }
         return content;
       }
@@ -167,7 +170,7 @@ export class IPFSFetcherService {
         ) {
           const cid = (value as any)['/'];
           if (cidToPath.has(cid)) {
-            newContent[key] = { path: cidToPath.get(cid)! };
+            newContent[key] = { '/': cidToPath.get(cid)! };
           } else {
             newContent[key] = value;
           }
@@ -694,6 +697,125 @@ export class IPFSFetcherService {
             }
           }
         }
+      }
+    }
+  }
+
+  /**
+   * Fetch data from IPFS and save it as a ZIP file
+   * @param initialCid The initial CID to fetch
+   * @param outputZip Path to the output ZIP file
+   */
+  public async fetchDataToZip(
+    initialCid: string,
+    outputZip: string
+  ): Promise<void> {
+    // Create a temporary directory for fetching data
+    const tempDirBase = join(tmpdir(), 'elephant-cli-fetch-');
+    const tempDir = await fsPromises.mkdtemp(tempDirBase);
+
+    try {
+      // Fetch data to the temporary directory
+      const dataDir = await this.fetchData(initialCid, tempDir);
+
+      // Create ZIP file
+      logger.info(`Creating ZIP file: ${outputZip}`);
+      const zip = new AdmZip();
+
+      // Add the fetched directory to the ZIP
+      const dirName = basename(dataDir);
+      await this.addDirectoryToZip(zip, dataDir, dirName);
+
+      // Write the ZIP file
+      zip.writeZip(outputZip);
+      logger.info(`ZIP file created successfully: ${outputZip}`);
+    } finally {
+      // Clean up temporary directory
+      try {
+        await rm(tempDir, { recursive: true, force: true });
+        logger.debug(`Cleaned up temporary directory: ${tempDir}`);
+      } catch (error) {
+        logger.warn(`Failed to clean up temporary directory: ${error}`);
+      }
+    }
+  }
+
+  /**
+   * Fetch data from transaction and save it as a ZIP file
+   * @param transactionHash The transaction hash to fetch from
+   * @param outputZip Path to the output ZIP file
+   */
+  public async fetchFromTransactionToZip(
+    transactionHash: string,
+    outputZip: string
+  ): Promise<void> {
+    // Create a temporary directory for fetching data
+    const tempDirBase = join(tmpdir(), 'elephant-cli-fetch-');
+    const tempDir = await fsPromises.mkdtemp(tempDirBase);
+
+    try {
+      // Fetch data to the temporary directory
+      await this.fetchFromTransaction(transactionHash, tempDir);
+
+      // Create ZIP file
+      logger.info(`Creating ZIP file: ${outputZip}`);
+      const zip = new AdmZip();
+
+      // Add all subdirectories to the ZIP
+      const entries = await readdir(tempDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const dirPath = join(tempDir, entry.name);
+          await this.addDirectoryToZip(zip, dirPath, entry.name);
+        } else if (entry.isFile()) {
+          // Add any files at the root level
+          const filePath = join(tempDir, entry.name);
+          const content = await fsPromises.readFile(filePath);
+          zip.addFile(entry.name, content);
+        }
+      }
+
+      // Write the ZIP file
+      zip.writeZip(outputZip);
+      logger.info(`ZIP file created successfully: ${outputZip}`);
+    } finally {
+      // Clean up temporary directory
+      try {
+        await rm(tempDir, { recursive: true, force: true });
+        logger.debug(`Cleaned up temporary directory: ${tempDir}`);
+      } catch (error) {
+        logger.warn(`Failed to clean up temporary directory: ${error}`);
+      }
+    }
+  }
+
+  /**
+   * Recursively add a directory to a ZIP file
+   * @param zip The AdmZip instance
+   * @param dirPath The directory path to add
+   * @param zipPath The path inside the ZIP file
+   */
+  private async addDirectoryToZip(
+    zip: AdmZip,
+    dirPath: string,
+    zipPath: string
+  ): Promise<void> {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      const entryZipPath = join(zipPath, entry.name);
+
+      if (entry.isDirectory()) {
+        // Recursively add subdirectory
+        await this.addDirectoryToZip(zip, fullPath, entryZipPath);
+      } else if (entry.isFile()) {
+        // Add file to ZIP
+        const content = await fsPromises.readFile(fullPath);
+        // Convert path separators to forward slashes for ZIP compatibility
+        const normalizedPath = entryZipPath.replace(/\\/g, '/');
+        zip.addFile(normalizedPath, content);
+        logger.debug(`Added to ZIP: ${normalizedPath}`);
       }
     }
   }

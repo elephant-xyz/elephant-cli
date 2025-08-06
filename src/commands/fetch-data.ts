@@ -9,7 +9,7 @@ import chalk from 'chalk';
 
 export interface FetchDataOptions {
   gateway?: string;
-  outputDir?: string;
+  outputZip?: string;
   rpcUrl?: string;
 }
 
@@ -25,9 +25,9 @@ export function registerFetchDataCommand(program: Command) {
       process.env.IPFS_GATEWAY || DEFAULT_IPFS_GATEWAY
     )
     .option(
-      '-o, --output-dir <path>',
-      'Output directory for fetched data',
-      'data'
+      '-o, --output-zip <path>',
+      'Output ZIP file for fetched data',
+      'fetched-data.zip'
     )
     .option(
       '-r, --rpc-url <url>',
@@ -59,7 +59,7 @@ async function fetchData(
     }
 
     const gatewayUrl = options.gateway!;
-    const outputDir = options.outputDir!;
+    const outputZip = options.outputZip!;
     const rpcUrl = options.rpcUrl!;
 
     spinner.start('Initializing IPFS fetcher service...');
@@ -78,15 +78,15 @@ async function fetchData(
 
     if (isTransactionHash) {
       spinner.start(`Fetching transaction data for: ${input}`);
-      await fetcher.fetchFromTransaction(input, outputDir);
+      await fetcher.fetchFromTransactionToZip(input, outputZip);
       spinner.succeed('Transaction data fetch complete!');
     } else {
       spinner.start(`Starting fetch from CID: ${input}`);
-      const resultDir = await fetcher.fetchData(input, outputDir);
+      await fetcher.fetchDataToZip(input, outputZip);
       spinner.succeed('Data fetch complete!');
-      logger.log(chalk.blue(`Data saved in: ${resultDir}`));
     }
 
+    logger.log(chalk.blue(`Data saved in: ${outputZip}`));
     logger.log(chalk.green('\n✓ Fetch successful!'));
   } catch (error: unknown) {
     spinner.fail('Fetch failed');

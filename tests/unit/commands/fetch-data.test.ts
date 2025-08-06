@@ -66,7 +66,7 @@ describe('fetch-data command', () => {
       expect(options?.[0].short).toBe('-g');
       expect(options?.[0].long).toBe('--gateway');
       expect(options?.[1].short).toBe('-o');
-      expect(options?.[1].long).toBe('--output-dir');
+      expect(options?.[1].long).toBe('--output-zip');
       expect(options?.[2].short).toBe('-r');
       expect(options?.[2].long).toBe('--rpc-url');
     });
@@ -74,15 +74,11 @@ describe('fetch-data command', () => {
 
   describe('command execution', () => {
     it('should fetch data successfully', async () => {
-      const mockFetchData = vi
-        .fn()
-        .mockResolvedValue(
-          'data/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-        );
+      const mockFetchDataToZip = vi.fn().mockResolvedValue(undefined);
       vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            fetchData: mockFetchData,
+            fetchDataToZip: mockFetchDataToZip,
           }) as any
       );
 
@@ -102,28 +98,26 @@ describe('fetch-data command', () => {
       );
       expect(mockSpinner.succeed).toHaveBeenCalledWith('Data fetch complete!');
 
-      expect(mockFetchData).toHaveBeenCalledWith(
+      expect(mockFetchDataToZip).toHaveBeenCalledWith(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-        'data'
+        'fetched-data.zip'
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
         expect.stringContaining('✓ Fetch successful!')
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Data saved in: data/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-        )
+        expect.stringContaining('Data saved in: fetched-data.zip')
       );
     });
 
     it('should use custom gateway URL', async () => {
-      const mockFetchData = vi.fn().mockResolvedValue('output/data_QmTest');
+      const mockFetchDataToZip = vi.fn().mockResolvedValue(undefined);
       let capturedGatewayUrl: string | undefined;
 
       vi.mocked(IPFSFetcherService).mockImplementation((gatewayUrl: string) => {
         capturedGatewayUrl = gatewayUrl;
         return {
-          fetchData: mockFetchData,
+          fetchDataToZip: mockFetchDataToZip,
         } as any;
       });
 
@@ -139,16 +133,12 @@ describe('fetch-data command', () => {
       expect(capturedGatewayUrl).toBe('https://custom.gateway.com/ipfs');
     });
 
-    it('should use custom output directory', async () => {
-      const mockFetchData = vi
-        .fn()
-        .mockResolvedValue(
-          'custom-output/data_QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU'
-        );
+    it('should use custom output ZIP file', async () => {
+      const mockFetchDataToZip = vi.fn().mockResolvedValue(undefined);
       vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            fetchData: mockFetchData,
+            fetchDataToZip: mockFetchDataToZip,
           }) as any
       );
 
@@ -157,13 +147,13 @@ describe('fetch-data command', () => {
         'test',
         'fetch-data',
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-        '--output-dir',
-        'custom-output',
+        '--output-zip',
+        'custom-output.zip',
       ]);
 
-      expect(mockFetchData).toHaveBeenCalledWith(
+      expect(mockFetchDataToZip).toHaveBeenCalledWith(
         'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU',
-        'custom-output'
+        'custom-output.zip'
       );
     });
 
@@ -187,11 +177,11 @@ describe('fetch-data command', () => {
 
     it('should handle fetch errors', async () => {
       const error = new Error('Failed to fetch CID');
-      const mockFetchData = vi.fn().mockRejectedValue(error);
+      const mockFetchDataToZip = vi.fn().mockRejectedValue(error);
       vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            fetchData: mockFetchData,
+            fetchDataToZip: mockFetchDataToZip,
           }) as any
       );
 
@@ -210,11 +200,11 @@ describe('fetch-data command', () => {
     });
 
     it('should handle non-Error exceptions', async () => {
-      const mockFetchData = vi.fn().mockRejectedValue('String error');
+      const mockFetchDataToZip = vi.fn().mockRejectedValue('String error');
       vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            fetchData: mockFetchData,
+            fetchDataToZip: mockFetchDataToZip,
           }) as any
       );
 
@@ -231,12 +221,14 @@ describe('fetch-data command', () => {
     });
 
     it('should handle transaction hash input', async () => {
-      const mockFetchFromTransaction = vi.fn().mockResolvedValue(undefined);
+      const mockFetchFromTransactionToZip = vi
+        .fn()
+        .mockResolvedValue(undefined);
       vi.mocked(IPFSFetcherService).mockImplementation(
         () =>
           ({
-            fetchData: vi.fn(),
-            fetchFromTransaction: mockFetchFromTransaction,
+            fetchDataToZip: vi.fn(),
+            fetchFromTransactionToZip: mockFetchFromTransactionToZip,
           }) as any
       );
 
@@ -251,9 +243,9 @@ describe('fetch-data command', () => {
         '0x1234567890123456789012345678901234567890123456789012345678901234',
       ]);
 
-      expect(mockFetchFromTransaction).toHaveBeenCalledWith(
+      expect(mockFetchFromTransactionToZip).toHaveBeenCalledWith(
         '0x1234567890123456789012345678901234567890123456789012345678901234',
-        'data'
+        'fetched-data.zip'
       );
       expect(mockSpinner.succeed).toHaveBeenCalledWith(
         'Transaction data fetch complete!'

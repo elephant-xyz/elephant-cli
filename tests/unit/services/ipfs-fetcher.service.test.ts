@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
 import { IPFSFetcherService } from '../../../src/services/ipfs-fetcher.service.js';
 import { logger } from '../../../src/utils/logger.js';
 
@@ -216,9 +215,9 @@ describe('IPFSFetcherService', () => {
 
       const result = service['replaceCidsWithPaths'](content, cidToPath);
       expect(result).toEqual({
-        data: { path: './test1.json' },
+        data: { '/': './test1.json' },
         nested: {
-          ref: { path: './test2.json' },
+          ref: { '/': './test2.json' },
         },
       });
     });
@@ -233,7 +232,7 @@ describe('IPFSFetcherService', () => {
       ];
 
       const result = service['replaceCidsWithPaths'](content, cidToPath);
-      expect(result).toEqual([{ path: './test1.json' }, { value: 'normal' }]);
+      expect(result).toEqual([{ '/': './test1.json' }, { value: 'normal' }]);
     });
 
     it('should preserve non-CID references', () => {
@@ -327,7 +326,7 @@ describe('IPFSFetcherService', () => {
       expect(vi.mocked(writeFileSync)).toHaveBeenNthCalledWith(
         2,
         'output/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU/QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU.json',
-        expect.stringContaining('"path": "./child.json"'),
+        expect.stringContaining('"/": "./child.json"'),
         'utf-8'
       );
     });
