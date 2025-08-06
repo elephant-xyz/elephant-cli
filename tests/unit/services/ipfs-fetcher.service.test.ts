@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
+import { rm, readdir } from 'fs/promises';
+import AdmZip from 'adm-zip';
 import { IPFSFetcherService } from '../../../src/services/ipfs-fetcher.service.js';
 import { logger } from '../../../src/utils/logger.js';
 
 // Mock dependencies
 vi.mock('fs');
+vi.mock('fs/promises');
 vi.mock('../../../src/utils/logger.js');
+vi.mock('adm-zip');
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -573,6 +578,458 @@ describe('IPFSFetcherService', () => {
       await expect(
         service.fetchFromTransaction(mockTransactionHash)
       ).rejects.toThrow('Failed to decode transaction data');
+    });
+  });
+
+  describe('fetchDataToZip', () => {
+    let mockZip: any;
+    let mockAddDirectoryToZip: any;
+
+    beforeEach(() => {
+      // Mock AdmZip instance
+      mockZip = {
+        addFile: vi.fn(),
+        writeZip: vi.fn(),
+      };
+      vi.mocked(AdmZip).mockImplementation(() => mockZip);
+
+      // Mock fs promises
+      vi.mocked(fsPromises.mkdtemp).mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123'
+      );
+      vi.mocked(rm).mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(
+        Buffer.from('test content')
+      );
+
+      // Mock the addDirectoryToZip method
+      mockAddDirectoryToZip = vi
+        .spyOn(service as any, 'addDirectoryToZip')
+        .mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      mockAddDirectoryToZip.mockRestore();
+    });
+
+    it('should create a temporary directory', async () => {
+      // Mock the fetchData method to return a directory path
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+
+      await service.fetchDataToZip('QmTest', 'output.zip');
+
+      expect(fsPromises.mkdtemp).toHaveBeenCalledWith(
+        expect.stringContaining('elephant-cli-fetch-')
+      );
+    });
+
+    it('should call fetchData with correct parameters', async () => {
+      const fetchDataSpy = vi
+        .spyOn(service, 'fetchData')
+        .mockResolvedValue('/tmp/elephant-cli-fetch-123/QmTest');
+
+      await service.fetchDataToZip('QmTest', 'output.zip');
+
+      expect(fetchDataSpy).toHaveBeenCalledWith(
+        'QmTest',
+        '/tmp/elephant-cli-fetch-123'
+      );
+    });
+
+    it('should create ZIP with correct structure', async () => {
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+
+      await service.fetchDataToZip('QmTest', 'output.zip');
+
+      // Verify ZIP was created with data folder structure
+      expect(mockAddDirectoryToZip).toHaveBeenCalledWith(
+        mockZip,
+        '/tmp/elephant-cli-fetch-123/QmTest',
+        'data/QmTest'
+      );
+      expect(mockZip.writeZip).toHaveBeenCalledWith('output.zip');
+    });
+
+    it('should clean up temporary directory on success', async () => {
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+
+      await service.fetchDataToZip('QmTest', 'output.zip');
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-123', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should clean up temporary directory on fetchData failure', async () => {
+      vi.spyOn(service, 'fetchData').mockRejectedValue(
+        new Error('Fetch failed')
+      );
+
+      await expect(
+        service.fetchDataToZip('QmTest', 'output.zip')
+      ).rejects.toThrow('Fetch failed');
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-123', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should clean up temporary directory on ZIP creation failure', async () => {
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+      mockZip.writeZip.mockImplementation(() => {
+        throw new Error('ZIP write failed');
+      });
+
+      await expect(
+        service.fetchDataToZip('QmTest', 'output.zip')
+      ).rejects.toThrow('ZIP write failed');
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-123', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should log appropriate messages', async () => {
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+
+      await service.fetchDataToZip('QmTest', 'output.zip');
+
+      expect(logger.info).toHaveBeenCalledWith('Creating ZIP file: output.zip');
+      expect(logger.info).toHaveBeenCalledWith(
+        'ZIP file created successfully: output.zip'
+      );
+    });
+
+    it('should handle cleanup failure gracefully', async () => {
+      vi.spyOn(service, 'fetchData').mockResolvedValue(
+        '/tmp/elephant-cli-fetch-123/QmTest'
+      );
+      vi.mocked(rm).mockRejectedValue(new Error('Cleanup failed'));
+
+      // Should not throw even if cleanup fails
+      await expect(
+        service.fetchDataToZip('QmTest', 'output.zip')
+      ).resolves.not.toThrow();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to clean up temporary directory')
+      );
+    });
+  });
+
+  describe('fetchFromTransactionToZip', () => {
+    let mockZip: any;
+    const mockTransactionHash =
+      '0x1234567890123456789012345678901234567890123456789012345678901234';
+
+    beforeEach(() => {
+      // Mock AdmZip instance
+      mockZip = {
+        addFile: vi.fn(),
+        writeZip: vi.fn(),
+      };
+      vi.mocked(AdmZip).mockImplementation(() => mockZip);
+
+      // Mock fs promises
+      vi.mocked(fsPromises.mkdtemp).mockResolvedValue(
+        '/tmp/elephant-cli-fetch-456'
+      );
+      vi.mocked(rm).mockResolvedValue(undefined);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(
+        Buffer.from('test content')
+      );
+    });
+
+    it('should create a temporary directory', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(fsPromises.mkdtemp).toHaveBeenCalledWith(
+        expect.stringContaining('elephant-cli-fetch-')
+      );
+    });
+
+    it('should call fetchFromTransaction with correct parameters', async () => {
+      const fetchFromTransactionSpy = vi
+        .spyOn(service, 'fetchFromTransaction')
+        .mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(fetchFromTransactionSpy).toHaveBeenCalledWith(
+        mockTransactionHash,
+        '/tmp/elephant-cli-fetch-456'
+      );
+    });
+
+    it('should add directories to ZIP with data prefix', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+
+      // Mock directory entries
+      const mockEntries = [
+        { name: 'bafybeiabc123', isDirectory: () => true, isFile: () => false },
+        { name: 'bafybeiabc456', isDirectory: () => true, isFile: () => false },
+      ] as any;
+      vi.mocked(readdir).mockResolvedValue(mockEntries);
+
+      const addDirectoryToZipSpy = vi
+        .spyOn(service as any, 'addDirectoryToZip')
+        .mockResolvedValue(undefined);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(addDirectoryToZipSpy).toHaveBeenCalledWith(
+        mockZip,
+        '/tmp/elephant-cli-fetch-456/bafybeiabc123',
+        'data/bafybeiabc123'
+      );
+      expect(addDirectoryToZipSpy).toHaveBeenCalledWith(
+        mockZip,
+        '/tmp/elephant-cli-fetch-456/bafybeiabc456',
+        'data/bafybeiabc456'
+      );
+    });
+
+    it('should add root files to ZIP under data folder', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+
+      // Mock file entries
+      const mockEntries = [
+        { name: 'rootfile.json', isDirectory: () => false, isFile: () => true },
+      ] as any;
+      vi.mocked(readdir).mockResolvedValue(mockEntries);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(fsPromises.readFile).toHaveBeenCalledWith(
+        '/tmp/elephant-cli-fetch-456/rootfile.json'
+      );
+      expect(mockZip.addFile).toHaveBeenCalledWith(
+        'data/rootfile.json',
+        Buffer.from('test content')
+      );
+    });
+
+    it('should write ZIP file', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(mockZip.writeZip).toHaveBeenCalledWith('output.zip');
+    });
+
+    it('should clean up temporary directory on success', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-456', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should clean up temporary directory on fetchFromTransaction failure', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockRejectedValue(
+        new Error('Transaction fetch failed')
+      );
+
+      await expect(
+        service.fetchFromTransactionToZip(mockTransactionHash, 'output.zip')
+      ).rejects.toThrow('Transaction fetch failed');
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-456', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should clean up temporary directory on ZIP creation failure', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+      mockZip.writeZip.mockImplementation(() => {
+        throw new Error('ZIP write failed');
+      });
+
+      await expect(
+        service.fetchFromTransactionToZip(mockTransactionHash, 'output.zip')
+      ).rejects.toThrow('ZIP write failed');
+
+      expect(rm).toHaveBeenCalledWith('/tmp/elephant-cli-fetch-456', {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    it('should handle cleanup failure gracefully', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+      vi.mocked(rm).mockRejectedValue(new Error('Cleanup failed'));
+
+      // Should not throw even if cleanup fails
+      await expect(
+        service.fetchFromTransactionToZip(mockTransactionHash, 'output.zip')
+      ).resolves.not.toThrow();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to clean up temporary directory')
+      );
+    });
+
+    it('should log appropriate messages', async () => {
+      vi.spyOn(service, 'fetchFromTransaction').mockResolvedValue(undefined);
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await service.fetchFromTransactionToZip(
+        mockTransactionHash,
+        'output.zip'
+      );
+
+      expect(logger.info).toHaveBeenCalledWith('Creating ZIP file: output.zip');
+      expect(logger.info).toHaveBeenCalledWith(
+        'ZIP file created successfully: output.zip'
+      );
+    });
+  });
+
+  describe('addDirectoryToZip', () => {
+    let mockZip: any;
+
+    beforeEach(() => {
+      mockZip = {
+        addFile: vi.fn(),
+      };
+    });
+
+    it('should recursively add files to ZIP', async () => {
+      // Mock readdir to return mixed files and directories
+      const mockEntries = [
+        { name: 'file1.json', isDirectory: () => false, isFile: () => true },
+        { name: 'subdir', isDirectory: () => true, isFile: () => false },
+      ] as any;
+
+      const mockSubEntries = [
+        { name: 'file2.json', isDirectory: () => false, isFile: () => true },
+      ] as any;
+
+      vi.mocked(readdir)
+        .mockResolvedValueOnce(mockEntries)
+        .mockResolvedValueOnce(mockSubEntries);
+
+      vi.mocked(fsPromises.readFile)
+        .mockResolvedValueOnce(Buffer.from('content1'))
+        .mockResolvedValueOnce(Buffer.from('content2'));
+
+      await (service as any).addDirectoryToZip(
+        mockZip,
+        '/test/dir',
+        'data/test'
+      );
+
+      expect(mockZip.addFile).toHaveBeenCalledWith(
+        'data/test/file1.json',
+        Buffer.from('content1')
+      );
+      expect(mockZip.addFile).toHaveBeenCalledWith(
+        'data/test/subdir/file2.json',
+        Buffer.from('content2')
+      );
+    });
+
+    it('should normalize path separators for ZIP compatibility', async () => {
+      const mockEntries = [
+        { name: 'file.json', isDirectory: () => false, isFile: () => true },
+      ] as any;
+
+      vi.mocked(readdir).mockResolvedValue(mockEntries);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(Buffer.from('content'));
+
+      // Test with Windows-style path separators
+      const originalJoin = require('path').join;
+      require('path').join = (...args: string[]) => args.join('\\');
+
+      await (service as any).addDirectoryToZip(
+        mockZip,
+        'C:\\test\\dir',
+        'data\\test'
+      );
+
+      // Verify that backslashes are converted to forward slashes
+      expect(mockZip.addFile).toHaveBeenCalledWith(
+        'data/test/file.json',
+        Buffer.from('content')
+      );
+
+      // Restore original join
+      require('path').join = originalJoin;
+    });
+
+    it('should handle empty directories', async () => {
+      vi.mocked(readdir).mockResolvedValue([]);
+
+      await (service as any).addDirectoryToZip(
+        mockZip,
+        '/empty/dir',
+        'data/empty'
+      );
+
+      expect(mockZip.addFile).not.toHaveBeenCalled();
+    });
+
+    it('should log debug messages for added files', async () => {
+      const mockEntries = [
+        { name: 'file.json', isDirectory: () => false, isFile: () => true },
+      ] as any;
+
+      vi.mocked(readdir).mockResolvedValue(mockEntries);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(Buffer.from('content'));
+
+      await (service as any).addDirectoryToZip(
+        mockZip,
+        '/test/dir',
+        'data/test'
+      );
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Added to ZIP: data/test/file.json'
+      );
     });
   });
 });
