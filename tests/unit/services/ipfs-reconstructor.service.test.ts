@@ -184,7 +184,7 @@ describe('IPFSReconstructorService', () => {
         )
       ).rejects.toThrow('HTTP 429: Too Many Requests');
       expect(mockFetch).toHaveBeenCalledTimes(3);
-    }, 20000); // Increase timeout for this test
+    }, 20000); // Timeout needed as retry logic includes actual delays (5s + 10s)
 
     it('should handle non-429 errors', async () => {
       mockFetch.mockResolvedValueOnce({
