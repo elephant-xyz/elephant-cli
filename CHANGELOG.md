@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.21.0...v1.22.0) (2025-08-05)
+
+
+### Features
+
+* **cli:** add CID-hex conversion commands ([#73](https://github.com/elephant-xyz/elephant-cli/issues/73)) ([994c8ed](https://github.com/elephant-xyz/elephant-cli/commit/994c8ed096830aa2ca27e9c106005ec4865f09f0))
+
 # [1.21.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.20.1...v1.21.0) (2025-08-05)
 
 

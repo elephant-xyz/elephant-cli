@@ -32,6 +32,10 @@ The Elephant Network CLI provides three main workflows:
 2. **✅ Validate & Upload** - Process and upload your data files
 3. **🔗 Submit to Blockchain** - Register your submissions on-chain
 
+Plus utility commands:
+
+- **🔄 CID-Hex Conversion** - Convert between IPFS CIDs and Ethereum hex hashes
+
 ## Workflow 1: Preparing and Uploading Data
 
 ### Step 1: Organize Your Data
@@ -408,6 +412,67 @@ elephant-cli check-transaction-status transaction-ids.csv --max-concurrent 20
 elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://polygon-rpc.com
 ```
 
+## Utility Commands
+
+### CID-Hex Conversion
+
+The CLI provides utilities to convert between IPFS CIDs and Ethereum hex hashes:
+
+#### hex-to-cid
+
+Convert an Ethereum hex hash to a CID v1 with raw codec:
+
+```bash
+# Convert hex to CID
+elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+# Output: CID: bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
+
+# Works with or without 0x prefix
+elephant-cli hex-to-cid b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+
+# Validate input format
+elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9 --validate
+# Output: ✓ Valid hex format
+#         CID: bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
+
+# Quiet mode for scripting
+elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9 --quiet
+# Output: bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
+```
+
+#### cid-to-hex
+
+Convert a CID v1 to an Ethereum hex hash:
+
+```bash
+# Convert CID to hex
+elephant-cli cid-to-hex bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
+# Output: Hex: 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+
+# Validate CID format
+elephant-cli cid-to-hex bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e --validate
+# Output: ✓ Valid CID format
+#         Hex: 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+
+# Quiet mode for scripting
+elephant-cli cid-to-hex bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e --quiet
+# Output: 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+```
+
+**Technical Details:**
+
+- Only supports CID v1 with raw codec (0x55) and SHA-256 hash (0x12)
+- Hex output always includes the `0x` prefix for Ethereum compatibility
+- Input hex can be provided with or without the `0x` prefix
+- Both commands validate input format and provide clear error messages
+
+**Use Cases:**
+
+- Converting between IPFS CIDs and smart contract hash representations
+- Debugging blockchain transactions that reference IPFS content
+- Integrating with systems that use different hash representations
+- Scripting and automation with the `--quiet` flag
+
 ## Advanced Features
 
 ### Custom Configuration
@@ -567,6 +632,8 @@ elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli reconstruct-data --help
+elephant-cli hex-to-cid --help
+elephant-cli cid-to-hex --help
 ```
 
 ### Debug Mode
