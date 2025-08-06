@@ -106,7 +106,9 @@ describe('fetch-data command', () => {
         expect.stringContaining('✓ Fetch successful!')
       );
       expect(vi.mocked(logger.log)).toHaveBeenCalledWith(
-        expect.stringContaining('Data saved in: fetched-data.zip')
+        expect.stringContaining(
+          '📦 Fetched data is located in: fetched-data.zip'
+        )
       );
     });
 
@@ -114,12 +116,14 @@ describe('fetch-data command', () => {
       const mockFetchDataToZip = vi.fn().mockResolvedValue(undefined);
       let capturedGatewayUrl: string | undefined;
 
-      vi.mocked(IPFSFetcherService).mockImplementation((gatewayUrl: string) => {
-        capturedGatewayUrl = gatewayUrl;
-        return {
-          fetchDataToZip: mockFetchDataToZip,
-        } as any;
-      });
+      vi.mocked(IPFSFetcherService).mockImplementation(
+        (gatewayUrl?: string) => {
+          capturedGatewayUrl = gatewayUrl;
+          return {
+            fetchDataToZip: mockFetchDataToZip,
+          } as any;
+        }
+      );
 
       await program.parseAsync([
         'node',

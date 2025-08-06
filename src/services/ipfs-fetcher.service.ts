@@ -722,9 +722,10 @@ export class IPFSFetcherService {
       logger.info(`Creating ZIP file: ${outputZip}`);
       const zip = new AdmZip();
 
-      // Add the fetched directory to the ZIP
+      // Add the fetched directory to the ZIP with 'data' as the root folder
       const dirName = basename(dataDir);
-      await this.addDirectoryToZip(zip, dataDir, dirName);
+      const zipRootPath = join('data', dirName);
+      await this.addDirectoryToZip(zip, dataDir, zipRootPath);
 
       // Write the ZIP file
       zip.writeZip(outputZip);
@@ -761,17 +762,19 @@ export class IPFSFetcherService {
       logger.info(`Creating ZIP file: ${outputZip}`);
       const zip = new AdmZip();
 
-      // Add all subdirectories to the ZIP
+      // Add all subdirectories to the ZIP under a 'data' root folder
       const entries = await readdir(tempDir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const dirPath = join(tempDir, entry.name);
-          await this.addDirectoryToZip(zip, dirPath, entry.name);
+          const zipPath = join('data', entry.name);
+          await this.addDirectoryToZip(zip, dirPath, zipPath);
         } else if (entry.isFile()) {
-          // Add any files at the root level
+          // Add any files at the root level under 'data' folder
           const filePath = join(tempDir, entry.name);
           const content = await fsPromises.readFile(filePath);
-          zip.addFile(entry.name, content);
+          const zipPath = join('data', entry.name).replace(/\\/g, '/');
+          zip.addFile(zipPath, content);
         }
       }
 

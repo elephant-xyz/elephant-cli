@@ -470,17 +470,18 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 **ZIP File Structure:**
 ```
 my-data.zip/
-├── bafybeiabc123.../           # Property CID (transaction mode)
-│   ├── bafkreidef456.json     # Data group file
-│   ├── property_seed.json     # Referenced files
-│   ├── property_seed_from.json
-│   └── property_seed_to.json
-├── bafybeiabc456.../           # Another property
-│   ├── bafkreidef789.json     # Data group file
-│   └── other_data.json        # Referenced files
-└── bafybeicid123.../          # CID mode output
-    ├── bafkreiroot.json        # Root data file
-    └── bafkreiref456.json      # Referenced files
+└── data/                        # Top-level data folder
+    ├── bafybeiabc123.../       # Property CID (transaction mode)
+    │   ├── bafkreidef456.json # Data group file
+    │   ├── property_seed.json # Referenced files
+    │   ├── property_seed_from.json
+    │   └── property_seed_to.json
+    ├── bafybeiabc456.../       # Another property
+    │   ├── bafkreidef789.json # Data group file
+    │   └── other_data.json    # Referenced files
+    └── bafybeicid123.../      # CID mode output
+        ├── bafkreiroot.json    # Root data file
+        └── bafkreiref456.json  # Referenced files
 ```
 
 ### CID-Hex Conversion
