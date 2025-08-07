@@ -493,10 +493,10 @@ The `consensus-status` command analyzes DataSubmitted events from the blockchain
 
 ```bash
 # Basic usage
-elephant-cli consensus-status --from-block 50000000 --output-csv consensus-report.csv
+elephant-cli consensus-status --from-block 50000000 --output-csv consensus-report.csv --rpc-url https://polygon-rpc.com
 
 # With custom end block
-elephant-cli consensus-status --from-block 50000000 --to-block 51000000 --output-csv report.csv
+elephant-cli consensus-status --from-block 50000000 --to-block 51000000 --output-csv report.csv --rpc-url https://polygon-rpc.com
 
 # With custom RPC and contract
 elephant-cli consensus-status \
@@ -508,6 +508,7 @@ elephant-cli consensus-status \
 # Performance tuning for large datasets
 elephant-cli consensus-status \
   --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
   --block-chunk-size 1000 \
   --event-batch-size 250 \
   --output-csv consensus.csv

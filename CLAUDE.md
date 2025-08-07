@@ -130,6 +130,27 @@ Key features:
 - **Smart Filename Mapping**: Uses datagroup schema CIDs for root files based on their label
 - **ZIP Output**: All fetched data is packaged into a ZIP file for easy distribution
 
+### consensus-status Command
+
+This command analyzes DataSubmitted events from the blockchain to check consensus status across different property-datagroup combinations:
+
+1. Queries the blockchain for all DataSubmitted events in the specified range
+2. Groups submissions by propertyHash and dataGroupHash
+3. Analyzes consensus status:
+   - **Full consensus**: 3 or more submitters agree on the same dataHash
+   - **Partial consensus**: Exactly 2 submitters agree on the same dataHash
+   - **No consensus**: No dataHash has 2 or more submitters
+4. Displays summary statistics including unique properties count
+5. Generates a CSV report with dynamic columns:
+   - For each submitter address, includes the hash and corresponding CID
+   - Shows consensus status and statistics for each property-datagroup pair
+
+Key features:
+- **Optimized Performance**: Handles millions of events using streaming
+- **Dynamic CSV Format**: Columns adapt based on all submitters found
+- **CID Conversion**: Shows both hashes and IPFS CIDs for easy data retrieval
+- **Configurable**: Supports custom block ranges, RPC URLs, and batch sizes
+
 ## Common Tasks for AI Assistants
 
 ### Adding New Features
@@ -279,6 +300,12 @@ npm run dev
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
   --output-zip ./tx-data.zip
+
+# Test the CLI - Check consensus status
+./bin/elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --output-csv consensus-report.csv
 
 # Clean build artifacts
 npm run clean
