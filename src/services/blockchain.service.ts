@@ -1,6 +1,11 @@
 import { JsonRpcProvider, Contract, Log } from 'ethers';
 import { EventDecoderService } from './event-decoder.service.js';
-import { OracleAssignment, ABI } from '../types/index.js';
+import {
+  OracleAssignment,
+  ABI,
+  DataSubmittedEvent,
+  StreamingOptions,
+} from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { DEFAULT_BLOCK_RANGE } from '../utils/constants.js';
 
@@ -77,5 +82,93 @@ export class BlockchainService {
       (parsedEvent): parsedEvent is NonNullable<typeof parsedEvent> =>
         parsedEvent !== null
     );
+  }
+
+  public async *getDataSubmittedEventsStream(
+    fromBlock: number,
+    toBlock?: number,
+    options: StreamingOptions = {}
+  ): AsyncGenerator<DataSubmittedEvent[], void, unknown> {
+    const {
+      blockChunkSize = 2500, // Smaller chunks for Polygon's high event density
+      eventBatchSize = 500,
+      retryAttempts = 3,
+      retryDelay = 2000,
+    } = options;
+
+    const finalToBlock = toBlock || (await this.getCurrentBlock());
+    const filter = this.contract.filters.DataSubmitted();
+
+    let eventBuffer: DataSubmittedEvent[] = [];
+
+    logger.info(
+      `Streaming DataSubmitted events from block ${fromBlock} to ${finalToBlock} in chunks of ${blockChunkSize} blocks.`
+    );
+
+    for (
+      let currentFromBlock = fromBlock;
+      currentFromBlock <= finalToBlock;
+      currentFromBlock += blockChunkSize
+    ) {
+      const currentToBlock = Math.min(
+        currentFromBlock + blockChunkSize - 1,
+        finalToBlock
+      );
+
+      // Retry logic for RPC failures
+      let attempts = 0;
+      let eventsChunkRaw: Log[] = [];
+
+      while (attempts < retryAttempts) {
+        try {
+          logger.debug(
+            `Querying chunk: ${currentFromBlock} - ${currentToBlock}`
+          );
+          eventsChunkRaw = await this.contract.queryFilter(
+            filter,
+            currentFromBlock,
+            currentToBlock
+          );
+          logger.debug(
+            `Fetched ${eventsChunkRaw.length} events in chunk ${currentFromBlock} - ${currentToBlock}`
+          );
+          break; // Success
+        } catch (error) {
+          attempts++;
+          if (attempts >= retryAttempts) {
+            logger.error(
+              `Failed to fetch events after ${retryAttempts} attempts for block range ${currentFromBlock}-${currentToBlock}: ${error}`
+            );
+            throw error;
+          }
+
+          logger.warn(
+            `Retry ${attempts}/${retryAttempts} for block range ${currentFromBlock}-${currentToBlock} after ${retryDelay}ms`
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, retryDelay * attempts)
+          );
+        }
+      }
+
+      // Parse and buffer events
+      for (const rawEvent of eventsChunkRaw) {
+        const parsed = this.eventDecoder.parseDataSubmittedEvent(rawEvent);
+        if (parsed) {
+          eventBuffer.push(parsed);
+
+          // Yield when buffer is full
+          if (eventBuffer.length >= eventBatchSize) {
+            yield eventBuffer;
+            eventBuffer = [];
+          }
+        }
+      }
+    }
+
+    // Yield remaining events
+    if (eventBuffer.length > 0) {
+      yield eventBuffer;
+    }
   }
 }

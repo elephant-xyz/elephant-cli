@@ -453,6 +453,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 ```
 
 **Transaction Mode Details:**
+
 - Fetches transaction data from the blockchain
 - Decodes `submitBatchData` calls to extract property, data group, and data hashes
 - Converts hashes to CIDs using the `CidHexConverterService` (raw codec, base32 encoding)
@@ -460,6 +461,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - Downloads all referenced data recursively
 
 **Features:**
+
 - Recursively follows all CID references in JSON data
 - Replaces CID references with local file paths
 - Preserves data structure and relationships
@@ -468,6 +470,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - **Outputs as ZIP file** for easy distribution and archiving
 
 **ZIP File Structure:**
+
 ```
 my-data.zip/
 └── data/                        # Top-level data folder
@@ -483,6 +486,64 @@ my-data.zip/
         ├── bafkreiroot.json    # Root data file
         └── bafkreiref456.json  # Referenced files
 ```
+
+### Consensus Status
+
+The `consensus-status` command analyzes DataSubmitted events from the blockchain to check consensus status across different property-datagroup combinations:
+
+```bash
+# Basic usage
+elephant-cli consensus-status --from-block 50000000 --output-csv consensus-report.csv
+
+# With custom end block
+elephant-cli consensus-status --from-block 50000000 --to-block 51000000 --output-csv report.csv
+
+# With custom RPC and contract
+elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --contract-address 0x... \
+  --output-csv consensus.csv
+
+# Performance tuning for large datasets
+elephant-cli consensus-status \
+  --from-block 50000000 \
+  --block-chunk-size 1000 \
+  --event-batch-size 250 \
+  --output-csv consensus.csv
+```
+
+**What this does:**
+
+- Queries the blockchain for all DataSubmitted events in the specified range
+- Groups submissions by propertyHash and dataGroupHash
+- Analyzes which dataHash values have consensus (>50% of submitters)
+- Generates a CSV report with consensus status
+
+**CSV Output Format:**
+The CSV includes dynamic columns based on all submitters found:
+
+```
+propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0x1234...,0x5678...,0xABCD...
+0xabc...,0xdef...,true,0x123...,3,1,0x123...,0x123...,0x123...
+0xghi...,0xjkl...,false,,2,2,0x456...,0x789...,-
+```
+
+**Options:**
+
+- `--from-block`: Starting block number (required)
+- `--to-block`: Ending block number (optional, defaults to latest)
+- `--rpc-url`: Custom RPC URL (optional)
+- `--contract-address`: Contract address (optional)
+- `--block-chunk-size`: Number of blocks to query at once (default: 2500)
+- `--event-batch-size`: Number of events to process at once (default: 500)
+
+**Performance Notes:**
+
+- Optimized for Polygon's high block density
+- Uses streaming to handle millions of events without memory issues
+- Includes retry logic for RPC failures
+- Shows progress updates during processing
 
 ### CID-Hex Conversion
 

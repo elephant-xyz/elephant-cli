@@ -21,6 +21,7 @@ import { registerFetchDataCommand } from './commands/fetch-data.js';
 import { registerCheckTransactionStatusCommand } from './commands/check-transaction-status.js';
 import { registerHexToCidCommand } from './commands/hex-to-cid.js';
 import { registerCidToHexCommand } from './commands/cid-to-hex.js';
+import { registerConsensusStatusCommand } from './commands/consensus-status.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -65,5 +66,8 @@ registerCidToHexCommand(program);
 
 // Register fetch-data command
 registerFetchDataCommand(program);
+
+// Register consensus-status command
+registerConsensusStatusCommand(program);
 
 program.parse();
