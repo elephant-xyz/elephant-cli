@@ -20,28 +20,23 @@ function createTestAnalysis(partial: {
   propertyHash: string;
   dataGroupHash: string;
   consensusReached: boolean | 'partial';
-  consensusDataHash?: string;
-  consensusDataCid?: string;
   submissionsByDataHash: Map<string, string[]>;
   totalSubmitters: number;
   uniqueDataHashes: number;
 }): ConsensusAnalysis {
-  // Create submissionsByDataCid from submissionsByDataHash
-  const submissionsByDataCid = new Map<string, string[]>();
+  // Create submitterData from submissionsByDataHash
+  const submitterData = new Map<string, { hash: string; cid: string }>();
   for (const [hash, submitters] of partial.submissionsByDataHash) {
     // Create a mock CID for testing
     const mockCid = `bafkrei${hash.replace('0x', '').substring(0, 10)}`;
-    submissionsByDataCid.set(mockCid, submitters);
+    for (const submitter of submitters) {
+      submitterData.set(submitter, { hash, cid: mockCid });
+    }
   }
 
   return {
     ...partial,
-    consensusDataCid:
-      partial.consensusDataCid ||
-      (partial.consensusDataHash
-        ? `bafkrei${partial.consensusDataHash.replace('0x', '').substring(0, 10)}`
-        : undefined),
-    submissionsByDataCid,
+    submitterData,
   };
 }
 
@@ -71,7 +66,6 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
-          consensusDataHash: '0xdata1',
           submissionsByDataHash: new Map([
             ['0xdata1', ['0xsubmitter1', '0xsubmitter2', '0xsubmitter3']],
             ['0xdata2', ['0xsubmitter4']],
@@ -83,7 +77,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: false,
-          consensusDataHash: undefined,
+
           submissionsByDataHash: new Map([
             ['0xdata3', ['0xsubmitter1']],
             ['0xdata4', ['0xsubmitter2', '0xsubmitter3']],
@@ -99,19 +93,19 @@ describe('ConsensusReporterService', () => {
       const csvContent = await fs.readFile(outputPath, 'utf-8');
       const lines = csvContent.trim().split('\n');
 
-      // Check header
+      // Check header - now includes hash and CID columns for each submitter
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3,0xsubmitter4'
+        'propertyHash,dataGroupHash,consensusReached,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter1_cid,0xsubmitter2,0xsubmitter2_cid,0xsubmitter3,0xsubmitter3_cid,0xsubmitter4,0xsubmitter4_cid'
       );
 
       // Check first data row (full consensus with 3 submitters)
       expect(lines[1]).toBe(
-        '0xprop1,0xgroup1,true,0xdata1,bafkreidata1,4,2,0xdata1,0xdata1,0xdata1,0xdata2'
+        '0xprop1,0xgroup1,true,4,2,0xdata1,bafkreidata1,0xdata1,bafkreidata1,0xdata1,bafkreidata1,0xdata2,bafkreidata2'
       );
 
       // Check second data row (no consensus)
       expect(lines[2]).toBe(
-        '0xprop2,0xgroup2,false,,,3,2,0xdata3,0xdata4,0xdata4,-'
+        '0xprop2,0xgroup2,false,3,2,0xdata3,bafkreidata3,0xdata4,bafkreidata4,0xdata4,bafkreidata4,-,-'
       );
     });
 
@@ -121,7 +115,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
-          consensusDataHash: '0xdata1',
+
           submissionsByDataHash: new Map([
             ['0xdata1', ['0xsubmitter1', '0xsubmitter2', '0xsubmitter3']],
           ]),
@@ -132,7 +126,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: 'partial',
-          consensusDataHash: '0xdata2',
+
           submissionsByDataHash: new Map([
             ['0xdata2', ['0xsubmitter1', '0xsubmitter2']],
             ['0xdata3', ['0xsubmitter3']],
@@ -144,7 +138,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop3',
           dataGroupHash: '0xgroup3',
           consensusReached: false,
-          consensusDataHash: undefined,
+
           submissionsByDataHash: new Map([
             ['0xdata4', ['0xsubmitter1']],
             ['0xdata5', ['0xsubmitter2']],
@@ -162,22 +156,22 @@ describe('ConsensusReporterService', () => {
 
       // Check header
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3'
+        'propertyHash,dataGroupHash,consensusReached,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter1_cid,0xsubmitter2,0xsubmitter2_cid,0xsubmitter3,0xsubmitter3_cid'
       );
 
       // Check full consensus row
       expect(lines[1]).toBe(
-        '0xprop1,0xgroup1,true,0xdata1,bafkreidata1,3,1,0xdata1,0xdata1,0xdata1'
+        '0xprop1,0xgroup1,true,3,1,0xdata1,bafkreidata1,0xdata1,bafkreidata1,0xdata1,bafkreidata1'
       );
 
       // Check partial consensus row
       expect(lines[2]).toBe(
-        '0xprop2,0xgroup2,partial,0xdata2,bafkreidata2,3,2,0xdata2,0xdata2,0xdata3'
+        '0xprop2,0xgroup2,partial,3,2,0xdata2,bafkreidata2,0xdata2,bafkreidata2,0xdata3,bafkreidata3'
       );
 
       // Check no consensus row
       expect(lines[3]).toBe(
-        '0xprop3,0xgroup3,false,,,3,3,0xdata4,0xdata5,0xdata6'
+        '0xprop3,0xgroup3,false,3,3,0xdata4,bafkreidata4,0xdata5,bafkreidata5,0xdata6,bafkreidata6'
       );
     });
 
@@ -192,7 +186,7 @@ describe('ConsensusReporterService', () => {
       // Should only have header
       expect(lines.length).toBe(1);
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes'
+        'propertyHash,dataGroupHash,consensusReached,totalSubmitters,uniqueDataHashes'
       );
     });
 
@@ -202,7 +196,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop,with,commas',
           dataGroupHash: '0xgroup"with"quotes',
           consensusReached: true,
-          consensusDataHash: '0xdata\nwith\nnewlines',
+
           submissionsByDataHash: new Map([
             ['0xdata,special', ['0xsubmitter1']],
           ]),
@@ -219,8 +213,8 @@ describe('ConsensusReporterService', () => {
       // Check that special characters are properly escaped
       expect(lines[1]).toContain('"0xprop,with,commas"');
       expect(lines[1]).toContain('"0xgroup""with""quotes"');
-      // The newline in the CSV will be literal, not escaped
-      expect(csvContent).toContain('0xdata\nwith\nnewlines');
+      // Check that the special data hash is properly escaped
+      expect(lines[1]).toContain('"0xdata,special"');
     });
   });
 
@@ -237,7 +231,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
-          consensusDataHash: '0xdata1',
+
           submissionsByDataHash: new Map([
             ['0xdata1', ['0xsubmitter1', '0xsubmitter2']],
           ]),
@@ -253,7 +247,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: false,
-          consensusDataHash: undefined,
+
           submissionsByDataHash: new Map([
             ['0xdata2', ['0xsubmitter1']],
             ['0xdata3', ['0xsubmitter2']],
@@ -284,7 +278,7 @@ describe('ConsensusReporterService', () => {
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
-          consensusDataHash: '0xdata1',
+
           submissionsByDataHash: new Map(),
           totalSubmitters: 0,
           uniqueDataHashes: 0,

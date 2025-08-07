@@ -18,17 +18,20 @@ export class ConsensusReporterService {
     this.writeStream = createWriteStream(this.outputPath);
     this.submitterColumns = Array.from(allSubmitters).sort();
 
-    // Write CSV header
+    // Write CSV header with hash and CID columns for each submitter
     const headers = [
       'propertyHash',
       'dataGroupHash',
       'consensusReached',
-      'consensusDataHash',
-      'consensusDataCid',
       'totalSubmitters',
       'uniqueDataHashes',
-      ...this.submitterColumns,
     ];
+
+    // Add hash and CID columns for each submitter
+    for (const submitter of this.submitterColumns) {
+      headers.push(submitter);
+      headers.push(`${submitter}_cid`);
+    }
 
     this.writeStream.write(headers.join(',') + '\n');
     this.headerWritten = true;
@@ -58,22 +61,22 @@ export class ConsensusReporterService {
         : analysis.consensusReached === 'partial'
           ? 'partial'
           : 'false',
-      analysis.consensusDataHash || '',
-      analysis.consensusDataCid || '',
       analysis.totalSubmitters.toString(),
       analysis.uniqueDataHashes.toString(),
     ];
 
-    // Add submitter columns
-    const submitterFields = this.submitterColumns.map((submitter) => {
-      // Find which dataHash this submitter submitted
-      for (const [dataHash, submitters] of analysis.submissionsByDataHash) {
-        if (submitters.includes(submitter)) {
-          return dataHash;
-        }
+    // Add submitter hash and CID columns
+    const submitterFields: string[] = [];
+    for (const submitter of this.submitterColumns) {
+      const data = analysis.submitterData.get(submitter);
+      if (data) {
+        submitterFields.push(data.hash);
+        submitterFields.push(data.cid || '-');
+      } else {
+        submitterFields.push('-');
+        submitterFields.push('-');
       }
-      return '-';
-    });
+    }
 
     return [...baseFields, ...submitterFields]
       .map((field) => this.escapeCSV(field))

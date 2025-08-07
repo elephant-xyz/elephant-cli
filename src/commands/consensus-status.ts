@@ -145,9 +145,7 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
 
   for (const group of state.groups.values()) {
     const submissionsByDataHash = new Map<string, string[]>();
-    const submissionsByDataCid = new Map<string, string[]>();
-    let consensusDataHash: string | undefined;
-    let consensusDataCid: string | undefined;
+    const submitterData = new Map<string, { hash: string; cid: string }>();
     let maxSubmitters = 0;
 
     // Convert Sets to Arrays and find consensus
@@ -155,25 +153,20 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
       const submittersArray = Array.from(submitters);
       submissionsByDataHash.set(dataHash, submittersArray);
 
-      // Convert hash to CID
-      try {
-        const dataCid = cidConverter.hexToCid(dataHash);
-        submissionsByDataCid.set(dataCid, submittersArray);
+      // Create submitter data mapping
+      for (const submitter of submittersArray) {
+        try {
+          const dataCid = cidConverter.hexToCid(dataHash);
+          submitterData.set(submitter, { hash: dataHash, cid: dataCid });
+        } catch (error) {
+          logger.warn(`Failed to convert dataHash to CID: ${dataHash}`);
+          submitterData.set(submitter, { hash: dataHash, cid: '' });
+        }
+      }
 
-        // Track which dataHash has the most submitters
-        if (submittersArray.length > maxSubmitters) {
-          maxSubmitters = submittersArray.length;
-          consensusDataHash = dataHash;
-          consensusDataCid = dataCid;
-        }
-      } catch (error) {
-        logger.warn(`Failed to convert dataHash to CID: ${dataHash}`);
-        // Still track the hash even if CID conversion fails
-        if (submittersArray.length > maxSubmitters) {
-          maxSubmitters = submittersArray.length;
-          consensusDataHash = dataHash;
-          consensusDataCid = undefined;
-        }
+      // Track which dataHash has the most submitters
+      if (submittersArray.length > maxSubmitters) {
+        maxSubmitters = submittersArray.length;
       }
     }
 
@@ -197,16 +190,8 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
       propertyHash: group.propertyHash,
       dataGroupHash: group.dataGroupHash,
       consensusReached,
-      consensusDataHash:
-        consensusReached === true || consensusReached === 'partial'
-          ? consensusDataHash
-          : undefined,
-      consensusDataCid:
-        consensusReached === true || consensusReached === 'partial'
-          ? consensusDataCid
-          : undefined,
       submissionsByDataHash,
-      submissionsByDataCid,
+      submitterData,
       totalSubmitters: uniqueSubmittersForGroup.size,
       uniqueDataHashes: group.submissions.size,
     });

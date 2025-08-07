@@ -63,10 +63,8 @@ export interface ConsensusAnalysis {
   propertyHash: string;
   dataGroupHash: string;
   consensusReached: boolean | 'partial';
-  consensusDataHash?: string;
-  consensusDataCid?: string;
   submissionsByDataHash: Map<string, string[]>; // dataHash -> submitters[]
-  submissionsByDataCid: Map<string, string[]>; // dataCid -> submitters[]
+  submitterData: Map<string, { hash: string; cid: string }>; // submitter -> {hash, cid}
   totalSubmitters: number;
   uniqueDataHashes: number;
 }
