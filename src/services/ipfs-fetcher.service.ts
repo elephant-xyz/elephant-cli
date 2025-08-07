@@ -216,7 +216,7 @@ export class IPFSFetcherService {
     if (parentRel) {
       // Child file: use parent relationship and key
       if (parentKey) {
-        filename = `${parentRel}_${parentKey}.json`;
+        filename = `${parentRel}_${parentKey}_${cid}.json`;
       } else {
         filename = `${parentRel}.json`;
       }
