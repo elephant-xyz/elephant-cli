@@ -1,3 +1,10 @@
+## [1.23.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.0...v1.23.1) (2025-08-07)
+
+
+### Bug Fixes
+
+* make `fetch-data` output zip, and fix "/" data structure ([#75](https://github.com/elephant-xyz/elephant-cli/issues/75)) ([80719fa](https://github.com/elephant-xyz/elephant-cli/commit/80719fa95130e74ead20b022801b11fa45818678))
+
 # [1.23.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.22.0...v1.23.0) (2025-08-06)
 
 
