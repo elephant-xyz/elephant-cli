@@ -206,6 +206,9 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
     (a) => a.consensusReached === false
   ).length;
 
+  // Count unique property hashes
+  const uniquePropertyHashes = new Set(analyses.map((a) => a.propertyHash));
+
   const fullConsensusPercentage =
     totalGroups > 0 ? Math.round((fullConsensusCount / totalGroups) * 100) : 0;
   const partialConsensusPercentage =
@@ -213,6 +216,7 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
       ? Math.round((partialConsensusCount / totalGroups) * 100)
       : 0;
 
+  console.log(`Unique properties: ${chalk.magenta(uniquePropertyHashes.size)}`);
   console.log(
     `Total property-datagroup combinations: ${chalk.cyan(totalGroups)}`
   );

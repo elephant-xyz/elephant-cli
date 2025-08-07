@@ -521,6 +521,7 @@ elephant-cli consensus-status \
   - **Full consensus**: 3 or more submitters agree on the same dataHash
   - **Partial consensus**: Exactly 2 submitters agree on the same dataHash
   - **No consensus**: No dataHash has 2 or more submitters
+- Displays summary statistics including unique properties count
 - Generates a CSV report with consensus status
 
 **CSV Output Format:**
