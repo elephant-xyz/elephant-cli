@@ -43,10 +43,10 @@ describe('ConsensusReporterService', () => {
           consensusReached: true,
           consensusDataHash: '0xdata1',
           submissionsByDataHash: new Map([
-            ['0xdata1', ['0xsubmitter1', '0xsubmitter2']],
-            ['0xdata2', ['0xsubmitter3']],
+            ['0xdata1', ['0xsubmitter1', '0xsubmitter2', '0xsubmitter3']],
+            ['0xdata2', ['0xsubmitter4']],
           ]),
-          totalSubmitters: 3,
+          totalSubmitters: 4,
           uniqueDataHashes: 2,
         },
         {
@@ -71,17 +71,83 @@ describe('ConsensusReporterService', () => {
 
       // Check header
       expect(lines[0]).toBe(
+        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3,0xsubmitter4'
+      );
+
+      // Check first data row (full consensus with 3 submitters)
+      expect(lines[1]).toBe(
+        '0xprop1,0xgroup1,true,0xdata1,4,2,0xdata1,0xdata1,0xdata1,0xdata2'
+      );
+
+      // Check second data row (no consensus)
+      expect(lines[2]).toBe(
+        '0xprop2,0xgroup2,false,,3,2,0xdata3,0xdata4,0xdata4,-'
+      );
+    });
+
+    it('should handle partial consensus correctly', async () => {
+      const analysisData: ConsensusAnalysis[] = [
+        {
+          propertyHash: '0xprop1',
+          dataGroupHash: '0xgroup1',
+          consensusReached: true,
+          consensusDataHash: '0xdata1',
+          submissionsByDataHash: new Map([
+            ['0xdata1', ['0xsubmitter1', '0xsubmitter2', '0xsubmitter3']],
+          ]),
+          totalSubmitters: 3,
+          uniqueDataHashes: 1,
+        },
+        {
+          propertyHash: '0xprop2',
+          dataGroupHash: '0xgroup2',
+          consensusReached: 'partial',
+          consensusDataHash: '0xdata2',
+          submissionsByDataHash: new Map([
+            ['0xdata2', ['0xsubmitter1', '0xsubmitter2']],
+            ['0xdata3', ['0xsubmitter3']],
+          ]),
+          totalSubmitters: 3,
+          uniqueDataHashes: 2,
+        },
+        {
+          propertyHash: '0xprop3',
+          dataGroupHash: '0xgroup3',
+          consensusReached: false,
+          consensusDataHash: undefined,
+          submissionsByDataHash: new Map([
+            ['0xdata4', ['0xsubmitter1']],
+            ['0xdata5', ['0xsubmitter2']],
+            ['0xdata6', ['0xsubmitter3']],
+          ]),
+          totalSubmitters: 3,
+          uniqueDataHashes: 3,
+        },
+      ];
+
+      await ConsensusReporterService.generateCSV(analysisData, outputPath);
+
+      const csvContent = await fs.readFile(outputPath, 'utf-8');
+      const lines = csvContent.trim().split('\n');
+
+      // Check header
+      expect(lines[0]).toBe(
         'propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3'
       );
 
-      // Check first data row
+      // Check full consensus row
       expect(lines[1]).toBe(
-        '0xprop1,0xgroup1,true,0xdata1,3,2,0xdata1,0xdata1,0xdata2'
+        '0xprop1,0xgroup1,true,0xdata1,3,1,0xdata1,0xdata1,0xdata1'
       );
 
-      // Check second data row
+      // Check partial consensus row
       expect(lines[2]).toBe(
-        '0xprop2,0xgroup2,false,,3,2,0xdata3,0xdata4,0xdata4'
+        '0xprop2,0xgroup2,partial,0xdata2,3,2,0xdata2,0xdata2,0xdata3'
+      );
+
+      // Check no consensus row
+      expect(lines[3]).toBe(
+        '0xprop3,0xgroup3,false,,3,3,0xdata4,0xdata5,0xdata6'
       );
     });
 

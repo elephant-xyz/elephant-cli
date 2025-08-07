@@ -143,7 +143,6 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
 
   for (const group of state.groups.values()) {
     const submissionsByDataHash = new Map<string, string[]>();
-    let totalSubmitters = 0;
     let consensusDataHash: string | undefined;
     let maxSubmitters = 0;
 
@@ -151,7 +150,6 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
     for (const [dataHash, submitters] of group.submissions) {
       const submittersArray = Array.from(submitters);
       submissionsByDataHash.set(dataHash, submittersArray);
-      totalSubmitters += submittersArray.length;
 
       // Track which dataHash has the most submitters
       if (submittersArray.length > maxSubmitters) {
@@ -160,19 +158,30 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
       }
     }
 
-    // Consensus is reached if one dataHash has more than 50% of unique submitters
+    // Count unique submitters for this group
     const uniqueSubmittersForGroup = new Set<string>();
     for (const submitters of submissionsByDataHash.values()) {
       submitters.forEach((s) => uniqueSubmittersForGroup.add(s));
     }
 
-    const consensusReached = maxSubmitters > uniqueSubmittersForGroup.size / 2;
+    // Determine consensus status based on the new rules
+    let consensusReached: boolean | 'partial';
+    if (maxSubmitters >= 3) {
+      consensusReached = true;
+    } else if (maxSubmitters === 2) {
+      consensusReached = 'partial';
+    } else {
+      consensusReached = false;
+    }
 
     analyses.push({
       propertyHash: group.propertyHash,
       dataGroupHash: group.dataGroupHash,
       consensusReached,
-      consensusDataHash: consensusReached ? consensusDataHash : undefined,
+      consensusDataHash:
+        consensusReached === true || consensusReached === 'partial'
+          ? consensusDataHash
+          : undefined,
       submissionsByDataHash,
       totalSubmitters: uniqueSubmittersForGroup.size,
       uniqueDataHashes: group.submissions.size,
@@ -187,27 +196,37 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
   console.log('='.repeat(50));
 
   const totalGroups = analyses.length;
-  const consensusReachedCount = analyses.filter(
-    (a) => a.consensusReached
+  const fullConsensusCount = analyses.filter(
+    (a) => a.consensusReached === true
   ).length;
-  const consensusPercentage =
+  const partialConsensusCount = analyses.filter(
+    (a) => a.consensusReached === 'partial'
+  ).length;
+  const noConsensusCount = analyses.filter(
+    (a) => a.consensusReached === false
+  ).length;
+
+  const fullConsensusPercentage =
+    totalGroups > 0 ? Math.round((fullConsensusCount / totalGroups) * 100) : 0;
+  const partialConsensusPercentage =
     totalGroups > 0
-      ? Math.round((consensusReachedCount / totalGroups) * 100)
+      ? Math.round((partialConsensusCount / totalGroups) * 100)
       : 0;
 
   console.log(
     `Total property-datagroup combinations: ${chalk.cyan(totalGroups)}`
   );
   console.log(
-    `Consensus reached: ${chalk.green(consensusReachedCount)} (${consensusPercentage}%)`
+    `Full consensus (3+ agree): ${chalk.green(fullConsensusCount)} (${fullConsensusPercentage}%)`
   );
   console.log(
-    `No consensus: ${chalk.yellow(totalGroups - consensusReachedCount)}`
+    `Partial consensus (2 agree): ${chalk.yellow(partialConsensusCount)} (${partialConsensusPercentage}%)`
   );
+  console.log(`No consensus: ${chalk.red(noConsensusCount)}`);
 
   // Show top disputed groups
   const disputedGroups = analyses
-    .filter((a) => !a.consensusReached && a.uniqueDataHashes > 1)
+    .filter((a) => a.consensusReached === false && a.uniqueDataHashes > 1)
     .sort((a, b) => b.uniqueDataHashes - a.uniqueDataHashes)
     .slice(0, 5);
 

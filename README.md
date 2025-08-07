@@ -517,7 +517,10 @@ elephant-cli consensus-status \
 
 - Queries the blockchain for all DataSubmitted events in the specified range
 - Groups submissions by propertyHash and dataGroupHash
-- Analyzes which dataHash values have consensus (>50% of submitters)
+- Analyzes consensus status:
+  - **Full consensus**: 3 or more submitters agree on the same dataHash
+  - **Partial consensus**: Exactly 2 submitters agree on the same dataHash
+  - **No consensus**: No dataHash has 2 or more submitters
 - Generates a CSV report with consensus status
 
 **CSV Output Format:**
@@ -526,7 +529,8 @@ The CSV includes dynamic columns based on all submitters found:
 ```
 propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0x1234...,0x5678...,0xABCD...
 0xabc...,0xdef...,true,0x123...,3,1,0x123...,0x123...,0x123...
-0xghi...,0xjkl...,false,,2,2,0x456...,0x789...,-
+0xghi...,0xjkl...,partial,0x456...,3,2,0x456...,0x456...,0x789...
+0xmno...,0xpqr...,false,,3,3,0x111...,0x222...,0x333...
 ```
 
 **Options:**

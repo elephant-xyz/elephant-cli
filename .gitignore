@@ -75,3 +75,4 @@ transaction-status.csv
 collected_data/
 collected_output.csv
 transaction-ids*
+consensus-report.csv

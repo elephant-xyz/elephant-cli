@@ -52,7 +52,11 @@ export class ConsensusReporterService {
     const baseFields = [
       analysis.propertyHash,
       analysis.dataGroupHash,
-      analysis.consensusReached ? 'true' : 'false',
+      analysis.consensusReached === true
+        ? 'true'
+        : analysis.consensusReached === 'partial'
+          ? 'partial'
+          : 'false',
       analysis.consensusDataHash || '',
       analysis.totalSubmitters.toString(),
       analysis.uniqueDataHashes.toString(),
