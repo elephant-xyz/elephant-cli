@@ -17,58 +17,9 @@ import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
-
-function validateDataGroupSchema(schema: any): {
-  valid: boolean;
-  error?: string;
-} {
-  if (!schema || typeof schema !== 'object') {
-    return {
-      valid: false,
-      error: 'Schema must be a valid JSON object',
-    };
-  }
-
-  if (schema.type !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must describe an object (type: "object")',
-    };
-  }
-
-  if (!schema.properties || typeof schema.properties !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "properties" object',
-    };
-  }
-
-  const properties = schema.properties;
-
-  if (!properties.label) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "label" property',
-    };
-  }
-
-  if (!properties.relationships) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "relationships" property',
-    };
-  }
-
-  if (Object.keys(properties).length !== 2) {
-    return {
-      valid: false,
-      error:
-        'Data group schema must have exactly 2 properties: "label" and "relationships"',
-    };
-  }
-
-  return { valid: true };
-}
+import { determineEffectiveConcurrency } from '../utils/concurrency.js';
+import { SchemaPrefetcherService } from '../services/schema-prefetcher.service.js';
+import { validateFileEntry } from '../services/file-processing.service.js';
 
 export interface ValidateCommandOptions {
   inputDir: string;
@@ -145,89 +96,8 @@ export async function handleValidate(
   logger.technical(`Input directory: ${actualInputDir}`);
   logger.technical(`Output CSV: ${options.outputCsv || 'submit_errors.csv'}`);
 
-  const FALLBACK_LOCAL_CONCURRENCY = 10;
-  const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
-  let effectiveConcurrency: number;
-  let concurrencyLogReason = '';
-  const userSpecifiedConcurrency = options.maxConcurrentTasks;
-
-  let calculatedOsCap: number | undefined = undefined;
-
-  if (process.platform !== 'win32') {
-    try {
-      const ulimitOutput = execSync('ulimit -n', {
-        encoding: 'utf8',
-        stdio: 'pipe',
-      }).trim();
-      const osMaxFiles = parseInt(ulimitOutput, 10);
-      if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
-        calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
-        logger.info(
-          `Unix-like system detected. System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
-        );
-      } else {
-        logger.warn(
-          `Unix-like system detected, but could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        `Unix-like system detected, but failed to check OS open file limit via 'ulimit -n'. OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  } else {
-    logger.info(
-      "Windows system detected. 'ulimit -n' based concurrency capping is not applicable."
-    );
-    if (userSpecifiedConcurrency === undefined) {
-      const numCpus = os.cpus().length;
-      calculatedOsCap = Math.max(
-        1,
-        numCpus * WINDOWS_DEFAULT_CONCURRENCY_FACTOR
-      );
-      logger.info(
-        `Using CPU count (${numCpus}) * ${WINDOWS_DEFAULT_CONCURRENCY_FACTOR} as a heuristic for concurrency cap on Windows: ${calculatedOsCap}. This will be used if no user value is provided.`
-      );
-    }
-  }
-
-  if (userSpecifiedConcurrency !== undefined) {
-    concurrencyLogReason = `User specified: ${userSpecifiedConcurrency}.`;
-    if (calculatedOsCap !== undefined) {
-      if (userSpecifiedConcurrency > calculatedOsCap) {
-        effectiveConcurrency = calculatedOsCap;
-        concurrencyLogReason += ` Capped by OS/heuristic limit to ${effectiveConcurrency}.`;
-      } else {
-        effectiveConcurrency = userSpecifiedConcurrency;
-        concurrencyLogReason += ` Within OS/heuristic limit of ${calculatedOsCap}.`;
-      }
-    } else {
-      effectiveConcurrency = userSpecifiedConcurrency;
-      concurrencyLogReason += ` OS/heuristic limit not determined or applicable, using user value.`;
-    }
-  } else {
-    // User did not specify concurrency
-    if (calculatedOsCap !== undefined) {
-      effectiveConcurrency = calculatedOsCap;
-      concurrencyLogReason = `Derived from OS/heuristic limit (${effectiveConcurrency}), as no user value was provided.`;
-    } else {
-      effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS/heuristic limit could not be determined.`;
-    }
-  }
-
-  if (
-    effectiveConcurrency === undefined ||
-    effectiveConcurrency === null ||
-    effectiveConcurrency <= 0
-  ) {
-    logger.error(
-      `Error: Effective concurrency is invalid (${effectiveConcurrency}). This should not happen. Defaulting to ${FALLBACK_LOCAL_CONCURRENCY}.`
-    );
-    effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-    concurrencyLogReason += ` Corrected to fallback due to invalid calculation.`;
-  }
-
+  const { value: effectiveConcurrency, reason: concurrencyLogReason } =
+    determineEffectiveConcurrency(options.maxConcurrentTasks);
   logger.technical(
     `Effective max concurrent validation tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`
   );
@@ -328,43 +198,14 @@ export async function handleValidate(
 
     // Phase 1: Pre-fetching Schemas
     progressTracker.setPhase('Pre-fetching Schemas', 1);
-    logger.info('Discovering all unique schema CIDs...');
+    const prefetcher = new SchemaPrefetcherService();
     try {
-      const allDataGroupCids =
-        await fileScannerService.getAllDataGroupCids(actualInputDir);
-      const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
-      logger.info(
-        `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
+      await prefetcher.prefetch(
+        actualInputDir,
+        fileScannerService,
+        schemaCacheService,
+        progressTracker
       );
-
-      if (uniqueSchemaCidsArray.length > 0) {
-        const schemaProgress = new SimpleProgress(
-          uniqueSchemaCidsArray.length,
-          'Fetching Schemas'
-        );
-        schemaProgress.start();
-        let prefetchedCount = 0;
-        let failedCount = 0;
-
-        for (const schemaCid of uniqueSchemaCidsArray) {
-          let fetchSuccess = false;
-          try {
-            await schemaCacheService.getSchema(schemaCid);
-            prefetchedCount++;
-            fetchSuccess = true;
-          } catch (error) {
-            logger.warn(
-              `Error pre-fetching schema ${schemaCid}: ${error instanceof Error ? error.message : String(error)}. It will be attempted again during file validation.`
-            );
-            failedCount++;
-          }
-          schemaProgress.increment(fetchSuccess ? 'processed' : 'errors');
-        }
-        schemaProgress.stop();
-        logger.info(
-          `Schema pre-fetching complete: ${prefetchedCount} successful, ${failedCount} failed/not found.`
-        );
-      }
     } catch (error) {
       logger.error(
         `Failed to discover or pre-fetch schemas: ${error instanceof Error ? error.message : String(error)}`
@@ -406,11 +247,23 @@ export async function handleValidate(
       for (const seedFile of seedFiles) {
         seedPromises.push(
           localProcessingSemaphore.runExclusive(async () => {
-            await validateSeedFile(
+            const beforeErrors =
+              servicesForValidation.progressTracker.getMetrics().errors;
+            const result = await validateFileEntry(
               seedFile,
               servicesForValidation,
-              failedSeedDirectories
+              true
             );
+            const afterErrors =
+              servicesForValidation.progressTracker.getMetrics().errors;
+            const ok = result.ok && afterErrors === beforeErrors;
+            if (!ok) {
+              const dirPath = path.dirname(seedFile.filePath);
+              failedSeedDirectories.add(dirPath);
+              logger.error(
+                `Seed validation failed for ${seedFile.filePath}. All other files in directory ${dirPath} will be skipped.`
+              );
+            }
           })
         );
       }
@@ -446,7 +299,17 @@ export async function handleValidate(
       for (const fileEntry of filesToValidate) {
         allValidationPromises.push(
           localProcessingSemaphore.runExclusive(async () =>
-            validateFile(fileEntry, servicesForValidation)
+            (async () => {
+              const res = await validateFileEntry(
+                fileEntry,
+                servicesForValidation,
+                true
+              );
+              if (res.ok) {
+                servicesForValidation.progressTracker.increment('processed');
+                logger.debug(`Successfully validated ${fileEntry.filePath}`);
+              }
+            })()
           )
         );
       }
@@ -560,154 +423,4 @@ export async function handleValidate(
   }
 }
 
-async function validateSeedFile(
-  fileEntry: FileEntry,
-  services: {
-    schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
-    csvReporterService: CsvReporterService;
-    progressTracker: SimpleProgress;
-  },
-  failedSeedDirectories: Set<string>
-): Promise<void> {
-  const dirPath = path.dirname(fileEntry.filePath);
-  const errorsCountBefore = services.progressTracker.getMetrics().errors;
-
-  try {
-    await validateFile(fileEntry, services);
-
-    // Check if validation was successful
-    const errorsCountAfter = services.progressTracker.getMetrics().errors;
-    const newErrorsOccurred = errorsCountAfter > errorsCountBefore;
-
-    if (newErrorsOccurred) {
-      // Validation failed
-      failedSeedDirectories.add(dirPath);
-      logger.error(
-        `Seed validation failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
-      );
-    }
-  } catch (error) {
-    // Mark this directory as having a failed seed
-    failedSeedDirectories.add(dirPath);
-    logger.error(
-      `Seed validation failed for ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}. All other files in directory ${dirPath} will be skipped.`
-    );
-    throw error; // Re-throw to maintain error reporting
-  }
-}
-
-async function validateFile(
-  fileEntry: FileEntry,
-  services: {
-    schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
-    csvReporterService: CsvReporterService;
-    progressTracker: SimpleProgress;
-  }
-): Promise<void> {
-  let jsonData;
-  try {
-    const fileContentStr = await fsPromises.readFile(
-      fileEntry.filePath,
-      'utf-8'
-    );
-    jsonData = JSON.parse(fileContentStr);
-  } catch (readOrParseError) {
-    const errorMsg =
-      readOrParseError instanceof Error
-        ? readOrParseError.message
-        : String(readOrParseError);
-    await services.csvReporterService.logError({
-      propertyCid: fileEntry.propertyCid,
-      dataGroupCid: fileEntry.dataGroupCid,
-      filePath: fileEntry.filePath,
-      errorPath: 'root',
-      errorMessage: `File read/parse error: ${errorMsg}`,
-      timestamp: new Date().toISOString(),
-    });
-    services.progressTracker.increment('errors');
-    return;
-  }
-
-  try {
-    const schemaCid = fileEntry.dataGroupCid;
-    const schema = await services.schemaCacheService.getSchema(schemaCid);
-    if (!schema) {
-      const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        errorPath: 'root',
-        errorMessage: error,
-        timestamp: new Date().toISOString(),
-      });
-      services.progressTracker.increment('errors');
-      return;
-    }
-
-    // Validate that the schema is a valid data group schema
-    const schemaValidation = validateDataGroupSchema(schema);
-    if (!schemaValidation.valid) {
-      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
-
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        errorPath: 'root',
-        errorMessage: error,
-        timestamp: new Date().toISOString(),
-      });
-      services.progressTracker.increment('errors');
-      return;
-    }
-
-    // Validate the data
-    const validationResult = await services.jsonValidatorService.validate(
-      jsonData,
-      schema,
-      fileEntry.filePath,
-      false // allow resolution of file references
-    );
-
-    if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
-
-      for (const errorInfo of errorMessages) {
-        await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
-          dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: errorInfo.path,
-          errorMessage: errorInfo.message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      services.progressTracker.increment('errors');
-      return;
-    }
-
-    // Validation passed
-    services.progressTracker.increment('processed');
-    logger.debug(`Successfully validated ${fileEntry.filePath}`);
-  } catch (processingError) {
-    const errorMsg =
-      processingError instanceof Error
-        ? processingError.message
-        : String(processingError);
-    await services.csvReporterService.logError({
-      propertyCid: fileEntry.propertyCid,
-      dataGroupCid: fileEntry.dataGroupCid,
-      filePath: fileEntry.filePath,
-      errorPath: 'root',
-      errorMessage: `Processing error: ${errorMsg}`,
-      timestamp: new Date().toISOString(),
-    });
-    services.progressTracker.increment('errors');
-  }
-}
+// validateSeedFile and validateFile inlined into calls to validateFileEntry above
