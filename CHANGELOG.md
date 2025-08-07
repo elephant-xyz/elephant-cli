@@ -1,3 +1,10 @@
+## [1.23.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.1...v1.23.2) (2025-08-07)
+
+
+### Bug Fixes
+
+* fix missing files in fetch-data command ([#78](https://github.com/elephant-xyz/elephant-cli/issues/78)) ([310e815](https://github.com/elephant-xyz/elephant-cli/commit/310e815d176f1e433355937f66b40d20ffa7a045))
+
 ## [1.23.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.0...v1.23.1) (2025-08-07)
 
 
