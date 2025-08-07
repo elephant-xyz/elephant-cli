@@ -24,6 +24,7 @@ export class ConsensusReporterService {
       'dataGroupHash',
       'consensusReached',
       'consensusDataHash',
+      'consensusDataCid',
       'totalSubmitters',
       'uniqueDataHashes',
       ...this.submitterColumns,
@@ -58,6 +59,7 @@ export class ConsensusReporterService {
           ? 'partial'
           : 'false',
       analysis.consensusDataHash || '',
+      analysis.consensusDataCid || '',
       analysis.totalSubmitters.toString(),
       analysis.uniqueDataHashes.toString(),
     ];

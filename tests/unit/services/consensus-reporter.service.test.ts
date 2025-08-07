@@ -15,6 +15,36 @@ vi.mock('../../../src/utils/logger.js', () => ({
   },
 }));
 
+// Helper function to create test data with all required fields
+function createTestAnalysis(partial: {
+  propertyHash: string;
+  dataGroupHash: string;
+  consensusReached: boolean | 'partial';
+  consensusDataHash?: string;
+  consensusDataCid?: string;
+  submissionsByDataHash: Map<string, string[]>;
+  totalSubmitters: number;
+  uniqueDataHashes: number;
+}): ConsensusAnalysis {
+  // Create submissionsByDataCid from submissionsByDataHash
+  const submissionsByDataCid = new Map<string, string[]>();
+  for (const [hash, submitters] of partial.submissionsByDataHash) {
+    // Create a mock CID for testing
+    const mockCid = `bafkrei${hash.replace('0x', '').substring(0, 10)}`;
+    submissionsByDataCid.set(mockCid, submitters);
+  }
+
+  return {
+    ...partial,
+    consensusDataCid:
+      partial.consensusDataCid ||
+      (partial.consensusDataHash
+        ? `bafkrei${partial.consensusDataHash.replace('0x', '').substring(0, 10)}`
+        : undefined),
+    submissionsByDataCid,
+  };
+}
+
 describe('ConsensusReporterService', () => {
   let tempDir: string;
   let outputPath: string;
@@ -37,7 +67,7 @@ describe('ConsensusReporterService', () => {
   describe('generateCSV', () => {
     it('should generate a CSV file with correct headers and data', async () => {
       const analysisData: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
@@ -48,8 +78,8 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 4,
           uniqueDataHashes: 2,
-        },
-        {
+        }),
+        createTestAnalysis({
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: false,
@@ -60,7 +90,7 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 3,
           uniqueDataHashes: 2,
-        },
+        }),
       ];
 
       await ConsensusReporterService.generateCSV(analysisData, outputPath);
@@ -71,23 +101,23 @@ describe('ConsensusReporterService', () => {
 
       // Check header
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3,0xsubmitter4'
+        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3,0xsubmitter4'
       );
 
       // Check first data row (full consensus with 3 submitters)
       expect(lines[1]).toBe(
-        '0xprop1,0xgroup1,true,0xdata1,4,2,0xdata1,0xdata1,0xdata1,0xdata2'
+        '0xprop1,0xgroup1,true,0xdata1,bafkreidata1,4,2,0xdata1,0xdata1,0xdata1,0xdata2'
       );
 
       // Check second data row (no consensus)
       expect(lines[2]).toBe(
-        '0xprop2,0xgroup2,false,,3,2,0xdata3,0xdata4,0xdata4,-'
+        '0xprop2,0xgroup2,false,,,3,2,0xdata3,0xdata4,0xdata4,-'
       );
     });
 
     it('should handle partial consensus correctly', async () => {
       const analysisData: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
@@ -97,8 +127,8 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 3,
           uniqueDataHashes: 1,
-        },
-        {
+        }),
+        createTestAnalysis({
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: 'partial',
@@ -109,8 +139,8 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 3,
           uniqueDataHashes: 2,
-        },
-        {
+        }),
+        createTestAnalysis({
           propertyHash: '0xprop3',
           dataGroupHash: '0xgroup3',
           consensusReached: false,
@@ -122,7 +152,7 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 3,
           uniqueDataHashes: 3,
-        },
+        }),
       ];
 
       await ConsensusReporterService.generateCSV(analysisData, outputPath);
@@ -132,22 +162,22 @@ describe('ConsensusReporterService', () => {
 
       // Check header
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3'
+        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes,0xsubmitter1,0xsubmitter2,0xsubmitter3'
       );
 
       // Check full consensus row
       expect(lines[1]).toBe(
-        '0xprop1,0xgroup1,true,0xdata1,3,1,0xdata1,0xdata1,0xdata1'
+        '0xprop1,0xgroup1,true,0xdata1,bafkreidata1,3,1,0xdata1,0xdata1,0xdata1'
       );
 
       // Check partial consensus row
       expect(lines[2]).toBe(
-        '0xprop2,0xgroup2,partial,0xdata2,3,2,0xdata2,0xdata2,0xdata3'
+        '0xprop2,0xgroup2,partial,0xdata2,bafkreidata2,3,2,0xdata2,0xdata2,0xdata3'
       );
 
       // Check no consensus row
       expect(lines[3]).toBe(
-        '0xprop3,0xgroup3,false,,3,3,0xdata4,0xdata5,0xdata6'
+        '0xprop3,0xgroup3,false,,,3,3,0xdata4,0xdata5,0xdata6'
       );
     });
 
@@ -162,13 +192,13 @@ describe('ConsensusReporterService', () => {
       // Should only have header
       expect(lines.length).toBe(1);
       expect(lines[0]).toBe(
-        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes'
+        'propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes'
       );
     });
 
     it('should escape CSV fields with special characters', async () => {
       const analysisData: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop,with,commas',
           dataGroupHash: '0xgroup"with"quotes',
           consensusReached: true,
@@ -178,7 +208,7 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 1,
           uniqueDataHashes: 1,
-        },
+        }),
       ];
 
       await ConsensusReporterService.generateCSV(analysisData, outputPath);
@@ -203,7 +233,7 @@ describe('ConsensusReporterService', () => {
 
       // Write first batch
       const batch1: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
@@ -213,13 +243,13 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 2,
           uniqueDataHashes: 1,
-        },
+        }),
       ];
       await reporter.writeAnalysis(batch1);
 
       // Write second batch
       const batch2: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop2',
           dataGroupHash: '0xgroup2',
           consensusReached: false,
@@ -230,7 +260,7 @@ describe('ConsensusReporterService', () => {
           ]),
           totalSubmitters: 2,
           uniqueDataHashes: 2,
-        },
+        }),
       ];
       await reporter.writeAnalysis(batch2);
 
@@ -250,7 +280,7 @@ describe('ConsensusReporterService', () => {
       const reporter = new ConsensusReporterService(outputPath);
 
       const data: ConsensusAnalysis[] = [
-        {
+        createTestAnalysis({
           propertyHash: '0xprop1',
           dataGroupHash: '0xgroup1',
           consensusReached: true,
@@ -258,7 +288,7 @@ describe('ConsensusReporterService', () => {
           submissionsByDataHash: new Map(),
           totalSubmitters: 0,
           uniqueDataHashes: 0,
-        },
+        }),
       ];
 
       await expect(reporter.writeAnalysis(data)).rejects.toThrow(

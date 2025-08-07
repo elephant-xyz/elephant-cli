@@ -64,7 +64,9 @@ export interface ConsensusAnalysis {
   dataGroupHash: string;
   consensusReached: boolean | 'partial';
   consensusDataHash?: string;
+  consensusDataCid?: string;
   submissionsByDataHash: Map<string, string[]>; // dataHash -> submitters[]
+  submissionsByDataCid: Map<string, string[]>; // dataCid -> submitters[]
   totalSubmitters: number;
   uniqueDataHashes: number;
 }
@@ -77,7 +79,7 @@ export interface ConsensusState {
 export interface ConsensusStatusOptions {
   fromBlock: number;
   toBlock?: number;
-  rpcUrl?: string;
+  rpcUrl: string;
   outputCsv: string;
   contractAddress?: string;
   blockChunkSize?: number;

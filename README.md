@@ -528,11 +528,19 @@ elephant-cli consensus-status \
 The CSV includes dynamic columns based on all submitters found:
 
 ```
+propertyHash,dataGroupHash,consensusReached,consensusDataHash,consensusDataCid,totalSubmitters,uniqueDataHashes,0x1234...,0x5678...,0xABCD...
+0xabc...,0xdef...,true,0x123...,bafkrei123...,3,1,0x123...,0x123...,0x123...
+0xghi...,0xjkl...,partial,0x456...,bafkrei456...,3,2,0x456...,0x456...,0x789...
+0xmno...,0xpqr...,false,,,3,3,0x111...,0x222...,0x333...
+```
+
+**Note**: The `consensusDataCid` column shows the IPFS CID (v1, raw codec) corresponding to the consensus data hash, making it easy to retrieve the actual data from IPFS.
 propertyHash,dataGroupHash,consensusReached,consensusDataHash,totalSubmitters,uniqueDataHashes,0x1234...,0x5678...,0xABCD...
 0xabc...,0xdef...,true,0x123...,3,1,0x123...,0x123...,0x123...
 0xghi...,0xjkl...,partial,0x456...,3,2,0x456...,0x456...,0x789...
 0xmno...,0xpqr...,false,,3,3,0x111...,0x222...,0x333...
-```
+
+````
 
 **Options:**
 
@@ -574,7 +582,7 @@ elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7
 # Quiet mode for scripting
 elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9 --quiet
 # Output: bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
-```
+````
 
 #### cid-to-hex
 

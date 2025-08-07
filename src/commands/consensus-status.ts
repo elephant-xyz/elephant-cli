@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { BlockchainService } from '../services/blockchain.service.js';
 import { ConsensusReporterService } from '../services/consensus-reporter.service.js';
+import { CidHexConverterService } from '../services/cid-hex-converter.service.js';
 import {
   ConsensusStatusOptions,
   ConsensusState,
@@ -140,10 +141,13 @@ function updateConsensusState(
 
 function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
   const analyses: ConsensusAnalysis[] = [];
+  const cidConverter = new CidHexConverterService();
 
   for (const group of state.groups.values()) {
     const submissionsByDataHash = new Map<string, string[]>();
+    const submissionsByDataCid = new Map<string, string[]>();
     let consensusDataHash: string | undefined;
+    let consensusDataCid: string | undefined;
     let maxSubmitters = 0;
 
     // Convert Sets to Arrays and find consensus
@@ -151,10 +155,25 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
       const submittersArray = Array.from(submitters);
       submissionsByDataHash.set(dataHash, submittersArray);
 
-      // Track which dataHash has the most submitters
-      if (submittersArray.length > maxSubmitters) {
-        maxSubmitters = submittersArray.length;
-        consensusDataHash = dataHash;
+      // Convert hash to CID
+      try {
+        const dataCid = cidConverter.hexToCid(dataHash);
+        submissionsByDataCid.set(dataCid, submittersArray);
+
+        // Track which dataHash has the most submitters
+        if (submittersArray.length > maxSubmitters) {
+          maxSubmitters = submittersArray.length;
+          consensusDataHash = dataHash;
+          consensusDataCid = dataCid;
+        }
+      } catch (error) {
+        logger.warn(`Failed to convert dataHash to CID: ${dataHash}`);
+        // Still track the hash even if CID conversion fails
+        if (submittersArray.length > maxSubmitters) {
+          maxSubmitters = submittersArray.length;
+          consensusDataHash = dataHash;
+          consensusDataCid = undefined;
+        }
       }
     }
 
@@ -182,7 +201,12 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
         consensusReached === true || consensusReached === 'partial'
           ? consensusDataHash
           : undefined,
+      consensusDataCid:
+        consensusReached === true || consensusReached === 'partial'
+          ? consensusDataCid
+          : undefined,
       submissionsByDataHash,
+      submissionsByDataCid,
       totalSubmitters: uniqueSubmittersForGroup.size,
       uniqueDataHashes: group.submissions.size,
     });
@@ -255,7 +279,7 @@ export function registerConsensusStatusCommand(program: Command): void {
       '-t, --to-block <number>',
       'Ending block number (defaults to latest)'
     )
-    .option('-r, --rpc-url <url>', 'RPC URL', DEFAULT_RPC_URL)
+    .requiredOption('-r, --rpc-url <url>', 'RPC URL')
     .requiredOption('-o, --output-csv <path>', 'Output CSV file path')
     .option(
       '-c, --contract-address <address>',
