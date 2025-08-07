@@ -118,7 +118,7 @@ This command:
 2. Fetches schema manifest from Elephant Network API to get datagroup CIDs
 3. Recursively follows all CID references in the data
 4. Replaces CID references with local file paths
-5. Saves all data locally in a structured directory
+5. Saves all data as a ZIP file
 6. Names root datagroup files using their schema CID from manifest
 
 Key features:
@@ -128,6 +128,7 @@ Key features:
 - **Progress Tracking**: Shows detailed download progress
 - **Schema Manifest Integration**: Fetches datagroup CIDs from `https://lexicon.elephant.xyz/json-schemas/schema-manifest.json`
 - **Smart Filename Mapping**: Uses datagroup schema CIDs for root files based on their label
+- **ZIP Output**: All fetched data is packaged into a ZIP file for easy distribution
 
 ## Common Tasks for AI Assistants
 
@@ -158,13 +159,13 @@ The `fetch-data` command supports two modes:
    - Downloads the root CID and recursively follows all CID references
    - Replaces CID references with local file paths
    - Uses schema manifest for proper file naming
-   - Creates directory: `output-dir/<CID>/` (no "data_" prefix)
+   - Creates ZIP file with directory structure: `<CID>/` containing all fetched data
 
 2. **Transaction Hash Mode**: Extracts and fetches data from blockchain transactions
    - Fetches transaction data from blockchain using RPC
    - Decodes `submitBatchData` calls to extract property, data group, and data hashes
    - Converts hashes to CIDs using `CidHexConverterService.hexToCid` (raw codec, base32 encoding)
-   - Creates directory structure: `output-dir/propertyCID/` with dataGroup and referenced files directly inside
+   - Creates ZIP file with directory structure: `propertyCID/` directories for each property
    - Downloads and fetches data for each item in the transaction
 
 Key implementation details:
@@ -271,13 +272,13 @@ npm run dev
 # Test the CLI - Fetch data from CID
 ./bin/elephant-cli fetch-data bafybeiabc123... \
   --gateway https://ipfs.io/ipfs/ \
-  --output-dir ./fetched
+  --output-zip ./fetched-data.zip
 
 # Test the CLI - Fetch data from transaction hash
 ./bin/elephant-cli fetch-data 0x1234567890abcdef... \
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
-  --output-dir ./tx-data
+  --output-zip ./tx-data.zip
 
 # Clean build artifacts
 npm run clean
