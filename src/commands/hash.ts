@@ -1,0 +1,1213 @@
+import { Command } from 'commander';
+import { promises as fsPromises } from 'fs';
+import path from 'path';
+import chalk from 'chalk';
+import { Semaphore } from 'async-mutex';
+import { execSync } from 'child_process';
+import * as os from 'os';
+import AdmZip from 'adm-zip';
+import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
+import { createSubmitConfig } from '../config/submit.config.js';
+import { logger } from '../utils/logger.js';
+import { FileScannerService } from '../services/file-scanner.service.js';
+import { SchemaCacheService } from '../services/schema-cache.service.js';
+import { JsonValidatorService } from '../services/json-validator.service.js';
+import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
+import { CidCalculatorService } from '../services/cid-calculator.service.js';
+import { CsvReporterService } from '../services/csv-reporter.service.js';
+import { SimpleProgress } from '../utils/simple-progress.js';
+import { FileEntry } from '../types/submit.types.js';
+import { IPFSService } from '../services/ipfs.service.js';
+import { IPLDConverterService } from '../services/ipld-converter.service.js';
+import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
+import { ZipExtractorService } from '../services/zip-extractor.service.js';
+
+interface HashedFile {
+  originalPath: string;
+  propertyCid: string;
+  dataGroupCid: string;
+  calculatedCid: string;
+  transformedData: any;
+  canonicalJson: string;
+}
+
+function validateDataGroupSchema(schema: any): {
+  valid: boolean;
+  error?: string;
+} {
+  if (!schema || typeof schema !== 'object') {
+    return {
+      valid: false,
+      error: 'Schema must be a valid JSON object',
+    };
+  }
+
+  if (schema.type !== 'object') {
+    return {
+      valid: false,
+      error: 'Data group schema must describe an object (type: "object")',
+    };
+  }
+
+  if (!schema.properties || typeof schema.properties !== 'object') {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "properties" object',
+    };
+  }
+
+  const properties = schema.properties;
+
+  if (!properties.label) {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "label" property',
+    };
+  }
+
+  if (!properties.relationships) {
+    return {
+      valid: false,
+      error: 'Data group schema must have a "relationships" property',
+    };
+  }
+
+  if (Object.keys(properties).length !== 2) {
+    return {
+      valid: false,
+      error:
+        'Data group schema must have exactly 2 properties: "label" and "relationships"',
+    };
+  }
+
+  return { valid: true };
+}
+
+export interface HashCommandOptions {
+  input: string;
+  outputZip: string;
+  maxConcurrentTasks?: number;
+}
+
+export function registerHashCommand(program: Command) {
+  program
+    .command('hash <input>')
+    .description(
+      'Calculate CIDs for all files, replace links with CIDs, and output transformed data as ZIP. Input can be a directory or ZIP file.'
+    )
+    .option(
+      '-o, --output-zip <path>',
+      'Output ZIP file path for transformed data',
+      'hashed-data.zip'
+    )
+    .option(
+      '--max-concurrent-tasks <number>',
+      "Target maximum concurrent processing tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
+      undefined
+    )
+    .action(async (input, options) => {
+      options.maxConcurrentTasks =
+        parseInt(options.maxConcurrentTasks, 10) || undefined;
+
+      const commandOptions: HashCommandOptions = {
+        ...options,
+        input: path.resolve(input),
+      };
+
+      await handleHash(commandOptions);
+    });
+}
+
+export interface HashServiceOverrides {
+  fileScannerService?: FileScannerService;
+  ipfsServiceForSchemas?: IPFSService;
+  schemaCacheService?: SchemaCacheService;
+  jsonValidatorService?: JsonValidatorService;
+  canonicalizerService?: IPLDCanonicalizerService;
+  cidCalculatorService?: CidCalculatorService;
+  csvReporterService?: CsvReporterService;
+  progressTracker?: SimpleProgress;
+  ipldConverterService?: IPLDConverterService;
+}
+
+export async function handleHash(
+  options: HashCommandOptions,
+  serviceOverrides: HashServiceOverrides = {}
+) {
+  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Hash'));
+  console.log();
+
+  // Initialize services
+  const zipExtractor = new ZipExtractorService();
+  let actualInputDir = options.input;
+  let tempDir: string | null = null;
+
+  try {
+    // Check if input is a ZIP file
+    const isZip = await zipExtractor.isZipFile(options.input);
+    if (isZip) {
+      logger.info(`Detected ZIP file: ${options.input}`);
+      actualInputDir = await zipExtractor.extractZip(options.input);
+      tempDir = zipExtractor.getTempRootDir(actualInputDir);
+      logger.info(`Extracted to: ${actualInputDir}`);
+    }
+  } catch (error) {
+    logger.error(
+      `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
+    );
+    process.exit(1);
+  }
+
+  logger.technical(`Input directory: ${actualInputDir}`);
+  logger.technical(`Output ZIP: ${options.outputZip}`);
+
+  const FALLBACK_LOCAL_CONCURRENCY = 10;
+  const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
+  let effectiveConcurrency: number;
+  let concurrencyLogReason = '';
+  const userSpecifiedConcurrency = options.maxConcurrentTasks;
+
+  let calculatedOsCap: number | undefined = undefined;
+
+  if (process.platform !== 'win32') {
+    try {
+      const ulimitOutput = execSync('ulimit -n', {
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }).trim();
+      const osMaxFiles = parseInt(ulimitOutput, 10);
+      if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
+        calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
+        logger.info(
+          `Unix-like system detected. System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
+        );
+      } else {
+        logger.warn(
+          `Unix-like system detected, but could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        `Unix-like system detected, but failed to check OS open file limit via 'ulimit -n'. OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  } else {
+    logger.info(
+      "Windows system detected. 'ulimit -n' based concurrency capping is not applicable."
+    );
+    if (userSpecifiedConcurrency === undefined) {
+      const numCpus = os.cpus().length;
+      calculatedOsCap = Math.max(
+        1,
+        numCpus * WINDOWS_DEFAULT_CONCURRENCY_FACTOR
+      );
+      logger.info(
+        `Using CPU count (${numCpus}) * ${WINDOWS_DEFAULT_CONCURRENCY_FACTOR} as a heuristic for concurrency cap on Windows: ${calculatedOsCap}. This will be used if no user value is provided.`
+      );
+    }
+  }
+
+  if (userSpecifiedConcurrency !== undefined) {
+    concurrencyLogReason = `User specified: ${userSpecifiedConcurrency}.`;
+    if (calculatedOsCap !== undefined) {
+      if (userSpecifiedConcurrency > calculatedOsCap) {
+        effectiveConcurrency = calculatedOsCap;
+        concurrencyLogReason += ` Capped by OS/heuristic limit to ${effectiveConcurrency}.`;
+      } else {
+        effectiveConcurrency = userSpecifiedConcurrency;
+        concurrencyLogReason += ` Within OS/heuristic limit of ${calculatedOsCap}.`;
+      }
+    } else {
+      effectiveConcurrency = userSpecifiedConcurrency;
+      concurrencyLogReason += ` OS/heuristic limit not determined or applicable, using user value.`;
+    }
+  } else {
+    // User did not specify concurrency
+    if (calculatedOsCap !== undefined) {
+      effectiveConcurrency = calculatedOsCap;
+      concurrencyLogReason = `Derived from OS/heuristic limit (${effectiveConcurrency}), as no user value was provided.`;
+    } else {
+      effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
+      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS/heuristic limit could not be determined.`;
+    }
+  }
+
+  if (
+    effectiveConcurrency === undefined ||
+    effectiveConcurrency === null ||
+    effectiveConcurrency <= 0
+  ) {
+    logger.error(
+      `Error: Effective concurrency is invalid (${effectiveConcurrency}). This should not happen. Defaulting to ${FALLBACK_LOCAL_CONCURRENCY}.`
+    );
+    effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
+    concurrencyLogReason += ` Corrected to fallback due to invalid calculation.`;
+  }
+
+  logger.technical(
+    `Effective max concurrent processing tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`
+  );
+
+  try {
+    const stats = await fsPromises.stat(actualInputDir);
+    if (!stats.isDirectory()) {
+      logger.error(`Input path ${actualInputDir} is not a directory.`);
+      process.exit(1);
+    }
+  } catch (error) {
+    logger.error(
+      `Error accessing input directory ${actualInputDir}: ${error instanceof Error ? error.message : String(error)}`
+    );
+    process.exit(1);
+  }
+
+  const config = createSubmitConfig({
+    maxConcurrentUploads: undefined,
+  });
+
+  // Keep a reference to csvReporterService to use in the final catch block
+  let csvReporterServiceInstance: CsvReporterService | undefined =
+    serviceOverrides.csvReporterService;
+
+  const fileScannerService =
+    serviceOverrides.fileScannerService ?? new FileScannerService();
+  const ipfsServiceForSchemas =
+    serviceOverrides.ipfsServiceForSchemas ??
+    new IPFSService(DEFAULT_IPFS_GATEWAY);
+  const schemaCacheService =
+    serviceOverrides.schemaCacheService ??
+    new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
+  const jsonValidatorService =
+    serviceOverrides.jsonValidatorService ??
+    new JsonValidatorService(
+      ipfsServiceForSchemas,
+      actualInputDir,
+      schemaCacheService
+    );
+  const canonicalizerService =
+    serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
+  const cidCalculatorService =
+    serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
+
+  // Create a mock IPLD converter that only calculates CIDs without uploading
+  const ipldConverterService =
+    serviceOverrides.ipldConverterService ??
+    new IPLDConverterService(
+      actualInputDir,
+      undefined, // No Pinata service for uploads
+      cidCalculatorService,
+      canonicalizerService
+    );
+
+  let progressTracker: SimpleProgress | undefined =
+    serviceOverrides.progressTracker;
+  const hashedFiles: HashedFile[] = [];
+  const cidToFileMap = new Map<string, HashedFile>(); // Map CID to file for link replacement
+
+  try {
+    // Initialize csvReporterServiceInstance if not overridden
+    if (!csvReporterServiceInstance) {
+      csvReporterServiceInstance = new CsvReporterService(
+        config.errorCsvPath,
+        config.warningCsvPath
+      );
+    }
+    // Assign to the const that the rest of the try block uses
+    const csvReporterService = csvReporterServiceInstance;
+
+    await csvReporterService.initialize();
+
+    logger.info('Validating directory structure...');
+    const initialValidation =
+      await fileScannerService.validateStructure(actualInputDir);
+    if (!initialValidation.isValid) {
+      console.log(chalk.red('❌ Directory structure is invalid:'));
+      console.log(`Errors found: ${initialValidation.errors}`);
+      initialValidation.errors.forEach((err) =>
+        console.log(chalk.red(`   • ${err}`))
+      );
+      await csvReporterService.finalize();
+      if (tempDir) {
+        await zipExtractor.cleanup(tempDir);
+      }
+      process.exit(1);
+    }
+    logger.success('Directory structure valid');
+
+    logger.info('Scanning to count total files...');
+    const totalFiles = await fileScannerService.countTotalFiles(actualInputDir);
+    logger.info(
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+    );
+
+    if (totalFiles === 0) {
+      logger.warn('No files found to process');
+      if (csvReporterServiceInstance) {
+        await csvReporterServiceInstance.finalize();
+      }
+      if (tempDir) {
+        await zipExtractor.cleanup(tempDir);
+      }
+      return;
+    }
+
+    if (!progressTracker) {
+      progressTracker = new SimpleProgress(0, 'Initializing');
+    }
+
+    progressTracker.start();
+
+    // Phase 1: Pre-fetching Schemas
+    progressTracker.setPhase('Pre-fetching Schemas', 1);
+    logger.info('Discovering all unique schema CIDs...');
+    try {
+      const allDataGroupCids =
+        await fileScannerService.getAllDataGroupCids(actualInputDir);
+      const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
+      logger.info(
+        `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
+      );
+
+      if (uniqueSchemaCidsArray.length > 0) {
+        const schemaProgress = new SimpleProgress(
+          uniqueSchemaCidsArray.length,
+          'Fetching Schemas'
+        );
+        schemaProgress.start();
+        let prefetchedCount = 0;
+        let failedCount = 0;
+
+        for (const schemaCid of uniqueSchemaCidsArray) {
+          let fetchSuccess = false;
+          try {
+            await schemaCacheService.getSchema(schemaCid);
+            prefetchedCount++;
+            fetchSuccess = true;
+          } catch (error) {
+            logger.warn(
+              `Error pre-fetching schema ${schemaCid}: ${error instanceof Error ? error.message : String(error)}. It will be attempted again during file processing.`
+            );
+            failedCount++;
+          }
+          schemaProgress.increment(fetchSuccess ? 'processed' : 'errors');
+        }
+        schemaProgress.stop();
+        logger.info(
+          `Schema pre-fetching complete: ${prefetchedCount} successful, ${failedCount} failed/not found.`
+        );
+      }
+    } catch (error) {
+      logger.error(
+        `Failed to discover or pre-fetch schemas: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    // Collect all files first to handle seed files in two phases
+    const allFiles: FileEntry[] = [];
+    for await (const fileBatch of fileScannerService.scanDirectory(
+      actualInputDir,
+      config.fileScanBatchSize
+    )) {
+      allFiles.push(...fileBatch);
+    }
+
+    // Phase 2: Processing Files
+    progressTracker.setPhase('Processing Files', allFiles.length);
+    const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
+
+    const servicesForProcessing = {
+      schemaCacheService,
+      jsonValidatorService,
+      canonicalizerService,
+      cidCalculatorService,
+      csvReporterService,
+      progressTracker,
+      ipldConverterService,
+    };
+
+    // Map to store seed CIDs for directories
+    const seedCidMap = new Map<string, string>(); // directory path -> calculated seed CID
+    const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
+
+    // Phase 1: Process all seed files first
+    const seedFiles = allFiles.filter(
+      (file) => file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
+    );
+
+    if (seedFiles.length > 0) {
+      logger.info(`Processing ${seedFiles.length} seed files first...`);
+
+      const seedPromises: Promise<void>[] = [];
+      for (const seedFile of seedFiles) {
+        seedPromises.push(
+          localProcessingSemaphore.runExclusive(async () => {
+            await processSeedFile(
+              seedFile,
+              servicesForProcessing,
+              hashedFiles,
+              cidToFileMap,
+              seedCidMap,
+              failedSeedDirectories
+            );
+          })
+        );
+      }
+
+      await Promise.all(seedPromises);
+      logger.info(`Completed processing ${seedFiles.length} seed files`);
+    }
+
+    // Phase 2: Process all non-seed files with updated propertyCids
+    const nonSeedFiles = allFiles.filter(
+      (file) => file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
+    );
+
+    // Update propertyCids for files in seed datagroup directories, but skip directories with failed seeds
+    const updatedFiles = nonSeedFiles
+      .filter((file) => {
+        // Skip files from directories with failed seed validation
+        if (file.propertyCid.startsWith('SEED_PENDING:')) {
+          const dirPath = path.dirname(file.filePath);
+          if (failedSeedDirectories.has(dirPath)) {
+            logger.warn(
+              `Skipping file ${file.filePath} because seed validation failed for directory ${dirPath}`
+            );
+            return false;
+          }
+        }
+        return true;
+      })
+      .map((file) => {
+        if (file.propertyCid.startsWith('SEED_PENDING:')) {
+          const dirName = file.propertyCid.replace('SEED_PENDING:', '');
+          const dirPath = path.dirname(file.filePath);
+          const seedCid = seedCidMap.get(dirPath);
+          if (seedCid) {
+            return { ...file, propertyCid: seedCid };
+          }
+          // If no seed CID found, keep the directory name
+          return { ...file, propertyCid: dirName };
+        }
+        return file;
+      });
+
+    if (updatedFiles.length > 0) {
+      logger.info(`Processing ${updatedFiles.length} non-seed files...`);
+
+      const allOperationPromises: Promise<void>[] = [];
+      for (const fileEntry of updatedFiles) {
+        allOperationPromises.push(
+          localProcessingSemaphore.runExclusive(async () =>
+            processFileForHashing(
+              fileEntry,
+              servicesForProcessing,
+              hashedFiles,
+              cidToFileMap
+            )
+          )
+        );
+      }
+
+      await Promise.all(allOperationPromises);
+    }
+
+    // Phase 3: Create output ZIP with transformed data
+    progressTracker.setPhase('Creating Output ZIP', 1);
+    logger.info('Creating output ZIP with transformed data...');
+
+    const zip = new AdmZip();
+
+    // Add each hashed file to the ZIP with CID as filename
+    for (const hashedFile of hashedFiles) {
+      // Determine the directory structure in the ZIP
+      // Use property CID as directory name, and calculated CID as filename
+      const zipPath = path.join(
+        'data',
+        hashedFile.propertyCid,
+        `${hashedFile.calculatedCid}.json`
+      );
+
+      // Add the canonical JSON to the ZIP
+      zip.addFile(zipPath, Buffer.from(hashedFile.canonicalJson, 'utf-8'));
+    }
+
+    // Write the ZIP file
+    zip.writeZip(options.outputZip);
+    logger.success(`Output ZIP created: ${options.outputZip}`);
+    progressTracker.increment('processed');
+
+    if (progressTracker) {
+      progressTracker.stop();
+    }
+
+    try {
+      await csvReporterService.finalize();
+    } catch (finalizeError) {
+      const errMsg =
+        finalizeError instanceof Error
+          ? finalizeError.message
+          : String(finalizeError);
+      console.error(
+        chalk.red(`Error during csvReporterService.finalize(): ${errMsg}`)
+      );
+      throw new Error(`CSV Finalization failed: ${errMsg}`);
+    }
+
+    const finalMetrics = progressTracker
+      ? progressTracker.getMetrics()
+      : {
+          startTime: Date.now(),
+          errors: 0,
+          processed: 0,
+          skipped: 0,
+          total: totalFiles,
+        };
+
+    console.log(chalk.green('\n✅ Hash process finished\n'));
+    console.log(chalk.bold('📊 Final Report:'));
+    console.log(
+      `  Total files scanned:    ${finalMetrics.total || totalFiles}`
+    );
+    console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
+    console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
+    console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
+
+    const totalHandled =
+      (finalMetrics.skipped || 0) +
+      (finalMetrics.errors || 0) +
+      (finalMetrics.processed || 0);
+
+    console.log(`  Total files handled:    ${totalHandled}`);
+
+    const elapsed = Date.now() - finalMetrics.startTime;
+    const seconds = Math.floor(elapsed / 1000);
+    console.log(`  Duration:               ${seconds}s`);
+    console.log(`\n  Error report:   ${config.errorCsvPath}`);
+    console.log(`  Warning report: ${config.warningCsvPath}`);
+    console.log(`  Output ZIP:     ${options.outputZip}`);
+
+    // Clean up temporary directory if it was created
+    if (tempDir) {
+      await zipExtractor.cleanup(tempDir);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red(`CRITICAL_ERROR_HASH: ${errorMessage}`));
+    if (error instanceof Error && error.stack) {
+      console.error(chalk.grey(error.stack));
+    }
+
+    if (progressTracker) {
+      progressTracker.stop();
+    }
+
+    if (csvReporterServiceInstance) {
+      try {
+        await csvReporterServiceInstance.finalize();
+        console.error(
+          chalk.yellow(
+            'CSV error/warning reports finalized during error handling.'
+          )
+        );
+      } catch (finalizeErrorInCatch) {
+        const finalErrMsg =
+          finalizeErrorInCatch instanceof Error
+            ? finalizeErrorInCatch.message
+            : String(finalizeErrorInCatch);
+        console.error(
+          chalk.magenta(
+            `Failed to finalize CSV reports during error handling: ${finalErrMsg}`
+          )
+        );
+      }
+    }
+
+    // Clean up temporary directory if it was created
+    if (tempDir) {
+      await zipExtractor.cleanup(tempDir);
+    }
+
+    process.exit(1);
+  }
+}
+
+async function processSeedFile(
+  fileEntry: FileEntry,
+  services: {
+    schemaCacheService: SchemaCacheService;
+    jsonValidatorService: JsonValidatorService;
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+    csvReporterService: CsvReporterService;
+    progressTracker: SimpleProgress;
+    ipldConverterService: IPLDConverterService;
+  },
+  hashedFiles: HashedFile[],
+  cidToFileMap: Map<string, HashedFile>,
+  seedCidMap: Map<string, string>,
+  failedSeedDirectories: Set<string>
+): Promise<void> {
+  const dirPath = path.dirname(fileEntry.filePath);
+  const hashedFilesCountBefore = hashedFiles.length;
+  const errorsCountBefore = services.progressTracker.getMetrics().errors;
+
+  try {
+    // Process the seed file exactly like a normal file
+    await processFileForHashing(fileEntry, services, hashedFiles, cidToFileMap);
+
+    // Check if processing was successful
+    const latestFile = hashedFiles[hashedFiles.length - 1];
+    const fileAdded =
+      hashedFiles.length > hashedFilesCountBefore &&
+      latestFile &&
+      latestFile.originalPath === fileEntry.filePath;
+
+    const errorsCountAfter = services.progressTracker.getMetrics().errors;
+    const newErrorsOccurred = errorsCountAfter > errorsCountBefore;
+
+    if (fileAdded) {
+      // Successful processing
+      seedCidMap.set(dirPath, latestFile.calculatedCid);
+      logger.debug(
+        `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
+      );
+    } else if (newErrorsOccurred) {
+      // Validation or processing failed
+      failedSeedDirectories.add(dirPath);
+      logger.error(
+        `Seed validation/processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+      );
+    } else {
+      // No file added and no errors - this shouldn't happen, but treat as failure
+      failedSeedDirectories.add(dirPath);
+      logger.error(
+        `Seed processing completed without success or error for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+      );
+    }
+  } catch (error) {
+    // Mark this directory as having a failed seed
+    failedSeedDirectories.add(dirPath);
+    logger.error(
+      `Seed processing failed for ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}. All other files in directory ${dirPath} will be skipped.`
+    );
+    throw error; // Re-throw to maintain error reporting
+  }
+}
+
+async function processFileForHashing(
+  fileEntry: FileEntry,
+  services: {
+    schemaCacheService: SchemaCacheService;
+    jsonValidatorService: JsonValidatorService;
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+    csvReporterService: CsvReporterService;
+    progressTracker: SimpleProgress;
+    ipldConverterService: IPLDConverterService;
+  },
+  hashedFiles: HashedFile[],
+  cidToFileMap: Map<string, HashedFile>
+): Promise<void> {
+  let jsonData;
+  try {
+    const fileContentStr = await fsPromises.readFile(
+      fileEntry.filePath,
+      'utf-8'
+    );
+    jsonData = JSON.parse(fileContentStr);
+  } catch (readOrParseError) {
+    const errorMsg =
+      readOrParseError instanceof Error
+        ? readOrParseError.message
+        : String(readOrParseError);
+    await services.csvReporterService.logError({
+      propertyCid: fileEntry.propertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      filePath: fileEntry.filePath,
+      errorPath: 'root',
+      errorMessage: `File read/parse error: ${errorMsg}`,
+      timestamp: new Date().toISOString(),
+    });
+    services.progressTracker.increment('errors');
+    return;
+  }
+
+  try {
+    const schemaCid = fileEntry.dataGroupCid;
+    const schema = await services.schemaCacheService.getSchema(schemaCid);
+    if (!schema) {
+      const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
+      await services.csvReporterService.logError({
+        propertyCid: fileEntry.propertyCid,
+        dataGroupCid: fileEntry.dataGroupCid,
+        filePath: fileEntry.filePath,
+        errorPath: 'root',
+        errorMessage: error,
+        timestamp: new Date().toISOString(),
+      });
+      services.progressTracker.increment('errors');
+      return;
+    }
+
+    // Validate that the schema is a valid data group schema
+    const schemaValidation = validateDataGroupSchema(schema);
+    if (!schemaValidation.valid) {
+      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
+
+      await services.csvReporterService.logError({
+        propertyCid: fileEntry.propertyCid,
+        dataGroupCid: fileEntry.dataGroupCid,
+        filePath: fileEntry.filePath,
+        errorPath: 'root',
+        errorMessage: error,
+        timestamp: new Date().toISOString(),
+      });
+      services.progressTracker.increment('errors');
+      return;
+    }
+
+    // Check if data has IPLD links that need conversion
+    let dataToProcess = jsonData;
+    const dataForValidation = jsonData;
+
+    // First validate the original data with file paths that can be resolved locally
+    // Note: We pass false to allow resolution of local file references for validation
+    const validationResult = await services.jsonValidatorService.validate(
+      dataForValidation,
+      schema,
+      fileEntry.filePath,
+      false // allow resolution of local file references for validation
+    );
+
+    if (!validationResult.valid) {
+      const errorMessages: Array<{ path: string; message: string }> =
+        services.jsonValidatorService.getErrorMessages(
+          validationResult.errors || []
+        );
+
+      for (const errorInfo of errorMessages) {
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          errorPath: errorInfo.path,
+          errorMessage: errorInfo.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      services.progressTracker.increment('errors');
+      return;
+    }
+
+    // Determine the property CID early for seed files
+    const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+
+    let linkedFilesFromConversion: Array<{
+      path: string;
+      cid: string;
+      canonicalJson: string;
+      processedData: any;
+    }> = [];
+
+    // After successful validation, process IPLD links to convert file paths to CIDs
+    if (
+      services.ipldConverterService &&
+      services.ipldConverterService.hasIPLDLinks(jsonData, schema)
+    ) {
+      logger.debug(
+        `Data has IPLD links, converting file paths to CIDs for ${fileEntry.filePath}`
+      );
+
+      try {
+        // Create a custom IPLD converter that calculates CIDs without uploading
+        // Use a placeholder property CID for now
+        const conversionResult = await convertToIPLDWithCIDCalculation(
+          jsonData,
+          fileEntry.filePath,
+          schema,
+          services,
+          hashedFiles,
+          cidToFileMap
+        );
+        dataToProcess = conversionResult.convertedData;
+        linkedFilesFromConversion = conversionResult.linkedFiles;
+
+        if (conversionResult.hasLinks) {
+          logger.debug(
+            `Converted ${conversionResult.linkedCIDs.length} file paths to CIDs`
+          );
+        }
+      } catch (conversionError) {
+        const errorMsg =
+          conversionError instanceof Error
+            ? conversionError.message
+            : String(conversionError);
+        logger.error(
+          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+        );
+        // Continue with original data
+        dataToProcess = jsonData;
+      }
+    }
+
+    // Calculate canonical JSON and CID for the final transformed data
+    const finalCanonicalJson =
+      services.canonicalizerService.canonicalize(dataToProcess);
+
+    const calculatedCid =
+      await services.cidCalculatorService.calculateCidFromCanonicalJson(
+        finalCanonicalJson,
+        dataToProcess
+      );
+
+    // For seed files, the propertyCid should be the same as the calculated CID
+    const finalPropertyCid = isSeedFile ? calculatedCid : fileEntry.propertyCid;
+
+    // Now add all the linked files with the correct property CID
+    for (const linkedFile of linkedFilesFromConversion) {
+      const hashedFile: HashedFile = {
+        originalPath: linkedFile.path,
+        propertyCid: finalPropertyCid,
+        dataGroupCid: '', // Linked files don't have a dataGroupCid
+        calculatedCid: linkedFile.cid,
+        transformedData: linkedFile.processedData,
+        canonicalJson: linkedFile.canonicalJson,
+      };
+      hashedFiles.push(hashedFile);
+      cidToFileMap.set(linkedFile.cid, hashedFile);
+    }
+
+    const hashedFile: HashedFile = {
+      originalPath: fileEntry.filePath,
+      propertyCid: finalPropertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      calculatedCid,
+      transformedData: dataToProcess,
+      canonicalJson: finalCanonicalJson,
+    };
+
+    hashedFiles.push(hashedFile);
+    cidToFileMap.set(calculatedCid, hashedFile);
+
+    logger.info(`Processed ${fileEntry.filePath} (CID: ${calculatedCid})`);
+    services.progressTracker.increment('processed');
+  } catch (processingError) {
+    const errorMsg =
+      processingError instanceof Error
+        ? processingError.message
+        : String(processingError);
+    await services.csvReporterService.logError({
+      propertyCid: fileEntry.propertyCid,
+      dataGroupCid: fileEntry.dataGroupCid,
+      filePath: fileEntry.filePath,
+      errorPath: 'root',
+      errorMessage: `Processing error: ${errorMsg}`,
+      timestamp: new Date().toISOString(),
+    });
+    services.progressTracker.increment('errors');
+  }
+}
+
+/**
+ * Custom IPLD converter that calculates CIDs for linked files without uploading
+ */
+async function convertToIPLDWithCIDCalculation(
+  data: any,
+  currentFilePath: string,
+  schema: any,
+  services: {
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+  },
+  hashedFiles: HashedFile[],
+  cidToFileMap: Map<string, HashedFile>
+): Promise<{
+  convertedData: any;
+  hasLinks: boolean;
+  linkedCIDs: string[];
+  linkedFiles: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }>;
+}> {
+  const linkedCIDs: string[] = [];
+  const linkedFilesData: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }> = [];
+
+  const convertedData = await processDataForIPLD(
+    data,
+    linkedCIDs,
+    currentFilePath,
+    schema,
+    services,
+    hashedFiles,
+    cidToFileMap,
+    undefined,
+    linkedFilesData
+  );
+
+  return {
+    convertedData,
+    hasLinks: linkedCIDs.length > 0,
+    linkedCIDs,
+    linkedFiles: linkedFilesData,
+  };
+}
+
+async function processDataForIPLD(
+  data: any,
+  linkedCIDs: string[],
+  currentFilePath: string,
+  schema: any,
+  services: {
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+  },
+  hashedFiles: HashedFile[],
+  cidToFileMap: Map<string, HashedFile>,
+  fieldName?: string,
+  linkedFilesData?: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }>
+): Promise<any> {
+  // Handle string values for ipfs_url fields or ipfs_uri format
+  if (
+    typeof data === 'string' &&
+    (fieldName === 'ipfs_url' || schema?.format === 'ipfs_uri')
+  ) {
+    // Check if it's already an IPFS URI
+    if (data.startsWith('ipfs://')) {
+      return data;
+    }
+
+    // Check if it's a valid CID
+    try {
+      const { CID } = await import('multiformats/cid');
+      CID.parse(data);
+      // It's a CID, convert to IPFS URI
+      return `ipfs://${data}`;
+    } catch {
+      // Not a CID, treat as local path
+    }
+
+    // It's a local path, calculate CID for the file
+    if (isImageFile(data)) {
+      const cid = await calculateCIDForFile(
+        data,
+        currentFilePath,
+        services,
+        true, // treat as ipfs_uri format
+        linkedFilesData
+      );
+      linkedCIDs.push(cid);
+      return `ipfs://${cid}`;
+    }
+
+    // Not an image file, return as-is
+    return data;
+  }
+
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  // Check if this is a pointer object with file path
+  if (
+    Object.prototype.hasOwnProperty.call(data, '/') &&
+    typeof data['/'] === 'string' &&
+    Object.keys(data).length === 1
+  ) {
+    const pointerValue = data['/'];
+
+    // Check if it's already a valid CID
+    let isCID = false;
+    try {
+      const { CID } = await import('multiformats/cid');
+      CID.parse(pointerValue);
+      isCID = true;
+    } catch {
+      // Not a valid CID, treat as file path
+    }
+
+    if (isCID) {
+      // Already a CID, return as-is (proper IPLD link format)
+      linkedCIDs.push(pointerValue);
+      return data;
+    } else {
+      // This is a file path reference - calculate its CID
+      const cid = await calculateCIDForFile(
+        pointerValue,
+        currentFilePath,
+        services,
+        false, // not necessarily an ipfs_uri format
+        linkedFilesData
+      );
+      linkedCIDs.push(cid);
+      return { '/': cid };
+    }
+  }
+
+  // Handle arrays
+  if (Array.isArray(data)) {
+    const itemSchema = schema?.items;
+    return Promise.all(
+      data.map((item) =>
+        processDataForIPLD(
+          item,
+          linkedCIDs,
+          currentFilePath,
+          itemSchema,
+          services,
+          hashedFiles,
+          cidToFileMap,
+          fieldName,
+          linkedFilesData
+        )
+      )
+    );
+  }
+
+  // Handle objects recursively
+  const processed: any = {};
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      const propertySchema = schema?.properties?.[key];
+      processed[key] = await processDataForIPLD(
+        data[key],
+        linkedCIDs,
+        currentFilePath,
+        propertySchema,
+        services,
+        hashedFiles,
+        cidToFileMap,
+        key, // Pass the field name
+        linkedFilesData
+      );
+    }
+  }
+  return processed;
+}
+
+/**
+ * Calculate CID for a file without uploading it
+ */
+async function calculateCIDForFile(
+  filePath: string,
+  currentFilePath: string,
+  services: {
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+  },
+  isIpfsUriFormat: boolean,
+  linkedFiles?: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }>
+): Promise<string> {
+  let resolvedPath: string;
+
+  // Determine if it's an absolute or relative path
+  if (filePath.startsWith('/')) {
+    resolvedPath = filePath;
+  } else {
+    // For relative paths, resolve based on directory of the current file
+    const currentDir = path.dirname(currentFilePath);
+    resolvedPath = path.join(currentDir, filePath);
+  }
+
+  // Check if it's an image file and schema expects IPFS URI
+  const isImage = isImageFile(resolvedPath) && isIpfsUriFormat;
+
+  // Read the file (binary for images, utf-8 for text)
+  const fileContent = isImage
+    ? await fsPromises.readFile(resolvedPath)
+    : await fsPromises.readFile(resolvedPath, 'utf-8');
+
+  // Handle based on file type
+  let calculatedCid: string;
+
+  if (isImage) {
+    // For images, calculate CID v1 with raw codec
+    calculatedCid =
+      await services.cidCalculatorService.calculateCidV1ForRawData(
+        fileContent as Buffer
+      );
+  } else {
+    // Try to parse as JSON
+    try {
+      const parsedData = JSON.parse(fileContent as string);
+      // Recursively process the parsed data to convert any nested file path links
+      // Use the same linkedFiles collection to track nested files
+      const nestedLinkedCIDs: string[] = [];
+      const processedData = await processDataForIPLD(
+        parsedData,
+        nestedLinkedCIDs,
+        resolvedPath,
+        undefined, // No schema for nested files
+        services,
+        [], // Don't track in hashedFiles yet
+        new Map(), // Don't track in cidToFileMap yet
+        undefined, // No field name context
+        linkedFiles // Pass the same linkedFiles collection to track nested files
+      );
+
+      const canonicalJson =
+        services.canonicalizerService.canonicalize(processedData);
+      calculatedCid =
+        await services.cidCalculatorService.calculateCidFromCanonicalJson(
+          canonicalJson,
+          processedData
+        );
+
+      // Track this linked file if we have a collection
+      if (linkedFiles) {
+        linkedFiles.push({
+          path: resolvedPath,
+          cid: calculatedCid,
+          canonicalJson,
+          processedData,
+        });
+      }
+    } catch {
+      // If not JSON, treat as raw text and calculate CID
+      const buffer = Buffer.from(fileContent as string, 'utf-8');
+      calculatedCid =
+        await services.cidCalculatorService.calculateCidV1(buffer);
+
+      // Track this linked file if we have a collection
+      if (linkedFiles) {
+        linkedFiles.push({
+          path: resolvedPath,
+          cid: calculatedCid,
+          canonicalJson: buffer.toString('utf-8'),
+          processedData: buffer.toString('utf-8'),
+        });
+      }
+    }
+  }
+
+  logger.debug(
+    `Calculated CID for linked file ${resolvedPath}: ${calculatedCid}`
+  );
+  return calculatedCid;
+}
+
+/**
+ * Check if a file is an image based on its extension
+ */
+function isImageFile(filePath: string): boolean {
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+  const ext = path.extname(filePath).toLowerCase();
+  return imageExtensions.includes(ext);
+}

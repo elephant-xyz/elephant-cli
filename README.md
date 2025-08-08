@@ -414,6 +414,48 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ## Utility Commands
 
+### Hash Command
+
+The `hash` command calculates CIDs for all files in your data, replaces file path links with their corresponding CIDs, and outputs the transformed data as a ZIP archive with CID-based filenames. This is useful for:
+
+- Pre-calculating CIDs without uploading to IPFS
+- Verifying what CIDs your data will have after upload
+- Creating a portable archive of your data with all links resolved
+- Testing data transformations before actual submission
+
+```bash
+# Basic usage (outputs to hashed-data.zip by default)
+elephant-cli hash ./your-data
+
+# With custom output ZIP file
+elephant-cli hash ./your-data --output-zip ./transformed-data.zip
+
+# Process a ZIP file as input
+elephant-cli hash ./your-data.zip --output-zip ./hashed-output.zip
+
+# With custom concurrency limit
+elephant-cli hash ./your-data --max-concurrent-tasks 5
+```
+
+**Features:**
+- Calculates CIDs for all files using the same algorithm as `validate-and-upload --dry-run`
+- Replaces file path references (e.g., `{"/": "./file.json"}`) with calculated CIDs
+- Handles IPLD links and ipfs_url fields
+- Processes seed datagroup files correctly
+- Outputs a ZIP archive with transformed data, using CIDs as filenames
+- Validates data against schemas before processing
+
+**Output Structure:**
+```
+hashed-data.zip
+└── data/
+    ├── property-cid-1/
+    │   ├── bafybeiabc123...json  # File named with its calculated CID
+    │   └── bafybeixyz789...json
+    └── property-cid-2/
+        └── bafybeidef456...json
+```
+
 ### Data Fetching
 
 The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively and packaging them as a ZIP file. It supports two input modes:

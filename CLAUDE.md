@@ -111,6 +111,27 @@ This command:
 4. Submits data hashes to the smart contract in batches
 5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
+### hash Command
+
+This command:
+1. Validates file structure in the input directory or ZIP file
+2. Uses filenames as Schema CIDs to validate JSON data
+3. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+4. Handles seed datagroup processing (processes seed files first)
+5. **Calculates CIDs for all files without uploading to IPFS**
+6. **Replaces all file path links with calculated CIDs**
+7. **Canonicalizes all data**
+8. **Outputs transformed data as a ZIP archive with CID-based filenames**
+9. **Supports both directory and ZIP file inputs**
+
+Key features:
+- **CID Calculation**: Uses the same algorithm as `validate-and-upload --dry-run`
+- **Link Replacement**: Converts `{"/": "./file.json"}` references to `{"/": "calculated-cid"}`
+- **IPLD Support**: Handles IPLD links and ipfs_url fields correctly
+- **Image Processing**: Calculates appropriate CIDs for image files with ipfs_uri format
+- **Seed Datagroup**: Processes seed files first and uses their CIDs for property identification
+- **Output Structure**: Creates ZIP with `data/property-cid/file-cid.json` structure
+
 ### fetch-data Command
 
 This command:
@@ -268,6 +289,14 @@ npm run dev
   --gas-price 50 \
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
+
+# Test the CLI - Hash command (calculate CIDs and transform data)
+./bin/elephant-cli hash ./test-data \
+  --output-zip ./hashed-data.zip
+
+# Test the CLI - Hash command with ZIP input
+./bin/elephant-cli hash ./test-data.zip \
+  --output-zip ./hashed-output.zip
 
 # Test the CLI - Fetch data from CID
 ./bin/elephant-cli fetch-data bafybeiabc123... \

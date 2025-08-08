@@ -21,6 +21,7 @@ import { registerFetchDataCommand } from './commands/fetch-data.js';
 import { registerCheckTransactionStatusCommand } from './commands/check-transaction-status.js';
 import { registerHexToCidCommand } from './commands/hex-to-cid.js';
 import { registerCidToHexCommand } from './commands/cid-to-hex.js';
+import { registerHashCommand } from './commands/hash.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -62,6 +63,7 @@ registerSubmitToContractCommand(program);
 registerCheckTransactionStatusCommand(program);
 registerHexToCidCommand(program);
 registerCidToHexCommand(program);
+registerHashCommand(program);
 
 // Register fetch-data command
 registerFetchDataCommand(program);
