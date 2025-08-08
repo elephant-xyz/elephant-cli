@@ -30,7 +30,7 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 // Gas estimation constants
 export const GAS_ESTIMATION_BUFFER = 0.3; // 30% buffer
-export const FALLBACK_GAS_LIMIT = 650000;
+export const FALLBACK_GAS_LIMIT = 30_000_000; // 30M gas fallback when estimation fails (API mode unsigned tx)
 export const DEFAULT_MAX_FEE_PER_GAS_GWEI = '50';
 export const DEFAULT_MAX_PRIORITY_FEE_PER_GAS_GWEI = '2';
 export const MIN_PRIORITY_FEE_GWEI = '1';

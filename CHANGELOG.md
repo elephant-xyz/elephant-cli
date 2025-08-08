@@ -1,3 +1,17 @@
+## [1.23.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.2...v1.23.3) (2025-08-08)
+
+
+### Bug Fixes
+
+* **constants:** update fallback gas limit to 30M ([#79](https://github.com/elephant-xyz/elephant-cli/issues/79)) ([004ba66](https://github.com/elephant-xyz/elephant-cli/commit/004ba66c66e9749d3a352ad240c003ca651bc825))
+
+## [1.23.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.1...v1.23.2) (2025-08-07)
+
+
+### Bug Fixes
+
+* fix missing files in fetch-data command ([#78](https://github.com/elephant-xyz/elephant-cli/issues/78)) ([310e815](https://github.com/elephant-xyz/elephant-cli/commit/310e815d176f1e433355937f66b40d20ffa7a045))
+
 ## [1.23.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.0...v1.23.1) (2025-08-07)
 
 
