@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.3...v1.24.0) (2025-08-08)
+
+
+### Features
+
+* Add new `hash` command. ([#80](https://github.com/elephant-xyz/elephant-cli/issues/80)) ([959c42d](https://github.com/elephant-xyz/elephant-cli/commit/959c42d5a280abb24488534379443f190ea9fa92))
+
 ## [1.23.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.2...v1.23.3) (2025-08-08)
 
 
