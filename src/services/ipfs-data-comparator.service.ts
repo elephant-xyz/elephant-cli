@@ -281,7 +281,7 @@ export class IpfsDataComparatorService {
     // Convert the key to a more readable JSON path format
     // The key comes as a path like "relationships.property_seed.from" or just "/"
     let formattedPath = key;
-    
+
     // Handle array indices if embeddedKey is provided
     if (embeddedKey) {
       // If embeddedKey is a number, it's an array index
@@ -292,12 +292,12 @@ export class IpfsDataComparatorService {
         formattedPath = `${key}.${embeddedKey}`;
       }
     }
-    
+
     // Special handling for root-level changes
     if (formattedPath === '/') {
       formattedPath = '(root)';
     }
-    
+
     return formattedPath;
   }
 
@@ -339,15 +339,25 @@ export class IpfsDataComparatorService {
     }
 
     const summaryLines: string[] = [];
-    summaryLines.push(`Compared ${cids.length} submissions (${cids.length === 2 ? 'CIDs' : 'unique CIDs'}: ${cids.map(c => '...' + c.slice(-8)).join(', ')}):`);
+    summaryLines.push(
+      `Compared ${cids.length} submissions (${cids.length === 2 ? 'CIDs' : 'unique CIDs'}: ${cids.map((c) => '...' + c.slice(-8)).join(', ')}):`
+    );
     summaryLines.push('');
 
     // Group differences by path to show all values for each path
-    const differencesByPath = new Map<string, {
-      type: string;
-      values: Map<string, any>;
-      comparisons: Array<{cid1: string, cid2: string, oldValue: any, newValue: any}>
-    }>();
+    const differencesByPath = new Map<
+      string,
+      {
+        type: string;
+        values: Map<string, any>;
+        comparisons: Array<{
+          cid1: string;
+          cid2: string;
+          oldValue: any;
+          newValue: any;
+        }>;
+      }
+    >();
 
     for (const comparison of comparisons) {
       for (const diff of comparison.differences) {
@@ -355,12 +365,12 @@ export class IpfsDataComparatorService {
           differencesByPath.set(diff.path, {
             type: diff.type,
             values: new Map(),
-            comparisons: []
+            comparisons: [],
           });
         }
-        
+
         const pathData = differencesByPath.get(diff.path)!;
-        
+
         // Track all unique values for this path
         if (diff.type === 'UPDATE') {
           pathData.values.set(comparison.cid1, diff.oldValue);
@@ -372,31 +382,32 @@ export class IpfsDataComparatorService {
           pathData.values.set(comparison.cid1, undefined);
           pathData.values.set(comparison.cid2, diff.newValue);
         }
-        
+
         pathData.comparisons.push({
           cid1: comparison.cid1,
           cid2: comparison.cid2,
           oldValue: diff.oldValue,
-          newValue: diff.newValue
+          newValue: diff.newValue,
         });
       }
     }
 
     // Sort paths by frequency of differences
-    const sortedPaths = Array.from(differencesByPath.entries())
-      .sort((a, b) => b[1].comparisons.length - a[1].comparisons.length);
+    const sortedPaths = Array.from(differencesByPath.entries()).sort(
+      (a, b) => b[1].comparisons.length - a[1].comparisons.length
+    );
 
     // Show detailed differences for top paths
     const maxPathsToShow = 10;
     const pathsToShow = sortedPaths.slice(0, maxPathsToShow);
-    
+
     if (pathsToShow.length > 0) {
       summaryLines.push('DIFFERENCES FOUND:');
       summaryLines.push('');
-      
+
       for (const [path, data] of pathsToShow) {
         summaryLines.push(`📍 Path: ${path}`);
-        
+
         // Show all unique values for this path
         const uniqueValues = Array.from(data.values.entries());
         if (uniqueValues.length <= 4) {
@@ -419,18 +430,25 @@ export class IpfsDataComparatorService {
         }
         summaryLines.push('');
       }
-      
+
       if (sortedPaths.length > maxPathsToShow) {
-        summaryLines.push(`... and ${sortedPaths.length - maxPathsToShow} more paths with differences`);
+        summaryLines.push(
+          `... and ${sortedPaths.length - maxPathsToShow} more paths with differences`
+        );
         summaryLines.push('');
       }
     }
 
     // Add summary statistics
-    const totalDifferences = comparisons.reduce((sum, c) => sum + c.differenceCount, 0);
+    const totalDifferences = comparisons.reduce(
+      (sum, c) => sum + c.differenceCount,
+      0
+    );
     summaryLines.push('SUMMARY STATISTICS:');
     summaryLines.push(`  • Total differences: ${totalDifferences}`);
-    summaryLines.push(`  • Unique paths with differences: ${differencesByPath.size}`);
+    summaryLines.push(
+      `  • Unique paths with differences: ${differencesByPath.size}`
+    );
     summaryLines.push(`  • Pairwise comparisons: ${comparisons.length}`);
 
     return summaryLines.join('\n');

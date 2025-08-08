@@ -310,43 +310,59 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
   if (casesWithDifferences.length > 0) {
     console.log('\n' + chalk.bold('Submission Differences Found:'));
     console.log(chalk.gray('(Showing top 3 cases with most differences)'));
-    
+
     // Sort by total differences and show top 3
     const topCases = casesWithDifferences
-      .sort((a, b) => (b.comparisonResult?.totalDifferences || 0) - (a.comparisonResult?.totalDifferences || 0))
+      .sort(
+        (a, b) =>
+          (b.comparisonResult?.totalDifferences || 0) -
+          (a.comparisonResult?.totalDifferences || 0)
+      )
       .slice(0, 3);
-    
+
     for (const analysis of topCases) {
       console.log('\n' + chalk.cyan('─'.repeat(60)));
-      console.log(chalk.bold(`Property: `) + chalk.gray(analysis.propertyHash.slice(0, 10) + '...'));
-      console.log(chalk.bold(`DataGroup: `) + chalk.gray(analysis.dataGroupHash.slice(0, 10) + '...'));
-      console.log(chalk.bold(`Consensus: `) + (
-        analysis.consensusReached === true ? chalk.green('Full') :
-        analysis.consensusReached === 'partial' ? chalk.yellow('Partial') :
-        chalk.red('None')
-      ));
-      console.log(chalk.bold(`Submitters: `) + analysis.totalSubmitters + 
-        chalk.gray(` (${analysis.uniqueDataHashes} unique submissions)`));
-      
+      console.log(
+        chalk.bold(`Property: `) +
+          chalk.gray(analysis.propertyHash.slice(0, 10) + '...')
+      );
+      console.log(
+        chalk.bold(`DataGroup: `) +
+          chalk.gray(analysis.dataGroupHash.slice(0, 10) + '...')
+      );
+      console.log(
+        chalk.bold(`Consensus: `) +
+          (analysis.consensusReached === true
+            ? chalk.green('Full')
+            : analysis.consensusReached === 'partial'
+              ? chalk.yellow('Partial')
+              : chalk.red('None'))
+      );
+      console.log(
+        chalk.bold(`Submitters: `) +
+          analysis.totalSubmitters +
+          chalk.gray(` (${analysis.uniqueDataHashes} unique submissions)`)
+      );
+
       if (analysis.comparisonResult) {
         console.log('\n' + chalk.bold('Difference Analysis:'));
         // Split the summary into lines and format each section
         const summaryLines = analysis.comparisonResult.summary.split('\n');
-        let inDifferencesSection = false;
         let inStatsSection = false;
-        
+
         for (const line of summaryLines) {
           if (line.includes('DIFFERENCES FOUND:')) {
-            inDifferencesSection = true;
             inStatsSection = false;
             console.log(chalk.yellow('  ' + line));
           } else if (line.includes('SUMMARY STATISTICS:')) {
-            inDifferencesSection = false;
             inStatsSection = true;
             console.log(chalk.blue('\n  ' + line));
           } else if (line.startsWith('📍 Path:')) {
             console.log(chalk.magenta('  ' + line));
-          } else if (line.includes('Values across submissions:') || line.includes('Sample values:')) {
+          } else if (
+            line.includes('Values across submissions:') ||
+            line.includes('Sample values:')
+          ) {
             console.log(chalk.gray('  ' + line));
           } else if (line.includes('• ...')) {
             // Value lines
@@ -359,10 +375,19 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
         }
       }
     }
-    
+
     if (casesWithDifferences.length > 3) {
-      console.log('\n' + chalk.gray(`... and ${casesWithDifferences.length - 3} more cases with differences`));
-      console.log(chalk.gray(`See the full report in: ${analyses.length > 0 ? 'consensus CSV file' : 'the output CSV'}`));
+      console.log(
+        '\n' +
+          chalk.gray(
+            `... and ${casesWithDifferences.length - 3} more cases with differences`
+          )
+      );
+      console.log(
+        chalk.gray(
+          `See the full report in: ${analyses.length > 0 ? 'consensus CSV file' : 'the output CSV'}`
+        )
+      );
     }
   }
 

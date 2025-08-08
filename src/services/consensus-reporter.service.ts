@@ -91,9 +91,9 @@ export class ConsensusReporterService {
       // Format the summary for CSV - preserve structure but make it CSV-friendly
       // Keep newlines as | separators, but preserve the hierarchical information
       const summary = analysis.comparisonResult.summary
-        .replace(/\n\n/g, ' || ')  // Double newlines become double pipes
-        .replace(/\n/g, ' | ')      // Single newlines become single pipes
-        .replace(/"/g, '""');       // Escape quotes for CSV
+        .replace(/\n\n/g, ' || ') // Double newlines become double pipes
+        .replace(/\n/g, ' | ') // Single newlines become single pipes
+        .replace(/"/g, '""'); // Escape quotes for CSV
       differenceFields.push(summary);
     } else {
       differenceFields.push('-');
