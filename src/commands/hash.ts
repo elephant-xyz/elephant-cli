@@ -21,6 +21,7 @@ import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
+import { CID } from 'multiformats/cid';
 
 interface HashedFile {
   originalPath: string;
@@ -1087,7 +1088,6 @@ async function processDataForIPLD(
 
     // Check if it's a valid CID
     try {
-      const { CID } = await import('multiformats/cid');
       CID.parse(data);
       // It's a CID, convert to IPFS URI
       return `ipfs://${data}`;
@@ -1127,7 +1127,6 @@ async function processDataForIPLD(
     // Check if it's already a valid CID
     let isCID = false;
     try {
-      const { CID } = await import('multiformats/cid');
       CID.parse(pointerValue);
       isCID = true;
     } catch {
