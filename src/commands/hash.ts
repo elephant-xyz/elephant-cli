@@ -610,8 +610,10 @@ export async function handleHash(
     }
 
     if (!propertyFolderName) {
-      logger.error('Could not determine property CID for output folder');
-      propertyFolderName = 'unknown-property';
+      const errorMsg =
+        'Could not determine property CID for output folder. This should not happen for valid single property data.';
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     // Add each hashed file to the ZIP
