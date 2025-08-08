@@ -548,10 +548,10 @@ export async function handleHash(
     // Phase 3: Generate CSV output and create output ZIP
     progressTracker.setPhase('Creating Output Files', 2);
 
-    // Generate CSV with hash results (similar to validate-and-upload --dry-run but without htmlLink)
+    // Generate CSV with hash results (similar to validate-and-upload but without htmlLink)
     logger.info('Generating CSV with hash results...');
     const csvData: string[] = [
-      'propertyCid,dataGroupCid,dataCid', // Headers without htmlLink column
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt', // Headers compatible with submit-to-contract
     ];
 
     // Process hashed files to generate CSV entries
@@ -559,8 +559,32 @@ export async function handleHash(
     for (const hashedFile of hashedFiles) {
       if (hashedFile.dataGroupCid) {
         // Only include files with dataGroupCid (main files, not linked)
+        // Calculate the path relative to the extracted ZIP content root
+        let relativePath: string;
+
+        // Ensure both paths are absolute for proper comparison
+        const absoluteInputDir = path.resolve(actualInputDir);
+        const absoluteOriginalPath = path.resolve(hashedFile.originalPath);
+
+        // Check if the file is actually within the extraction directory
+        if (absoluteOriginalPath.startsWith(absoluteInputDir)) {
+          // File is within the extraction directory, calculate relative path
+          relativePath = path.relative(absoluteInputDir, absoluteOriginalPath);
+        } else {
+          // File is outside extraction directory (shouldn't happen)
+          // Just use the filename
+          logger.warn(
+            `File ${hashedFile.originalPath} is outside extraction directory ${actualInputDir}`
+          );
+          relativePath = path.basename(hashedFile.originalPath);
+        }
+
+        // Normalize the path separators for consistency (use forward slashes)
+        relativePath = relativePath.replace(/\\/g, '/');
+
+        // Add empty uploadedAt field for compatibility with submit-to-contract
         csvData.push(
-          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid}`
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},`
         );
       }
     }

@@ -553,7 +553,7 @@ elephant-cli hash property-data.zip \
 - Validates all JSON files against their schemas
 - Calculates CIDs for all files (including linked files)
 - Replaces file path links with calculated CIDs
-- Generates CSV with hash results (compatible with submit-to-contract)
+- Generates CSV with hash results (fully compatible with submit-to-contract)
 - Creates output ZIP with CID-named files
 
 **Key Features:**
@@ -561,7 +561,7 @@ elephant-cli hash property-data.zip \
 - **Single property processing** - optimized for processing one property at a time
 - **IPLD link resolution** - automatically converts file paths to CIDs
 - **Seed datagroup support** - handles seed files correctly
-- **CSV output** - generates submission-ready CSV (without htmlLink column)
+- **CSV output** - generates submission-ready CSV compatible with submit-to-contract
 
 **Input Requirements:**
 - Must be a ZIP file (directories not supported)
@@ -577,9 +577,9 @@ hashed-data.zip/
     └── bafkreifile3.json
 
 upload-results.csv:
-propertyCid,dataGroupCid,dataCid
-bafybeiproperty...,bafkreischema1...,bafkreifile1...
-bafybeiproperty...,bafkreischema2...,bafkreifile2...
+propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+bafybeiproperty...,bafkreischema1...,bafkreifile1...,data.json,
+bafybeiproperty...,bafkreischema2...,bafkreifile2...,other.json,
 ```
 
 ### CID-Hex Conversion

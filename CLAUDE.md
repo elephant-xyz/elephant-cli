@@ -122,7 +122,7 @@ This command:
 6. **Calculates CIDs for all files without uploading to IPFS**
 7. **Replaces all file path links with calculated CIDs**
 8. **Canonicalizes all data**
-9. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid)
+9. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
 10. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:

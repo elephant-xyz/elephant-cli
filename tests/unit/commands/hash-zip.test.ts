@@ -265,10 +265,12 @@ describe('Hash Command - ZIP Input', () => {
         testExtractedDir
       );
 
-      // Verify CSV was written with correct headers
+      // Verify CSV was written with correct headers including filePath and uploadedAt
       expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledWith(
         testOutputCsv,
-        expect.stringContaining('propertyCid,dataGroupCid,dataCid'),
+        expect.stringContaining(
+          'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+        ),
         'utf-8'
       );
 
@@ -329,10 +331,12 @@ describe('Hash Command - ZIP Input', () => {
       // Verify seed file was processed
       expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
 
-      // Verify CSV contains both entries
+      // Verify CSV contains both entries with filePath and uploadedAt columns
       const csvContent = vi.mocked(fsPromises.writeFile).mock
         .calls[0][1] as string;
-      expect(csvContent).toContain('propertyCid,dataGroupCid,dataCid');
+      expect(csvContent).toContain(
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      );
 
       // Verify ZIP was created
       const mockZip = vi.mocked(AdmZip).mock.results[0].value;
