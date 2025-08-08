@@ -526,6 +526,62 @@ my-data.zip/
         └── bafkreiref456.json  # Referenced files
 ```
 
+### Hash Command (Offline CID Calculation)
+
+The `hash` command allows you to calculate CIDs for all files in a single property ZIP archive without uploading to IPFS. This is useful for:
+- Offline CID calculation and verification
+- Pre-computing CIDs before submission
+- Testing data transformations locally
+- Generating submission CSVs without network access
+
+```bash
+# Basic usage
+elephant-cli hash property-data.zip
+
+# With custom output files
+elephant-cli hash property-data.zip \
+  --output-zip hashed-data.zip \
+  --output-csv upload-results.csv
+
+# With concurrency control
+elephant-cli hash property-data.zip \
+  --max-concurrent-tasks 20
+```
+
+**What this does:**
+- **Requires ZIP input** containing single property data
+- Validates all JSON files against their schemas
+- Calculates CIDs for all files (including linked files)
+- Replaces file path links with calculated CIDs
+- Generates CSV with hash results (compatible with submit-to-contract)
+- Creates output ZIP with CID-named files
+
+**Key Features:**
+- **Completely offline** - no network requests or IPFS uploads
+- **Single property processing** - optimized for processing one property at a time
+- **IPLD link resolution** - automatically converts file paths to CIDs
+- **Seed datagroup support** - handles seed files correctly
+- **CSV output** - generates submission-ready CSV (without htmlLink column)
+
+**Input Requirements:**
+- Must be a ZIP file (directories not supported)
+- Should contain data for a single property
+- Files must follow standard naming convention (schema CID as filename)
+
+**Output Structure:**
+```
+hashed-data.zip/
+└── bafybeiproperty.../           # Property CID folder
+    ├── bafkreifile1.json         # Files named by their calculated CID
+    ├── bafkreifile2.json
+    └── bafkreifile3.json
+
+upload-results.csv:
+propertyCid,dataGroupCid,dataCid
+bafybeiproperty...,bafkreischema1...,bafkreifile1...
+bafybeiproperty...,bafkreischema2...,bafkreifile2...
+```
+
 ### CID-Hex Conversion
 
 The CLI provides utilities to convert between IPFS CIDs and Ethereum hex hashes:
@@ -744,6 +800,7 @@ elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli fetch-data --help
+elephant-cli hash --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```

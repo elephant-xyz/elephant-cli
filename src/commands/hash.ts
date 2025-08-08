@@ -86,6 +86,7 @@ function validateDataGroupSchema(schema: any): {
 export interface HashCommandOptions {
   input: string;
   outputZip: string;
+  outputCsv: string;
   maxConcurrentTasks?: number;
 }
 
@@ -93,12 +94,17 @@ export function registerHashCommand(program: Command) {
   program
     .command('hash <input>')
     .description(
-      'Calculate CIDs for all files, replace links with CIDs, and output transformed data as ZIP. Input can be a directory or ZIP file.'
+      'Calculate CIDs for all files in a single property ZIP archive, replace links with CIDs, and output transformed data as ZIP with CSV report.'
     )
     .option(
       '-o, --output-zip <path>',
       'Output ZIP file path for transformed data',
       'hashed-data.zip'
+    )
+    .option(
+      '-c, --output-csv <path>',
+      'Output CSV file path for hash results',
+      'upload-results.csv'
     )
     .option(
       '--max-concurrent-tasks <number>',
@@ -134,7 +140,9 @@ export async function handleHash(
   options: HashCommandOptions,
   serviceOverrides: HashServiceOverrides = {}
 ) {
-  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Hash'));
+  console.log(
+    chalk.bold.blue('🐘 Elephant Network CLI - Hash (Single Property)')
+  );
   console.log();
 
   // Initialize services
@@ -142,24 +150,50 @@ export async function handleHash(
   let actualInputDir = options.input;
   let tempDir: string | null = null;
 
+  // Validate that input is a ZIP file (REQUIRED - no directory support)
   try {
-    // Check if input is a ZIP file
-    const isZip = await zipExtractor.isZipFile(options.input);
-    if (isZip) {
-      logger.info(`Detected ZIP file: ${options.input}`);
-      actualInputDir = await zipExtractor.extractZip(options.input);
-      tempDir = zipExtractor.getTempRootDir(actualInputDir);
-      logger.info(`Extracted to: ${actualInputDir}`);
+    const stats = await fsPromises.stat(options.input);
+    if (!stats.isFile()) {
+      console.error(
+        chalk.red('❌ Error: Input must be a ZIP file, not a directory')
+      );
+      console.error(
+        chalk.yellow(
+          'The hash command only accepts ZIP archives containing single property data.'
+        )
+      );
+      process.exit(1);
     }
+
+    const isZip = await zipExtractor.isZipFile(options.input);
+    if (!isZip) {
+      console.error(chalk.red('❌ Error: Input must be a valid ZIP file'));
+      console.error(
+        chalk.yellow(
+          'The hash command only accepts ZIP archives containing single property data.'
+        )
+      );
+      process.exit(1);
+    }
+
+    logger.info(`Processing single property ZIP file: ${options.input}`);
+    actualInputDir = await zipExtractor.extractZip(options.input);
+    tempDir = zipExtractor.getTempRootDir(actualInputDir);
+    logger.info(`Extracted single property data to temporary directory`);
+
+    // IMPORTANT: For single property processing, the extracted directory IS the property directory
+    // We process all files directly from the extracted root
   } catch (error) {
     logger.error(
-      `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to process ZIP input: ${error instanceof Error ? error.message : String(error)}`
     );
     process.exit(1);
   }
 
-  logger.technical(`Input directory: ${actualInputDir}`);
+  logger.technical(`Processing single property data from: ${actualInputDir}`);
   logger.technical(`Output ZIP: ${options.outputZip}`);
+  logger.technical(`Output CSV: ${options.outputCsv}`);
+  logger.info('Note: Processing single property data only');
 
   const FALLBACK_LOCAL_CONCURRENCY = 10;
   const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
@@ -511,19 +545,56 @@ export async function handleHash(
       await Promise.all(allOperationPromises);
     }
 
-    // Phase 3: Create output ZIP with transformed data
-    progressTracker.setPhase('Creating Output ZIP', 1);
-    logger.info('Creating output ZIP with transformed data...');
+    // Phase 3: Generate CSV output and create output ZIP
+    progressTracker.setPhase('Creating Output Files', 2);
 
+    // Generate CSV with hash results (similar to validate-and-upload --dry-run but without htmlLink)
+    logger.info('Generating CSV with hash results...');
+    const csvData: string[] = [
+      'propertyCid,dataGroupCid,dataCid', // Headers without htmlLink column
+    ];
+
+    // Process hashed files to generate CSV entries
+    // We only include main datagroup files in CSV, not linked files
+    for (const hashedFile of hashedFiles) {
+      if (hashedFile.dataGroupCid) {
+        // Only include files with dataGroupCid (main files, not linked)
+        csvData.push(
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid}`
+        );
+      }
+    }
+
+    // Write CSV file
+    await fsPromises.writeFile(options.outputCsv, csvData.join('\n'), 'utf-8');
+    logger.success(`CSV results written to: ${options.outputCsv}`);
+    progressTracker.increment('processed');
+
+    // Create output ZIP with transformed data
+    logger.info('Creating output ZIP with transformed data...');
     const zip = new AdmZip();
 
-    // Add each hashed file to the ZIP with CID as filename
+    // Determine the property CID (should be consistent for single property)
+    // Use the first non-empty propertyCid found
+    let propertyFolderName = '';
     for (const hashedFile of hashedFiles) {
-      // Determine the directory structure in the ZIP
-      // Use property CID as directory name, and calculated CID as filename
+      if (hashedFile.propertyCid && hashedFile.propertyCid !== '') {
+        propertyFolderName = hashedFile.propertyCid;
+        break;
+      }
+    }
+
+    if (!propertyFolderName) {
+      logger.error('Could not determine property CID for output folder');
+      propertyFolderName = 'unknown-property';
+    }
+
+    // Add each hashed file to the ZIP
+    // For single property: use property CID as the single folder name (no 'data' wrapper)
+    for (const hashedFile of hashedFiles) {
+      // Single folder structure: propertyCid/calculatedCid.json
       const zipPath = path.join(
-        'data',
-        hashedFile.propertyCid,
+        propertyFolderName,
         `${hashedFile.calculatedCid}.json`
       );
 
@@ -585,6 +656,7 @@ export async function handleHash(
     console.log(`\n  Error report:   ${config.errorCsvPath}`);
     console.log(`  Warning report: ${config.warningCsvPath}`);
     console.log(`  Output ZIP:     ${options.outputZip}`);
+    console.log(`  Output CSV:     ${options.outputCsv}`);
 
     // Clean up temporary directory if it was created
     if (tempDir) {

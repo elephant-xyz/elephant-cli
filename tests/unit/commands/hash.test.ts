@@ -26,6 +26,7 @@ vi.mock('fs', async () => {
       mkdir: vi.fn(),
       mkdtemp: vi.fn(),
       rm: vi.fn(),
+      writeFile: vi.fn(),
     },
   };
 });
@@ -43,16 +44,27 @@ describe('Hash Command', () => {
   let mockIpldConverterService: any;
 
   const testInputDir = '/test/input';
+  const testInputZip = '/test/input.zip';
   const testOutputZip = '/test/output/hashed.zip';
+  const testOutputCsv = '/test/output/upload-results.csv';
+  const testExtractedDir = '/tmp/extracted';
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock file system operations
-    vi.mocked(fsPromises.stat).mockResolvedValue({
-      isDirectory: () => true,
-      isFile: () => false,
-    } as any);
+    // Mock file system operations for ZIP file
+    vi.mocked(fsPromises.stat).mockImplementation(async (path) => {
+      if (path === testInputZip) {
+        return {
+          isDirectory: () => false,
+          isFile: () => true,
+        } as any;
+      }
+      return {
+        isDirectory: () => true,
+        isFile: () => false,
+      } as any;
+    });
 
     // Create mock services
     mockFileScannerService = {
@@ -65,13 +77,8 @@ describe('Hash Command', () => {
       scanDirectory: vi.fn().mockImplementation(async function* () {
         yield [
           {
-            filePath: '/test/input/property1/data.json',
+            filePath: '/tmp/extracted/data.json',
             propertyCid: 'property1',
-            dataGroupCid: 'schema-cid-1',
-          },
-          {
-            filePath: '/test/input/property2/data.json',
-            propertyCid: 'property2',
             dataGroupCid: 'schema-cid-1',
           },
         ];
@@ -161,10 +168,62 @@ describe('Hash Command', () => {
   });
 
   describe('handleHash', () => {
-    it('should process files and generate output ZIP with CID-named files', async () => {
+    it('should require ZIP input and reject directory input', async () => {
+      // Mock as directory instead of file
+      vi.mocked(fsPromises.stat).mockResolvedValueOnce({
+        isDirectory: () => true,
+        isFile: () => false,
+      } as any);
+
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('Process exited');
+      }) as any);
+
+      await expect(
+        handleHash({
+          input: '/test/directory',
+          outputZip: testOutputZip,
+          outputCsv: testOutputCsv,
+        })
+      ).rejects.toThrow('Process exited');
+
+      expect(mockExit).toHaveBeenCalledWith(1);
+      mockExit.mockRestore();
+    });
+
+    it('should process ZIP file and generate output with CSV', async () => {
+      // Mock ZIP extraction service behavior
+      const mockZipExtractor = {
+        isZipFile: vi.fn().mockResolvedValue(true),
+        extractZip: vi.fn().mockResolvedValue(testExtractedDir),
+        getTempRootDir: vi.fn().mockReturnValue('/tmp'),
+        cleanup: vi.fn().mockResolvedValue(undefined),
+      };
+
       // Mock file reading
       vi.mocked(fsPromises.readFile).mockResolvedValue(
         JSON.stringify({ label: 'Test', relationships: {} })
+      );
+
+      // Mock file writing for CSV
+      vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
+
+      // Import and mock ZipExtractorService
+      const { ZipExtractorService } = await import(
+        '../../../src/services/zip-extractor.service.js'
+      );
+      vi.spyOn(ZipExtractorService.prototype, 'isZipFile').mockImplementation(
+        mockZipExtractor.isZipFile
+      );
+      vi.spyOn(ZipExtractorService.prototype, 'extractZip').mockImplementation(
+        mockZipExtractor.extractZip
+      );
+      vi.spyOn(
+        ZipExtractorService.prototype,
+        'getTempRootDir'
+      ).mockImplementation(mockZipExtractor.getTempRootDir);
+      vi.spyOn(ZipExtractorService.prototype, 'cleanup').mockImplementation(
+        mockZipExtractor.cleanup
       );
 
       const options = {
