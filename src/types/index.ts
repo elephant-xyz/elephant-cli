@@ -67,6 +67,32 @@ export interface ConsensusAnalysis {
   submitterData: Map<string, { hash: string; cid: string }>; // submitter -> {hash, cid}
   totalSubmitters: number;
   uniqueDataHashes: number;
+  comparisonResult?: MultiComparisonResult; // Added for partial consensus differences
+}
+
+export interface MultiComparisonResult {
+  propertyHash: string;
+  dataGroupHash: string;
+  cids: string[];
+  pairwiseComparisons: ComparisonResult[];
+  summary: string;
+  totalDifferences: number;
+}
+
+export interface ComparisonResult {
+  cid1: string;
+  cid2: string;
+  differences: DifferenceDetail[];
+  differenceCount: number;
+  hasDifferences: boolean;
+}
+
+export interface DifferenceDetail {
+  path: string;
+  type: 'ADD' | 'UPDATE' | 'REMOVE';
+  oldValue?: any;
+  newValue?: any;
+  description: string;
 }
 
 export interface ConsensusState {
@@ -84,6 +110,8 @@ export interface ConsensusStatusOptions {
   eventBatchSize?: number;
   parallelWorkers?: number;
   memoryLimit?: number;
+  gatewayUrl?: string; // IPFS gateway URL for fetching data
+  analyzeDifferences?: boolean; // Whether to analyze differences for partial consensus
   progressInterval?: number;
 }
 

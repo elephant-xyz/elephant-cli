@@ -33,6 +33,10 @@ export class ConsensusReporterService {
       headers.push(`${submitter}_cid`);
     }
 
+    // Add difference analysis columns
+    headers.push('totalDifferences');
+    headers.push('differenceSummary');
+
     this.writeStream.write(headers.join(',') + '\n');
     this.headerWritten = true;
 
@@ -78,7 +82,25 @@ export class ConsensusReporterService {
       }
     }
 
-    return [...baseFields, ...submitterFields]
+    // Add difference analysis fields
+    const differenceFields: string[] = [];
+    if (analysis.comparisonResult) {
+      differenceFields.push(
+        analysis.comparisonResult.totalDifferences.toString()
+      );
+      // Format the summary for CSV - preserve structure but make it CSV-friendly
+      // Keep newlines as | separators, but preserve the hierarchical information
+      const summary = analysis.comparisonResult.summary
+        .replace(/\n\n/g, ' || ')  // Double newlines become double pipes
+        .replace(/\n/g, ' | ')      // Single newlines become single pipes
+        .replace(/"/g, '""');       // Escape quotes for CSV
+      differenceFields.push(summary);
+    } else {
+      differenceFields.push('-');
+      differenceFields.push('-');
+    }
+
+    return [...baseFields, ...submitterFields, ...differenceFields]
       .map((field) => this.escapeCSV(field))
       .join(',');
   }

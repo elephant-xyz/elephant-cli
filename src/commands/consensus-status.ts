@@ -1,9 +1,10 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora, { Ora } from 'ora';
 import { BlockchainService } from '../services/blockchain.service.js';
 import { ConsensusReporterService } from '../services/consensus-reporter.service.js';
 import { CidHexConverterService } from '../services/cid-hex-converter.service.js';
+import { IpfsDataComparatorService } from '../services/ipfs-data-comparator.service.js';
 import {
   ConsensusStatusOptions,
   ConsensusState,
@@ -94,6 +95,17 @@ export async function consensusStatusCommand(
     spinner.succeed(
       `Analyzed ${analysis.length} property-datagroup combinations`
     );
+
+    // Analyze differences for partial consensus if enabled
+    if (options.analyzeDifferences) {
+      spinner.start('Analyzing differences for partial consensus cases...');
+      await analyzeDifferencesForPartialConsensus(
+        analysis,
+        options.gatewayUrl || 'https://gateway.pinata.cloud/ipfs',
+        spinner
+      );
+      spinner.succeed('Difference analysis complete');
+    }
 
     // Generate CSV report
     spinner.start(`Writing CSV report to ${options.outputCsv}...`);
@@ -200,6 +212,59 @@ function analyzeConsensusStatus(state: ConsensusState): ConsensusAnalysis[] {
   return analyses;
 }
 
+async function analyzeDifferencesForPartialConsensus(
+  analyses: ConsensusAnalysis[],
+  gatewayUrl: string,
+  spinner: Ora
+): Promise<void> {
+  const comparator = new IpfsDataComparatorService(gatewayUrl);
+  // Analyze any case with multiple unique hashes where consensus is not full
+  // This includes both partial consensus and no consensus cases
+  const casesToAnalyze = analyses.filter(
+    (a) => a.consensusReached !== true && a.uniqueDataHashes > 1
+  );
+
+  logger.info(
+    `Found ${casesToAnalyze.length} cases with differences to analyze`
+  );
+
+  let analyzed = 0;
+  for (const analysis of casesToAnalyze) {
+    try {
+      // Collect unique CIDs
+      const uniqueCids = new Set<string>();
+      for (const data of analysis.submitterData.values()) {
+        if (data.cid) {
+          uniqueCids.add(data.cid);
+        }
+      }
+
+      if (uniqueCids.size > 1) {
+        spinner.text = `Analyzing differences ${++analyzed}/${casesToAnalyze.length}...`;
+
+        const cids = Array.from(uniqueCids);
+        const comparisonResult = await comparator.compareMultipleCids(
+          cids,
+          analysis.propertyHash,
+          analysis.dataGroupHash
+        );
+
+        analysis.comparisonResult = comparisonResult;
+
+        logger.info(
+          `Analyzed property ${analysis.propertyHash.slice(0, 10)}..., found ${comparisonResult.totalDifferences} differences`
+        );
+      }
+    } catch (error) {
+      logger.error(
+        `Failed to analyze differences for property ${analysis.propertyHash.slice(0, 10)}...: ${error}`
+      );
+    }
+  }
+
+  comparator.clearCache();
+}
+
 function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
   console.log('\n' + chalk.bold('Consensus Status Summary'));
   console.log('='.repeat(50));
@@ -236,6 +301,70 @@ function displayConsensusSummary(analyses: ConsensusAnalysis[]): void {
     `Partial consensus (2 agree): ${chalk.yellow(partialConsensusCount)} (${partialConsensusPercentage}%)`
   );
   console.log(`No consensus: ${chalk.red(noConsensusCount)}`);
+
+  // Show cases with differences (partial consensus or no consensus with multiple submissions)
+  const casesWithDifferences = analyses.filter(
+    (a) => a.comparisonResult && a.comparisonResult.totalDifferences > 0
+  );
+
+  if (casesWithDifferences.length > 0) {
+    console.log('\n' + chalk.bold('Submission Differences Found:'));
+    console.log(chalk.gray('(Showing top 3 cases with most differences)'));
+    
+    // Sort by total differences and show top 3
+    const topCases = casesWithDifferences
+      .sort((a, b) => (b.comparisonResult?.totalDifferences || 0) - (a.comparisonResult?.totalDifferences || 0))
+      .slice(0, 3);
+    
+    for (const analysis of topCases) {
+      console.log('\n' + chalk.cyan('─'.repeat(60)));
+      console.log(chalk.bold(`Property: `) + chalk.gray(analysis.propertyHash.slice(0, 10) + '...'));
+      console.log(chalk.bold(`DataGroup: `) + chalk.gray(analysis.dataGroupHash.slice(0, 10) + '...'));
+      console.log(chalk.bold(`Consensus: `) + (
+        analysis.consensusReached === true ? chalk.green('Full') :
+        analysis.consensusReached === 'partial' ? chalk.yellow('Partial') :
+        chalk.red('None')
+      ));
+      console.log(chalk.bold(`Submitters: `) + analysis.totalSubmitters + 
+        chalk.gray(` (${analysis.uniqueDataHashes} unique submissions)`));
+      
+      if (analysis.comparisonResult) {
+        console.log('\n' + chalk.bold('Difference Analysis:'));
+        // Split the summary into lines and format each section
+        const summaryLines = analysis.comparisonResult.summary.split('\n');
+        let inDifferencesSection = false;
+        let inStatsSection = false;
+        
+        for (const line of summaryLines) {
+          if (line.includes('DIFFERENCES FOUND:')) {
+            inDifferencesSection = true;
+            inStatsSection = false;
+            console.log(chalk.yellow('  ' + line));
+          } else if (line.includes('SUMMARY STATISTICS:')) {
+            inDifferencesSection = false;
+            inStatsSection = true;
+            console.log(chalk.blue('\n  ' + line));
+          } else if (line.startsWith('📍 Path:')) {
+            console.log(chalk.magenta('  ' + line));
+          } else if (line.includes('Values across submissions:') || line.includes('Sample values:')) {
+            console.log(chalk.gray('  ' + line));
+          } else if (line.includes('• ...')) {
+            // Value lines
+            console.log(chalk.white('  ' + line));
+          } else if (inStatsSection && line.includes('•')) {
+            console.log(chalk.cyan('  ' + line));
+          } else if (line.trim()) {
+            console.log('  ' + line);
+          }
+        }
+      }
+    }
+    
+    if (casesWithDifferences.length > 3) {
+      console.log('\n' + chalk.gray(`... and ${casesWithDifferences.length - 3} more cases with differences`));
+      console.log(chalk.gray(`See the full report in: ${analyses.length > 0 ? 'consensus CSV file' : 'the output CSV'}`));
+    }
+  }
 
   // Show top disputed groups
   const disputedGroups = analyses
@@ -281,6 +410,16 @@ export function registerConsensusStatusCommand(program: Command): void {
       'Number of events to process at once',
       '500'
     )
+    .option(
+      '-g, --gateway-url <url>',
+      'IPFS gateway URL for fetching data',
+      'https://gateway.pinata.cloud/ipfs'
+    )
+    .option(
+      '--analyze-differences',
+      'Analyze and report differences for partial consensus cases',
+      false
+    )
     .action(async (options) => {
       try {
         // Parse and validate options
@@ -292,6 +431,8 @@ export function registerConsensusStatusCommand(program: Command): void {
           contractAddress: options.contractAddress,
           blockChunkSize: parseInt(options.blockChunkSize, 10),
           eventBatchSize: parseInt(options.eventBatchSize, 10),
+          gatewayUrl: options.gatewayUrl,
+          analyzeDifferences: options.analyzeDifferences,
         };
 
         // Validate block numbers
