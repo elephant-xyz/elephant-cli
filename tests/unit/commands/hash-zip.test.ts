@@ -1,16 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import path from 'path';
 import AdmZip from 'adm-zip';
 import { handleHash } from '../../../src/commands/hash.js';
-import { FileScannerService } from '../../../src/services/file-scanner.service.js';
-import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
-import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
-import { IPLDCanonicalizerService } from '../../../src/services/ipld-canonicalizer.service.js';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
-import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
-import { SimpleProgress } from '../../../src/utils/simple-progress.js';
-import { IPLDConverterService } from '../../../src/services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
 
