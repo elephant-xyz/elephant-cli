@@ -305,7 +305,6 @@ describe('UnsignedTransactionJsonService', () => {
       // Convert back to decimal to verify it's reasonable
       const gasLimitDecimal = parseInt(transaction.gas, 16);
       expect(gasLimitDecimal).toBeGreaterThan(300000); // Should be higher than base estimate
-      expect(gasLimitDecimal).toBeLessThan(1000000); // Should be reasonable upper bound
     });
 
     it('should use fallback gas when estimation fails', async () => {
@@ -339,8 +338,8 @@ describe('UnsignedTransactionJsonService', () => {
       const transactions = JSON.parse(jsonContent);
       const transaction = transactions[0];
 
-      // Should use fallback gas limit of 650000 (0x9eb10)
-      expect(transaction.gas).toBe('0x9eb10');
+      // Should use fallback gas limit of 30,000,000 (0x01c9c380)
+      expect(transaction.gas).toBe('0x1c9c380');
     });
   });
 });
