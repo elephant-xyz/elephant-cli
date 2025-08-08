@@ -414,6 +414,48 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ## Utility Commands
 
+### Hash Command
+
+The `hash` command calculates CIDs for all files in your data, replaces file path links with their corresponding CIDs, and outputs the transformed data as a ZIP archive with CID-based filenames. This is useful for:
+
+- Pre-calculating CIDs without uploading to IPFS
+- Verifying what CIDs your data will have after upload
+- Creating a portable archive of your data with all links resolved
+- Testing data transformations before actual submission
+
+```bash
+# Basic usage (outputs to hashed-data.zip by default)
+elephant-cli hash ./your-data
+
+# With custom output ZIP file
+elephant-cli hash ./your-data --output-zip ./transformed-data.zip
+
+# Process a ZIP file as input
+elephant-cli hash ./your-data.zip --output-zip ./hashed-output.zip
+
+# With custom concurrency limit
+elephant-cli hash ./your-data --max-concurrent-tasks 5
+```
+
+**Features:**
+- Calculates CIDs for all files using the same algorithm as `validate-and-upload --dry-run`
+- Replaces file path references (e.g., `{"/": "./file.json"}`) with calculated CIDs
+- Handles IPLD links and ipfs_url fields
+- Processes seed datagroup files correctly
+- Outputs a ZIP archive with transformed data, using CIDs as filenames
+- Validates data against schemas before processing
+
+**Output Structure:**
+```
+hashed-data.zip
+└── data/
+    ├── property-cid-1/
+    │   ├── bafybeiabc123...json  # File named with its calculated CID
+    │   └── bafybeixyz789...json
+    └── property-cid-2/
+        └── bafybeidef456...json
+```
+
 ### Data Fetching
 
 The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively and packaging them as a ZIP file. It supports two input modes:
@@ -482,6 +524,62 @@ my-data.zip/
     └── bafybeicid123.../      # CID mode output
         ├── bafkreiroot.json    # Root data file
         └── bafkreiref456.json  # Referenced files
+```
+
+### Hash Command (Offline CID Calculation)
+
+The `hash` command allows you to calculate CIDs for all files in a single property ZIP archive without uploading to IPFS. This is useful for:
+- Offline CID calculation and verification
+- Pre-computing CIDs before submission
+- Testing data transformations locally
+- Generating submission CSVs without network access
+
+```bash
+# Basic usage
+elephant-cli hash property-data.zip
+
+# With custom output files
+elephant-cli hash property-data.zip \
+  --output-zip hashed-data.zip \
+  --output-csv upload-results.csv
+
+# With concurrency control
+elephant-cli hash property-data.zip \
+  --max-concurrent-tasks 20
+```
+
+**What this does:**
+- **Requires ZIP input** containing single property data
+- Validates all JSON files against their schemas
+- Calculates CIDs for all files (including linked files)
+- Replaces file path links with calculated CIDs
+- Generates CSV with hash results (fully compatible with submit-to-contract)
+- Creates output ZIP with CID-named files
+
+**Key Features:**
+- **Completely offline** - no network requests or IPFS uploads
+- **Single property processing** - optimized for processing one property at a time
+- **IPLD link resolution** - automatically converts file paths to CIDs
+- **Seed datagroup support** - handles seed files correctly
+- **CSV output** - generates submission-ready CSV compatible with submit-to-contract
+
+**Input Requirements:**
+- Must be a ZIP file (directories not supported)
+- Should contain data for a single property
+- Files must follow standard naming convention (schema CID as filename)
+
+**Output Structure:**
+```
+hashed-data.zip/
+└── bafybeiproperty.../           # Property CID folder
+    ├── bafkreifile1.json         # Files named by their calculated CID
+    ├── bafkreifile2.json
+    └── bafkreifile3.json
+
+upload-results.csv:
+propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+bafybeiproperty...,bafkreischema1...,bafkreifile1...,data.json,
+bafybeiproperty...,bafkreischema2...,bafkreifile2...,other.json,
 ```
 
 ### CID-Hex Conversion
@@ -702,6 +800,7 @@ elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli fetch-data --help
+elephant-cli hash --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```

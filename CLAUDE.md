@@ -111,6 +111,31 @@ This command:
 4. Submits data hashes to the smart contract in batches
 5. In dry-run mode, can optionally generate unsigned transactions CSV for later signing and submission
 
+### hash Command
+
+This command:
+1. **Requires ZIP file input** containing single property data
+2. Extracts ZIP to temporary directory for processing
+3. Validates file structure and JSON data against schemas
+4. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+5. Handles seed datagroup processing (processes seed files first)
+6. **Calculates CIDs for all files without uploading to IPFS**
+7. **Replaces all file path links with calculated CIDs**
+8. **Canonicalizes all data**
+9. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
+10. **Outputs transformed data as a ZIP archive with CID-based filenames**
+
+Key features:
+- **Single Property Only**: Processes data for one property at a time
+- **ZIP Input Required**: Only accepts ZIP archives, not directories
+- **CSV Output**: Generates submission-ready CSV compatible with `submit-to-contract`
+- **CID Calculation**: Uses the same algorithm as `validate-and-upload --dry-run`
+- **Link Replacement**: Converts `{"/": "./file.json"}` references to `{"/": "calculated-cid"}`
+- **IPLD Support**: Handles IPLD links and ipfs_url fields correctly
+- **Image Processing**: Calculates appropriate CIDs for image files with ipfs_uri format
+- **Seed Datagroup**: Processes seed files first and uses their CIDs for property identification
+- **Output Structure**: Creates ZIP with single `property-cid/file-cid.json` structure (no 'data' wrapper)
+
 ### fetch-data Command
 
 This command:
@@ -269,6 +294,12 @@ npm run dev
   --dry-run \
   --unsigned-transactions-json unsigned_txs.json
 
+# Test the CLI - Hash command (offline CID calculation for single property)
+./bin/elephant-cli hash ./property-data.zip \
+  --output-zip ./hashed-data.zip \
+  --output-csv ./upload-results.csv \
+  --max-concurrent-tasks 20
+
 # Test the CLI - Fetch data from CID
 ./bin/elephant-cli fetch-data bafybeiabc123... \
   --gateway https://ipfs.io/ipfs/ \
@@ -307,6 +338,7 @@ npm run test:coverage
 - `src/commands/validate-and-upload.ts` - Validate and upload to IPFS command
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
 - `src/commands/fetch-data.ts` - Fetch data from IPFS command
+- `src/commands/hash.ts` - Calculate CIDs offline for single property data
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
