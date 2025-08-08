@@ -1,6 +1,7 @@
 import { AbiCoder, getAddress, dataSlice, Log } from 'ethers';
-import { OracleAssignment } from '../types/index.js';
+import { OracleAssignment, DataSubmittedEvent } from '../types/index.js';
 import { isValidCID, deriveCIDFromHash } from '../utils/validation.js';
+import { logger } from '../utils/logger.js';
 
 export class EventDecoderService {
   private abiCoder: AbiCoder;
@@ -47,5 +48,52 @@ export class EventDecoderService {
       blockNumber: event.blockNumber,
       transactionHash: event.transactionHash,
     };
+  }
+
+  public parseDataSubmittedEvent(event: Log): DataSubmittedEvent | null {
+    try {
+      // DataSubmitted event structure:
+      // event DataSubmitted(
+      //   bytes32 indexed propertyHash,
+      //   bytes32 indexed dataGroupHash,
+      //   address indexed submitter,
+      //   bytes32 dataHash
+      // );
+
+      // Validate we have the expected number of topics
+      if (!event.topics || event.topics.length !== 4) {
+        logger.error(
+          `Invalid DataSubmitted event: expected 4 topics, got ${event.topics?.length}`
+        );
+        return null;
+      }
+
+      // topics[0] is the event signature
+      // topics[1] is propertyHash (bytes32)
+      // topics[2] is dataGroupHash (bytes32)
+      // topics[3] is submitter (address)
+
+      const propertyHash = event.topics[1];
+      const dataGroupHash = event.topics[2];
+
+      // Extract address from topic (last 20 bytes of 32-byte topic)
+      const submitterAddress = dataSlice(event.topics[3], 12);
+      const submitter = getAddress(submitterAddress).toLowerCase();
+
+      // Decode non-indexed data (dataHash)
+      const [dataHash] = this.abiCoder.decode(['bytes32'], event.data);
+
+      return {
+        propertyHash,
+        dataGroupHash,
+        submitter,
+        dataHash,
+        blockNumber: event.blockNumber,
+        transactionHash: event.transactionHash,
+      };
+    } catch (error) {
+      logger.error(`Error parsing DataSubmitted event: ${error}`);
+      return null;
+    }
   }
 }

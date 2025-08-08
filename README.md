@@ -453,6 +453,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 ```
 
 **Transaction Mode Details:**
+
 - Fetches transaction data from the blockchain
 - Decodes `submitBatchData` calls to extract property, data group, and data hashes
 - Converts hashes to CIDs using the `CidHexConverterService` (raw codec, base32 encoding)
@@ -460,6 +461,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - Downloads all referenced data recursively
 
 **Features:**
+
 - Recursively follows all CID references in JSON data
 - Replaces CID references with local file paths
 - Preserves data structure and relationships
@@ -468,6 +470,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - **Outputs as ZIP file** for easy distribution and archiving
 
 **ZIP File Structure:**
+
 ```
 my-data.zip/
 └── data/                        # Top-level data folder
@@ -483,6 +486,130 @@ my-data.zip/
         ├── bafkreiroot.json    # Root data file
         └── bafkreiref456.json  # Referenced files
 ```
+
+### Consensus Status
+
+The `consensus-status` command analyzes DataSubmitted events from the blockchain to check consensus status across different property-datagroup combinations:
+
+```bash
+# Basic usage
+elephant-cli consensus-status --from-block 50000000 --output-csv consensus-report.csv --rpc-url https://polygon-rpc.com
+
+# With custom end block
+elephant-cli consensus-status --from-block 50000000 --to-block 51000000 --output-csv report.csv --rpc-url https://polygon-rpc.com
+
+# With custom RPC and contract
+elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --contract-address 0x... \
+  --output-csv consensus.csv
+
+# Performance tuning for large datasets
+elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --block-chunk-size 1000 \
+  --event-batch-size 250 \
+  --output-csv consensus.csv
+```
+
+**What this does:**
+
+- Queries the blockchain for all DataSubmitted events in the specified range
+- Groups submissions by propertyHash and dataGroupHash
+- Analyzes consensus status:
+  - **Full consensus**: 3 or more submitters agree on the same dataHash
+  - **Partial consensus**: Exactly 2 submitters agree on the same dataHash
+  - **No consensus**: No dataHash has 2 or more submitters
+- Displays summary statistics including unique properties count
+- **NEW**: Optionally analyzes differences for partial consensus cases
+- Generates a CSV report with consensus status and difference analysis
+
+**Enhanced Difference Analysis:**
+
+When using the `--analyze-differences` flag, the command will:
+- Analyze cases without full consensus that have multiple unique data submissions
+- Fetch complete JSON data from IPFS for each unique CID
+- Recursively resolve all CID references to build complete JSON objects
+- Compare the data using json-diff-ts to find all differences
+- Provide detailed, human-readable difference summaries showing:
+  - Full JSON paths to different fields (e.g., `relationships.property_seed.from`)
+  - Actual values for each submission
+  - Clear indication when fields are missing ("undefined (field missing)")
+  - Array indices when applicable (e.g., `additional_notes[4]`)
+  - Grouped differences by path for easy understanding
+  - Summary statistics including total differences and unique paths
+
+```bash
+# Enable difference analysis for partial consensus
+elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --output-csv consensus.csv \
+  --analyze-differences \
+  --gateway-url https://gateway.pinata.cloud/ipfs
+```
+
+**Example Difference Output:**
+```
+📍 Path: purchase_price_amount
+  Values across submissions:
+    • ...xljrh7de: 500000
+    • ...n7p5466q: 550000
+
+📍 Path: relationships.property_seed.from
+  Values across submissions:
+    • ...xljrh7de: {"/": "bafkreiabc123..."}
+    • ...n7p5466q: {"/": "bafkreidef456..."}
+
+SUMMARY STATISTICS:
+  • Total differences: 6
+  • Unique paths with differences: 6
+  • Pairwise comparisons: 1
+```
+
+**CSV Output Format:**
+The CSV includes dynamic columns based on all submitters found. For each submitter address, there are two columns:
+
+- `<address>`: The data hash submitted by this oracle
+- `<address>_cid`: The IPFS CID (v1, raw codec) corresponding to the submitted hash
+
+When difference analysis is enabled, two additional columns are added:
+- `totalDifferences`: Number of differences found between unique submissions
+- `differenceSummary`: Detailed summary showing paths, values, and statistics
+
+```
+propertyHash,dataGroupHash,consensusReached,totalSubmitters,uniqueDataHashes,0x1234...,0x1234..._cid,0x5678...,0x5678..._cid,0xABCD...,0xABCD..._cid,totalDifferences,differenceSummary
+0xabc...,0xdef...,true,3,1,0x123...,bafkrei123...,0x123...,bafkrei123...,0x123...,bafkrei123...,-,-
+0xghi...,0xjkl...,partial,3,2,0x456...,bafkrei456...,0x456...,bafkrei456...,0x789...,bafkrei789...,6,"Compared 2 submissions (CIDs: ...ei456, ...ei789): | DIFFERENCES FOUND: | 📍 Path: purchase_price_amount | Values across submissions: | • ...ei456: 500000 | • ...ei789: 550000 | ..."
+0xmno...,0xpqr...,false,3,3,0x111...,bafkrei111...,0x222...,bafkrei222...,0x333...,bafkrei333...,12,"Compared 3 submissions (unique CIDs: ...ei111, ...ei222, ...ei333): | DIFFERENCES FOUND: | 📍 Path: name | Values across submissions: | • ...ei111: \"Property A\" | • ...ei222: \"Property B\" | • ...ei333: \"Property C\" | ..."
+```
+
+**Note**: Each oracle's submission is shown with both the hash and its corresponding IPFS CID, making it easy to:
+
+- Compare what different oracles submitted
+- Retrieve the actual data from IPFS using the CID
+- Identify consensus patterns at a glance
+- Understand exactly what differs between partial consensus submissions
+
+```
+
+**Options:**
+
+- `--from-block`: Starting block number (required)
+- `--to-block`: Ending block number (optional, defaults to latest)
+- `--rpc-url`: Custom RPC URL (optional)
+- `--contract-address`: Contract address (optional)
+- `--block-chunk-size`: Number of blocks to query at once (default: 2500)
+- `--event-batch-size`: Number of events to process at once (default: 500)
+
+**Performance Notes:**
+
+- Optimized for Polygon's high block density
+- Uses streaming to handle millions of events without memory issues
+- Includes retry logic for RPC failures
+- Shows progress updates during processing
 
 ### CID-Hex Conversion
 
@@ -508,7 +635,7 @@ elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7
 # Quiet mode for scripting
 elephant-cli hex-to-cid 0xb94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9 --quiet
 # Output: bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e
-```
+````
 
 #### cid-to-hex
 

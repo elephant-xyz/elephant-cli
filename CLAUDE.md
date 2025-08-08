@@ -130,6 +130,84 @@ Key features:
 - **Smart Filename Mapping**: Uses datagroup schema CIDs for root files based on their label
 - **ZIP Output**: All fetched data is packaged into a ZIP file for easy distribution
 
+### consensus-status Command
+
+This command analyzes DataSubmitted events from the blockchain to check consensus status across different property-datagroup combinations:
+
+1. Queries the blockchain for all DataSubmitted events in the specified range
+2. Groups submissions by propertyHash and dataGroupHash
+3. Analyzes consensus status:
+   - **Full consensus**: 3 or more submitters agree on the same dataHash
+   - **Partial consensus**: Exactly 2 submitters agree on the same dataHash
+   - **No consensus**: No dataHash has 2 or more submitters
+4. **Optionally analyzes differences** for cases without full consensus (when `--analyze-differences` flag is used):
+   - Analyzes both partial consensus AND no consensus cases with multiple unique submissions
+   - Fetches complete JSON data from IPFS for each unique CID
+   - Recursively resolves all CID references to build complete JSON objects
+   - Compares data using json-diff-ts library
+   - Provides detailed, human-readable difference summaries
+5. Displays summary statistics including unique properties count and top difference cases
+6. Generates a CSV report with dynamic columns:
+   - For each submitter address, includes the hash and corresponding CID
+   - Shows consensus status and statistics for each property-datagroup pair
+   - Includes difference analysis columns (totalDifferences, differenceSummary) when analysis is enabled
+
+Key features:
+- **Optimized Performance**: Handles millions of events using streaming
+- **Dynamic CSV Format**: Columns adapt based on all submitters found
+- **CID Conversion**: Shows both hashes and IPFS CIDs for easy data retrieval
+- **Enhanced Difference Analysis**: 
+  - Shows full JSON paths (e.g., `relationships.property_seed.from`)
+  - Displays actual values for each submission
+  - Clearly indicates missing fields
+  - Handles array indices (e.g., `additional_notes[4]`)
+  - Groups differences by path for clarity
+- **Improved Console Output**: Color-coded display with top cases highlighted
+- **Configurable**: Supports custom block ranges, RPC URLs, batch sizes, and IPFS gateways
+
+#### Difference Analysis Output Format
+
+The improved difference analysis provides clear, actionable information:
+
+```
+📍 Path: purchase_price_amount
+  Values across submissions:
+    • ...xljrh7de: 500000
+    • ...n7p5466q: 550000
+
+📍 Path: relationships.property_seed.from
+  Values across submissions:
+    • ...xljrh7de: {"/": "bafkreiabc123..."}
+    • ...n7p5466q: {"/": "bafkreidef456..."}
+
+📍 Path: additional_notes[4]
+  Values across submissions:
+    • ...xljrh7de: "Note about property condition"
+    • ...n7p5466q: undefined (field missing)
+
+SUMMARY STATISTICS:
+  • Total differences: 6
+  • Unique paths with differences: 6
+  • Pairwise comparisons: 1
+```
+
+#### Implementation Details
+
+**IpfsDataComparatorService** (`src/services/ipfs-data-comparator.service.ts`):
+- Fetches and constructs complete JSON objects from IPFS
+- Recursively resolves CID references
+- Performs pairwise comparisons using json-diff-ts
+- Generates human-readable difference summaries
+- Caches fetched data to optimize performance
+
+**Difference Analysis Flow**:
+1. Filter for partial consensus cases with `uniqueDataHashes > 1`
+2. Extract unique CIDs from submitter data
+3. Fetch and resolve complete JSON for each CID
+4. Perform pairwise comparisons between all unique submissions
+5. Generate summary with most common differences and comparison matrix
+6. Include results in CSV output for analysis
+
 ## Common Tasks for AI Assistants
 
 ### Adding New Features
@@ -279,6 +357,20 @@ npm run dev
   --rpc-url https://polygon-rpc.com \
   --gateway https://ipfs.io/ipfs/ \
   --output-zip ./tx-data.zip
+
+# Test the CLI - Check consensus status
+./bin/elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --output-csv consensus-report.csv
+
+# Test the CLI - Check consensus status with difference analysis
+./bin/elephant-cli consensus-status \
+  --from-block 50000000 \
+  --rpc-url https://polygon-rpc.com \
+  --output-csv consensus-report.csv \
+  --analyze-differences \
+  --gateway-url https://gateway.pinata.cloud/ipfs
 
 # Clean build artifacts
 npm run clean
