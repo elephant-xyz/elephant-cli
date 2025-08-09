@@ -93,29 +93,34 @@ elephant-cli hash ./single-property.zip
 **Important:**
 
 - Directory names must be root CIDs (a.k.a. seed CIDs) OR contain a seed datagroup file
-- File names must be schema CIDs
+- Files are recognized as datagroup root files if they contain exactly two keys: `label` and `relationships`
+- The datagroup CID is determined by matching the `label` value with the schema manifest from Elephant Network
 - Files must contain valid JSON data
 - Schema CIDs must point to valid data group schemas (see [Data Group Schema Requirements](#data-group-schema-requirements))
 
-### **Seed Datagroup Support:**
+### **Flexible File Naming:**
 
-Alternatively, you can use directories with any name as long as they contain a file named with the hardcoded seed datagroup schema CID: `bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json`
+Files can have any name. The system automatically recognizes datagroup root files by their structure:
+- Must have exactly two properties: `label` and `relationships`
+- The `label` value is matched against the Elephant Network schema manifest to determine the datagroup CID
 
 ```
 your-data/
 ├── property_data_set_1/          # Any name (not a CID)
-│   ├── bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json  # Seed file
-│   └── other_schema_cid.json     # Other data files
+│   ├── property_seed.json        # Seed file (recognized by label matching seed schema)
+│   └── photo_metadata.json       # Other data files (recognized by label)
 ├── bafybe.../                    # Traditional CID directory
-│   └── schema_cid.json           # Data file
+│   └── any_name.json             # Data file (recognized by structure)
 └── ...
 ```
 
 When using seed datagroup directories:
 
-- The seed file is uploaded first to IPFS
+- Files are recognized as datagroups if they have `label` and `relationships` properties
+- The system fetches the schema manifest from Elephant Network to map labels to CIDs
+- Seed files (with label matching the seed datagroup) are processed first
 - The CID of the uploaded seed file becomes the propertyCid for ALL files in that directory
-- This allows flexible directory naming while maintaining traceability
+- This allows flexible file and directory naming while maintaining traceability
 
 ### Data Group Schema Requirements
 

@@ -18,7 +18,8 @@ import {
   validateDataGroupSchema,
 } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
-import { scanSinglePropertyDirectory } from '../utils/single-property-file-scanner.js';
+import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -61,6 +62,7 @@ export interface ValidateServiceOverrides {
   jsonValidatorService?: JsonValidatorService;
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
+  schemaManifestService?: SchemaManifestService;
 }
 
 export async function handleValidate(
@@ -120,6 +122,8 @@ export async function handleValidate(
       actualInputDir,
       schemaCacheService
     );
+  const schemaManifestService =
+    serviceOverrides.schemaManifestService ?? new SchemaManifestService();
 
   let progressTracker: SimpleProgress | undefined =
     serviceOverrides.progressTracker;
@@ -169,11 +173,12 @@ export async function handleValidate(
       `Found ${jsonFiles.length} JSON files in property directory`
     );
 
-    // Scan the single property directory
+    // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
-    const scanResult = await scanSinglePropertyDirectory(
+    const scanResult = await scanSinglePropertyDirectoryV2(
       actualInputDir,
-      propertyDirName
+      propertyDirName,
+      schemaManifestService
     );
     const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
       scanResult;

@@ -84,26 +84,29 @@ This command:
 2. **Expects property directory contents directly in ZIP** (no wrapper directory)
 3. Extracts ZIP to temporary directory for processing
 4. Validates file structure
-5. Uses filenames as Schema CIDs to validate JSON data
-6. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
-7. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
-8. Writes validation errors to CSV file (default: `submit_errors.csv`)
-9. Shows validation summary
-10. **Does NOT upload anything to IPFS**
-11. **Does NOT calculate CIDs or generate HTML files**
-12. **Single Property Only**: Processes data for one property at a time
+5. **Identifies datagroup files by structure** (must have exactly two properties: `label` and `relationships`)
+6. **Uses the `label` value to look up the datagroup CID** from Elephant Network's schema manifest
+7. Uses datagroup CIDs to validate JSON data against schemas
+8. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+9. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
+10. Writes validation errors to CSV file (default: `submit_errors.csv`)
+11. Shows validation summary
+12. **Does NOT upload anything to IPFS**
+13. **Does NOT calculate CIDs or generate HTML files**
+14. **Single Property Only**: Processes data for one property at a time
 
 ### validate-and-upload Command
 
 This command:
 1. Validates file structure in the input directory
 2. Confirms file assignments to the user
-3. Uses filenames as Schema CIDs to validate JSON data
-4. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
-5. Handles seed datagroup processing (uploads seed files first to get their CIDs)
-6. Canonicalizes validated data
-7. Uploads canonicalized files to IPFS via Pinata
-8. Generates a CSV file with upload results
+3. **For files with CID names**: Uses filenames as Schema CIDs to validate JSON data
+4. **For files with any names**: Identifies datagroup files by structure (must have exactly two properties: `label` and `relationships`), then uses the label to look up the datagroup CID from the schema manifest
+5. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+6. Handles seed datagroup processing (uploads seed files first to get their CIDs)
+7. Canonicalizes validated data
+8. Uploads canonicalized files to IPFS via Pinata
+9. Generates a CSV file with upload results
 
 ### submit-to-contract Command
 
@@ -120,14 +123,16 @@ This command:
 1. **Requires ZIP file input** containing single property data
 2. **Expects property directory contents directly in ZIP** (no wrapper directory)
 3. Extracts ZIP to temporary directory for processing
-4. Validates file structure and JSON data against schemas
-5. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
-6. Handles seed datagroup processing (processes seed files first)
-7. **Calculates CIDs for all files without uploading to IPFS**
-8. **Replaces all file path links with calculated CIDs**
-9. **Canonicalizes all data**
-10. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
-11. **Outputs transformed data as a ZIP archive with CID-based filenames**
+4. **Identifies datagroup files by structure** (must have exactly two properties: `label` and `relationships`)
+5. **Uses the `label` value to look up the datagroup CID** from Elephant Network's schema manifest
+6. Validates file structure and JSON data against schemas
+7. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+8. Handles seed datagroup processing (processes seed files first)
+9. **Calculates CIDs for all files without uploading to IPFS**
+10. **Replaces all file path links with calculated CIDs**
+11. **Canonicalizes all data**
+12. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
+13. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time
@@ -258,6 +263,8 @@ Common issues to check:
 4. **Validation**: Input validation before processing
 5. **JSON Validator with CID Support**: Advanced schema validation with IPFS integration
 6. **ZIP File Support**: Allows users to provide data as ZIP files for easier distribution
+7. **Schema Manifest Service**: Centralized service for fetching and managing datagroup schema mappings from Elephant Network
+8. **Flexible File Recognition**: Files are identified as datagroups by their structure (label + relationships) rather than requiring CID filenames
 
 ## Improvement Opportunities
 
@@ -371,7 +378,9 @@ npm run test:coverage
 - `src/services/json-validator.service.ts` - JSON validation with CID support
 - `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
 - `src/services/ipfs-fetcher.service.ts` - IPFS data fetching service
+- `src/services/schema-manifest.service.ts` - Schema manifest management service
 - `src/utils/` - Logging, validation, and progress utilities
+- `src/utils/single-property-file-scanner-v2.ts` - File scanner with structure-based datagroup recognition
 
 ## Known Limitations
 
@@ -451,14 +460,25 @@ const data = {
 const result = await validator.validate(data, schema);
 ```
 
+## Datagroup File Recognition
+
+### Flexible File Naming
+As of the latest version, datagroup files are recognized by their structure rather than their filename:
+- Files must have exactly two properties: `label` and `relationships`
+- The `label` value is matched against the Elephant Network schema manifest to determine the datagroup CID
+- Files can have any name - the system automatically identifies them as datagroups based on their content
+
+### Schema Manifest Integration
+The system fetches the schema manifest from `https://lexicon.elephant.xyz/json-schemas/schema-manifest.json` which contains mappings of datagroup labels to their CIDs. This allows flexible file naming while maintaining proper schema validation.
+
 ## Seed Datagroup Feature
 
-The validate-and-upload command supports a special "seed datagroup" workflow:
+The validate-and-upload, validate, and hash commands support a special "seed datagroup" workflow:
 
 ### Directory Structure
 Two types of directories are supported:
 1. **Standard CID directories**: Directory name is a valid IPFS CID
-2. **Seed datagroup directories**: Directory name can be anything, but must contain a file named `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`
+2. **Seed datagroup directories**: Directory name can be anything, files are identified by their structure and label
 
 ### Processing Workflow
 1. **Phase 1**: All seed files (`bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu.json`) are processed first

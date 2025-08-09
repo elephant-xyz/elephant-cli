@@ -22,7 +22,8 @@ import {
   validateDataGroupSchema,
 } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
-import { scanSinglePropertyDirectory } from '../utils/single-property-file-scanner.js';
+import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { CID } from 'multiformats/cid';
 
 interface HashedFile {
@@ -84,6 +85,7 @@ export interface HashServiceOverrides {
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
   ipldConverterService?: IPLDConverterService;
+  schemaManifestService?: SchemaManifestService;
 }
 
 export async function handleHash(
@@ -148,6 +150,8 @@ export async function handleHash(
     serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
     serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
+  const schemaManifestService =
+    serviceOverrides.schemaManifestService ?? new SchemaManifestService();
 
   // Create a mock IPLD converter that only calculates CIDs without uploading
   const ipldConverterService =
@@ -206,11 +210,12 @@ export async function handleHash(
       `Found ${jsonFiles.length} JSON files in property directory`
     );
 
-    // Scan the single property directory
+    // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
-    const scanResult = await scanSinglePropertyDirectory(
+    const scanResult = await scanSinglePropertyDirectoryV2(
       actualInputDir,
-      propertyDirName
+      propertyDirName,
+      schemaManifestService
     );
     const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
       scanResult;
