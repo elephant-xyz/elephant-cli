@@ -203,15 +203,37 @@ export async function handleHash(
       return;
     }
 
+    // Helper function to check if a string is a valid CID
+    const isValidCid = (cid: string): boolean => {
+      if (!cid || cid.length < 10) return false;
+      // CIDv0 pattern: starts with 'Qm' and is 46 characters
+      if (cid.startsWith('Qm') && cid.length === 46) {
+        return /^Qm[a-zA-Z0-9]+$/.test(cid);
+      }
+      // CIDv1 pattern: can start with 'b' (base32) or other bases
+      if (cid.startsWith('b') && cid.length > 20) {
+        return /^b[a-z2-7]+$/.test(cid);
+      }
+      // Also accept other potential CID formats
+      if (/^[a-zA-Z0-9]+$/.test(cid) && cid.length >= 20) {
+        return true;
+      }
+      return false;
+    };
+
     logger.success(
       `Found ${jsonFiles.length} JSON files in property directory`
     );
 
     logger.info('Scanning to count total files...');
-    // For single property, we already have the count from jsonFiles
-    const totalFiles = jsonFiles.length;
+    // For single property, count only files with valid schema CID names
+    const validFiles = jsonFiles.filter((file) => {
+      const name = file.name.slice(0, -5); // Remove '.json'
+      return isValidCid(name) || name === SEED_DATAGROUP_SCHEMA_CID;
+    });
+    const totalFiles = validFiles.length;
     logger.info(
-      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process (${jsonFiles.length - totalFiles} descriptive-named files will be processed via IPLD references)`
     );
 
     if (totalFiles === 0) {
@@ -297,24 +319,6 @@ export async function handleHash(
     );
 
     // Determine the property CID
-    // Check if directory name is a valid CID
-    const isValidCid = (cid: string): boolean => {
-      if (!cid || cid.length < 10) return false;
-      // CIDv0 pattern: starts with 'Qm' and is 46 characters
-      if (cid.startsWith('Qm') && cid.length === 46) {
-        return /^Qm[a-zA-Z0-9]+$/.test(cid);
-      }
-      // CIDv1 pattern: can start with 'b' (base32) or other bases
-      if (cid.startsWith('b') && cid.length > 20) {
-        return /^b[a-z2-7]+$/.test(cid);
-      }
-      // Also accept other potential CID formats
-      if (/^[a-zA-Z0-9]+$/.test(cid) && cid.length >= 20) {
-        return true;
-      }
-      return false;
-    };
-
     let propertyCid: string;
     if (isValidCid(propertyDirName)) {
       // Directory has a CID name
@@ -331,6 +335,18 @@ export async function handleHash(
     for (const jsonFile of jsonFiles) {
       const dataGroupCid = jsonFile.name.slice(0, -5); // Remove '.json'
       const filePath = path.join(actualInputDir, jsonFile.name);
+
+      // Only process files that have valid schema CID names
+      // Skip descriptive-named files as they are referenced from within other files
+      if (
+        !isValidCid(dataGroupCid) &&
+        dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
+      ) {
+        logger.debug(
+          `Skipping descriptive-named file: ${jsonFile.name} (will be processed via IPLD references)`
+        );
+        continue;
+      }
 
       // For single property with seed file, mark non-seed files appropriately
       let filePropertyCid = propertyCid;
@@ -663,6 +679,8 @@ async function processSeedFile(
     if (fileAdded) {
       // Successful processing
       seedCidMap.set(dirPath, latestFile.calculatedCid);
+      // Update the seed file's property CID to the calculated CID
+      latestFile.propertyCid = latestFile.calculatedCid;
       logger.debug(
         `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
       );
