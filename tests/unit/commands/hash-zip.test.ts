@@ -4,6 +4,8 @@ import AdmZip from 'adm-zip';
 import { handleHash } from '../../../src/commands/hash.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
+import { scanSinglePropertyDirectoryV2 } from '../../../src/utils/single-property-file-scanner-v2.js';
+import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual('fs');
@@ -25,6 +27,20 @@ vi.mock('fs', async () => {
 vi.mock('adm-zip');
 vi.mock('../../../src/services/zip-extractor.service.js');
 
+// Mock the single-property-file-scanner-v2 module
+vi.mock('../../../src/utils/single-property-file-scanner-v2.js', () => ({
+  scanSinglePropertyDirectoryV2: vi.fn(),
+}));
+
+// Mock the schema-manifest service
+vi.mock('../../../src/services/schema-manifest.service.js', () => ({
+  SchemaManifestService: vi.fn().mockImplementation(() => ({
+    loadSchemaManifest: vi.fn().mockResolvedValue({}),
+    getDataGroupCidByLabel: vi.fn().mockReturnValue(null),
+    getAllDataGroups: vi.fn().mockReturnValue([]),
+  })),
+}));
+
 describe('Hash Command - ZIP Input', () => {
   let mockFileScannerService: any;
   let mockSchemaCacheService: any;
@@ -34,6 +50,7 @@ describe('Hash Command - ZIP Input', () => {
   let mockCsvReporterService: any;
   let mockProgressTracker: any;
   let mockIpldConverterService: any;
+  let mockSchemaManifestService: any;
 
   const testInputZip = '/test/input.zip';
   const testOutputZip = '/test/output/hashed.zip';
@@ -164,6 +181,8 @@ describe('Hash Command - ZIP Input', () => {
       }),
     };
 
+    mockSchemaManifestService = new SchemaManifestService();
+
     // Mock AdmZip
     const mockZipInstance = {
       addFile: vi.fn(),
@@ -180,6 +199,42 @@ describe('Hash Command - ZIP Input', () => {
       JSON.stringify({ label: 'Test', relationships: {} })
     );
     vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
+
+    // Mock scanSinglePropertyDirectoryV2
+    vi.mocked(scanSinglePropertyDirectoryV2).mockImplementation(async () => {
+      // Check what files were mocked in readdir to determine what to return
+      const readdirResult = await vi.mocked(fsPromises.readdir).mock.results[0]
+        ?.value;
+      const files = readdirResult || [];
+
+      const hasSeedFile = files.some((f: any) =>
+        f?.name?.includes(SEED_DATAGROUP_SCHEMA_CID)
+      );
+
+      const allFiles = files
+        .filter((f: any) => f?.name?.endsWith('.json'))
+        .map((f: any) => {
+          const dataGroupCid = f.name.replace('.json', '');
+          const isSeed = dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+          return {
+            propertyCid:
+              hasSeedFile && !isSeed
+                ? 'SEED_PENDING:property-dir'
+                : 'property-dir',
+            dataGroupCid,
+            filePath: `${testExtractedDir}/${f.name}`,
+          };
+        });
+
+      return {
+        allFiles,
+        validFilesCount: allFiles.length,
+        descriptiveFilesCount: 0,
+        hasSeedFile,
+        propertyCid: hasSeedFile ? 'SEED_PENDING:property-dir' : 'property-dir',
+        schemaCids: new Set(allFiles.map((f) => f.dataGroupCid)),
+      };
+    });
   });
 
   afterEach(() => {
@@ -257,6 +312,7 @@ describe('Hash Command - ZIP Input', () => {
         csvReporterService: mockCsvReporterService,
         progressTracker: mockProgressTracker,
         ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
       };
 
       await handleHash(options, serviceOverrides);
@@ -324,6 +380,7 @@ describe('Hash Command - ZIP Input', () => {
         csvReporterService: mockCsvReporterService,
         progressTracker: mockProgressTracker,
         ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
       };
 
       await handleHash(options, serviceOverrides);

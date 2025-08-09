@@ -48,6 +48,20 @@ vi.mock('../../../src/utils/single-property-processor.js', () => ({
   }),
 }));
 
+// Mock the single-property-file-scanner-v2 module
+vi.mock('../../../src/utils/single-property-file-scanner-v2.js', () => ({
+  scanSinglePropertyDirectoryV2: vi.fn(),
+}));
+
+// Mock the schema-manifest service
+vi.mock('../../../src/services/schema-manifest.service.js', () => ({
+  SchemaManifestService: vi.fn().mockImplementation(() => ({
+    loadSchemaManifest: vi.fn().mockResolvedValue({}),
+    getDataGroupCidByLabel: vi.fn().mockReturnValue(null),
+    getAllDataGroups: vi.fn().mockReturnValue([]),
+  })),
+}));
+
 // Mock the concurrency-calculator module
 vi.mock('../../../src/utils/concurrency-calculator.js', () => ({
   calculateEffectiveConcurrency: vi.fn(() => ({
@@ -108,6 +122,8 @@ vi.mock('../../../src/utils/logger.js', () => ({
 // Import the mocked functions
 import { processSinglePropertyInput } from '../../../src/utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../../../src/utils/concurrency-calculator.js';
+import { scanSinglePropertyDirectoryV2 } from '../../../src/utils/single-property-file-scanner-v2.js';
+import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 
 describe('handleValidate', () => {
   let mockFileScannerService: Partial<FileScannerService>;
@@ -254,6 +270,43 @@ describe('handleValidate', () => {
     vi.spyOn(fsPromises, 'readFile').mockResolvedValue(
       JSON.stringify({ label: 'test', relationships: {} })
     );
+
+    // Mock scanSinglePropertyDirectoryV2 to return test data
+    // This will be overridden in individual tests as needed
+    vi.mocked(scanSinglePropertyDirectoryV2).mockImplementation(async () => {
+      // Check what files were mocked in readdir to determine what to return
+      const readdirResult = await vi.mocked(fsPromises.readdir).mock.results[0]
+        ?.value;
+      const files = readdirResult || [];
+
+      const hasSeedFile = files.some((f: any) =>
+        f?.name?.includes(SEED_DATAGROUP_SCHEMA_CID)
+      );
+
+      const allFiles = files
+        .filter((f: any) => f?.name?.endsWith('.json'))
+        .map((f: any) => {
+          const dataGroupCid = f.name.replace('.json', '');
+          const isSeed = dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
+          return {
+            propertyCid:
+              hasSeedFile && !isSeed
+                ? 'SEED_PENDING:property-dir'
+                : 'property-dir',
+            dataGroupCid,
+            filePath: `/tmp/extracted/property-dir/${f.name}`,
+          };
+        });
+
+      return {
+        allFiles,
+        validFilesCount: allFiles.length,
+        descriptiveFilesCount: 0,
+        hasSeedFile,
+        propertyCid: hasSeedFile ? 'SEED_PENDING:property-dir' : 'property-dir',
+        schemaCids: new Set(allFiles.map((f) => f.dataGroupCid)),
+      };
+    });
   });
 
   afterEach(() => {
