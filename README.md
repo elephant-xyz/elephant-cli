@@ -448,16 +448,13 @@ The `hash` command calculates CIDs for all files in your data, replaces file pat
 
 ```bash
 # Basic usage (outputs to hashed-data.zip by default)
-elephant-cli hash ./your-data
+elephant-cli hash ./single-property.zip
 
 # With custom output ZIP file
-elephant-cli hash ./your-data --output-zip ./transformed-data.zip
-
-# Process a ZIP file as input
-elephant-cli hash ./your-data.zip --output-zip ./hashed-output.zip
+elephant-cli hash ./single-property.zip --output-zip ./transformed-data.zip
 
 # With custom concurrency limit
-elephant-cli hash ./your-data --max-concurrent-tasks 5
+elephant-cli hash ./single-property.zip --max-concurrent-tasks 5
 ```
 
 **Features:**
@@ -471,12 +468,10 @@ elephant-cli hash ./your-data --max-concurrent-tasks 5
 **Output Structure:**
 ```
 hashed-data.zip
-└── data/
-    ├── property-cid-1/
-    │   ├── bafybeiabc123...json  # File named with its calculated CID
-    │   └── bafybeixyz789...json
-    └── property-cid-2/
-        └── bafybeidef456...json
+└── property-cid-1/
+    ├── bafybeiabc123...json  # File named with its calculated CID
+    │── bafybeixyz789...json
+    ...
 ```
 
 ### Data Fetching

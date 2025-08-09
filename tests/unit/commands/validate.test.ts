@@ -152,14 +152,15 @@ describe('handleValidate', () => {
     } as any);
 
     // Mock fsPromises.readdir to return JSON files for single property
+    // Use valid CID names for test files
     vi.mocked(fsPromises.readdir).mockResolvedValue([
       {
-        name: 'schema-cid-1.json',
+        name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
         isDirectory: () => false,
         isFile: () => true,
       },
       {
-        name: 'schema-cid-2.json',
+        name: 'bafkreihqjagfsqpsozsqcrnvhc3kqvhxwzp7p3dhsxdnhqcwjeqtpumiry.json',
         isDirectory: () => false,
         isFile: () => true,
       },
@@ -172,17 +173,25 @@ describe('handleValidate', () => {
         errors: [],
       }),
       countTotalFiles: vi.fn().mockResolvedValue(2),
-      getAllDataGroupCids: vi.fn().mockResolvedValue(new Set(['schema-cid-1'])),
+      getAllDataGroupCids: vi
+        .fn()
+        .mockResolvedValue(
+          new Set([
+            'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+          ])
+        ),
       scanDirectory: vi.fn().mockImplementation(async function* () {
         yield [
           {
             propertyCid: 'property-1',
-            dataGroupCid: 'schema-cid-1',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
             filePath: '/test/property-1/data.json',
           },
           {
             propertyCid: 'property-2',
-            dataGroupCid: 'schema-cid-1',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
             filePath: '/test/property-2/data.json',
           },
         ];
@@ -358,7 +367,7 @@ describe('handleValidate', () => {
         isFile: () => true,
       },
       {
-        name: 'schema-cid-1.json',
+        name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
         isDirectory: () => false,
         isFile: () => true,
       },
@@ -392,7 +401,7 @@ describe('handleValidate', () => {
         isFile: () => true,
       },
       {
-        name: 'schema-cid-1.json',
+        name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
         isDirectory: () => false,
         isFile: () => true,
       },

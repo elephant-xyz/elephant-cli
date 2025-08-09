@@ -58,9 +58,10 @@ describe('Hash Command - ZIP Input', () => {
     });
 
     // Mock readdir to simulate single property directory with no subdirectories
+    // Use valid CID names for test files
     vi.mocked(fsPromises.readdir).mockResolvedValue([
       {
-        name: 'schema-cid-1.json',
+        name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
         isDirectory: () => false,
         isFile: () => true,
       },
@@ -85,7 +86,13 @@ describe('Hash Command - ZIP Input', () => {
         errors: [],
       }),
       countTotalFiles: vi.fn().mockResolvedValue(1),
-      getAllDataGroupCids: vi.fn().mockResolvedValue(new Set(['schema-cid-1'])),
+      getAllDataGroupCids: vi
+        .fn()
+        .mockResolvedValue(
+          new Set([
+            'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+          ])
+        ),
       scanDirectory: vi.fn().mockImplementation(async function* () {
         // Not used for single property processing
       }),
@@ -207,9 +214,16 @@ describe('Hash Command - ZIP Input', () => {
     });
 
     it('should reject non-ZIP files', async () => {
-      // Mock ZipExtractorService to return false for isZipFile
-      const mockZipExtractor = new ZipExtractorService() as any;
-      mockZipExtractor.isZipFile.mockResolvedValue(false);
+      // Override the ZipExtractorService mock to return false for isZipFile
+      vi.mocked(ZipExtractorService).mockImplementation(
+        () =>
+          ({
+            isZipFile: vi.fn().mockResolvedValue(false),
+            extractZip: vi.fn().mockResolvedValue(testExtractedDir),
+            getTempRootDir: vi.fn().mockReturnValue('/tmp'),
+            cleanup: vi.fn().mockResolvedValue(undefined),
+          }) as any
+      );
 
       const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
         throw new Error('Process exited');
@@ -289,7 +303,7 @@ describe('Hash Command - ZIP Input', () => {
           isFile: () => true,
         },
         {
-          name: 'schema-cid-1.json',
+          name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
           isDirectory: () => false,
           isFile: () => true,
         },
