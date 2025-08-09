@@ -3,13 +3,10 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
-import { execSync } from 'child_process';
-import * as os from 'os';
 import AdmZip from 'adm-zip';
 import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
-import { FileScannerService } from '../services/file-scanner.service.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
@@ -20,7 +17,12 @@ import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-import { ZipExtractorService } from '../services/zip-extractor.service.js';
+import {
+  processSinglePropertyInput,
+  validateDataGroupSchema,
+} from '../utils/single-property-processor.js';
+import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
+import { scanSinglePropertyDirectory } from '../utils/single-property-file-scanner.js';
 import { CID } from 'multiformats/cid';
 
 interface HashedFile {
@@ -30,58 +32,6 @@ interface HashedFile {
   calculatedCid: string;
   transformedData: any;
   canonicalJson: string;
-}
-
-function validateDataGroupSchema(schema: any): {
-  valid: boolean;
-  error?: string;
-} {
-  if (!schema || typeof schema !== 'object') {
-    return {
-      valid: false,
-      error: 'Schema must be a valid JSON object',
-    };
-  }
-
-  if (schema.type !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must describe an object (type: "object")',
-    };
-  }
-
-  if (!schema.properties || typeof schema.properties !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "properties" object',
-    };
-  }
-
-  const properties = schema.properties;
-
-  if (!properties.label) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "label" property',
-    };
-  }
-
-  if (!properties.relationships) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "relationships" property',
-    };
-  }
-
-  if (Object.keys(properties).length !== 2) {
-    return {
-      valid: false,
-      error:
-        'Data group schema must have exactly 2 properties: "label" and "relationships"',
-    };
-  }
-
-  return { valid: true };
 }
 
 export interface HashCommandOptions {
@@ -126,7 +76,6 @@ export function registerHashCommand(program: Command) {
 }
 
 export interface HashServiceOverrides {
-  fileScannerService?: FileScannerService;
   ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   jsonValidatorService?: JsonValidatorService;
@@ -146,155 +95,33 @@ export async function handleHash(
   );
   console.log();
 
-  // Initialize services
-  const zipExtractor = new ZipExtractorService();
-  let actualInputDir = options.input;
-  let tempDir: string | null = null;
-
-  // Validate that input is a ZIP file (REQUIRED - no directory support)
+  // Process single property ZIP input
+  let processedInput;
   try {
-    const stats = await fsPromises.stat(options.input);
-    if (!stats.isFile()) {
-      console.error(
-        chalk.red('❌ Error: Input must be a ZIP file, not a directory')
-      );
-      console.error(
-        chalk.yellow(
-          'The hash command only accepts ZIP archives containing single property data.'
-        )
-      );
-      process.exit(1);
-    }
-
-    const isZip = await zipExtractor.isZipFile(options.input);
-    if (!isZip) {
-      console.error(chalk.red('❌ Error: Input must be a valid ZIP file'));
-      console.error(
-        chalk.yellow(
-          'The hash command only accepts ZIP archives containing single property data.'
-        )
-      );
-      process.exit(1);
-    }
-
-    logger.info(`Processing single property ZIP file: ${options.input}`);
-    actualInputDir = await zipExtractor.extractZip(options.input);
-    tempDir = zipExtractor.getTempRootDir(actualInputDir);
-    logger.info(`Extracted single property data to temporary directory`);
-
-    // IMPORTANT: For single property processing, the extracted directory IS the property directory
-    // We process all files directly from the extracted root
+    processedInput = await processSinglePropertyInput({
+      inputPath: options.input,
+      requireZip: true,
+    });
   } catch (error) {
     logger.error(
-      `Failed to process ZIP input: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
     );
     process.exit(1);
   }
+
+  const { actualInputDir, cleanup } = processedInput;
 
   logger.technical(`Processing single property data from: ${actualInputDir}`);
   logger.technical(`Output ZIP: ${options.outputZip}`);
   logger.technical(`Output CSV: ${options.outputCsv}`);
   logger.info('Note: Processing single property data only');
 
-  const FALLBACK_LOCAL_CONCURRENCY = 10;
-  const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
-  let effectiveConcurrency: number;
-  let concurrencyLogReason = '';
-  const userSpecifiedConcurrency = options.maxConcurrentTasks;
-
-  let calculatedOsCap: number | undefined = undefined;
-
-  if (process.platform !== 'win32') {
-    try {
-      const ulimitOutput = execSync('ulimit -n', {
-        encoding: 'utf8',
-        stdio: 'pipe',
-      }).trim();
-      const osMaxFiles = parseInt(ulimitOutput, 10);
-      if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
-        calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
-        logger.info(
-          `Unix-like system detected. System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
-        );
-      } else {
-        logger.warn(
-          `Unix-like system detected, but could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        `Unix-like system detected, but failed to check OS open file limit via 'ulimit -n'. OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  } else {
-    logger.info(
-      "Windows system detected. 'ulimit -n' based concurrency capping is not applicable."
-    );
-    if (userSpecifiedConcurrency === undefined) {
-      const numCpus = os.cpus().length;
-      calculatedOsCap = Math.max(
-        1,
-        numCpus * WINDOWS_DEFAULT_CONCURRENCY_FACTOR
-      );
-      logger.info(
-        `Using CPU count (${numCpus}) * ${WINDOWS_DEFAULT_CONCURRENCY_FACTOR} as a heuristic for concurrency cap on Windows: ${calculatedOsCap}. This will be used if no user value is provided.`
-      );
-    }
-  }
-
-  if (userSpecifiedConcurrency !== undefined) {
-    concurrencyLogReason = `User specified: ${userSpecifiedConcurrency}.`;
-    if (calculatedOsCap !== undefined) {
-      if (userSpecifiedConcurrency > calculatedOsCap) {
-        effectiveConcurrency = calculatedOsCap;
-        concurrencyLogReason += ` Capped by OS/heuristic limit to ${effectiveConcurrency}.`;
-      } else {
-        effectiveConcurrency = userSpecifiedConcurrency;
-        concurrencyLogReason += ` Within OS/heuristic limit of ${calculatedOsCap}.`;
-      }
-    } else {
-      effectiveConcurrency = userSpecifiedConcurrency;
-      concurrencyLogReason += ` OS/heuristic limit not determined or applicable, using user value.`;
-    }
-  } else {
-    // User did not specify concurrency
-    if (calculatedOsCap !== undefined) {
-      effectiveConcurrency = calculatedOsCap;
-      concurrencyLogReason = `Derived from OS/heuristic limit (${effectiveConcurrency}), as no user value was provided.`;
-    } else {
-      effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS/heuristic limit could not be determined.`;
-    }
-  }
-
-  if (
-    effectiveConcurrency === undefined ||
-    effectiveConcurrency === null ||
-    effectiveConcurrency <= 0
-  ) {
-    logger.error(
-      `Error: Effective concurrency is invalid (${effectiveConcurrency}). This should not happen. Defaulting to ${FALLBACK_LOCAL_CONCURRENCY}.`
-    );
-    effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-    concurrencyLogReason += ` Corrected to fallback due to invalid calculation.`;
-  }
-
-  logger.technical(
-    `Effective max concurrent processing tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`
-  );
-
-  try {
-    const stats = await fsPromises.stat(actualInputDir);
-    if (!stats.isDirectory()) {
-      logger.error(`Input path ${actualInputDir} is not a directory.`);
-      process.exit(1);
-    }
-  } catch (error) {
-    logger.error(
-      `Error accessing input directory ${actualInputDir}: ${error instanceof Error ? error.message : String(error)}`
-    );
-    process.exit(1);
-  }
+  // Calculate effective concurrency
+  const { effectiveConcurrency } = calculateEffectiveConcurrency({
+    userSpecified: options.maxConcurrentTasks,
+    fallback: 10,
+    windowsFactor: 4,
+  });
 
   const config = createSubmitConfig({
     maxConcurrentUploads: undefined,
@@ -304,8 +131,6 @@ export async function handleHash(
   let csvReporterServiceInstance: CsvReporterService | undefined =
     serviceOverrides.csvReporterService;
 
-  const fileScannerService =
-    serviceOverrides.fileScannerService ?? new FileScannerService();
   const ipfsServiceForSchemas =
     serviceOverrides.ipfsServiceForSchemas ??
     new IPFSService(DEFAULT_IPFS_GATEWAY);
@@ -352,27 +177,48 @@ export async function handleHash(
 
     await csvReporterService.initialize();
 
-    logger.info('Validating directory structure...');
-    const initialValidation =
-      await fileScannerService.validateStructure(actualInputDir);
-    if (!initialValidation.isValid) {
-      console.log(chalk.red('❌ Directory structure is invalid:'));
-      console.log(`Errors found: ${initialValidation.errors}`);
-      initialValidation.errors.forEach((err) =>
-        console.log(chalk.red(`   • ${err}`))
-      );
+    logger.info('Validating single property directory structure...');
+    // For single property, we validate that the directory contains JSON files,
+    // not that it contains property subdirectories
+    const dirStats = await fsPromises.stat(actualInputDir);
+    if (!dirStats.isDirectory()) {
+      console.log(chalk.red('❌ Extracted path is not a directory'));
       await csvReporterService.finalize();
-      if (tempDir) {
-        await zipExtractor.cleanup(tempDir);
-      }
+      await cleanup();
       process.exit(1);
     }
-    logger.success('Directory structure valid');
+
+    const entries = await fsPromises.readdir(actualInputDir, {
+      withFileTypes: true,
+    });
+    const jsonFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.json')
+    );
+
+    if (jsonFiles.length === 0) {
+      logger.warn('No JSON files found in the property directory');
+      await csvReporterService.finalize();
+      await cleanup();
+      return;
+    }
+
+    logger.success(
+      `Found ${jsonFiles.length} JSON files in property directory`
+    );
+
+    // Scan the single property directory
+    const propertyDirName = path.basename(actualInputDir);
+    const scanResult = await scanSinglePropertyDirectory(
+      actualInputDir,
+      propertyDirName
+    );
+    const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
+      scanResult;
 
     logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(actualInputDir);
+    const totalFiles = validFilesCount;
     logger.info(
-      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process (${descriptiveFilesCount} descriptive-named files will be processed via IPLD references)`
     );
 
     if (totalFiles === 0) {
@@ -380,9 +226,7 @@ export async function handleHash(
       if (csvReporterServiceInstance) {
         await csvReporterServiceInstance.finalize();
       }
-      if (tempDir) {
-        await zipExtractor.cleanup(tempDir);
-      }
+      await cleanup();
       return;
     }
 
@@ -396,9 +240,8 @@ export async function handleHash(
     progressTracker.setPhase('Pre-fetching Schemas', 1);
     logger.info('Discovering all unique schema CIDs...');
     try {
-      const allDataGroupCids =
-        await fileScannerService.getAllDataGroupCids(actualInputDir);
-      const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
+      // Use the schema CIDs discovered during file scanning
+      const uniqueSchemaCidsArray = Array.from(schemaCids);
       logger.info(
         `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
       );
@@ -437,14 +280,7 @@ export async function handleHash(
       );
     }
 
-    // Collect all files first to handle seed files in two phases
-    const allFiles: FileEntry[] = [];
-    for await (const fileBatch of fileScannerService.scanDirectory(
-      actualInputDir,
-      config.fileScanBatchSize
-    )) {
-      allFiles.push(...fileBatch);
-    }
+    // The allFiles array is already populated from scanSinglePropertyDirectory
 
     // Phase 2: Processing Files
     progressTracker.setPhase('Processing Files', allFiles.length);
@@ -686,9 +522,7 @@ export async function handleHash(
     console.log(`  Output CSV:     ${options.outputCsv}`);
 
     // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
+    await cleanup();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`CRITICAL_ERROR_HASH: ${errorMessage}`));
@@ -722,9 +556,7 @@ export async function handleHash(
     }
 
     // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
+    await cleanup();
 
     process.exit(1);
   }
@@ -767,6 +599,8 @@ async function processSeedFile(
     if (fileAdded) {
       // Successful processing
       seedCidMap.set(dirPath, latestFile.calculatedCid);
+      // Update the seed file's property CID to the calculated CID
+      latestFile.propertyCid = latestFile.calculatedCid;
       logger.debug(
         `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
       );

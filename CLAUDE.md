@@ -80,15 +80,18 @@ The file submission process has been split into three commands for better contro
 ### validate Command
 
 This command:
-1. Validates file structure in the input directory or ZIP file
-2. Uses filenames as Schema CIDs to validate JSON data
-3. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
-4. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
-5. Writes validation errors to CSV file (default: `submit_errors.csv`)
-6. Shows validation summary
-7. **Does NOT upload anything to IPFS**
-8. **Does NOT calculate CIDs or generate HTML files**
-9. **Supports both directory and ZIP file inputs**
+1. **Requires ZIP file input** containing single property data
+2. **Expects property directory contents directly in ZIP** (no wrapper directory)
+3. Extracts ZIP to temporary directory for processing
+4. Validates file structure
+5. Uses filenames as Schema CIDs to validate JSON data
+6. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+7. Handles seed datagroup processing (validates seed files first, skips directories with failed seeds)
+8. Writes validation errors to CSV file (default: `submit_errors.csv`)
+9. Shows validation summary
+10. **Does NOT upload anything to IPFS**
+11. **Does NOT calculate CIDs or generate HTML files**
+12. **Single Property Only**: Processes data for one property at a time
 
 ### validate-and-upload Command
 
@@ -115,15 +118,16 @@ This command:
 
 This command:
 1. **Requires ZIP file input** containing single property data
-2. Extracts ZIP to temporary directory for processing
-3. Validates file structure and JSON data against schemas
-4. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
-5. Handles seed datagroup processing (processes seed files first)
-6. **Calculates CIDs for all files without uploading to IPFS**
-7. **Replaces all file path links with calculated CIDs**
-8. **Canonicalizes all data**
-9. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
-10. **Outputs transformed data as a ZIP archive with CID-based filenames**
+2. **Expects property directory contents directly in ZIP** (no wrapper directory)
+3. Extracts ZIP to temporary directory for processing
+4. Validates file structure and JSON data against schemas
+5. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
+6. Handles seed datagroup processing (processes seed files first)
+7. **Calculates CIDs for all files without uploading to IPFS**
+8. **Replaces all file path links with calculated CIDs**
+9. **Canonicalizes all data**
+10. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
+11. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time
@@ -168,9 +172,32 @@ When adding features, follow these patterns:
 
 ### ZIP File Support
 
-The CLI now supports processing ZIP files containing the expected directory structure:
+The CLI supports processing ZIP files with different structures:
 
-- `validate` command accepts ZIP files as input
+### Single Property Commands (validate, hash)
+- **Require** ZIP files as input
+- **Expect property directory contents directly in ZIP** (no wrapper directory)
+- Example structure:
+  ```
+  single-property.zip:
+    ├── bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json
+    ├── property_seed.json
+    └── other_schema_cid.json
+  ```
+
+### Multiple Property Commands (validate-and-upload)
+- Accept both directories and ZIP files
+- Support multiple property directories
+- Example structure:
+  ```
+  multi-property.zip:
+    ├── property1/
+    │   └── schema_cid.json
+    └── property2/
+        └── schema_cid.json
+  ```
+
+### General ZIP Handling
 - ZIP files are automatically detected by file extension and magic bytes
 - Files are extracted to a temporary directory that's cleaned up after processing
 - The same validation and upload logic applies to extracted files
@@ -266,12 +293,8 @@ npm run dev
 # Test the CLI - List assignments
 ./bin/elephant-cli list-assignments --oracle 0x0e44bfab0f7e1943cF47942221929F898E181505 --from-block 71875850
 
-# Test the CLI - Validate only (no upload)
-./bin/elephant-cli validate ./test-data \
-  --output-csv validation_errors.csv
-
-# Test the CLI - Validate only from ZIP file
-./bin/elephant-cli validate ./test-data.zip \
+# Test the CLI - Validate only from ZIP file (single property)
+./bin/elephant-cli validate ./single-property.zip \
   --output-csv validation_errors.csv
 
 # Test the CLI - Validate and upload
