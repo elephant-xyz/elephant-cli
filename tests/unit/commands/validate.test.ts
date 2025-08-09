@@ -11,7 +11,7 @@ import { promises as fsPromises } from 'fs';
 import * as fs from 'fs';
 import path from 'path';
 import * as child_process from 'child_process';
-import * as os from 'os';
+import * as os_module from 'os';
 import { logger } from '../../../src/utils/logger.js';
 import {
   handleValidate,
@@ -29,6 +29,32 @@ import { IPFSService } from '../../../src/services/ipfs.service.js';
 import { ReportSummary, FileEntry } from '../../../src/types/submit.types.js';
 import { DEFAULT_IPFS_GATEWAY } from '../../../src/config/constants.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
+import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
+
+// Mock the single-property-processor module
+vi.mock('../../../src/utils/single-property-processor.js', () => ({
+  processSinglePropertyInput: vi.fn(),
+  validateDataGroupSchema: vi.fn((schema) => {
+    if (!schema || typeof schema !== 'object') {
+      return { valid: false, error: 'Schema must be a valid JSON object' };
+    }
+    if (!schema.properties?.label || !schema.properties?.relationships) {
+      return { valid: false, error: 'is not a valid data group schema' };
+    }
+    if (Object.keys(schema.properties).length !== 2) {
+      return { valid: false, error: 'is not a valid data group schema' };
+    }
+    return { valid: true };
+  }),
+}));
+
+// Mock the concurrency-calculator module
+vi.mock('../../../src/utils/concurrency-calculator.js', () => ({
+  calculateEffectiveConcurrency: vi.fn(() => ({
+    effectiveConcurrency: 10,
+    reason: 'Test concurrency',
+  })),
+}));
 
 // Mock built-in modules first
 vi.mock('child_process', async () => {
@@ -45,6 +71,21 @@ vi.mock('os', async () => {
   return {
     ...actual,
     cpus: vi.fn(() => new Array(4)),
+    tmpdir: vi.fn(() => '/tmp'),
+  };
+});
+
+// Mock fs module
+vi.mock('fs', async () => {
+  const actual = await vi.importActual('fs');
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      stat: vi.fn(),
+      readFile: vi.fn(),
+      readdir: vi.fn(),
+    },
   };
 });
 
@@ -64,6 +105,10 @@ vi.mock('../../../src/utils/logger.js', () => ({
   },
 }));
 
+// Import the mocked functions
+import { processSinglePropertyInput } from '../../../src/utils/single-property-processor.js';
+import { calculateEffectiveConcurrency } from '../../../src/utils/concurrency-calculator.js';
+
 describe('handleValidate', () => {
   let mockFileScannerService: Partial<FileScannerService>;
   let mockSchemaCacheService: Partial<SchemaCacheService>;
@@ -71,6 +116,7 @@ describe('handleValidate', () => {
   let mockCsvReporterService: Partial<CsvReporterService>;
   let mockProgressTracker: Partial<SimpleProgress>;
   let mockIpfsService: Partial<IPFSService>;
+  let mockCleanup: vi.Mock;
 
   let exitSpy: MockInstance;
 
@@ -86,7 +132,38 @@ describe('handleValidate', () => {
     vi.mocked(child_process.execSync).mockReturnValue('1024\n');
 
     // Mock os.cpus to return a standard CPU count
-    vi.mocked(os.cpus).mockReturnValue(new Array(4));
+    vi.mocked(os_module.cpus).mockReturnValue(new Array(4));
+
+    // Setup mock cleanup function
+    mockCleanup = vi.fn().mockResolvedValue(undefined);
+
+    // Mock processSinglePropertyInput to return a valid input
+    // The actualInputDir should now point to the single property directory
+    vi.mocked(processSinglePropertyInput).mockResolvedValue({
+      actualInputDir: '/tmp/extracted/property-dir',
+      tempDir: '/tmp/temp123',
+      cleanup: mockCleanup,
+    });
+
+    // Mock fsPromises.stat to return directory
+    vi.mocked(fsPromises.stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    } as any);
+
+    // Mock fsPromises.readdir to return JSON files for single property
+    vi.mocked(fsPromises.readdir).mockResolvedValue([
+      {
+        name: 'schema-cid-1.json',
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: 'schema-cid-2.json',
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+    ] as any);
 
     // Initialize mock services
     mockFileScannerService = {
@@ -164,11 +241,6 @@ describe('handleValidate', () => {
       downloadFile: vi.fn(),
     };
 
-    // Mock fs.promises.stat
-    vi.spyOn(fsPromises, 'stat').mockResolvedValue({
-      isDirectory: () => true,
-    } as any);
-
     // Mock fs.promises.readFile
     vi.spyOn(fsPromises, 'readFile').mockResolvedValue(
       JSON.stringify({ label: 'test', relationships: {} })
@@ -181,7 +253,7 @@ describe('handleValidate', () => {
 
   it('should validate files successfully when all validations pass', async () => {
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
       outputCsv: 'test_errors.csv',
     };
 
@@ -194,18 +266,16 @@ describe('handleValidate', () => {
       ipfsServiceForSchemas: mockIpfsService as IPFSService,
     });
 
-    expect(mockFileScannerService.validateStructure).toHaveBeenCalledWith(
-      '/test/input'
-    );
-    expect(mockFileScannerService.countTotalFiles).toHaveBeenCalledWith(
-      '/test/input'
-    );
+    // validateStructure and countTotalFiles are no longer called for single property
+    expect(mockFileScannerService.validateStructure).not.toHaveBeenCalled();
+    expect(mockFileScannerService.countTotalFiles).not.toHaveBeenCalled();
     expect(mockCsvReporterService.initialize).toHaveBeenCalled();
     expect(mockCsvReporterService.finalize).toHaveBeenCalled();
     expect(mockProgressTracker.start).toHaveBeenCalled();
     expect(mockProgressTracker.stop).toHaveBeenCalled();
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
     expect(mockCsvReporterService.getErrorCount).toHaveBeenCalled();
+    expect(mockCleanup).toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining('✅ All files passed validation!')
     );
@@ -229,7 +299,7 @@ describe('handleValidate', () => {
     });
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
       outputCsv: 'test_errors.csv',
     };
 
@@ -255,50 +325,47 @@ describe('handleValidate', () => {
   });
 
   it('should handle invalid directory structure', async () => {
-    mockFileScannerService.validateStructure = vi.fn().mockResolvedValue({
-      isValid: false,
-      errors: ['Invalid directory structure'],
-    });
+    // Mock no JSON files found - this will trigger the error
+    vi.mocked(fsPromises.readdir).mockResolvedValue([]);
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
-    await expect(
-      handleValidate(options, {
-        fileScannerService: mockFileScannerService as FileScannerService,
-        schemaCacheService: mockSchemaCacheService as SchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
-        csvReporterService: mockCsvReporterService as CsvReporterService,
-        progressTracker: mockProgressTracker as SimpleProgress,
-        ipfsServiceForSchemas: mockIpfsService as IPFSService,
-      })
-    ).rejects.toThrow('process.exit(1)');
+    // Now returns gracefully when no files found instead of exiting
+    await handleValidate(options, {
+      fileScannerService: mockFileScannerService as FileScannerService,
+      schemaCacheService: mockSchemaCacheService as SchemaCacheService,
+      jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
+      csvReporterService: mockCsvReporterService as CsvReporterService,
+      progressTracker: mockProgressTracker as SimpleProgress,
+      ipfsServiceForSchemas: mockIpfsService as IPFSService,
+    });
 
-    expect(mockFileScannerService.validateStructure).toHaveBeenCalled();
+    // validateStructure is no longer called for single property processing
     expect(mockCsvReporterService.finalize).toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'No JSON files found in the property directory'
+    );
   });
 
   it('should handle seed files validation', async () => {
-    mockFileScannerService.scanDirectory = vi
-      .fn()
-      .mockImplementation(async function* () {
-        yield [
-          {
-            propertyCid: 'seed-dir',
-            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
-            filePath: '/test/seed-dir/seed.json',
-          },
-          {
-            propertyCid: 'SEED_PENDING:seed-dir',
-            dataGroupCid: 'schema-cid-1',
-            filePath: '/test/seed-dir/data.json',
-          },
-        ];
-      });
+    // Mock readdir to include seed file
+    vi.mocked(fsPromises.readdir).mockResolvedValue([
+      {
+        name: `${SEED_DATAGROUP_SCHEMA_CID}.json`,
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: 'schema-cid-1.json',
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+    ] as any);
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -317,22 +384,19 @@ describe('handleValidate', () => {
   });
 
   it('should skip files in directories with failed seed validation', async () => {
-    mockFileScannerService.scanDirectory = vi
-      .fn()
-      .mockImplementation(async function* () {
-        yield [
-          {
-            propertyCid: 'seed-dir',
-            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
-            filePath: '/test/seed-dir/seed.json',
-          },
-          {
-            propertyCid: 'SEED_PENDING:seed-dir',
-            dataGroupCid: 'schema-cid-1',
-            filePath: '/test/seed-dir/data.json',
-          },
-        ];
-      });
+    // Mock readdir to include seed file with validation that will fail
+    vi.mocked(fsPromises.readdir).mockResolvedValue([
+      {
+        name: `${SEED_DATAGROUP_SCHEMA_CID}.json`,
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: 'schema-cid-1.json',
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+    ] as any);
 
     // Make seed validation fail
     let callCount = 0;
@@ -362,7 +426,7 @@ describe('handleValidate', () => {
       });
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -377,7 +441,7 @@ describe('handleValidate', () => {
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(1); // Only seed file
     expect(mockProgressTracker.increment).toHaveBeenCalledWith('skipped');
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Skipping file /test/seed-dir/data.json')
+      expect.stringContaining('Skipping file')
     );
   });
 
@@ -391,7 +455,7 @@ describe('handleValidate', () => {
     });
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -418,7 +482,7 @@ describe('handleValidate', () => {
     );
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -441,7 +505,7 @@ describe('handleValidate', () => {
     mockSchemaCacheService.getSchema = vi.fn().mockResolvedValue(null);
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -460,15 +524,14 @@ describe('handleValidate', () => {
     );
   });
 
-  it('should handle concurrency limits on Unix systems', async () => {
-    vi.mocked(child_process.execSync).mockReturnValue('2048\n');
-    Object.defineProperty(process, 'platform', {
-      value: 'darwin',
-      configurable: true,
+  it('should handle concurrency limits', async () => {
+    vi.mocked(calculateEffectiveConcurrency).mockReturnValue({
+      effectiveConcurrency: 1536,
+      reason: 'User specified: 3000. Capped by OS/heuristic limit to 1536.',
     });
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
       maxConcurrentTasks: 3000, // Higher than OS limit
     };
 
@@ -481,49 +544,19 @@ describe('handleValidate', () => {
       ipfsServiceForSchemas: mockIpfsService as IPFSService,
     });
 
-    expect(logger.technical).toHaveBeenCalledWith(
-      expect.stringContaining('Capped by OS/heuristic limit')
-    );
-  });
-
-  it('should handle concurrency limits on Windows systems', async () => {
-    Object.defineProperty(process, 'platform', {
-      value: 'win32',
-      configurable: true,
+    expect(calculateEffectiveConcurrency).toHaveBeenCalledWith({
+      userSpecified: 3000,
+      fallback: 10,
+      windowsFactor: 4,
     });
-    vi.mocked(os.cpus).mockReturnValue(new Array(8));
-
-    const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
-    };
-
-    await handleValidate(options, {
-      fileScannerService: mockFileScannerService as FileScannerService,
-      schemaCacheService: mockSchemaCacheService as SchemaCacheService,
-      jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
-      csvReporterService: mockCsvReporterService as CsvReporterService,
-      progressTracker: mockProgressTracker as SimpleProgress,
-      ipfsServiceForSchemas: mockIpfsService as IPFSService,
-    });
-
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('Windows system detected')
-    );
-    expect(logger.technical).toHaveBeenCalledWith(
-      expect.stringContaining('Derived from OS/heuristic limit')
-    );
   });
 
   it('should handle no files to validate', async () => {
-    mockFileScannerService.countTotalFiles = vi.fn().mockResolvedValue(0);
-    mockFileScannerService.scanDirectory = vi
-      .fn()
-      .mockImplementation(async function* () {
-        // yield nothing
-      });
+    // Mock no files to process
+    vi.mocked(fsPromises.readdir).mockResolvedValue([]);
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await handleValidate(options, {
@@ -535,7 +568,9 @@ describe('handleValidate', () => {
       ipfsServiceForSchemas: mockIpfsService as IPFSService,
     });
 
-    expect(logger.warn).toHaveBeenCalledWith('No files found to validate');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'No JSON files found in the property directory'
+    );
     expect(mockCsvReporterService.finalize).toHaveBeenCalled();
   });
 
@@ -545,7 +580,7 @@ describe('handleValidate', () => {
       .mockRejectedValue(new Error('CSV initialization failed'));
 
     const options: ValidateCommandOptions = {
-      inputDir: '/test/input',
+      input: '/test/input.zip',
     };
 
     await expect(
@@ -564,13 +599,13 @@ describe('handleValidate', () => {
     );
   });
 
-  it('should handle non-existent input directory', async () => {
-    vi.spyOn(fsPromises, 'stat').mockRejectedValue(
-      new Error('ENOENT: no such file or directory')
+  it('should handle invalid ZIP input', async () => {
+    vi.mocked(processSinglePropertyInput).mockRejectedValue(
+      new Error('Input must be a valid ZIP file')
     );
 
     const options: ValidateCommandOptions = {
-      inputDir: '/non/existent/path',
+      input: '/test/not-a-zip.txt',
     };
 
     await expect(
@@ -585,32 +620,7 @@ describe('handleValidate', () => {
     ).rejects.toThrow('process.exit(1)');
 
     expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('Error accessing input directory')
-    );
-  });
-
-  it('should handle input path that is not a directory', async () => {
-    vi.spyOn(fsPromises, 'stat').mockResolvedValue({
-      isDirectory: () => false,
-    } as any);
-
-    const options: ValidateCommandOptions = {
-      inputDir: '/test/file.txt',
-    };
-
-    await expect(
-      handleValidate(options, {
-        fileScannerService: mockFileScannerService as FileScannerService,
-        schemaCacheService: mockSchemaCacheService as SchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
-        csvReporterService: mockCsvReporterService as CsvReporterService,
-        progressTracker: mockProgressTracker as SimpleProgress,
-        ipfsServiceForSchemas: mockIpfsService as IPFSService,
-      })
-    ).rejects.toThrow('process.exit(1)');
-
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('is not a directory')
+      expect.stringContaining('Failed to process input')
     );
   });
 });

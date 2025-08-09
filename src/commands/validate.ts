@@ -3,8 +3,6 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
-import { execSync } from 'child_process';
-import * as os from 'os';
 import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
@@ -16,62 +14,14 @@ import { SimpleProgress } from '../utils/simple-progress.js';
 import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-import { ZipExtractorService } from '../services/zip-extractor.service.js';
-
-function validateDataGroupSchema(schema: any): {
-  valid: boolean;
-  error?: string;
-} {
-  if (!schema || typeof schema !== 'object') {
-    return {
-      valid: false,
-      error: 'Schema must be a valid JSON object',
-    };
-  }
-
-  if (schema.type !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must describe an object (type: "object")',
-    };
-  }
-
-  if (!schema.properties || typeof schema.properties !== 'object') {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "properties" object',
-    };
-  }
-
-  const properties = schema.properties;
-
-  if (!properties.label) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "label" property',
-    };
-  }
-
-  if (!properties.relationships) {
-    return {
-      valid: false,
-      error: 'Data group schema must have a "relationships" property',
-    };
-  }
-
-  if (Object.keys(properties).length !== 2) {
-    return {
-      valid: false,
-      error:
-        'Data group schema must have exactly 2 properties: "label" and "relationships"',
-    };
-  }
-
-  return { valid: true };
-}
+import {
+  processSinglePropertyInput,
+  validateDataGroupSchema,
+} from '../utils/single-property-processor.js';
+import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 
 export interface ValidateCommandOptions {
-  inputDir: string;
+  input: string;
   outputCsv?: string;
   maxConcurrentTasks?: number;
 }
@@ -80,7 +30,7 @@ export function registerValidateCommand(program: Command) {
   program
     .command('validate <input>')
     .description(
-      'Validate files against schemas without uploading to IPFS. Input can be a directory or ZIP file.'
+      'Validate single property data from a ZIP file against schemas without uploading to IPFS.'
     )
     .option(
       '-o, --output-csv <path>',
@@ -98,7 +48,7 @@ export function registerValidateCommand(program: Command) {
 
       const commandOptions: ValidateCommandOptions = {
         ...options,
-        inputDir: path.resolve(input),
+        input: path.resolve(input),
       };
 
       await handleValidate(commandOptions);
@@ -118,23 +68,18 @@ export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
 ) {
-  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Validate'));
+  console.log(
+    chalk.bold.blue('🐘 Elephant Network CLI - Validate (Single Property)')
+  );
   console.log();
 
-  // Initialize services
-  const zipExtractor = new ZipExtractorService();
-  let actualInputDir = options.inputDir;
-  let tempDir: string | null = null;
-
+  // Process single property ZIP input
+  let processedInput;
   try {
-    // Check if input is a ZIP file
-    const isZip = await zipExtractor.isZipFile(options.inputDir);
-    if (isZip) {
-      logger.info(`Detected ZIP file: ${options.inputDir}`);
-      actualInputDir = await zipExtractor.extractZip(options.inputDir);
-      tempDir = zipExtractor.getTempRootDir(actualInputDir);
-      logger.info(`Extracted to: ${actualInputDir}`);
-    }
+    processedInput = await processSinglePropertyInput({
+      inputPath: options.input,
+      requireZip: true,
+    });
   } catch (error) {
     logger.error(
       `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
@@ -142,110 +87,18 @@ export async function handleValidate(
     process.exit(1);
   }
 
-  logger.technical(`Input directory: ${actualInputDir}`);
+  const { actualInputDir, cleanup } = processedInput;
+
+  logger.technical(`Processing single property data from: ${actualInputDir}`);
   logger.technical(`Output CSV: ${options.outputCsv || 'submit_errors.csv'}`);
+  logger.info('Note: Processing single property data only');
 
-  const FALLBACK_LOCAL_CONCURRENCY = 10;
-  const WINDOWS_DEFAULT_CONCURRENCY_FACTOR = 4;
-  let effectiveConcurrency: number;
-  let concurrencyLogReason = '';
-  const userSpecifiedConcurrency = options.maxConcurrentTasks;
-
-  let calculatedOsCap: number | undefined = undefined;
-
-  if (process.platform !== 'win32') {
-    try {
-      const ulimitOutput = execSync('ulimit -n', {
-        encoding: 'utf8',
-        stdio: 'pipe',
-      }).trim();
-      const osMaxFiles = parseInt(ulimitOutput, 10);
-      if (!isNaN(osMaxFiles) && osMaxFiles > 0) {
-        calculatedOsCap = Math.max(1, Math.floor(osMaxFiles * 0.75));
-        logger.info(
-          `Unix-like system detected. System maximum open files (ulimit -n): ${osMaxFiles}. Calculated concurrency cap (0.75 * OS limit): ${calculatedOsCap}.`
-        );
-      } else {
-        logger.warn(
-          `Unix-like system detected, but could not determine a valid OS open file limit from 'ulimit -n' output: "${ulimitOutput}". OS-based capping will not be applied.`
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        `Unix-like system detected, but failed to check OS open file limit via 'ulimit -n'. OS-based capping will not be applied. Error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  } else {
-    logger.info(
-      "Windows system detected. 'ulimit -n' based concurrency capping is not applicable."
-    );
-    if (userSpecifiedConcurrency === undefined) {
-      const numCpus = os.cpus().length;
-      calculatedOsCap = Math.max(
-        1,
-        numCpus * WINDOWS_DEFAULT_CONCURRENCY_FACTOR
-      );
-      logger.info(
-        `Using CPU count (${numCpus}) * ${WINDOWS_DEFAULT_CONCURRENCY_FACTOR} as a heuristic for concurrency cap on Windows: ${calculatedOsCap}. This will be used if no user value is provided.`
-      );
-    }
-  }
-
-  if (userSpecifiedConcurrency !== undefined) {
-    concurrencyLogReason = `User specified: ${userSpecifiedConcurrency}.`;
-    if (calculatedOsCap !== undefined) {
-      if (userSpecifiedConcurrency > calculatedOsCap) {
-        effectiveConcurrency = calculatedOsCap;
-        concurrencyLogReason += ` Capped by OS/heuristic limit to ${effectiveConcurrency}.`;
-      } else {
-        effectiveConcurrency = userSpecifiedConcurrency;
-        concurrencyLogReason += ` Within OS/heuristic limit of ${calculatedOsCap}.`;
-      }
-    } else {
-      effectiveConcurrency = userSpecifiedConcurrency;
-      concurrencyLogReason += ` OS/heuristic limit not determined or applicable, using user value.`;
-    }
-  } else {
-    // User did not specify concurrency
-    if (calculatedOsCap !== undefined) {
-      effectiveConcurrency = calculatedOsCap;
-      concurrencyLogReason = `Derived from OS/heuristic limit (${effectiveConcurrency}), as no user value was provided.`;
-    } else {
-      effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-      concurrencyLogReason = `Using fallback value (${effectiveConcurrency}), as no user value was provided and OS/heuristic limit could not be determined.`;
-    }
-  }
-
-  if (
-    effectiveConcurrency === undefined ||
-    effectiveConcurrency === null ||
-    effectiveConcurrency <= 0
-  ) {
-    logger.error(
-      `Error: Effective concurrency is invalid (${effectiveConcurrency}). This should not happen. Defaulting to ${FALLBACK_LOCAL_CONCURRENCY}.`
-    );
-    effectiveConcurrency = FALLBACK_LOCAL_CONCURRENCY;
-    concurrencyLogReason += ` Corrected to fallback due to invalid calculation.`;
-  }
-
-  logger.technical(
-    `Effective max concurrent validation tasks: ${effectiveConcurrency}. Reason: ${concurrencyLogReason}`
-  );
-
-  try {
-    const stats = await fsPromises.stat(actualInputDir);
-    if (!stats.isDirectory()) {
-      logger.error(`Input path ${actualInputDir} is not a directory.`);
-      if (tempDir) await zipExtractor.cleanup(tempDir);
-      process.exit(1);
-    }
-  } catch (error) {
-    logger.error(
-      `Error accessing input directory ${actualInputDir}: ${error instanceof Error ? error.message : String(error)}`
-    );
-    if (tempDir) await zipExtractor.cleanup(tempDir);
-    process.exit(1);
-  }
+  // Calculate effective concurrency
+  const { effectiveConcurrency } = calculateEffectiveConcurrency({
+    userSpecified: options.maxConcurrentTasks,
+    fallback: 10,
+    windowsFactor: 4,
+  });
 
   const config = createSubmitConfig({
     errorCsvPath: options.outputCsv || 'submit_errors.csv',
@@ -290,25 +143,67 @@ export async function handleValidate(
       `Validation errors will be saved to: ${config.errorCsvPath}`
     );
 
-    logger.info('Validating directory structure...');
-    const initialValidation =
-      await fileScannerService.validateStructure(actualInputDir);
-    if (!initialValidation.isValid) {
-      console.log(chalk.red('❌ Directory structure is invalid:'));
-      console.log(`Errors found: ${initialValidation.errors}`);
-      initialValidation.errors.forEach((err) =>
-        console.log(chalk.red(`   • ${err}`))
-      );
+    logger.info('Validating single property directory structure...');
+    // For single property, we validate that the directory contains JSON files,
+    // not that it contains property subdirectories
+    const dirStats = await fsPromises.stat(actualInputDir);
+    if (!dirStats.isDirectory()) {
+      console.log(chalk.red('❌ Extracted path is not a directory'));
       await csvReporterService.finalize();
-      if (tempDir) await zipExtractor.cleanup(tempDir);
+      await cleanup();
       process.exit(1);
     }
-    logger.success('Directory structure valid');
 
-    logger.info('Scanning to count total files...');
-    const totalFiles = await fileScannerService.countTotalFiles(actualInputDir);
+    const entries = await fsPromises.readdir(actualInputDir, {
+      withFileTypes: true,
+    });
+    const jsonFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.json')
+    );
+
+    if (jsonFiles.length === 0) {
+      logger.warn('No JSON files found in the property directory');
+      await csvReporterService.finalize();
+      await cleanup();
+      return;
+    }
+
+    // Helper function to check if a string is a valid CID
+    const isValidCid = (cid: string): boolean => {
+      if (!cid || cid.length < 10) return false;
+      // CIDv0 pattern: starts with 'Qm' and is 46 characters
+      if (cid.startsWith('Qm') && cid.length === 46) {
+        return /^Qm[a-zA-Z0-9]+$/.test(cid);
+      }
+      // CIDv1 pattern: can start with 'b' (base32) or other bases
+      if (cid.startsWith('b') && cid.length > 20) {
+        return /^b[a-z2-7]+$/.test(cid);
+      }
+      // Also accept other potential CID formats
+      if (/^[a-zA-Z0-9]+$/.test(cid) && cid.length >= 20) {
+        return true;
+      }
+      return false;
+    };
+
+    // Check if there's a seed datagroup file or if files are named with schema CIDs
+    const hasSeedFile = jsonFiles.some(
+      (file) => file.name === `${SEED_DATAGROUP_SCHEMA_CID}.json`
+    );
+
+    logger.success(
+      `Found ${jsonFiles.length} JSON files in property directory`
+    );
+
+    logger.info('Counting files to validate...');
+    // For single property, count only files with valid schema CID names
+    const validFiles = jsonFiles.filter((file) => {
+      const name = file.name.slice(0, -5); // Remove '.json'
+      return isValidCid(name) || name === SEED_DATAGROUP_SCHEMA_CID;
+    });
+    const totalFiles = validFiles.length;
     logger.info(
-      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to validate`
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to validate (${jsonFiles.length - totalFiles} descriptive-named files will be validated via IPLD references)`
     );
 
     if (totalFiles === 0) {
@@ -316,7 +211,7 @@ export async function handleValidate(
       if (csvReporterServiceInstance) {
         await csvReporterServiceInstance.finalize();
       }
-      if (tempDir) await zipExtractor.cleanup(tempDir);
+      await cleanup();
       return;
     }
 
@@ -326,13 +221,17 @@ export async function handleValidate(
 
     progressTracker.start();
 
-    // Phase 1: Pre-fetching Schemas
+    // Phase 1: Pre-fetching Schemas (skip for descriptive file names)
     progressTracker.setPhase('Pre-fetching Schemas', 1);
     logger.info('Discovering all unique schema CIDs...');
     try {
+      // For single property with descriptive names, we need to get schemas differently
+      // The FileScannerService expects files to be named with CIDs, but in single property
+      // mode with descriptive names, we need to handle this differently
       const allDataGroupCids =
         await fileScannerService.getAllDataGroupCids(actualInputDir);
       const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
+
       logger.info(
         `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
       );
@@ -371,13 +270,58 @@ export async function handleValidate(
       );
     }
 
-    // Collect all files first to handle seed files in two phases
+    // For single property validation, we process the property directory directly
+    // The actualInputDir IS the property directory itself
     const allFiles: FileEntry[] = [];
-    for await (const fileBatch of fileScannerService.scanDirectory(
-      actualInputDir,
-      config.fileScanBatchSize
-    )) {
-      allFiles.push(...fileBatch);
+    const propertyDirName = path.basename(actualInputDir);
+
+    // Determine the property CID
+    let propertyCid: string;
+    if (isValidCid(propertyDirName)) {
+      // Directory has a CID name
+      propertyCid = propertyDirName;
+    } else if (hasSeedFile) {
+      // Directory has a seed file, mark for pending
+      propertyCid = `SEED_PENDING:${propertyDirName}`;
+    } else {
+      // Directory name is not a CID and no seed file - this shouldn't happen for valid data
+      propertyCid = propertyDirName;
+    }
+
+    // Scan all JSON files in the property directory
+    const files = await fsPromises.readdir(actualInputDir, {
+      withFileTypes: true,
+    });
+    for (const file of files) {
+      if (file.isFile() && file.name.endsWith('.json')) {
+        const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
+        const filePath = path.join(actualInputDir, file.name);
+
+        // Only process files that have valid schema CID names
+        // Skip descriptive-named files as they are referenced from within other files
+        if (
+          !isValidCid(dataGroupCid) &&
+          dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
+        ) {
+          logger.debug(
+            `Skipping descriptive-named file: ${file.name} (will be validated via IPLD references)`
+          );
+          continue;
+        }
+
+        // For single property with seed file, mark non-seed files appropriately
+        let filePropertyCid = propertyCid;
+        if (hasSeedFile && dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID) {
+          // Non-seed file in a seed datagroup directory
+          filePropertyCid = `SEED_PENDING:${propertyDirName}`;
+        }
+
+        allFiles.push({
+          propertyCid: filePropertyCid,
+          dataGroupCid,
+          filePath,
+        });
+      }
     }
 
     // Phase 2: Validating Files
@@ -512,9 +456,7 @@ export async function handleValidate(
     }
 
     // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
+    await cleanup();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`CRITICAL_ERROR_VALIDATE: ${errorMessage}`));
@@ -552,9 +494,7 @@ export async function handleValidate(
     }
 
     // Clean up temporary directory if it was created
-    if (tempDir) {
-      await zipExtractor.cleanup(tempDir);
-    }
+    await cleanup();
 
     process.exit(1);
   }

@@ -42,7 +42,7 @@ Plus utility commands:
 
 You can provide your data in two ways:
 
-#### Option 1: Directory Structure
+#### Option 1: Directory Structure (for validate-and-upload)
 
 Structure your data directory like this:
 
@@ -57,15 +57,38 @@ your-data/
 
 #### Option 2: ZIP File
 
-Alternatively, you can provide a ZIP file containing the same directory structure:
+You can provide a ZIP file containing the directory structure.
 
+**For multiple properties** (validate-and-upload):
 ```bash
-# Create a ZIP file of your data directory
-zip -r your-data.zip your-data/
+# Structure: ZIP containing multiple property directories
+zip -r multi-property.zip your-data/
+# your-data/
+#   ├── property1/
+#   │   └── schema_cid.json
+#   └── property2/
+#       └── schema_cid.json
 
-# Use the ZIP file with the CLI
-elephant-cli validate your-data.zip
+elephant-cli validate-and-upload ./multi-property.zip
 ```
+
+**For single property** (validate and hash commands):
+```bash
+# Structure: ZIP containing single property data directly
+zip -r single-property.zip 074527L1060260060/
+# 074527L1060260060/
+#   ├── bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json
+#   ├── property_seed.json
+#   └── other_schema_cid.json
+
+# For validation only:
+elephant-cli validate ./single-property.zip
+
+# For hash calculation:
+elephant-cli hash ./single-property.zip
+```
+
+**Note:** The `validate` and `hash` commands expect the property directory contents directly in the ZIP (no wrapper directory).
 
 **Important:**
 
@@ -159,18 +182,18 @@ Visit [https://lexicon.elephant.xyz](https://lexicon.elephant.xyz) to find valid
 
 ### Step 2: Validate Your Data (Optional but Recommended)
 
-Before uploading, you can validate your data files without any credentials:
+Before uploading, you can validate your single property data files without any credentials:
 
 ```bash
-# Validate all files in your data directory
-elephant-cli validate ./your-data
-
-# Or validate from a ZIP file
-elephant-cli validate ./your-data.zip
+# Validate single property data from a ZIP file (REQUIRED)
+elephant-cli validate ./single-property.zip
 ```
+
+**Note:** The `validate` command only accepts ZIP files containing data for a single property.
 
 This command:
 
+- Extracts and validates single property data
 - Checks directory structure
 - Validates JSON syntax
 - Verifies data against schemas

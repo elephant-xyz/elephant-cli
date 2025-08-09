@@ -57,6 +57,16 @@ describe('Hash Command - ZIP Input', () => {
       } as any;
     });
 
+    // Mock readdir to simulate single property directory with no subdirectories
+    vi.mocked(fsPromises.readdir).mockResolvedValue([
+      {
+        name: 'schema-cid-1.json',
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      { name: 'data.json', isDirectory: () => false, isFile: () => true },
+    ] as any);
+
     // Mock ZipExtractorService
     vi.mocked(ZipExtractorService).mockImplementation(
       () =>
@@ -77,13 +87,7 @@ describe('Hash Command - ZIP Input', () => {
       countTotalFiles: vi.fn().mockResolvedValue(1),
       getAllDataGroupCids: vi.fn().mockResolvedValue(new Set(['schema-cid-1'])),
       scanDirectory: vi.fn().mockImplementation(async function* () {
-        yield [
-          {
-            filePath: '/tmp/extracted/data.json',
-            propertyCid: 'property1',
-            dataGroupCid: 'schema-cid-1',
-          },
-        ];
+        // Not used for single property processing
       }),
     };
 
@@ -251,10 +255,7 @@ describe('Hash Command - ZIP Input', () => {
       expect(zipExtractor.isZipFile).toHaveBeenCalledWith(testInputZip);
       expect(zipExtractor.extractZip).toHaveBeenCalledWith(testInputZip);
 
-      // Verify file scanning on extracted directory
-      expect(mockFileScannerService.validateStructure).toHaveBeenCalledWith(
-        testExtractedDir
-      );
+      // validateStructure is no longer called for single property processing
 
       // Verify CSV was written with correct headers including filePath and uploadedAt
       expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledWith(
@@ -280,25 +281,19 @@ describe('Hash Command - ZIP Input', () => {
     });
 
     it('should handle seed datagroup files in single property ZIP', async () => {
-      // Update mock to return seed files
-      mockFileScannerService.scanDirectory.mockImplementation(
-        async function* () {
-          yield [
-            {
-              filePath: `/tmp/extracted/${SEED_DATAGROUP_SCHEMA_CID}.json`,
-              propertyCid: 'SEED_PENDING:property',
-              dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
-            },
-            {
-              filePath: '/tmp/extracted/data.json',
-              propertyCid: 'SEED_PENDING:property',
-              dataGroupCid: 'schema-cid-1',
-            },
-          ];
-        }
-      );
-
-      mockFileScannerService.countTotalFiles.mockResolvedValue(2);
+      // Update readdir mock to include seed file
+      vi.mocked(fsPromises.readdir).mockResolvedValue([
+        {
+          name: `${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+        {
+          name: 'schema-cid-1.json',
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+      ] as any);
 
       const options = {
         input: testInputZip,
