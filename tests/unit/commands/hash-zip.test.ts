@@ -37,7 +37,7 @@ describe('Hash Command - ZIP Input', () => {
 
   const testInputZip = '/test/input.zip';
   const testOutputZip = '/test/output/hashed.zip';
-  const testOutputCsv = '/test/output/upload-results.csv';
+  const testOutputCsv = '/test/output/hash-results.csv';
   const testExtractedDir = '/tmp/extracted';
 
   beforeEach(() => {
