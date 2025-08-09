@@ -6,7 +6,6 @@ import { Semaphore } from 'async-mutex';
 import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
-import { FileScannerService } from '../services/file-scanner.service.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
@@ -19,6 +18,7 @@ import {
   validateDataGroupSchema,
 } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
+import { scanSinglePropertyDirectory } from '../utils/single-property-file-scanner.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -56,7 +56,6 @@ export function registerValidateCommand(program: Command) {
 }
 
 export interface ValidateServiceOverrides {
-  fileScannerService?: FileScannerService;
   ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   jsonValidatorService?: JsonValidatorService;
@@ -108,8 +107,6 @@ export async function handleValidate(
   let csvReporterServiceInstance: CsvReporterService | undefined =
     serviceOverrides.csvReporterService;
 
-  const fileScannerService =
-    serviceOverrides.fileScannerService ?? new FileScannerService();
   const ipfsServiceForSchemas =
     serviceOverrides.ipfsServiceForSchemas ??
     new IPFSService(DEFAULT_IPFS_GATEWAY);
@@ -168,42 +165,23 @@ export async function handleValidate(
       return;
     }
 
-    // Helper function to check if a string is a valid CID
-    const isValidCid = (cid: string): boolean => {
-      if (!cid || cid.length < 10) return false;
-      // CIDv0 pattern: starts with 'Qm' and is 46 characters
-      if (cid.startsWith('Qm') && cid.length === 46) {
-        return /^Qm[a-zA-Z0-9]+$/.test(cid);
-      }
-      // CIDv1 pattern: can start with 'b' (base32) or other bases
-      if (cid.startsWith('b') && cid.length > 20) {
-        return /^b[a-z2-7]+$/.test(cid);
-      }
-      // Also accept other potential CID formats
-      if (/^[a-zA-Z0-9]+$/.test(cid) && cid.length >= 20) {
-        return true;
-      }
-      return false;
-    };
-
-    // Check if there's a seed datagroup file or if files are named with schema CIDs
-    const hasSeedFile = jsonFiles.some(
-      (file) => file.name === `${SEED_DATAGROUP_SCHEMA_CID}.json`
-    );
-
     logger.success(
       `Found ${jsonFiles.length} JSON files in property directory`
     );
 
+    // Scan the single property directory
+    const propertyDirName = path.basename(actualInputDir);
+    const scanResult = await scanSinglePropertyDirectory(
+      actualInputDir,
+      propertyDirName
+    );
+    const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
+      scanResult;
+
     logger.info('Counting files to validate...');
-    // For single property, count only files with valid schema CID names
-    const validFiles = jsonFiles.filter((file) => {
-      const name = file.name.slice(0, -5); // Remove '.json'
-      return isValidCid(name) || name === SEED_DATAGROUP_SCHEMA_CID;
-    });
-    const totalFiles = validFiles.length;
+    const totalFiles = validFilesCount;
     logger.info(
-      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to validate (${jsonFiles.length - totalFiles} descriptive-named files will be validated via IPLD references)`
+      `Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to validate (${descriptiveFilesCount} descriptive-named files will be validated via IPLD references)`
     );
 
     if (totalFiles === 0) {
@@ -225,12 +203,8 @@ export async function handleValidate(
     progressTracker.setPhase('Pre-fetching Schemas', 1);
     logger.info('Discovering all unique schema CIDs...');
     try {
-      // For single property with descriptive names, we need to get schemas differently
-      // The FileScannerService expects files to be named with CIDs, but in single property
-      // mode with descriptive names, we need to handle this differently
-      const allDataGroupCids =
-        await fileScannerService.getAllDataGroupCids(actualInputDir);
-      const uniqueSchemaCidsArray = Array.from(allDataGroupCids);
+      // Use the schema CIDs discovered during file scanning
+      const uniqueSchemaCidsArray = Array.from(schemaCids);
 
       logger.info(
         `Found ${uniqueSchemaCidsArray.length} unique schema CIDs to pre-fetch.`
@@ -270,59 +244,7 @@ export async function handleValidate(
       );
     }
 
-    // For single property validation, we process the property directory directly
-    // The actualInputDir IS the property directory itself
-    const allFiles: FileEntry[] = [];
-    const propertyDirName = path.basename(actualInputDir);
-
-    // Determine the property CID
-    let propertyCid: string;
-    if (isValidCid(propertyDirName)) {
-      // Directory has a CID name
-      propertyCid = propertyDirName;
-    } else if (hasSeedFile) {
-      // Directory has a seed file, mark for pending
-      propertyCid = `SEED_PENDING:${propertyDirName}`;
-    } else {
-      // Directory name is not a CID and no seed file - this shouldn't happen for valid data
-      propertyCid = propertyDirName;
-    }
-
-    // Scan all JSON files in the property directory
-    const files = await fsPromises.readdir(actualInputDir, {
-      withFileTypes: true,
-    });
-    for (const file of files) {
-      if (file.isFile() && file.name.endsWith('.json')) {
-        const dataGroupCid = file.name.slice(0, -5); // Remove '.json'
-        const filePath = path.join(actualInputDir, file.name);
-
-        // Only process files that have valid schema CID names
-        // Skip descriptive-named files as they are referenced from within other files
-        if (
-          !isValidCid(dataGroupCid) &&
-          dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
-        ) {
-          logger.debug(
-            `Skipping descriptive-named file: ${file.name} (will be validated via IPLD references)`
-          );
-          continue;
-        }
-
-        // For single property with seed file, mark non-seed files appropriately
-        let filePropertyCid = propertyCid;
-        if (hasSeedFile && dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID) {
-          // Non-seed file in a seed datagroup directory
-          filePropertyCid = `SEED_PENDING:${propertyDirName}`;
-        }
-
-        allFiles.push({
-          propertyCid: filePropertyCid,
-          dataGroupCid,
-          filePath,
-        });
-      }
-    }
+    // The allFiles array is already populated from scanSinglePropertyDirectory
 
     // Phase 2: Validating Files
     progressTracker.setPhase('Validating Files', allFiles.length);
