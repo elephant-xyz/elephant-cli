@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.0...v1.24.1) (2025-08-09)
+
+
+### Bug Fixes
+
+* 'validate' & 'hash' commands singleton interface ([#81](https://github.com/elephant-xyz/elephant-cli/issues/81)) ([7076c1c](https://github.com/elephant-xyz/elephant-cli/commit/7076c1c6500a3d9182a3effee6d4cb99d0216a5b))
+
 # [1.24.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.23.3...v1.24.0) (2025-08-08)
 
 
