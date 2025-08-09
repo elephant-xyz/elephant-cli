@@ -55,7 +55,7 @@ export function registerHashCommand(program: Command) {
     .option(
       '-c, --output-csv <path>',
       'Output CSV file path for hash results',
-      'upload-results.csv'
+      'hash-results.csv'
     )
     .option(
       '--max-concurrent-tasks <number>',

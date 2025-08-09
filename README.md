@@ -559,7 +559,7 @@ elephant-cli hash property-data.zip
 # With custom output files
 elephant-cli hash property-data.zip \
   --output-zip hashed-data.zip \
-  --output-csv upload-results.csv
+  --output-csv hash-results.csv
 
 # With concurrency control
 elephant-cli hash property-data.zip \
@@ -594,7 +594,7 @@ hashed-data.zip/
     ├── bafkreifile2.json
     └── bafkreifile3.json
 
-upload-results.csv:
+hash-results.csv:
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
 bafybeiproperty...,bafkreischema1...,bafkreifile1...,data.json,
 bafybeiproperty...,bafkreischema2...,bafkreifile2...,other.json,
