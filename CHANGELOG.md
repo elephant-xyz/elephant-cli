@@ -1,3 +1,10 @@
+## [1.24.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.2...v1.24.3) (2025-08-11)
+
+
+### Bug Fixes
+
+* Free naming datagroup files for hashing + user-provided propertyCid ([#83](https://github.com/elephant-xyz/elephant-cli/issues/83)) ([ebdc7ef](https://github.com/elephant-xyz/elephant-cli/commit/ebdc7ef8aaa395e1bc8574d99fdbf36c37c898bc))
+
 ## [1.24.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.1...v1.24.2) (2025-08-11)
 
 
