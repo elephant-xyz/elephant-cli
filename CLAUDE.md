@@ -327,7 +327,7 @@ npm run dev
 # Test the CLI - Hash command (offline CID calculation for single property)
 ./bin/elephant-cli hash ./property-data.zip \
   --output-zip ./hashed-data.zip \
-  --output-csv ./upload-results.csv \
+  --output-csv ./hash-results.csv \
   --max-concurrent-tasks 20
 
 # Test the CLI - Fetch data from CID
