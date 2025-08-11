@@ -1,3 +1,10 @@
+## [1.24.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.3...v1.24.4) (2025-08-11)
+
+
+### Bug Fixes
+
+* Ensure consistent CID calculation from canonical JSON using RAW coded ([#84](https://github.com/elephant-xyz/elephant-cli/issues/84)) ([66d7291](https://github.com/elephant-xyz/elephant-cli/commit/66d72914d2985d99a7335afaaefb35e9359550df))
+
 ## [1.24.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.2...v1.24.3) (2025-08-11)
 
 
