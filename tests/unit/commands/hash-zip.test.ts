@@ -5,7 +5,6 @@ import { handleHash } from '../../../src/commands/hash.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
 import { scanSinglePropertyDirectoryV2 } from '../../../src/utils/single-property-file-scanner-v2.js';
-import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual('fs');
@@ -51,6 +50,7 @@ describe('Hash Command - ZIP Input', () => {
   let mockProgressTracker: any;
   let mockIpldConverterService: any;
   let mockSchemaManifestService: any;
+  let mockProcessExit: any;
 
   const testInputZip = '/test/input.zip';
   const testOutputZip = '/test/output/hashed.zip';
@@ -59,6 +59,13 @@ describe('Hash Command - ZIP Input', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Mock process.exit to prevent actual exit during tests
+    mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(((
+      code: number
+    ) => {
+      throw new Error(`process.exit called with ${code}`);
+    }) as any);
 
     // Mock file system operations for ZIP file
     vi.mocked(fsPromises.stat).mockImplementation(async (path) => {
@@ -181,7 +188,11 @@ describe('Hash Command - ZIP Input', () => {
       }),
     };
 
-    mockSchemaManifestService = new SchemaManifestService();
+    mockSchemaManifestService = {
+      loadSchemaManifest: vi.fn().mockResolvedValue({}),
+      getDataGroupCidByLabel: vi.fn().mockReturnValue(null),
+      getAllDataGroups: vi.fn().mockReturnValue([]),
+    };
 
     // Mock AdmZip
     const mockZipInstance = {
@@ -200,44 +211,15 @@ describe('Hash Command - ZIP Input', () => {
     );
     vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
 
-    // Mock scanSinglePropertyDirectoryV2
-    vi.mocked(scanSinglePropertyDirectoryV2).mockImplementation(async () => {
-      // Check what files were mocked in readdir to determine what to return
-      const readdirResult = await vi.mocked(fsPromises.readdir).mock.results[0]
-        ?.value;
-      const files = readdirResult || [];
-
-      const hasSeedFile = files.some((f: any) =>
-        f?.name?.includes(SEED_DATAGROUP_SCHEMA_CID)
-      );
-
-      const allFiles = files
-        .filter((f: any) => f?.name?.endsWith('.json'))
-        .map((f: any) => {
-          const dataGroupCid = f.name.replace('.json', '');
-          const isSeed = dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
-          return {
-            propertyCid:
-              hasSeedFile && !isSeed
-                ? 'SEED_PENDING:property-dir'
-                : 'property-dir',
-            dataGroupCid,
-            filePath: `${testExtractedDir}/${f.name}`,
-          };
-        });
-
-      return {
-        allFiles,
-        validFilesCount: allFiles.length,
-        descriptiveFilesCount: 0,
-        hasSeedFile,
-        propertyCid: hasSeedFile ? 'SEED_PENDING:property-dir' : 'property-dir',
-        schemaCids: new Set(allFiles.map((f) => f.dataGroupCid)),
-      };
-    });
+    // Mock scanSinglePropertyDirectoryV2 - it needs to be async
+    const mockScanSinglePropertyDirectoryV2 = vi.fn();
+    vi.mocked(scanSinglePropertyDirectoryV2).mockImplementation(
+      mockScanSinglePropertyDirectoryV2
+    );
   });
 
   afterEach(() => {
+    mockProcessExit.mockRestore();
     vi.restoreAllMocks();
   });
 
@@ -297,10 +279,36 @@ describe('Hash Command - ZIP Input', () => {
     });
 
     it('should process single property ZIP and generate CSV with output ZIP', async () => {
+      // Mock scanSinglePropertyDirectoryV2 for this test - no seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+          {
+            propertyCid: 'property-dir',
+            dataGroupCid: 'data',
+            filePath: `${testExtractedDir}/data.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: false,
+        propertyCid: 'property-dir',
+        schemaCids: new Set([
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+          'data',
+        ]),
+      });
+
       const options = {
         input: testInputZip,
         outputZip: testOutputZip,
         outputCsv: testOutputCsv,
+        propertyCid: 'bafkreitestpropertycid', // Provide property CID since no seed
       };
 
       const serviceOverrides = {
@@ -365,10 +373,44 @@ describe('Hash Command - ZIP Input', () => {
         },
       ] as any);
 
+      // Mock scanSinglePropertyDirectoryV2 for this test - WITH seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
+            filePath: `${testExtractedDir}/${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          },
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: true,
+        propertyCid: 'SEED_PENDING:property-dir',
+        schemaCids: new Set([
+          SEED_DATAGROUP_SCHEMA_CID,
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+        ]),
+      });
+
+      // Mock CID calculation for seed file
+      const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      mockCidCalculatorService.calculateCidFromCanonicalJson
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValue(
+          'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+        );
+
       const options = {
         input: testInputZip,
         outputZip: testOutputZip,
         outputCsv: testOutputCsv,
+        // No propertyCid provided - should use calculated seed CID
       };
 
       const serviceOverrides = {
@@ -398,6 +440,374 @@ describe('Hash Command - ZIP Input', () => {
       // Verify ZIP was created
       const mockZip = vi.mocked(AdmZip).mock.results[0].value;
       expect(mockZip.writeZip).toHaveBeenCalledWith(testOutputZip);
+    });
+  });
+
+  describe('Property CID Determination', () => {
+    it('should use user-provided property CID when --property-cid is provided', async () => {
+      // Mock scanSinglePropertyDirectoryV2 for this test - no seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+        ],
+        validFilesCount: 1,
+        descriptiveFilesCount: 0,
+        hasSeedFile: false,
+        propertyCid: 'property-dir',
+        schemaCids: new Set([
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+        ]),
+      });
+
+      const userProvidedCid = 'bafkreiuserprovidedcid123456789';
+      const options = {
+        input: testInputZip,
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+        propertyCid: userProvidedCid,
+      };
+
+      const serviceOverrides = {
+        fileScannerService: mockFileScannerService,
+        schemaCacheService: mockSchemaCacheService,
+        jsonValidatorService: mockJsonValidatorService,
+        canonicalizerService: mockCanonicalizerService,
+        cidCalculatorService: mockCidCalculatorService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
+      };
+
+      await handleHash(options, serviceOverrides);
+
+      // Verify the CSV contains the user-provided property CID
+      const csvContent = vi.mocked(fsPromises.writeFile).mock
+        .calls[0][1] as string;
+      expect(csvContent).toContain(userProvidedCid);
+
+      // Verify the ZIP uses the user-provided CID for folder name
+      const mockZip = vi.mocked(AdmZip).mock.results[0].value;
+      expect(mockZip.addFile).toHaveBeenCalled();
+      const addFileCalls = mockZip.addFile.mock.calls;
+      for (const call of addFileCalls) {
+        const zipPath = call[0] as string;
+        // The path should start with the user-provided CID
+        expect(zipPath).toMatch(new RegExp(`^${userProvidedCid}/`));
+      }
+    });
+
+    it('should use calculated seed CID when no --property-cid is provided but seed file exists', async () => {
+      // Mock readdir to include seed file
+      vi.mocked(fsPromises.readdir).mockResolvedValue([
+        {
+          name: `${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+        {
+          name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+      ] as any);
+
+      // Mock scanSinglePropertyDirectoryV2 for this test - WITH seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
+            filePath: `${testExtractedDir}/${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          },
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: true,
+        propertyCid: 'SEED_PENDING:property-dir',
+        schemaCids: new Set([
+          SEED_DATAGROUP_SCHEMA_CID,
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+        ]),
+      });
+
+      // Mock CID calculation for seed file
+      const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      mockCidCalculatorService.calculateCidFromCanonicalJson
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValue(
+          'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+        );
+
+      const options = {
+        input: testInputZip,
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+        // No propertyCid provided
+      };
+
+      const serviceOverrides = {
+        fileScannerService: mockFileScannerService,
+        schemaCacheService: mockSchemaCacheService,
+        jsonValidatorService: mockJsonValidatorService,
+        canonicalizerService: mockCanonicalizerService,
+        cidCalculatorService: mockCidCalculatorService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
+      };
+
+      await handleHash(options, serviceOverrides);
+
+      // Verify the CSV contains the calculated seed CID as property CID
+      const csvContent = vi.mocked(fsPromises.writeFile).mock
+        .calls[0][1] as string;
+      const csvLines = csvContent.split('\n');
+      // Skip header and check data lines
+      for (let i = 1; i < csvLines.length; i++) {
+        const line = csvLines[i];
+        if (line && !line.includes(SEED_DATAGROUP_SCHEMA_CID)) {
+          // Non-seed files should use the seed CID as property CID
+          expect(line).toContain(seedCalculatedCid);
+        }
+      }
+    });
+
+    it('should throw error when no --property-cid is provided and no seed file exists', async () => {
+      // Mock readdir to NOT include seed file
+      vi.mocked(fsPromises.readdir).mockResolvedValue([
+        {
+          name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+        {
+          name: 'bafkreiotherdatafile.json',
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+      ] as any);
+
+      // Mock scanSinglePropertyDirectoryV2 for this test - NO seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+          {
+            propertyCid: 'property-dir',
+            dataGroupCid: 'bafkreiotherdatafile',
+            filePath: `${testExtractedDir}/bafkreiotherdatafile.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: false,
+        propertyCid: 'property-dir',
+        schemaCids: new Set([
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+          'bafkreiotherdatafile',
+        ]),
+      });
+
+      const options = {
+        input: testInputZip,
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+        // No propertyCid provided
+      };
+
+      const serviceOverrides = {
+        fileScannerService: mockFileScannerService,
+        schemaCacheService: mockSchemaCacheService,
+        jsonValidatorService: mockJsonValidatorService,
+        canonicalizerService: mockCanonicalizerService,
+        cidCalculatorService: mockCidCalculatorService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
+      };
+
+      // Expect the function to call process.exit due to missing property CID
+      await expect(handleHash(options, serviceOverrides)).rejects.toThrow(
+        'process.exit called with 1'
+      );
+
+      // Verify the error was logged
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Property CID could not be determined')
+      );
+    });
+
+    it('should use correct property CID for ZIP folder name', async () => {
+      // Mock scanSinglePropertyDirectoryV2 for this test - WITH seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
+            filePath: `${testExtractedDir}/${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          },
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: true,
+        propertyCid: 'SEED_PENDING:property-dir',
+        schemaCids: new Set([
+          SEED_DATAGROUP_SCHEMA_CID,
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+        ]),
+      });
+
+      // Mock CID calculation for seed file
+      const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      mockCidCalculatorService.calculateCidFromCanonicalJson
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValue(
+          'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+        );
+
+      const options = {
+        input: testInputZip,
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+        // No propertyCid provided - should use calculated seed CID
+      };
+
+      const serviceOverrides = {
+        fileScannerService: mockFileScannerService,
+        schemaCacheService: mockSchemaCacheService,
+        jsonValidatorService: mockJsonValidatorService,
+        canonicalizerService: mockCanonicalizerService,
+        cidCalculatorService: mockCidCalculatorService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
+      };
+
+      await handleHash(options, serviceOverrides);
+
+      // Verify the ZIP was created with the correct folder structure
+      const mockZip = vi.mocked(AdmZip).mock.results[0].value;
+      expect(mockZip.addFile).toHaveBeenCalled();
+
+      // Check that the folder name in the ZIP path is the seed CID, not the original directory name
+      const addFileCalls = mockZip.addFile.mock.calls;
+      for (const call of addFileCalls) {
+        const zipPath = call[0] as string;
+        // The path should start with the seed CID
+        expect(zipPath).toMatch(new RegExp(`^${seedCalculatedCid}/`));
+        // The path should NOT start with 'property-dir' or any other incorrect value
+        expect(zipPath).not.toMatch(/^property-dir\//);
+        expect(zipPath).not.toMatch(/^SEED_PENDING:/);
+      }
+    });
+
+    it('should prioritize user-provided CID over calculated seed CID', async () => {
+      // Mock readdir to include seed file
+      vi.mocked(fsPromises.readdir).mockResolvedValue([
+        {
+          name: `${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+        {
+          name: 'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json',
+          isDirectory: () => false,
+          isFile: () => true,
+        },
+      ] as any);
+
+      // Mock scanSinglePropertyDirectoryV2 for this test - WITH seed file
+      vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+        allFiles: [
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid: SEED_DATAGROUP_SCHEMA_CID,
+            filePath: `${testExtractedDir}/${SEED_DATAGROUP_SCHEMA_CID}.json`,
+          },
+          {
+            propertyCid: 'SEED_PENDING:property-dir',
+            dataGroupCid:
+              'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+            filePath: `${testExtractedDir}/bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi.json`,
+          },
+        ],
+        validFilesCount: 2,
+        descriptiveFilesCount: 0,
+        hasSeedFile: true,
+        propertyCid: 'SEED_PENDING:property-dir',
+        schemaCids: new Set([
+          SEED_DATAGROUP_SCHEMA_CID,
+          'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+        ]),
+      });
+
+      // Mock CID calculation for seed file
+      const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      mockCidCalculatorService.calculateCidFromCanonicalJson
+        .mockResolvedValueOnce(seedCalculatedCid)
+        .mockResolvedValue(
+          'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
+        );
+
+      const userProvidedCid = 'bafkreiuseroverridescid123456789';
+      const options = {
+        input: testInputZip,
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+        propertyCid: userProvidedCid, // User provides CID even though seed exists
+      };
+
+      const serviceOverrides = {
+        fileScannerService: mockFileScannerService,
+        schemaCacheService: mockSchemaCacheService,
+        jsonValidatorService: mockJsonValidatorService,
+        canonicalizerService: mockCanonicalizerService,
+        cidCalculatorService: mockCidCalculatorService,
+        csvReporterService: mockCsvReporterService,
+        progressTracker: mockProgressTracker,
+        ipldConverterService: mockIpldConverterService,
+        schemaManifestService: mockSchemaManifestService,
+      };
+
+      await handleHash(options, serviceOverrides);
+
+      // Verify the CSV contains the user-provided CID, not the calculated seed CID
+      const csvContent = vi.mocked(fsPromises.writeFile).mock
+        .calls[0][1] as string;
+      expect(csvContent).toContain(userProvidedCid);
+      // Ensure seed CID is not used as property CID for non-seed files
+      const csvLines = csvContent.split('\n');
+      for (let i = 1; i < csvLines.length; i++) {
+        const line = csvLines[i];
+        if (line && !line.includes(SEED_DATAGROUP_SCHEMA_CID)) {
+          expect(line).not.toContain(seedCalculatedCid);
+        }
+      }
     });
   });
 });

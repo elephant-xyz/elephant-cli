@@ -128,11 +128,12 @@ This command:
 6. Validates file structure and JSON data against schemas
 7. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
 8. Handles seed datagroup processing (processes seed files first)
-9. **Calculates CIDs for all files without uploading to IPFS**
-10. **Replaces all file path links with calculated CIDs**
-11. **Canonicalizes all data**
-12. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
-13. **Outputs transformed data as a ZIP archive with CID-based filenames**
+9. **Determines property CID** using priority: `--property-cid` option > calculated Seed CID > error
+10. **Calculates CIDs for all files without uploading to IPFS**
+11. **Replaces all file path links with calculated CIDs**
+12. **Canonicalizes all data**
+13. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
+14. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time
@@ -144,6 +145,7 @@ Key features:
 - **Image Processing**: Calculates appropriate CIDs for image files with ipfs_uri format
 - **Seed Datagroup**: Processes seed files first and uses their CIDs for property identification
 - **Output Structure**: Creates ZIP with single `property-cid/file-cid.json` structure (no 'data' wrapper)
+- **Property CID Options**: Supports `--property-cid` flag to override automatic detection
 
 ### fetch-data Command
 

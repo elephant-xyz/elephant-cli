@@ -272,11 +272,8 @@ describe('IPFSFetcherService', () => {
 
   describe('fetchData', () => {
     beforeEach(() => {
-      // Mock schema manifest fetch for all fetchData tests
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSchemaManifest,
-      });
+      // Schema manifest is now loaded via SchemaManifestService mock
+      // No need to mock fetch for it
     });
 
     it('should fetch data successfully', async () => {

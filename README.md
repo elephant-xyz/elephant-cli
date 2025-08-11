@@ -460,7 +460,19 @@ elephant-cli hash ./single-property.zip --output-zip ./transformed-data.zip
 
 # With custom concurrency limit
 elephant-cli hash ./single-property.zip --max-concurrent-tasks 5
+
+# With explicit property CID (overrides automatic detection)
+elephant-cli hash ./single-property.zip --property-cid bafkreiexample123
 ```
+
+**Property CID Determination:**
+
+The hash command determines the property CID using the following priority:
+1. **User-provided CID** via `--property-cid` option (highest priority)
+2. **Calculated Seed datagroup CID** if a Seed file exists in the data
+3. **Error** if neither is available
+
+This ensures that all files in a single property have a consistent property CID in the output.
 
 **Features:**
 - Calculates CIDs for all files using the same algorithm as `validate-and-upload --dry-run`
@@ -569,6 +581,10 @@ elephant-cli hash property-data.zip \
 # With concurrency control
 elephant-cli hash property-data.zip \
   --max-concurrent-tasks 20
+
+# With explicit property CID
+elephant-cli hash property-data.zip \
+  --property-cid bafkreiexample123
 ```
 
 **What this does:**
