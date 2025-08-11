@@ -1,3 +1,10 @@
+## [1.24.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.1...v1.24.2) (2025-08-11)
+
+
+### Bug Fixes
+
+* Update `hash` command default output CSV filename ([#82](https://github.com/elephant-xyz/elephant-cli/issues/82)) ([742de37](https://github.com/elephant-xyz/elephant-cli/commit/742de3749dc2ae07cc1f9435a5bd6c9da52daaeb))
+
 ## [1.24.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.0...v1.24.1) (2025-08-09)
 
 
