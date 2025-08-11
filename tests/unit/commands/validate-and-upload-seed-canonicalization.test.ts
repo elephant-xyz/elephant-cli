@@ -144,9 +144,12 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       }),
       calculateCidFromCanonicalJson: vi
         .fn()
-        .mockImplementation(async (canonicalJson: string, data?: any) => {
-          // Capture both the canonical JSON and the original data
-          calculatedCidCalls.push({ canonical: canonicalJson, data });
+        .mockImplementation(async (canonicalJson: string) => {
+          // Capture the canonical JSON
+          calculatedCidCalls.push({
+            canonical: canonicalJson,
+            data: JSON.parse(canonicalJson),
+          });
           // Return a deterministic CID based on the canonical JSON
           return `bafybeig${canonicalJson.length}canonicalized`;
         }),
@@ -351,8 +354,11 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       }),
       calculateCidFromCanonicalJson: vi
         .fn()
-        .mockImplementation(async (canonicalJson: string, data?: any) => {
-          calculatedCidCalls.push({ canonical: canonicalJson, data });
+        .mockImplementation(async (canonicalJson: string) => {
+          calculatedCidCalls.push({
+            canonical: canonicalJson,
+            data: JSON.parse(canonicalJson),
+          });
           return `bafybeig${canonicalJson.length}canonicalized`;
         }),
     } as any;
@@ -526,9 +532,12 @@ describe('ValidateAndUpload - Seed Datagroup Canonicalization', () => {
       }),
       calculateCidFromCanonicalJson: vi
         .fn()
-        .mockImplementation(async (canonicalJson: string, data?: any) => {
+        .mockImplementation(async (canonicalJson: string) => {
           // Capture the calls for verification
-          canonicalJsonCalls.push({ canonical: canonicalJson, data });
+          canonicalJsonCalls.push({
+            canonical: canonicalJson,
+            data: JSON.parse(canonicalJson),
+          });
           // Generate a deterministic CID based on the canonical JSON
           const cid = `bafybeig${Buffer.from(canonicalJson).toString('base64').substring(0, 20)}`;
           calculatedCids.push(cid);

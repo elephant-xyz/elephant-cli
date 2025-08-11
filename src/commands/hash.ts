@@ -808,8 +808,7 @@ async function processFileForHashing(
 
     const calculatedCid =
       await services.cidCalculatorService.calculateCidFromCanonicalJson(
-        finalCanonicalJson,
-        dataToProcess
+        finalCanonicalJson
       );
 
     // For seed files, the propertyCid should be the same as the calculated CID
@@ -1116,8 +1115,7 @@ async function calculateCIDForFile(
         services.canonicalizerService.canonicalize(processedData);
       calculatedCid =
         await services.cidCalculatorService.calculateCidFromCanonicalJson(
-          canonicalJson,
-          processedData
+          canonicalJson
         );
 
       // Track this linked file if we have a collection
@@ -1130,10 +1128,10 @@ async function calculateCIDForFile(
         });
       }
     } catch {
-      // If not JSON, treat as raw text and calculate CID
+      // If not JSON, treat as raw text and calculate CID using raw codec
       const buffer = Buffer.from(fileContent as string, 'utf-8');
       calculatedCid =
-        await services.cidCalculatorService.calculateCidV1(buffer);
+        await services.cidCalculatorService.calculateCidV1ForRawData(buffer);
 
       // Track this linked file if we have a collection
       if (linkedFiles) {
