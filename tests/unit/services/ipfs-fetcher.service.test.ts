@@ -12,6 +12,21 @@ vi.mock('fs/promises');
 vi.mock('../../../src/utils/logger.js');
 vi.mock('adm-zip');
 
+// Mock SchemaManifestService
+const mockLoadSchemaManifest = vi.fn();
+const mockGetDataGroupCidByLabel = vi.fn();
+const mockGetAllDataGroups = vi.fn();
+
+vi.mock('../../../src/services/schema-manifest.service.js', () => {
+  return {
+    SchemaManifestService: class {
+      loadSchemaManifest = mockLoadSchemaManifest;
+      getDataGroupCidByLabel = mockGetDataGroupCidByLabel;
+      getAllDataGroups = mockGetAllDataGroups;
+    },
+  };
+});
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch as any;
@@ -46,6 +61,22 @@ describe('IPFSFetcherService', () => {
     vi.mocked(mkdirSync).mockImplementation(() => undefined);
     vi.mocked(writeFileSync).mockImplementation(() => undefined);
 
+    // Reset mock implementations
+    mockLoadSchemaManifest.mockReset();
+    mockGetDataGroupCidByLabel.mockReset();
+    mockGetAllDataGroups.mockReset();
+
+    // Set default implementations
+    mockLoadSchemaManifest.mockResolvedValue(mockSchemaManifest);
+    mockGetDataGroupCidByLabel.mockImplementation((label: string) => {
+      // Match labels with underscores or spaces
+      const normalizedLabel = label.replace(/ /g, '_');
+      const entry = Object.entries(mockSchemaManifest).find(
+        ([key]) => key === normalizedLabel || key === label
+      );
+      return entry ? entry[1].ipfsCid : null;
+    });
+
     service = new IPFSFetcherService(mockGatewayUrl);
   });
 
@@ -65,30 +96,19 @@ describe('IPFSFetcherService', () => {
 
   describe('loadSchemaManifest', () => {
     it('should fetch and load schema manifest successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSchemaManifest,
-      });
+      // Mock the loadSchemaManifest method to return the manifest
+      mockLoadSchemaManifest.mockResolvedValueOnce(mockSchemaManifest);
 
-      await service['loadSchemaManifest']();
+      const result = await service['loadSchemaManifest']();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://lexicon.elephant.xyz/json-schemas/schema-manifest.json'
-      );
-      expect(service['schemaManifest']).toEqual(mockSchemaManifest);
-      expect(vi.mocked(logger.info)).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Loaded schema manifest with 4 entries (3 dataGroups)'
-        )
-      );
+      expect(mockLoadSchemaManifest).toHaveBeenCalled();
+      expect(result).toEqual(mockSchemaManifest);
     });
 
     it('should throw error if manifest fetch fails', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      });
+      mockLoadSchemaManifest.mockRejectedValueOnce(
+        new Error('Failed to load schema manifest from Elephant Network')
+      );
 
       await expect(service['loadSchemaManifest']()).rejects.toThrow(
         'Failed to load schema manifest from Elephant Network'
@@ -96,15 +116,13 @@ describe('IPFSFetcherService', () => {
     });
 
     it('should only fetch manifest once', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockSchemaManifest,
-      });
+      mockLoadSchemaManifest.mockResolvedValue(mockSchemaManifest);
 
       await service['loadSchemaManifest']();
       await service['loadSchemaManifest'](); // Second call
 
-      expect(mockFetch).toHaveBeenCalledTimes(1); // Only called once
+      // SchemaManifestService handles caching internally
+      expect(mockLoadSchemaManifest).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -254,11 +272,8 @@ describe('IPFSFetcherService', () => {
 
   describe('fetchData', () => {
     beforeEach(() => {
-      // Mock schema manifest fetch for all fetchData tests
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockSchemaManifest,
-      });
+      // Schema manifest is now loaded via SchemaManifestService mock
+      // No need to mock fetch for it
     });
 
     it('should fetch data successfully', async () => {

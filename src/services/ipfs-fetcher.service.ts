@@ -5,18 +5,13 @@ import { CID } from 'multiformats/cid';
 import { logger } from '../utils/logger.js';
 import { ethers, JsonRpcProvider, TransactionResponse } from 'ethers';
 import { CidHexConverterService } from './cid-hex-converter.service.js';
+import {
+  SchemaManifestService,
+  SchemaManifest,
+} from './schema-manifest.service.js';
 import AdmZip from 'adm-zip';
 import { tmpdir } from 'os';
 import { promises as fsPromises } from 'fs';
-
-interface SchemaManifestItem {
-  ipfsCid: string;
-  type: 'class' | 'relationship' | 'dataGroup';
-}
-
-interface SchemaManifest {
-  [key: string]: SchemaManifestItem;
-}
 
 interface BatchDataItem {
   propertyHash: string;
@@ -28,13 +23,11 @@ export class IPFSFetcherService {
   private readonly baseUrl: string;
   private processedCids: Set<string> = new Set();
   private cidToFilename: Map<string, string> = new Map();
-  private schemaManifest: SchemaManifest | null = null;
   private readonly maxRetries: number = 3;
   private readonly rateLimitDelay: number = 5000; // Base delay for rate limiting
-  private readonly schemaManifestUrl: string =
-    'https://lexicon.elephant.xyz/json-schemas/schema-manifest.json';
   private provider: JsonRpcProvider | null = null;
   private readonly cidHexConverter: CidHexConverterService;
+  private readonly schemaManifestService: SchemaManifestService;
 
   constructor(
     gatewayUrl: string = 'https://gateway.pinata.cloud/ipfs',
@@ -49,34 +42,11 @@ export class IPFSFetcherService {
     }
 
     this.cidHexConverter = new CidHexConverterService();
+    this.schemaManifestService = new SchemaManifestService();
   }
 
-  private async loadSchemaManifest(): Promise<void> {
-    if (this.schemaManifest) {
-      return; // Already loaded
-    }
-
-    try {
-      logger.info('Fetching schema manifest from Elephant Network...');
-      const response = await fetch(this.schemaManifestUrl);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      this.schemaManifest = await response.json();
-
-      const dataGroups = Object.entries(this.schemaManifest!).filter(
-        ([_, item]) => item.type === 'dataGroup'
-      ).length;
-
-      logger.info(
-        `Loaded schema manifest with ${Object.keys(this.schemaManifest!).length} entries (${dataGroups} dataGroups)`
-      );
-    } catch (error) {
-      logger.error(`Failed to load schema manifest: ${error}`);
-      throw new Error('Failed to load schema manifest from Elephant Network');
-    }
+  private async loadSchemaManifest(): Promise<SchemaManifest> {
+    return this.schemaManifestService.loadSchemaManifest();
   }
 
   private isValidCid(cid: string): boolean {
@@ -226,20 +196,18 @@ export class IPFSFetcherService {
     } else {
       // Root file: check if we have a datagroup mapping in schema manifest
       let datagroupCid: string | undefined;
-      if (typeof content === 'object' && content.label && this.schemaManifest) {
+      if (typeof content === 'object' && content.label) {
+        // Load manifest if not already loaded
+        await this.loadSchemaManifest();
+
         const label = content.label;
         // Try to find a matching dataGroup in the manifest
-        const manifestEntry = Object.entries(this.schemaManifest).find(
-          ([key, item]) => {
-            // Match by converting key to label format (e.g., "Photo_Metadata" -> "Photo Metadata")
-            const normalizedKey = key.replace(/_/g, ' ');
-            return item.type === 'dataGroup' && normalizedKey === label;
-          }
-        );
-
-        if (manifestEntry) {
-          datagroupCid = manifestEntry[1].ipfsCid;
-        }
+        datagroupCid =
+          this.schemaManifestService.getDataGroupCidByLabel(label) ||
+          this.schemaManifestService.getDataGroupCidByLabel(
+            label.replace(/ /g, '_')
+          ) ||
+          undefined;
       }
 
       if (datagroupCid) {

@@ -22,7 +22,8 @@ import {
   validateDataGroupSchema,
 } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
-import { scanSinglePropertyDirectory } from '../utils/single-property-file-scanner.js';
+import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { CID } from 'multiformats/cid';
 
 interface HashedFile {
@@ -39,6 +40,7 @@ export interface HashCommandOptions {
   outputZip: string;
   outputCsv: string;
   maxConcurrentTasks?: number;
+  propertyCid?: string;
 }
 
 export function registerHashCommand(program: Command) {
@@ -62,6 +64,10 @@ export function registerHashCommand(program: Command) {
       "Target maximum concurrent processing tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
       undefined
     )
+    .option(
+      '--property-cid <cid>',
+      'Property CID to use for output folder and CSV. If not provided, uses the Seed datagroup CID if present.'
+    )
     .action(async (input, options) => {
       options.maxConcurrentTasks =
         parseInt(options.maxConcurrentTasks, 10) || undefined;
@@ -84,6 +90,7 @@ export interface HashServiceOverrides {
   csvReporterService?: CsvReporterService;
   progressTracker?: SimpleProgress;
   ipldConverterService?: IPLDConverterService;
+  schemaManifestService?: SchemaManifestService;
 }
 
 export async function handleHash(
@@ -148,6 +155,8 @@ export async function handleHash(
     serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
     serviceOverrides.cidCalculatorService ?? new CidCalculatorService();
+  const schemaManifestService =
+    serviceOverrides.schemaManifestService ?? new SchemaManifestService();
 
   // Create a mock IPLD converter that only calculates CIDs without uploading
   const ipldConverterService =
@@ -206,11 +215,12 @@ export async function handleHash(
       `Found ${jsonFiles.length} JSON files in property directory`
     );
 
-    // Scan the single property directory
+    // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
-    const scanResult = await scanSinglePropertyDirectory(
+    const scanResult = await scanSinglePropertyDirectoryV2(
       actualInputDir,
-      propertyDirName
+      propertyDirName,
+      schemaManifestService
     );
     const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
       scanResult;
@@ -302,8 +312,13 @@ export async function handleHash(
 
     // Phase 1: Process all seed files first
     const seedFiles = allFiles.filter(
-      (file) => file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID
+      (file) =>
+        file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
+        file.dataGroupCid ===
+          schemaManifestService.getDataGroupCidByLabel('Seed')
     );
+
+    let calculatedSeedCid: string | undefined;
 
     if (seedFiles.length > 0) {
       logger.info(`Processing ${seedFiles.length} seed files first...`);
@@ -326,41 +341,52 @@ export async function handleHash(
 
       await Promise.all(seedPromises);
       logger.info(`Completed processing ${seedFiles.length} seed files`);
+
+      // Get the calculated seed CID if available
+      if (seedCidMap.size > 0) {
+        calculatedSeedCid = Array.from(seedCidMap.values())[0];
+      }
     }
 
-    // Phase 2: Process all non-seed files with updated propertyCids
+    // Determine the final property CID based on the priority:
+    // 1. User-provided property CID (via --property-cid option)
+    // 2. Calculated Seed datagroup CID (if seed file exists)
+    // 3. Error if neither is available
+    let finalPropertyCid: string;
+
+    if (options.propertyCid) {
+      // Use the user-provided property CID
+      finalPropertyCid = options.propertyCid;
+      logger.info(`Using user-provided property CID: ${finalPropertyCid}`);
+    } else if (calculatedSeedCid) {
+      // Use the calculated seed CID
+      finalPropertyCid = calculatedSeedCid;
+      logger.info(
+        `Using calculated Seed datagroup CID as property CID: ${finalPropertyCid}`
+      );
+    } else {
+      // Neither provided nor seed found - error
+      const errorMsg =
+        'Property CID could not be determined. Please provide --property-cid option or ensure your data contains a Seed datagroup.';
+      logger.error(errorMsg);
+      await csvReporterService.finalize();
+      await cleanup();
+      throw new Error(errorMsg);
+    }
+
+    // Phase 2: Process all non-seed files with the determined property CID
     const nonSeedFiles = allFiles.filter(
-      (file) => file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID
+      (file) =>
+        file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID &&
+        file.dataGroupCid !==
+          schemaManifestService.getDataGroupCidByLabel('Seed')
     );
 
-    // Update propertyCids for files in seed datagroup directories, but skip directories with failed seeds
-    const updatedFiles = nonSeedFiles
-      .filter((file) => {
-        // Skip files from directories with failed seed validation
-        if (file.propertyCid.startsWith('SEED_PENDING:')) {
-          const dirPath = path.dirname(file.filePath);
-          if (failedSeedDirectories.has(dirPath)) {
-            logger.warn(
-              `Skipping file ${file.filePath} because seed validation failed for directory ${dirPath}`
-            );
-            return false;
-          }
-        }
-        return true;
-      })
-      .map((file) => {
-        if (file.propertyCid.startsWith('SEED_PENDING:')) {
-          const dirName = file.propertyCid.replace('SEED_PENDING:', '');
-          const dirPath = path.dirname(file.filePath);
-          const seedCid = seedCidMap.get(dirPath);
-          if (seedCid) {
-            return { ...file, propertyCid: seedCid };
-          }
-          // If no seed CID found, keep the directory name
-          return { ...file, propertyCid: dirName };
-        }
-        return file;
-      });
+    // Update all files to use the final property CID
+    const updatedFiles = nonSeedFiles.map((file) => ({
+      ...file,
+      propertyCid: finalPropertyCid,
+    }));
 
     if (updatedFiles.length > 0) {
       logger.info(`Processing ${updatedFiles.length} non-seed files...`);
@@ -435,15 +461,8 @@ export async function handleHash(
     logger.info('Creating output ZIP with transformed data...');
     const zip = new AdmZip();
 
-    // Determine the property CID (should be consistent for single property)
-    // Use the first non-empty propertyCid found
-    let propertyFolderName = '';
-    for (const hashedFile of hashedFiles) {
-      if (hashedFile.propertyCid && hashedFile.propertyCid !== '') {
-        propertyFolderName = hashedFile.propertyCid;
-        break;
-      }
-    }
+    // Use the finalPropertyCid that was determined earlier for the ZIP folder name
+    const propertyFolderName = finalPropertyCid;
 
     if (!propertyFolderName) {
       const errorMsg =
