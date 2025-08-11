@@ -368,18 +368,21 @@ describe('validate-and-upload with image support', () => {
     // Verify calculated CIDs are included in output
     expect(
       mockCidCalculatorService.calculateCidFromCanonicalJson
-    ).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        label: 'Test Product',
-        relationships: expect.arrayContaining([
-          {
-            name: 'Test Product',
-            ipfs_url: 'ipfs://bafkreicalculatedimage',
-          },
-        ]),
-      })
-    );
+    ).toHaveBeenCalledWith(expect.any(String));
+
+    // Verify the canonical JSON contains the expected data structure
+    const callArgs =
+      mockCidCalculatorService.calculateCidFromCanonicalJson.mock.calls[0];
+    const canonicalJson = JSON.parse(callArgs[0]);
+    expect(canonicalJson).toMatchObject({
+      label: 'Test Product',
+      relationships: expect.arrayContaining([
+        {
+          name: 'Test Product',
+          ipfs_url: 'ipfs://bafkreicalculatedimage',
+        },
+      ]),
+    });
   });
 
   it('should handle validation errors for invalid image paths', async () => {

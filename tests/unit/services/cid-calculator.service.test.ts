@@ -267,6 +267,95 @@ describe('CidCalculatorService', () => {
     });
   });
 
+  describe('calculateCidFromCanonicalJson', () => {
+    it('should calculate CID using raw codec for canonical JSON', async () => {
+      const canonicalJson = '{"test":"data"}';
+      const cid =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+
+      // CID v1 should be base32 encoded and use raw codec
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+
+      // Verify it's a valid CID with raw codec
+      const parsedCid = CID.parse(cid);
+      expect(parsedCid.version).toBe(1);
+      expect(parsedCid.code).toBe(raw.code); // Should use raw codec (0x55)
+    });
+
+    it('should always use raw codec regardless of content', async () => {
+      // Test with regular JSON
+      const regularJson = '{"name":"test","value":42}';
+      const regularCid =
+        await cidCalculator.calculateCidFromCanonicalJson(regularJson);
+
+      // Test with IPLD-like structure
+      const ipldJson =
+        '{"/":"bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu"}';
+      const ipldCid =
+        await cidCalculator.calculateCidFromCanonicalJson(ipldJson);
+
+      // Both should use raw codec
+      const regularParsed = CID.parse(regularCid);
+      const ipldParsed = CID.parse(ipldCid);
+
+      expect(regularParsed.code).toBe(raw.code);
+      expect(ipldParsed.code).toBe(raw.code);
+    });
+
+    it('should calculate consistent CID for same canonical JSON', async () => {
+      const canonicalJson = '{"a":1,"b":2}';
+
+      const cid1 =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+      const cid2 =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+
+      expect(cid1).toBe(cid2);
+    });
+
+    it('should calculate different CIDs for different canonical JSON', async () => {
+      const json1 = '{"name":"test1"}';
+      const json2 = '{"name":"test2"}';
+
+      const cid1 = await cidCalculator.calculateCidFromCanonicalJson(json1);
+      const cid2 = await cidCalculator.calculateCidFromCanonicalJson(json2);
+
+      expect(cid1).not.toBe(cid2);
+    });
+
+    it('should handle empty JSON object', async () => {
+      const canonicalJson = '{}';
+      const cid =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+      const parsedCid = CID.parse(cid);
+      expect(parsedCid.code).toBe(raw.code);
+    });
+
+    it('should handle complex nested canonical JSON', async () => {
+      const canonicalJson =
+        '{"level1":{"array":[1,2,3],"level2":{"boolean":true,"null":null,"string":"test"}}}';
+      const cid =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+
+      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+      const parsedCid = CID.parse(cid);
+      expect(parsedCid.code).toBe(raw.code);
+    });
+
+    it('should be identical to calculateCidV1ForRawData for same buffer', async () => {
+      const canonicalJson = '{"test":"value"}';
+      const buffer = Buffer.from(canonicalJson, 'utf-8');
+
+      const cidFromCanonical =
+        await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
+      const cidFromRaw = await cidCalculator.calculateCidV1ForRawData(buffer);
+
+      expect(cidFromCanonical).toBe(cidFromRaw);
+    });
+  });
+
   describe('calculateCidV1ForRawData', () => {
     it('should calculate valid CID v1 for raw binary data', async () => {
       const data = Buffer.from('Hello Raw Data!');

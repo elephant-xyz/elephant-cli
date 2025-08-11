@@ -314,8 +314,7 @@ export class IPLDConverterService {
             this.canonicalizerService.canonicalize(dataToUpload);
           expectedCid =
             await this.cidCalculatorService.calculateCidFromCanonicalJson(
-              canonicalJson,
-              dataToUpload
+              canonicalJson
             );
 
           processedFile = {
@@ -366,8 +365,7 @@ export class IPLDConverterService {
           const canonicalJson =
             this.canonicalizerService.canonicalize(dataToUpload);
           return await this.cidCalculatorService.calculateCidFromCanonicalJson(
-            canonicalJson,
-            dataToUpload
+            canonicalJson
           );
         }
       }

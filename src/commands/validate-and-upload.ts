@@ -1383,8 +1383,7 @@ async function processFileAndGetUploadPromise(
     // Calculate CID from the canonical JSON string directly
     const calculatedCid =
       await services.cidCalculatorService.calculateCidFromCanonicalJson(
-        canonicalJson,
-        dataToUpload
+        canonicalJson
       );
 
     const processedFile: ProcessedFile = {
