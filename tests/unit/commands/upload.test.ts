@@ -31,18 +31,15 @@ describe('Upload Command', () => {
     // Create a temporary directory for test files
     tempDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'upload-test-'));
 
-    // Create a mock extracted directory structure
+    // Create a mock extracted directory structure with SINGLE property
     mockExtractedPath = path.join(tempDir, 'extracted');
     await fsPromises.mkdir(mockExtractedPath, { recursive: true });
 
-    // Create property directories with JSON files
+    // Create a single property directory with JSON files
     const property1Dir = path.join(mockExtractedPath, 'bafybeiabc123');
-    const property2Dir = path.join(mockExtractedPath, 'bafybeidef456');
-
     await fsPromises.mkdir(property1Dir, { recursive: true });
-    await fsPromises.mkdir(property2Dir, { recursive: true });
 
-    // Add JSON files to property directories
+    // Add JSON files to property directory
     await fsPromises.writeFile(
       path.join(property1Dir, 'bafkreihash1.json'),
       JSON.stringify({ label: 'Test 1', relationships: [] })
@@ -50,10 +47,6 @@ describe('Upload Command', () => {
     await fsPromises.writeFile(
       path.join(property1Dir, 'bafkreihash2.json'),
       JSON.stringify({ label: 'Test 2', relationships: [] })
-    );
-    await fsPromises.writeFile(
-      path.join(property2Dir, 'bafkreihash3.json'),
-      JSON.stringify({ label: 'Test 3', relationships: [] })
     );
 
     // Create a mock ZIP file
@@ -139,26 +132,40 @@ describe('Upload Command', () => {
     // which is tested separately
   });
 
-  it('should successfully upload directories from hash output ZIP', async () => {
+  it('should successfully upload single property directory from hash output ZIP', async () => {
+    // Create a single property structure (only one directory)
+    const singlePropertyExtracted = path.join(tempDir, 'single-extracted');
+    await fsPromises.mkdir(singlePropertyExtracted, { recursive: true });
+
+    const singlePropertyDir = path.join(
+      singlePropertyExtracted,
+      'bafybeiabc123'
+    );
+    await fsPromises.mkdir(singlePropertyDir, { recursive: true });
+
+    // Add JSON files to the single property directory
+    await fsPromises.writeFile(
+      path.join(singlePropertyDir, 'bafkreihash1.json'),
+      JSON.stringify({ label: 'Test 1', relationships: [] })
+    );
+    await fsPromises.writeFile(
+      path.join(singlePropertyDir, 'bafkreihash2.json'),
+      JSON.stringify({ label: 'Test 2', relationships: [] })
+    );
+
     // Mock services
     const mockZipExtractor = {
       isZipFile: vi.fn().mockResolvedValue(true),
-      extractZip: vi.fn().mockResolvedValue(mockExtractedPath),
+      extractZip: vi.fn().mockResolvedValue(singlePropertyExtracted),
       getTempRootDir: vi.fn().mockReturnValue(tempDir),
       cleanup: vi.fn().mockResolvedValue(undefined),
     } as unknown as ZipExtractorService;
 
     const mockPinataService = {
-      uploadDirectory: vi
-        .fn()
-        .mockResolvedValueOnce({
-          success: true,
-          cid: 'bafybeimockcid1',
-        })
-        .mockResolvedValueOnce({
-          success: true,
-          cid: 'bafybeimockcid2',
-        }),
+      uploadDirectory: vi.fn().mockResolvedValueOnce({
+        success: true,
+        cid: 'bafybeimockcid1',
+      }),
     } as unknown as PinataDirectoryUploadService;
 
     const mockProgress = {
@@ -166,10 +173,10 @@ describe('Upload Command', () => {
       stop: vi.fn(),
       increment: vi.fn(),
       getMetrics: vi.fn().mockReturnValue({
-        processed: 2,
+        processed: 1,
         errors: 0,
         skipped: 0,
-        total: 2,
+        total: 1,
       }),
     } as unknown as SimpleProgress;
 
@@ -189,10 +196,10 @@ describe('Upload Command', () => {
     expect(mockZipExtractor.isZipFile).toHaveBeenCalledWith(mockZipPath);
     expect(mockZipExtractor.extractZip).toHaveBeenCalledWith(mockZipPath);
 
-    // Verify directory uploads
-    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(2);
+    // Verify only ONE directory upload
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      path.join(mockExtractedPath, 'bafybeiabc123'),
+      path.join(singlePropertyExtracted, 'bafybeiabc123'),
       expect.objectContaining({
         name: 'bafybeiabc123',
         keyvalues: {
@@ -201,22 +208,12 @@ describe('Upload Command', () => {
         },
       })
     );
-    expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      path.join(mockExtractedPath, 'bafybeidef456'),
-      expect.objectContaining({
-        name: 'bafybeidef456',
-        keyvalues: {
-          source: 'elephant-cli-upload',
-          propertyId: 'bafybeidef456',
-        },
-      })
-    );
 
     // Verify progress tracking
     expect(mockProgress.start).toHaveBeenCalled();
     expect(mockProgress.stop).toHaveBeenCalled();
     expect(mockProgress.increment).toHaveBeenCalledWith('processed');
-    expect(mockProgress.increment).toHaveBeenCalledTimes(2);
+    expect(mockProgress.increment).toHaveBeenCalledTimes(1);
 
     // Verify cleanup
     expect(mockZipExtractor.cleanup).toHaveBeenCalledWith(tempDir);
@@ -229,24 +226,34 @@ describe('Upload Command', () => {
   });
 
   it('should handle upload failures gracefully', async () => {
+    // Create a single property structure
+    const singlePropertyExtracted = path.join(tempDir, 'single-fail-test');
+    await fsPromises.mkdir(singlePropertyExtracted, { recursive: true });
+
+    const singlePropertyDir = path.join(
+      singlePropertyExtracted,
+      'bafybeiabc123'
+    );
+    await fsPromises.mkdir(singlePropertyDir, { recursive: true });
+
+    // Add JSON files
+    await fsPromises.writeFile(
+      path.join(singlePropertyDir, 'bafkreihash1.json'),
+      JSON.stringify({ label: 'Test 1', relationships: [] })
+    );
+
     const mockZipExtractor = {
       isZipFile: vi.fn().mockResolvedValue(true),
-      extractZip: vi.fn().mockResolvedValue(mockExtractedPath),
+      extractZip: vi.fn().mockResolvedValue(singlePropertyExtracted),
       getTempRootDir: vi.fn().mockReturnValue(tempDir),
       cleanup: vi.fn().mockResolvedValue(undefined),
     } as unknown as ZipExtractorService;
 
     const mockPinataService = {
-      uploadDirectory: vi
-        .fn()
-        .mockResolvedValueOnce({
-          success: true,
-          cid: 'bafybeimockcid1',
-        })
-        .mockResolvedValueOnce({
-          success: false,
-          error: 'Network error',
-        }),
+      uploadDirectory: vi.fn().mockResolvedValueOnce({
+        success: false,
+        error: 'Network error',
+      }),
     } as unknown as PinataDirectoryUploadService;
 
     const mockProgress = {
@@ -254,10 +261,10 @@ describe('Upload Command', () => {
       stop: vi.fn(),
       increment: vi.fn(),
       getMetrics: vi.fn().mockReturnValue({
-        processed: 1,
+        processed: 0,
         errors: 1,
         skipped: 0,
-        total: 2,
+        total: 1,
       }),
     } as unknown as SimpleProgress;
 
@@ -273,11 +280,10 @@ describe('Upload Command', () => {
       progressTracker: mockProgress,
     });
 
-    // Verify both uploads were attempted
-    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(2);
+    // Verify upload was attempted
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
 
-    // Verify progress tracking for both success and error
-    expect(mockProgress.increment).toHaveBeenCalledWith('processed');
+    // Verify progress tracking for error
     expect(mockProgress.increment).toHaveBeenCalledWith('errors');
 
     // Verify CSV was created (content testing would require mocking datagroup analyzer)
@@ -287,9 +293,15 @@ describe('Upload Command', () => {
     );
   });
 
-  it('should skip directories without JSON files', async () => {
-    // Create a directory without JSON files
-    const emptyPropertyDir = path.join(mockExtractedPath, 'empty-property');
+  it('should skip single directory without JSON files', async () => {
+    // Create a single directory structure without JSON files
+    const singlePropertyExtracted = path.join(tempDir, 'single-empty');
+    await fsPromises.mkdir(singlePropertyExtracted, { recursive: true });
+
+    const emptyPropertyDir = path.join(
+      singlePropertyExtracted,
+      'empty-property'
+    );
     await fsPromises.mkdir(emptyPropertyDir, { recursive: true });
     await fsPromises.writeFile(
       path.join(emptyPropertyDir, 'readme.txt'),
@@ -298,7 +310,7 @@ describe('Upload Command', () => {
 
     const mockZipExtractor = {
       isZipFile: vi.fn().mockResolvedValue(true),
-      extractZip: vi.fn().mockResolvedValue(mockExtractedPath),
+      extractZip: vi.fn().mockResolvedValue(singlePropertyExtracted),
       getTempRootDir: vi.fn().mockReturnValue(tempDir),
       cleanup: vi.fn().mockResolvedValue(undefined),
     } as unknown as ZipExtractorService;
@@ -315,10 +327,10 @@ describe('Upload Command', () => {
       stop: vi.fn(),
       increment: vi.fn(),
       getMetrics: vi.fn().mockReturnValue({
-        processed: 2,
+        processed: 0,
         errors: 0,
         skipped: 1,
-        total: 3,
+        total: 1,
       }),
     } as unknown as SimpleProgress;
 
@@ -333,8 +345,8 @@ describe('Upload Command', () => {
       progressTracker: mockProgress,
     });
 
-    // Should only upload directories with JSON files
-    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(2);
+    // Should not upload directories without JSON files
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(0);
     expect(mockProgress.increment).toHaveBeenCalledWith('skipped');
   });
 
@@ -410,6 +422,45 @@ describe('Upload Command', () => {
     ).rejects.toThrow('No valid structure found in the extracted ZIP');
   });
 
+  it('should throw error if multiple property directories are found', async () => {
+    // Create multiple property directories (should fail)
+    const multiPropertyPath = path.join(tempDir, 'multi-extracted');
+    await fsPromises.mkdir(multiPropertyPath, { recursive: true });
+
+    const prop1Dir = path.join(multiPropertyPath, 'bafybeiprop1');
+    const prop2Dir = path.join(multiPropertyPath, 'bafybeiprop2');
+    await fsPromises.mkdir(prop1Dir, { recursive: true });
+    await fsPromises.mkdir(prop2Dir, { recursive: true });
+
+    // Add JSON files to each directory
+    await fsPromises.writeFile(
+      path.join(prop1Dir, 'file1.json'),
+      JSON.stringify({ label: 'Test 1', relationships: [] })
+    );
+    await fsPromises.writeFile(
+      path.join(prop2Dir, 'file2.json'),
+      JSON.stringify({ label: 'Test 2', relationships: [] })
+    );
+
+    const mockZipExtractor = {
+      isZipFile: vi.fn().mockResolvedValue(true),
+      extractZip: vi.fn().mockResolvedValue(multiPropertyPath),
+      getTempRootDir: vi.fn().mockReturnValue(tempDir),
+      cleanup: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ZipExtractorService;
+
+    const options: UploadCommandOptions = {
+      input: mockZipPath,
+      pinataJwt: 'test-jwt-token',
+    };
+
+    await expect(
+      handleUpload(options, {
+        zipExtractorService: mockZipExtractor,
+      })
+    ).rejects.toThrow('Multiple property directories found');
+  });
+
   it('should throw error if no JWT is provided', async () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
@@ -453,7 +504,7 @@ describe('Upload Command', () => {
         processed: 0,
         errors: 1,
         skipped: 0,
-        total: 2,
+        total: 1,
       }),
     } as unknown as SimpleProgress;
 
@@ -469,7 +520,7 @@ describe('Upload Command', () => {
       progressTracker: mockProgress,
     });
 
-    // Should handle the error and continue with other uploads
+    // Should handle the error
     expect(mockProgress.increment).toHaveBeenCalledWith('errors');
 
     // Verify CSV was created with proper headers

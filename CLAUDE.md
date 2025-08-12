@@ -150,17 +150,18 @@ Key features:
 ### upload Command
 
 This command:
-1. **Takes ZIP output from hash command** containing property directories with CID-named files
+1. **Takes ZIP output from hash command** containing a single property directory with CID-named files
 2. **Extracts ZIP to temporary directory** for processing
-3. **Detects property directory structure** (single or multiple properties)
-4. **Uploads each property directory to IPFS via Pinata** in a single API request
+3. **Validates single property structure** (rejects multiple property directories)
+4. **Uploads the property directory to IPFS via Pinata** in a single API request
 5. **Analyzes datagroup files** to generate proper CSV output
 6. **Generates CSV compatible with submit-to-contract** with actual upload timestamps
 
 Key features:
+- **Single Property Only**: Processes data for one property at a time (matches hash command)
 - **Optimized for Upload**: No validation or CID calculation - just pure upload functionality
-- **Batch Upload**: Uploads entire directories as single IPFS objects
-- **Smart Structure Detection**: Handles both single property (from hash command) and multiple property directories
+- **Batch Upload**: Uploads entire directory as single IPFS object
+- **Smart Structure Detection**: Handles hash command output (property directory with CID-named files)
 - **Datagroup Analysis**: Identifies datagroup root files by structure (label + relationships keys)
 - **Schema Manifest Integration**: Uses schema manifest to map labels to datagroup CIDs
 - **CSV Generation**: Creates submission-ready CSV with proper format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt)

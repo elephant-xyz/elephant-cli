@@ -507,9 +507,9 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 ```
 
 **Features:**
-- Uploads entire property directories to IPFS in a single request
+- Uploads single property directory to IPFS in one request
 - Generates CSV report compatible with `submit-to-contract` command
-- Supports both single and multiple property directories
+- Single property only - matches `hash` command output structure
 - No validation or CID calculation - just pure upload
 
 **CSV Output Format:**

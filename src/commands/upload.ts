@@ -19,7 +19,7 @@ export function registerUploadCommand(program: Command) {
   program
     .command('upload <input>')
     .description(
-      'Upload files from the output of hash command to IPFS as a directory. The input should be a ZIP file containing property directories with CID-named JSON files.'
+      'Upload single property data from the output of hash command to IPFS. The input should be a ZIP file containing a single property directory with CID-named JSON files.'
     )
     .option(
       '--pinata-jwt <jwt>',
@@ -126,20 +126,32 @@ export async function handleUpload(
       logger.info(
         `Detected single property directory: ${propertyName} with ${jsonFiles.length} JSON files`
       );
-    } else if (subdirs.length > 0) {
-      // We have multiple property directories
-      propertyDirs = subdirs.map((dir) => ({
-        name: dir.name,
-        path: path.join(extractedPath!, dir.name),
-      }));
-      logger.info(`Found ${propertyDirs.length} property directories`);
+    } else if (subdirs.length === 1) {
+      // We have exactly one property directory
+      propertyDirs = [
+        {
+          name: subdirs[0].name,
+          path: path.join(extractedPath!, subdirs[0].name),
+        },
+      ];
+      logger.info(`Found single property directory: ${subdirs[0].name}`);
+    } else if (subdirs.length > 1) {
+      // Multiple directories found - this is an error
+      throw new Error(
+        'Multiple property directories found. The upload command only supports single property data. Please use the hash command to process single property data first.'
+      );
     } else {
       throw new Error(
         'No valid structure found in the extracted ZIP. Expected property directories with JSON files from hash command.'
       );
     }
 
-    // No need to log again, already logged above
+    // Ensure we have exactly one property directory
+    if (propertyDirs.length !== 1) {
+      throw new Error(
+        `Expected exactly one property directory, found ${propertyDirs.length}. The upload command only supports single property data.`
+      );
+    }
 
     // Initialize Pinata service
     const pinataService =
@@ -148,14 +160,11 @@ export async function handleUpload(
 
     // Initialize progress tracking
     if (!progressTracker) {
-      progressTracker = new SimpleProgress(
-        propertyDirs.length,
-        'Uploading to IPFS'
-      );
+      progressTracker = new SimpleProgress(1, 'Uploading to IPFS');
     }
     progressTracker.start();
 
-    // Upload each property directory
+    // Upload the single property directory
     const uploadResults: Array<{
       propertyDir: string;
       success: boolean;
