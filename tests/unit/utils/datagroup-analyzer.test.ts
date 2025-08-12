@@ -21,7 +21,7 @@ vi.mock('../../../src/utils/logger.js', () => ({
 
 describe('Datagroup Analyzer', () => {
   let tempDir: string;
-  let mockSchemaManifestService: SchemaManifestService;
+  let mockSchemaManifestService: any;
 
   beforeEach(async () => {
     // Create a temporary directory for test files

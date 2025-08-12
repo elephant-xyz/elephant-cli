@@ -250,7 +250,7 @@ export async function handleUpload(
         'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt',
       ];
 
-      // Initialize schema manifest service for analyzing datagroup files
+      // Initialize schema manifest service for analyzing datagroup files (reuse if provided)
       const schemaManifestService =
         serviceOverrides.schemaManifestService ?? new SchemaManifestService();
 

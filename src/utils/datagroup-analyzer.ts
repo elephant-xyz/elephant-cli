@@ -16,18 +16,17 @@ export interface DatagroupFile {
  * Datagroup root files are identified by having exactly two properties: "label" and "relationships".
  *
  * @param directoryPath - The directory to analyze
- * @param schemaManifestService - Service for looking up schema CIDs by label
+ * @param schemaManifestService - Service for looking up schema CIDs by label (required)
  * @returns Array of datagroup file information
  */
 export async function analyzeDatagroupFiles(
   directoryPath: string,
-  schemaManifestService?: SchemaManifestService
+  schemaManifestService: SchemaManifestService
 ): Promise<DatagroupFile[]> {
   const datagroupFiles: DatagroupFile[] = [];
 
-  // Create schema manifest service if not provided
-  const manifestService = schemaManifestService || new SchemaManifestService();
-  await manifestService.loadSchemaManifest();
+  // Ensure the schema manifest is loaded
+  await schemaManifestService.loadSchemaManifest();
 
   // Read all files in the directory
   const entries = await fsPromises.readdir(directoryPath, {
@@ -51,7 +50,8 @@ export async function analyzeDatagroupFiles(
         const label = jsonData.label;
 
         // Get the schema CID for this datagroup by its label
-        const dataGroupCid = manifestService.getDataGroupCidByLabel(label);
+        const dataGroupCid =
+          schemaManifestService.getDataGroupCidByLabel(label);
 
         if (dataGroupCid) {
           // Extract the data CID from the filename (remove .json extension)
@@ -89,18 +89,17 @@ export async function analyzeDatagroupFiles(
  * Recursively analyzes a directory tree to find all datagroup files.
  *
  * @param directoryPath - The root directory to analyze
- * @param schemaManifestService - Service for looking up schema CIDs by label
+ * @param schemaManifestService - Service for looking up schema CIDs by label (required)
  * @returns Array of datagroup file information from all subdirectories
  */
 export async function analyzeDatagroupFilesRecursive(
   directoryPath: string,
-  schemaManifestService?: SchemaManifestService
+  schemaManifestService: SchemaManifestService
 ): Promise<DatagroupFile[]> {
   const allDatagroupFiles: DatagroupFile[] = [];
 
-  // Create schema manifest service if not provided
-  const manifestService = schemaManifestService || new SchemaManifestService();
-  await manifestService.loadSchemaManifest();
+  // Ensure the schema manifest is loaded
+  await schemaManifestService.loadSchemaManifest();
 
   async function walkDirectory(currentPath: string) {
     const entries = await fsPromises.readdir(currentPath, {
@@ -110,7 +109,7 @@ export async function analyzeDatagroupFilesRecursive(
     // Process files in current directory
     const filesInDir = await analyzeDatagroupFiles(
       currentPath,
-      manifestService
+      schemaManifestService
     );
     allDatagroupFiles.push(...filesInDir);
 
