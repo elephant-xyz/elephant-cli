@@ -491,6 +491,46 @@ hashed-data.zip
     ...
 ```
 
+### Upload Command
+
+The `upload` command takes the output from the `hash` command and uploads it to IPFS as a directory via Pinata. This command is optimized for simple, efficient uploads without validation or CID calculation overhead.
+
+```bash
+# Basic usage (uses PINATA_JWT environment variable)
+elephant-cli upload hashed-data.zip
+
+# With explicit Pinata JWT
+elephant-cli upload hashed-data.zip --pinata-jwt "your-jwt-token"
+
+# With custom output CSV
+elephant-cli upload hashed-data.zip --output-csv upload-results.csv
+```
+
+**Features:**
+- Uploads entire property directories to IPFS in a single request
+- Generates CSV report compatible with `submit-to-contract` command
+- Supports both single and multiple property directories
+- No validation or CID calculation - just pure upload
+
+**CSV Output Format:**
+The CSV output matches the `hash` command format but includes actual upload timestamps:
+```
+propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+bafybeiproperty...,bafkreischema1...,bafkreifile1...,file1.json,2024-08-11T20:35:00.687Z
+```
+
+**Workflow Example:**
+```bash
+# Step 1: Calculate CIDs offline
+elephant-cli hash property-data.zip
+
+# Step 2: Upload to IPFS
+elephant-cli upload hashed-data.zip
+
+# Step 3: Submit to blockchain
+elephant-cli submit-to-contract upload-results.csv --private-key "your-key"
+```
+
 ### Data Fetching
 
 The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively and packaging them as a ZIP file. It supports two input modes:
@@ -840,6 +880,7 @@ elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli fetch-data --help
 elephant-cli hash --help
+elephant-cli upload --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```

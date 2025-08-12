@@ -147,6 +147,33 @@ Key features:
 - **Output Structure**: Creates ZIP with single `property-cid/file-cid.json` structure (no 'data' wrapper)
 - **Property CID Options**: Supports `--property-cid` flag to override automatic detection
 
+### upload Command
+
+This command:
+1. **Takes ZIP output from hash command** containing property directories with CID-named files
+2. **Extracts ZIP to temporary directory** for processing
+3. **Detects property directory structure** (single or multiple properties)
+4. **Uploads each property directory to IPFS via Pinata** in a single API request
+5. **Analyzes datagroup files** to generate proper CSV output
+6. **Generates CSV compatible with submit-to-contract** with actual upload timestamps
+
+Key features:
+- **Optimized for Upload**: No validation or CID calculation - just pure upload functionality
+- **Batch Upload**: Uploads entire directories as single IPFS objects
+- **Smart Structure Detection**: Handles both single property (from hash command) and multiple property directories
+- **Datagroup Analysis**: Identifies datagroup root files by structure (label + relationships keys)
+- **Schema Manifest Integration**: Uses schema manifest to map labels to datagroup CIDs
+- **CSV Generation**: Creates submission-ready CSV with proper format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt)
+- **Environment Variable Support**: Can use PINATA_JWT from environment if not provided via CLI
+- **Progress Tracking**: Visual progress indicators during upload
+- **Error Recovery**: Graceful error handling with proper cleanup
+
+Technical implementation:
+- Uses `PinataDirectoryUploadService` for optimized directory uploads
+- Employs `datagroup-analyzer` utility to identify and analyze datagroup files
+- Integrates with `SchemaManifestService` for label-to-CID mapping
+- Preserves directory structure when uploading to IPFS
+
 ### fetch-data Command
 
 This command:
@@ -331,6 +358,11 @@ npm run dev
   --output-zip ./hashed-data.zip \
   --output-csv ./hash-results.csv \
   --max-concurrent-tasks 20
+
+# Test the CLI - Upload command (upload hash output to IPFS)
+./bin/elephant-cli upload ./hashed-data.zip \
+  --pinata-jwt "..." \
+  --output-csv ./upload-results.csv
 
 # Test the CLI - Fetch data from CID
 ./bin/elephant-cli fetch-data bafybeiabc123... \

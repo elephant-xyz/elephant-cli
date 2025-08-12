@@ -6,6 +6,8 @@ import { logger } from '../utils/logger.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
 import { PinataDirectoryUploadService } from '../services/pinata-directory-upload.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
+import { analyzeDatagroupFiles } from '../utils/datagroup-analyzer.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 
 export interface UploadCommandOptions {
   input: string;
@@ -52,6 +54,7 @@ export interface UploadServiceOverrides {
   zipExtractorService?: ZipExtractorService;
   pinataDirectoryUploadService?: PinataDirectoryUploadService;
   progressTracker?: SimpleProgress;
+  schemaManifestService?: SchemaManifestService;
 }
 
 export async function handleUpload(
@@ -229,17 +232,58 @@ export async function handleUpload(
 
     progressTracker.stop();
 
-    // Generate CSV output if specified
+    // Generate CSV output in the same format as hash command
     if (options.outputCsv) {
       logger.info('Generating CSV report...');
-      const csvData: string[] = ['propertyDir,success,cid,error,timestamp'];
 
+      // CSV header matching hash command format
+      const csvData: string[] = [
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt',
+      ];
+
+      // Initialize schema manifest service for analyzing datagroup files
+      const schemaManifestService =
+        serviceOverrides.schemaManifestService ?? new SchemaManifestService();
+
+      // Process each successfully uploaded directory
       for (const result of uploadResults) {
-        csvData.push(
-          `${result.propertyDir},${result.success},${result.cid || ''},${
-            result.error || ''
-          },${new Date().toISOString()}`
-        );
+        if (result.success && result.cid) {
+          try {
+            // Find the corresponding property directory
+            const propertyDir = propertyDirs.find(
+              (p) => p.name === result.propertyDir
+            );
+            if (!propertyDir) continue;
+
+            // Analyze the datagroup files in this directory
+            const datagroupFiles = await analyzeDatagroupFiles(
+              propertyDir.path,
+              schemaManifestService
+            );
+
+            // Add a CSV row for each datagroup file
+            const uploadTimestamp = new Date().toISOString();
+            for (const dgFile of datagroupFiles) {
+              csvData.push(
+                `${result.propertyDir},${dgFile.dataGroupCid},${dgFile.dataCid},${dgFile.fileName},${uploadTimestamp}`
+              );
+            }
+
+            if (datagroupFiles.length === 0) {
+              logger.warn(`No datagroup files found in ${result.propertyDir}`);
+            } else {
+              logger.info(
+                `Found ${datagroupFiles.length} datagroup files in ${result.propertyDir}`
+              );
+            }
+          } catch (error) {
+            logger.error(
+              `Error analyzing datagroup files for ${result.propertyDir}: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
+          }
+        }
       }
 
       await fsPromises.writeFile(
