@@ -516,7 +516,7 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 The CSV output matches the `hash` command format but includes actual upload timestamps:
 ```
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-bafybeiproperty...,bafkreischema1...,bafkreifile1...,bafkreifile1....json,2024-08-11T20:35:00.687Z
+bafkreiproperty...,bafkreidatagroupschema1...,bafkreidatagrouprootfile1...,bafkreidatagroupfile1....json,2024-08-11T20:35:00.687Z
 ```
 
 **Workflow Example:**
@@ -541,13 +541,13 @@ Download data starting from a root CID:
 
 ```bash
 # Basic usage (outputs to fetched-data.zip by default)
-elephant-cli fetch-data bafybeiabc123...
+elephant-cli fetch-data bafkreiabc123...
 
 # With custom output ZIP file
-elephant-cli fetch-data bafybeiabc123... --output-zip ./my-data.zip
+elephant-cli fetch-data bafkreiabc123... --output-zip ./my-data.zip
 
 # With custom IPFS gateway
-elephant-cli fetch-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
+elephant-cli fetch-data bafkreiabc123... --gateway https://ipfs.io/ipfs/
 ```
 
 #### Mode 2: Fetch from Transaction Hash
@@ -588,15 +588,15 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 ```
 my-data.zip/
 └── data/                        # Top-level data folder
-    ├── bafybeiabc123.../       # Property CID (transaction mode)
+    ├── bafkreiabc123.../       # Property CID (transaction mode)
     │   ├── bafkreidef456.json # Data group file
     │   ├── property_seed.json # Referenced files
     │   ├── property_seed_from.json
     │   └── property_seed_to.json
-    ├── bafybeiabc456.../       # Another property
+    ├── bafkreiabc456.../       # Another property
     │   ├── bafkreidef789.json # Data group file
     │   └── other_data.json    # Referenced files
-    └── bafybeicid123.../      # CID mode output
+    └── bafkreicid123.../      # CID mode output
         ├── bafkreiroot.json    # Root data file
         └── bafkreiref456.json  # Referenced files
 ```
@@ -650,15 +650,15 @@ elephant-cli hash property-data.zip \
 **Output Structure:**
 ```
 hashed-data.zip/
-└── bafybeiproperty.../           # Property CID folder
+└── bafkreiproperty.../           # Property CID folder
     ├── bafkreifile1.json         # Files named by their calculated CID
     ├── bafkreifile2.json
     └── bafkreifile3.json
 
 hash-results.csv:
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-bafybeiproperty...,bafkreischema1...,bafkreifile1...,data.json,
-bafybeiproperty...,bafkreischema2...,bafkreifile2...,other.json,
+bafkreiproperty...,bafkreischema1...,bafkreifile1...,data.json,
+bafkreiproperty...,bafkreischema2...,bafkreifile2...,other.json,
 ```
 
 ### CID-Hex Conversion

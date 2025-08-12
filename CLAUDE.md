@@ -366,7 +366,7 @@ npm run dev
   --output-csv ./upload-results.csv
 
 # Test the CLI - Fetch data from CID
-./bin/elephant-cli fetch-data bafybeiabc123... \
+./bin/elephant-cli fetch-data bafkreiabc123... \
   --gateway https://ipfs.io/ipfs/ \
   --output-zip ./fetched-data.zip
 
