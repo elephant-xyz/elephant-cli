@@ -516,7 +516,7 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 The CSV output matches the `hash` command format but includes actual upload timestamps:
 ```
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-bafybeiproperty...,bafkreischema1...,bafkreifile1...,file1.json,2024-08-11T20:35:00.687Z
+bafybeiproperty...,bafkreischema1...,bafkreifile1...,bafkreifile1....json,2024-08-11T20:35:00.687Z
 ```
 
 **Workflow Example:**
