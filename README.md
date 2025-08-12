@@ -491,6 +491,46 @@ hashed-data.zip
     ...
 ```
 
+### Upload Command
+
+The `upload` command takes the output from the `hash` command and uploads it to IPFS as a directory via Pinata. This command is optimized for simple, efficient uploads without validation or CID calculation overhead.
+
+```bash
+# Basic usage (uses PINATA_JWT environment variable)
+elephant-cli upload hashed-data.zip
+
+# With explicit Pinata JWT
+elephant-cli upload hashed-data.zip --pinata-jwt "your-jwt-token"
+
+# With custom output CSV
+elephant-cli upload hashed-data.zip --output-csv upload-results.csv
+```
+
+**Features:**
+- Uploads single property directory to IPFS in one request
+- Generates CSV report compatible with `submit-to-contract` command
+- Single property only - matches `hash` command output structure
+- No validation or CID calculation - just pure upload
+
+**CSV Output Format:**
+The CSV output matches the `hash` command format but includes actual upload timestamps:
+```
+propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
+bafkreiproperty...,bafkreidatagroupschema1...,bafkreidatagrouprootfile1...,bafkreidatagroupfile1....json,2024-08-11T20:35:00.687Z
+```
+
+**Workflow Example:**
+```bash
+# Step 1: Calculate CIDs offline
+elephant-cli hash property-data.zip
+
+# Step 2: Upload to IPFS
+elephant-cli upload hashed-data.zip
+
+# Step 3: Submit to blockchain
+elephant-cli submit-to-contract upload-results.csv --private-key "your-key"
+```
+
 ### Data Fetching
 
 The `fetch-data` command allows you to download and fetch entire data trees from IPFS, following all CID references recursively and packaging them as a ZIP file. It supports two input modes:
@@ -501,13 +541,13 @@ Download data starting from a root CID:
 
 ```bash
 # Basic usage (outputs to fetched-data.zip by default)
-elephant-cli fetch-data bafybeiabc123...
+elephant-cli fetch-data bafkreiabc123...
 
 # With custom output ZIP file
-elephant-cli fetch-data bafybeiabc123... --output-zip ./my-data.zip
+elephant-cli fetch-data bafkreiabc123... --output-zip ./my-data.zip
 
 # With custom IPFS gateway
-elephant-cli fetch-data bafybeiabc123... --gateway https://ipfs.io/ipfs/
+elephant-cli fetch-data bafkreiabc123... --gateway https://ipfs.io/ipfs/
 ```
 
 #### Mode 2: Fetch from Transaction Hash
@@ -548,15 +588,15 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 ```
 my-data.zip/
 └── data/                        # Top-level data folder
-    ├── bafybeiabc123.../       # Property CID (transaction mode)
+    ├── bafkreiabc123.../       # Property CID (transaction mode)
     │   ├── bafkreidef456.json # Data group file
     │   ├── property_seed.json # Referenced files
     │   ├── property_seed_from.json
     │   └── property_seed_to.json
-    ├── bafybeiabc456.../       # Another property
+    ├── bafkreiabc456.../       # Another property
     │   ├── bafkreidef789.json # Data group file
     │   └── other_data.json    # Referenced files
-    └── bafybeicid123.../      # CID mode output
+    └── bafkreicid123.../      # CID mode output
         ├── bafkreiroot.json    # Root data file
         └── bafkreiref456.json  # Referenced files
 ```
@@ -610,15 +650,15 @@ elephant-cli hash property-data.zip \
 **Output Structure:**
 ```
 hashed-data.zip/
-└── bafybeiproperty.../           # Property CID folder
+└── bafkreiproperty.../           # Property CID folder
     ├── bafkreifile1.json         # Files named by their calculated CID
     ├── bafkreifile2.json
     └── bafkreifile3.json
 
 hash-results.csv:
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-bafybeiproperty...,bafkreischema1...,bafkreifile1...,data.json,
-bafybeiproperty...,bafkreischema2...,bafkreifile2...,other.json,
+bafkreiproperty...,bafkreischema1...,bafkreifile1...,data.json,
+bafkreiproperty...,bafkreischema2...,bafkreifile2...,other.json,
 ```
 
 ### CID-Hex Conversion
@@ -840,6 +880,7 @@ elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli fetch-data --help
 elephant-cli hash --help
+elephant-cli upload --help
 elephant-cli hex-to-cid --help
 elephant-cli cid-to-hex --help
 ```
