@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.4...v1.25.0) (2025-08-12)
+
+
+### Features
+
+* add standalone `upload` command ([#85](https://github.com/elephant-xyz/elephant-cli/issues/85)) ([281990d](https://github.com/elephant-xyz/elephant-cli/commit/281990d871f3311e242c331d8ea7e9ef9eeae19b))
+
 ## [1.24.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.3...v1.24.4) (2025-08-11)
 
 
