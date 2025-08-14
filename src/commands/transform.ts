@@ -23,7 +23,7 @@ export function registerTransformCommand(program: Command) {
     .command('transform')
     .description(
       'Transform property data to Lexicon schema-valid format and generate HTML presentation'
-    )
+    .description('Transform property data to Lexicon schema-valid format and generate HTML presentation')
     .allowUnknownOption() // Allow any arguments to be passed through to AI-agent
     .option(
       '--output-zip <path>',
