@@ -56,7 +56,7 @@ export async function handleTransform(options: TransformCommandOptions) {
       execSync(aiAgentCmd, {
         encoding: 'utf8',
         cwd: process.cwd(),
-        stdio: 'inherit', // Show AI-agent output directly to the user
+        stdio: ['inherit', 'pipe', 'pipe'], // Suppress stdout, keep stderr
       });
       logger.success('AI-agent transformer completed successfully');
     } catch (execError) {
