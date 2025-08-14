@@ -175,6 +175,46 @@ Technical implementation:
 - Integrates with `SchemaManifestService` for label-to-CID mapping
 - Preserves directory structure when uploading to IPFS
 
+### transform Command
+
+This command provides an end-to-end solution for transforming property data to Lexicon schema-valid format and generating HTML fact sheets:
+
+1. **Step 1: AI-Agent Transformation**
+   - Invokes external AI-Agent via `uvx --from git+https://github.com/elephant-xyz/AI-Agent test-evaluator-agent --transform`
+   - Supports two transformation scenarios:
+     - `--group seed --input-csv <filename>.csv` for seed data
+     - `--group county --input-zip <filename>.zip` for county data
+   - Passes through all arguments transparently to AI-Agent
+   - Handles `--output-zip` with default value "transformed-data.zip"
+   - Suppresses AI-Agent stdout output for cleaner CLI experience
+
+2. **Step 2: HTML Fact Sheet Generation**
+   - Automatically installs/updates fact-sheet-template tool if needed
+   - Requires `curl` to be installed on the system
+   - Creates temporary directory structure compatible with fact-sheet tool
+   - Generates interactive HTML fact sheets with embedded JavaScript and CSS
+   - Handles fact-sheet tool's subdirectory output structure
+
+3. **Output Structure**
+   - Merges HTML files directly with transformed JSON data
+   - Creates single ZIP containing both data and visualization
+   - Final structure: `property_directory/` with all JSON and HTML files at same level
+
+Key features:
+- **Singleton Architecture**: Processes single property data only
+- **Argument Passthrough**: All CLI arguments forwarded to AI-Agent
+- **Automatic Tool Management**: Handles fact-sheet tool installation/updates
+- **Smart Directory Detection**: Handles various ZIP extraction patterns
+- **Temporary Directory Cleanup**: Properly cleans up all temp directories
+- **Error Recovery**: Continues with existing fact-sheet if update fails
+
+Technical implementation:
+- Located in `src/commands/transform.ts`
+- Uses extracted fact-sheet utilities from `src/utils/fact-sheet.ts`
+- Employs `ZipExtractorService` for ZIP handling
+- Creates AdmZip instances for final output generation
+- Implements comprehensive error handling with process.exit(1) on failure
+
 ### fetch-data Command
 
 This command:
@@ -365,6 +405,12 @@ npm run dev
   --pinata-jwt "..." \
   --output-csv ./upload-results.csv
 
+# Test the CLI - Transform command (transform data and generate HTML)
+./bin/elephant-cli transform \
+  --group seed \
+  --input-csv ./seed_data.csv \
+  --output-zip ./transformed-data.zip
+
 # Test the CLI - Fetch data from CID
 ./bin/elephant-cli fetch-data bafkreiabc123... \
   --gateway https://ipfs.io/ipfs/ \
@@ -404,6 +450,8 @@ npm run test:coverage
 - `src/commands/submit-to-contract.ts` - Submit to blockchain command
 - `src/commands/fetch-data.ts` - Fetch data from IPFS command
 - `src/commands/hash.ts` - Calculate CIDs offline for single property data
+- `src/commands/upload.ts` - Upload hash output to IPFS
+- `src/commands/transform.ts` - Transform data to Lexicon format with HTML generation
 - `src/services/blockchain.service.ts` - Ethereum/Polygon interaction
 - `src/services/event-decoder.service.ts` - Event data parsing
 - `src/services/ipfs.service.ts` - IPFS download logic
@@ -416,6 +464,7 @@ npm run test:coverage
 - `src/services/schema-manifest.service.ts` - Schema manifest management service
 - `src/utils/` - Logging, validation, and progress utilities
 - `src/utils/single-property-file-scanner-v2.ts` - File scanner with structure-based datagroup recognition
+- `src/utils/fact-sheet.ts` - Fact sheet tool installation and HTML generation utilities
 
 ## Known Limitations
 

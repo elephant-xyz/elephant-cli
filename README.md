@@ -35,6 +35,7 @@ The Elephant Network CLI provides three main workflows:
 Plus utility commands:
 
 - **🔄 CID-Hex Conversion** - Convert between IPFS CIDs and Ethereum hex hashes
+- **🔀 Transform** - Transform property data to Lexicon format with HTML fact sheets
 
 ## Workflow 1: Preparing and Uploading Data
 
@@ -720,6 +721,69 @@ elephant-cli cid-to-hex bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36
 - Integrating with systems that use different hash representations
 - Scripting and automation with the `--quiet` flag
 
+### Data Transformation
+
+The `transform` command provides an end-to-end solution for transforming property data to Lexicon schema-valid format and generating HTML fact sheets:
+
+```bash
+# Transform seed data from CSV
+elephant-cli transform --group seed --input-csv seed_data.csv --output-zip transformed-data.zip
+
+# Transform county data from ZIP
+elephant-cli transform --group county --input-zip property_data.zip --output-zip transformed-data.zip
+
+# With default output (transformed-data.zip)
+elephant-cli transform --group seed --input-csv seed_data.csv
+```
+
+**What this does:**
+
+1. **Step 1: AI-agent transformation**
+   - Invokes the Elephant Network AI-Agent to transform raw property data
+   - Validates and converts data to Lexicon schema-compliant format
+   - Outputs transformed JSON files in a structured format
+
+2. **Step 2: HTML fact sheet generation**
+   - Automatically installs/updates the fact-sheet-template tool
+   - Generates interactive HTML fact sheets for the property data
+   - Merges HTML files with the transformed JSON data
+
+**Output Structure:**
+
+The command produces a single ZIP file containing:
+```
+transformed-data.zip/
+└── property_directory/
+    ├── address.json           # Transformed property data
+    ├── county_data_group.json
+    ├── property.json
+    ├── ... (other JSON files)
+    ├── index.html             # Interactive fact sheet
+    ├── manifest.json          # Web app manifest
+    └── ... (SVG icons and assets)
+```
+
+**Requirements:**
+
+- `curl` must be installed for fact-sheet tool installation
+- Internet connection for downloading dependencies
+- Valid input data in supported format (CSV for seed, ZIP for county)
+
+**Supported Options:**
+
+The command passes through all arguments to the AI-agent, supporting:
+- `--group seed` with `--input-csv` for seed data transformation
+- `--group county` with `--input-zip` for county data transformation
+- `--output-zip` to specify the output file (default: transformed-data.zip)
+- Any additional AI-agent specific options
+
+**Use Cases:**
+
+- Converting raw property data to standardized Lexicon format
+- Generating web-viewable fact sheets for property information
+- Preparing data for validation and upload to IPFS
+- Streamlining the data transformation workflow
+
 ## Advanced Features
 
 ### Custom Configuration
@@ -879,6 +943,7 @@ elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
 elephant-cli fetch-data --help
+elephant-cli transform --help
 elephant-cli hash --help
 elephant-cli upload --help
 elephant-cli hex-to-cid --help
