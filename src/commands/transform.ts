@@ -165,26 +165,62 @@ export async function handleTransform(options: TransformCommandOptions) {
 
     await generateHTMLFiles(tempInputDir, htmlOutputDir);
 
-    // Step 3: Create the final ZIP archive
+    // Step 3: Merge HTML files with JSON data and create the final ZIP
+    logger.info('Merging HTML files with transformed data...');
+
+    // The fact-sheet tool creates a subdirectory with the property name inside htmlOutputDir
+    // We need to find that subdirectory and copy its contents (not the directory itself)
+    const htmlEntries = await fsPromises.readdir(htmlOutputDir, {
+      withFileTypes: true,
+    });
+
+    // Check if there's a single directory that matches our property name pattern
+    const propertySubDirs = htmlEntries.filter((entry) => entry.isDirectory());
+
+    if (propertySubDirs.length === 1) {
+      // The HTML files are in a subdirectory - copy the contents of that subdirectory
+      const htmlPropertyDir = path.join(htmlOutputDir, propertySubDirs[0].name);
+      const htmlPropertyEntries = await fsPromises.readdir(htmlPropertyDir, {
+        withFileTypes: true,
+      });
+
+      logger.debug(
+        `Found HTML files in subdirectory: ${propertySubDirs[0].name}`
+      );
+
+      // Copy all files from the HTML property subdirectory to the property directory
+      for (const entry of htmlPropertyEntries) {
+        const srcPath = path.join(htmlPropertyDir, entry.name);
+        const destPath = path.join(propertyPath, entry.name);
+
+        if (entry.isFile()) {
+          await fsPromises.copyFile(srcPath, destPath);
+          logger.debug(`Copied ${entry.name} to property directory`);
+        } else if (entry.isDirectory()) {
+          await copyDirectory(srcPath, destPath);
+          logger.debug(`Copied directory ${entry.name} to property directory`);
+        }
+      }
+    } else {
+      // Fallback: copy files directly from htmlOutputDir if no subdirectory structure
+      for (const entry of htmlEntries) {
+        if (entry.isFile()) {
+          const srcFile = path.join(htmlOutputDir, entry.name);
+          const destFile = path.join(propertyPath, entry.name);
+          await fsPromises.copyFile(srcFile, destFile);
+          logger.debug(`Copied ${entry.name} to property directory`);
+        }
+      }
+    }
+
+    // Step 4: Create the final ZIP archive
     logger.info('Creating final output ZIP...');
 
     // Create a new ZIP file
     const finalZip = new AdmZip();
 
-    // Add the original transformed data (property directory)
+    // Add the merged directory (property directory with both JSON and HTML files)
     finalZip.addLocalFolder(propertyPath, propertyDirName);
-
-    // Create a ZIP of the generated HTMLs and add it
-    const htmlZip = new AdmZip();
-    htmlZip.addLocalFolder(htmlOutputDir);
-
-    // Save the HTML ZIP to a temporary file
-    const htmlZipPath = path.join(tmpdir(), 'generated-htmls.zip');
-    tempDirs.push(path.dirname(htmlZipPath)); // Track for cleanup
-    htmlZip.writeZip(htmlZipPath);
-
-    // Add the HTML ZIP to the final archive
-    finalZip.addLocalFile(htmlZipPath, '', 'generated-htmls.zip');
 
     // Write the final ZIP
     finalZip.writeZip(outputZip);
@@ -197,9 +233,10 @@ export async function handleTransform(options: TransformCommandOptions) {
     console.log();
     console.log(chalk.gray('The output ZIP contains:'));
     console.log(
-      chalk.gray(`  - ${propertyDirName}/ (transformed property data)`)
+      chalk.gray(
+        `  - ${propertyDirName}/ (transformed data with HTML fact sheets)`
+      )
     );
-    console.log(chalk.gray('  - generated-htmls.zip (HTML fact sheets)'));
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`Error during transform: ${errorMessage}`));
