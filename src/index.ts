@@ -23,6 +23,7 @@ import { registerHexToCidCommand } from './commands/hex-to-cid.js';
 import { registerCidToHexCommand } from './commands/cid-to-hex.js';
 import { registerHashCommand } from './commands/hash.js';
 import { registerUploadCommand } from './commands/upload.js';
+import { registerTransformCommand } from './commands/transform.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -69,5 +70,8 @@ registerUploadCommand(program);
 
 // Register fetch-data command
 registerFetchDataCommand(program);
+
+// Register transform command
+registerTransformCommand(program);
 
 program.parse();
