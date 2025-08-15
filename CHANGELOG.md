@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.25.0...v1.26.0) (2025-08-15)
+
+
+### Features
+
+* `transform` command ([#86](https://github.com/elephant-xyz/elephant-cli/issues/86)) ([6a3add6](https://github.com/elephant-xyz/elephant-cli/commit/6a3add6be17e3992735c21aa378a9dded26bc77f))
+
 # [1.25.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.24.4...v1.25.0) (2025-08-12)
 
 
