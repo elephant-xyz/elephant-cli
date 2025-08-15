@@ -6,6 +6,7 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { handleTransform } from '../../../src/commands/transform.js';
 import * as factSheet from '../../../src/utils/fact-sheet.js';
+import * as aiAgent from '../../../src/utils/ai-agent.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
 
 // Mock modules
@@ -14,6 +15,7 @@ vi.mock('fs');
 vi.mock('fs/promises');
 vi.mock('adm-zip');
 vi.mock('../../../src/utils/fact-sheet.js');
+vi.mock('../../../src/utils/ai-agent.js');
 vi.mock('../../../src/services/zip-extractor.service.js');
 vi.mock('../../../src/utils/logger.js', () => ({
   logger: {
@@ -72,6 +74,9 @@ describe('transform command', () => {
     vi.mocked(factSheet.checkFactSheetInstalled).mockResolvedValue(true);
     vi.mocked(factSheet.installOrUpdateFactSheet).mockResolvedValue(undefined);
     vi.mocked(factSheet.generateHTMLFiles).mockResolvedValue(undefined);
+
+    // Mock AI-Agent function
+    vi.mocked(aiAgent.runAIAgent).mockReturnValue(0);
   });
 
   afterEach(() => {
@@ -82,15 +87,8 @@ describe('transform command', () => {
     it('should successfully transform data with default output zip', async () => {
       const options = {};
 
-      // Mock AI-agent execution
+      // Mock curl check for fact-sheet
       vi.mocked(execSync).mockImplementation((cmd: any) => {
-        if (
-          cmd.includes(
-            'uvx --from git+https://github.com/elephant-xyz/AI-Agent'
-          )
-        ) {
-          return 'AI-agent output';
-        }
         if (cmd === 'which curl') {
           return '/usr/bin/curl';
         }
@@ -142,15 +140,12 @@ describe('transform command', () => {
       await handleTransform(options);
 
       // Verify AI-agent was called
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'uvx --from git+https://github.com/elephant-xyz/AI-Agent'
-        ),
-        expect.objectContaining({
-          encoding: 'utf8',
-          cwd: process.cwd(),
-          stdio: ['inherit', 'pipe', 'pipe'],
-        })
+      expect(aiAgent.runAIAgent).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--transform',
+          '--output-zip',
+          'transformed-data.zip',
+        ])
       );
 
       // Verify output zip was created
@@ -175,9 +170,8 @@ describe('transform command', () => {
 
       await handleTransform(options);
 
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining(`--output-zip "${customOutput}"`),
-        expect.any(Object)
+      expect(aiAgent.runAIAgent).toHaveBeenCalledWith(
+        expect.arrayContaining(['--output-zip', customOutput])
       );
 
       const zipInstance = vi.mocked(AdmZip).mock.results[0].value;
@@ -275,16 +269,8 @@ describe('transform command', () => {
     it('should handle AI-agent execution failure', async () => {
       const options = {};
 
-      vi.mocked(execSync).mockImplementation((cmd: any) => {
-        if (
-          cmd.includes(
-            'uvx --from git+https://github.com/elephant-xyz/AI-Agent'
-          )
-        ) {
-          throw new Error('AI-agent failed');
-        }
-        return '';
-      });
+      // Mock AI-Agent to return non-zero exit code
+      vi.mocked(aiAgent.runAIAgent).mockReturnValue(1);
 
       await handleTransform(options);
 
@@ -442,13 +428,18 @@ describe('transform command', () => {
 
       await handleTransform(options);
 
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining('--group "seed"'),
-        expect.any(Object)
-      );
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining('--input-csv "data.csv"'),
-        expect.any(Object)
+      expect(aiAgent.runAIAgent).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--transform',
+          '--group',
+          'seed',
+          '--input-csv',
+          'data.csv',
+          '--some-other-option',
+          'value',
+          '--output-zip',
+          'transformed-data.zip',
+        ])
       );
     });
   });

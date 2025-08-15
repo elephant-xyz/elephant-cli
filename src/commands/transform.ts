@@ -11,6 +11,7 @@ import {
   installOrUpdateFactSheet,
   generateHTMLFiles,
 } from '../utils/fact-sheet.js';
+import { runAIAgent } from '../utils/ai-agent.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
 
 export interface TransformCommandOptions {
@@ -46,18 +47,15 @@ export async function handleTransform(options: TransformCommandOptions) {
     // Step 1: Run AI-agent transformer
     logger.info('Step 1: Running AI-agent transformer...');
 
-    // Build the command for AI-agent
+    // Build the arguments for AI-agent
     const outputZip = options.outputZip || 'transformed-data.zip';
-    const aiAgentCmd = buildAIAgentCommand(options, outputZip);
-
-    logger.debug(`Running command: ${aiAgentCmd}`);
+    const aiAgentArgs = buildAIAgentArgs(options, outputZip);
 
     try {
-      execSync(aiAgentCmd, {
-        encoding: 'utf8',
-        cwd: process.cwd(),
-        stdio: ['inherit', 'pipe', 'pipe'], // Suppress stdout, keep stderr
-      });
+      const exitCode = runAIAgent(aiAgentArgs);
+      if (exitCode !== 0) {
+        throw new Error(`AI-agent exited with code ${exitCode}`);
+      }
       logger.success('AI-agent transformer completed successfully');
     } catch (execError) {
       logger.error('AI-agent transformer failed');
@@ -265,13 +263,11 @@ export async function handleTransform(options: TransformCommandOptions) {
   }
 }
 
-function buildAIAgentCommand(
+function buildAIAgentArgs(
   options: TransformCommandOptions,
   outputZip: string
-): string {
-  // Base command
-  let cmd =
-    'uvx --from git+https://github.com/elephant-xyz/AI-Agent test-evaluator-agent --transform';
+): string[] {
+  const args: string[] = ['--transform'];
 
   // Add all the options passed by the user, except our own output-zip
   for (const [key, value] of Object.entries(options)) {
@@ -285,23 +281,23 @@ function buildAIAgentCommand(
 
     if (typeof value === 'boolean') {
       if (value) {
-        cmd += ` --${argName}`;
+        args.push(`--${argName}`);
       }
     } else if (value !== undefined && value !== null) {
-      cmd += ` --${argName} "${value}"`;
+      args.push(`--${argName}`, String(value));
     }
   }
 
   // Always add the output-zip argument
-  cmd += ` --output-zip "${outputZip}"`;
+  args.push('--output-zip', outputZip);
 
   // Handle any remaining arguments that were passed directly
-  const args = process.argv.slice(3); // Skip 'node', 'elephant-cli', and 'transform'
-  const outputZipIndex = args.findIndex((arg) => arg === '--output-zip');
+  const processArgs = process.argv.slice(3); // Skip 'node', 'elephant-cli', and 'transform'
+  const outputZipIndex = processArgs.findIndex((arg) => arg === '--output-zip');
 
   // Add any arguments that weren't already processed
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  for (let i = 0; i < processArgs.length; i++) {
+    const arg = processArgs[i];
 
     // Skip --output-zip and its value as we handle it separately
     if (i === outputZipIndex || i === outputZipIndex + 1) {
@@ -316,19 +312,19 @@ function buildAIAgentCommand(
 
     if (!inOptions && arg.startsWith('--')) {
       // This is an unknown option that should be passed to AI-agent
-      cmd += ` ${arg}`;
+      args.push(arg);
       // Check if the next item is a value for this option
-      if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
-        cmd += ` "${args[i + 1]}"`;
+      if (i + 1 < processArgs.length && !processArgs[i + 1].startsWith('--')) {
+        args.push(processArgs[i + 1]);
         i++; // Skip the value in the next iteration
       }
     } else if (!inOptions && !arg.startsWith('--')) {
       // This might be a positional argument
-      cmd += ` "${arg}"`;
+      args.push(arg);
     }
   }
 
-  return cmd;
+  return args;
 }
 
 async function copyDirectory(src: string, dest: string): Promise<void> {

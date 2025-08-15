@@ -180,7 +180,11 @@ Technical implementation:
 This command provides an end-to-end solution for transforming property data to Lexicon schema-valid format and generating HTML fact sheets:
 
 1. **Step 1: AI-Agent Transformation**
-   - Invokes external AI-Agent via `uvx --from git+https://github.com/elephant-xyz/AI-Agent test-evaluator-agent --transform`
+   - Smart binary detection (in priority order):
+     - Environment variable `ELEPHANT_AI_AGENT_PATH` if set and file exists
+     - System PATH lookup using `which test-evaluator-agent`
+     - Default location `/opt/elephant/bin/test-evaluator-agent`
+     - Falls back to `uvx --from git+https://github.com/elephant-xyz/AI-Agent@${ref} test-evaluator-agent`
    - Supports two transformation scenarios:
      - `--group seed --input-csv <filename>.csv` for seed data
      - `--group county --input-zip <filename>.zip` for county data
@@ -202,14 +206,20 @@ This command provides an end-to-end solution for transforming property data to L
 
 Key features:
 - **Singleton Architecture**: Processes single property data only
+- **Flexible Binary Location**: Automatically finds AI-Agent in PATH or common locations
 - **Argument Passthrough**: All CLI arguments forwarded to AI-Agent
 - **Automatic Tool Management**: Handles fact-sheet tool installation/updates
 - **Smart Directory Detection**: Handles various ZIP extraction patterns
 - **Temporary Directory Cleanup**: Properly cleans up all temp directories
 - **Error Recovery**: Continues with existing fact-sheet if update fails
 
+Environment variables:
+- `ELEPHANT_AI_AGENT_PATH`: Override AI-Agent binary location (optional)
+- `ELEPHANT_AI_AGENT_REF`: Git ref for uvx fallback (default: 'main')
+
 Technical implementation:
 - Located in `src/commands/transform.ts`
+- Uses AI-Agent runner from `src/utils/ai-agent.ts` with smart binary detection
 - Uses extracted fact-sheet utilities from `src/utils/fact-sheet.ts`
 - Employs `ZipExtractorService` for ZIP handling
 - Creates AdmZip instances for final output generation
