@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.26.0...v1.27.0) (2025-08-18)
+
+
+### Features
+
+* Add `--inline-svg` option passed to fact-sheet generation command ([#89](https://github.com/elephant-xyz/elephant-cli/issues/89)) ([592171b](https://github.com/elephant-xyz/elephant-cli/commit/592171beabfe2dc707a7cf0321f5f35dcd0c7251))
+
 # [1.26.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.25.0...v1.26.0) (2025-08-15)
 
 
