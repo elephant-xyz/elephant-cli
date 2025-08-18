@@ -149,7 +149,7 @@ export async function generateHTMLFiles(
       logger.warn('Could not determine fact-sheet version');
     }
 
-    const command = `${factSheetCmd} generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css`;
+    const command = `${factSheetCmd} generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg`;
     logger.debug(`Running command: ${command}`);
 
     try {
