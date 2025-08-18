@@ -35,7 +35,8 @@ The Elephant Network CLI provides three main workflows:
 Plus utility commands:
 
 - **🔄 CID-Hex Conversion** - Convert between IPFS CIDs and Ethereum hex hashes
-- **🔀 Transform** - Transform property data to Lexicon format with HTML fact sheets
+ - **🔀 Transform** - Run generated scripts to produce Lexicon outputs + fact sheets, or use legacy AI mode with `--legacy-mode`
+ - **🧪 Generate-Transform** - Generate county extraction scripts from minimal inputs (LLM-assisted)
 
 ## Workflow 1: Preparing and Uploading Data
 
@@ -723,58 +724,59 @@ elephant-cli cid-to-hex bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36
 - Integrating with systems that use different hash representations
 - Scripting and automation with the `--quiet` flag
 
-### Data Transformation
+### Generate Transform Scripts
 
-The `transform` command provides an end-to-end solution for transforming property data to Lexicon schema-valid format and generating HTML fact sheets:
+Generate JavaScript extraction scripts from a minimal input bundle (uses an LLM pipeline under the hood):
 
 ```bash
-# Transform seed data from CSV
-elephant-cli transform --group seed --input-csv seed_data.csv --output-zip transformed-data.zip
+# Prepare input ZIP with required files at top level:
+#   - unnormalized_address.json
+#   - property_seed.json
+#   - one HTML/JSON page from the county site (e.g., input.html)
 
-# Transform county data from ZIP
-elephant-cli transform --group county --input-zip property_data.zip --output-zip transformed-data.zip
-
-# With default output (transformed-data.zip)
-elephant-cli transform --group seed --input-csv seed_data.csv
+export OPENAI_API_KEY=your_key
+elephant-cli generate-transform input.zip --output-zip generated-scripts.zip
 ```
 
-**What this does:**
+- Duration and cost: about 1 hour, approximately $10 USD.
+- Optional: include `scripts/` and a prior `*errors*.csv` in your ZIP to guide improvements.
+- Output: `generated-scripts.zip` with `*.js` scripts and a `manifest.json`.
 
-1. **Step 1: AI-agent transformation**
-   - Invokes the Elephant Network AI-Agent to transform raw property data
-   - Validates and converts data to Lexicon schema-compliant format
-   - Outputs transformed JSON files in a structured format
+Deep dive: see `docs/GENERATE-TRANSFORM-WORKFLOW.md`.
 
-2. **Step 2: HTML fact sheet generation**
-   - Automatically installs/updates the fact-sheet-template tool
-   - Generates interactive HTML fact sheets for the property data
-   - Merges HTML files with the transformed JSON data
+### Data Transformation (Scripts and Legacy)
 
-**Output Structure:**
+The `transform` command runs in two modes:
 
-The command produces a single ZIP file containing:
+- Scripts mode (default): executes generated scripts against your inputs, enriches outputs, generates relationships and HTML fact sheets, and bundles results.
+- Legacy mode: runs the previous AI-agent flow. Enable with `--legacy-mode`.
+
+```bash
+# Scripts mode: run generated scripts
+elephant-cli transform \
+  --input-zip input.zip \
+  --scripts-zip generated-scripts.zip \
+  --output-zip transformed-data.zip
+
+# Scripts mode (seed-only helper): build seed datagroup files from CSV
+# Put a top-level seed.csv inside input.zip with headers:
+# parcel_id,address,method,url,multiValueQueryString,source_identifier,county
+elephant-cli transform --input-zip input.zip --output-zip transformed-data.zip
+
+# Legacy mode: use prior AI-agent behavior (additional flags are forwarded)
+elephant-cli transform --legacy-mode --output-zip transformed-data.zip [other-flags]
 ```
-transformed-data.zip/
-└── property_directory/
-    ├── address.json           # Transformed property data
-    ├── county_data_group.json
-    ├── property.json
-    ├── ... (other JSON files)
-    ├── index.html             # Interactive fact sheet
-    ├── manifest.json          # Web app manifest
-    └── ... (SVG icons and assets)
-```
 
-**Requirements:**
+**What scripts mode does:**
 
-- `curl` must be installed for fact-sheet tool installation
-- Internet connection for downloading dependencies
-- Valid input data in supported format (CSV for seed, ZIP for county)
+- Normalizes inputs to a temp workdir (`input.html`, `unnormalized_address.json`, `property_seed.json`).
+- Locates and runs required scripts by filename: `ownerMapping.js`, `structureMapping.js`, `layoutMapping.js`, `utilityMapping.js` (in parallel), then `data_extractor.js`.
+- Injects `source_http_request` and `request_identifier` from `property_seed.json` into produced JSON files.
+- Auto-generates relationship JSONs between `property.json` and other entities.
+- Generates HTML fact sheets and merges them into the output.
+- Packages results as `transformed-data.zip` with a top-level `data/` directory inside.
 
-**Supported Options:**
-
-The command passes through all arguments to the AI-agent, supporting:
-- `--group seed` with `--input-csv` for seed data transformation
+For the complete workflow, including validation and iterating on scripts, see `docs/GENERATE-TRANSFORM-WORKFLOW.md`.
 - `--group county` with `--input-zip` for county data transformation
 - `--output-zip` to specify the output file (default: transformed-data.zip)
 - Any additional AI-agent specific options

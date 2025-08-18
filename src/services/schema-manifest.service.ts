@@ -56,29 +56,14 @@ export class SchemaManifestService {
       );
     }
 
-    for (const [key, item] of Object.entries(this.schemaManifest)) {
-      if (item.type === 'dataGroup' && key === label) {
-        return item.ipfsCid;
-      }
+    const item = this.schemaManifest[label];
+    if (!item) {
+      return null;
     }
-
-    return null;
-  }
-
-  /**
-   * Get all datagroup entries from the manifest
-   * @returns Array of datagroup entries with label and CID
-   */
-  getAllDataGroups(): Array<{ label: string; cid: string }> {
-    if (!this.schemaManifest) {
-      throw new Error(
-        'Schema manifest not loaded. Call loadSchemaManifest() first.'
-      );
+    if (item.type !== 'dataGroup') {
+      return null;
     }
-
-    return Object.entries(this.schemaManifest)
-      .filter(([_, item]) => item.type === 'dataGroup')
-      .map(([label, item]) => ({ label, cid: item.ipfsCid }));
+    return item.ipfsCid;
   }
 
   /**

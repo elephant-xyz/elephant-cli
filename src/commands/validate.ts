@@ -166,7 +166,7 @@ export async function handleValidate(
       logger.warn('No JSON files found in the property directory');
       await csvReporterService.finalize();
       await cleanup();
-      return;
+      throw Error('No data group JSON files found in the property directory');
     }
 
     logger.success(
@@ -195,7 +195,7 @@ export async function handleValidate(
         await csvReporterServiceInstance.finalize();
       }
       await cleanup();
-      return;
+      throw Error('No files found to validate');
     }
 
     if (!progressTracker) {
@@ -359,7 +359,9 @@ export async function handleValidate(
     );
     console.log(`  Files skipped:          ${finalMetrics.skipped || 0}`);
     console.log(`  Validation errors:      ${finalMetrics.errors || 0}`);
-    console.log(`  Successfully validated: ${finalMetrics.processed || 0}`);
+    console.log(
+      `  Successfully validated: ${finalMetrics.processed - finalMetrics.errors || 0}`
+    );
 
     const totalHandled =
       (finalMetrics.skipped || 0) +
@@ -382,8 +384,10 @@ export async function handleValidate(
       console.log(chalk.green('\n✅ All files passed validation!'));
     }
 
-    // Clean up temporary directory if it was created
     await cleanup();
+    if (finalMetrics.errors > 0) {
+      process.exit(1);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`CRITICAL_ERROR_VALIDATE: ${errorMessage}`));

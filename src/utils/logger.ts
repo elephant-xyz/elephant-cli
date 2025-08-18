@@ -31,48 +31,48 @@ const fileLogger = winston.createLogger({
 
 export const logger = {
   // All logging messages go to file only; console output is suppressed here
-  info: (message: string) => {
+  info: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.info(message);
     }
   },
-  success: (message: string) => {
+  success: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.info(`SUCCESS: ${message}`);
     }
   },
-  error: (message: string) => {
+  error: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.error(message);
     }
   },
-  warn: (message: string) => {
+  warn: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.warn(message);
     }
   },
-  log: (message: string) => {
+  log: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.info(message);
     }
   },
 
   // Debug messages - only log to file, not console
-  debug: (message: string) => {
+  debug: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.debug(message);
     }
   },
 
   // Technical details - log to file but don't show on console
-  technical: (message: string) => {
+  technical: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.info(`TECHNICAL: ${message}`);
     }
   },
 
   // Progress updates - log to file only; progress bar renders to console separately
-  progress: (message: string) => {
+  progress: (message: unknown) => {
     if (!isTestEnvironment) {
       fileLogger.info(`PROGRESS: ${message}`);
     }
