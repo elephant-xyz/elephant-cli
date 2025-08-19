@@ -153,18 +153,21 @@ This command:
 1. **Takes ZIP output from hash command** containing a single property directory with CID-named files
 2. **Extracts ZIP to temporary directory** for processing
 3. **Validates single property structure** (rejects multiple property directories)
-4. **Uploads the property directory to IPFS via Pinata** in a single API request
-5. **Analyzes datagroup files** to generate proper CSV output
-6. **Generates CSV compatible with submit-to-contract** with actual upload timestamps
+4. **Separates JSON files from media files** (HTML and images)
+5. **Uploads media files as separate IPFS directory** if present
+6. **Uploads JSON files to IPFS via Pinata** as separate directory
+7. **Analyzes datagroup files** to generate proper CSV output
+8. **Generates CSV compatible with submit-to-contract** with actual upload timestamps and htmlLink
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time (matches hash command)
-- **Optimized for Upload**: No validation or CID calculation - just pure upload functionality
-- **Batch Upload**: Uploads entire directory as single IPFS object
+- **Media Files Support**: Handles HTML and image files separately from JSON data
+- **Dual Upload**: Uploads JSON and media files as separate IPFS directories
 - **Smart Structure Detection**: Handles hash command output (property directory with CID-named files)
 - **Datagroup Analysis**: Identifies datagroup root files by structure (label + relationships keys)
 - **Schema Manifest Integration**: Uses schema manifest to map labels to datagroup CIDs
-- **CSV Generation**: Creates submission-ready CSV with proper format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt)
+- **Enhanced CSV Generation**: Creates submission-ready CSV with format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink)
+- **HTML Link Support**: Includes IPFS link to media directory in CSV output when media files are present
 - **Environment Variable Support**: Can use PINATA_JWT from environment if not provided via CLI
 - **Progress Tracking**: Visual progress indicators during upload
 - **Error Recovery**: Graceful error handling with proper cleanup

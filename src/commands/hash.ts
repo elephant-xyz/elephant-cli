@@ -20,6 +20,7 @@ import { processSinglePropertyInput } from '../utils/single-property-processor.j
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
+import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
 import { CID } from 'multiformats/cid';
 
 interface HashedFile {
@@ -1173,23 +1174,6 @@ async function calculateCIDForFile(
     `Calculated CID for linked file ${resolvedPath}: ${calculatedCid}`
   );
   return calculatedCid;
-}
-
-/**
- * Check if a file is an image based on its extension
- */
-function isImageFile(filePath: string): boolean {
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
-  const ext = path.extname(filePath).toLowerCase();
-  return imageExtensions.includes(ext);
-}
-
-/**
- * Check if a file is an HTML file based on its extension
- */
-function isHtmlFile(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return ext === '.html' || ext === '.htm';
 }
 
 /**
