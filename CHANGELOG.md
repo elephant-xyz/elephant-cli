@@ -1,3 +1,10 @@
+## [1.28.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.0...v1.28.1) (2025-08-19)
+
+
+### Bug Fixes
+
+* 'hash' command processes Fact Sheet data + remove validation from 'hash' command flow ([#91](https://github.com/elephant-xyz/elephant-cli/issues/91)) ([18c2a02](https://github.com/elephant-xyz/elephant-cli/commit/18c2a028a299391fc5a109ff26396a1fe6a85831))
+
 # [1.28.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.27.0...v1.28.0) (2025-08-19)
 
 
