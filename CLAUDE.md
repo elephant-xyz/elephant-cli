@@ -199,9 +199,18 @@ This command provides an end-to-end solution for transforming property data to L
    - Generates interactive HTML fact sheets with embedded JavaScript and CSS
    - Handles fact-sheet tool's subdirectory output structure
 
-3. **Output Structure**
+3. **Step 3: Fact Sheet Relationship Generation**
+   - Generates `fact_sheet.json` file with reference to HTML content
+   - Identifies all datagroup root files by their structure (label + relationships)
+   - Fetches schemas from IPFS to determine class mappings
+   - Creates relationship files from each class to fact_sheet
+   - Updates datagroup files with new fact_sheet relationships
+   - Handles complex relationship structures including arrays and nested objects
+
+4. **Output Structure**
    - Merges HTML files directly with transformed JSON data
-   - Creates single ZIP containing both data and visualization
+   - Includes fact_sheet.json and relationship files
+   - Creates single ZIP containing data, visualization, and relationships
    - Final structure: `property_directory/` with all JSON and HTML files at same level
 
 Key features:
@@ -442,6 +451,7 @@ npm run test
 npm run test -- tests/unit/commands/validate.test.ts
 npm run test -- tests/unit/commands/validate-and-upload.test.ts
 npm run test -- tests/integration/split-commands.test.ts
+npm run test -- tests/unit/services/fact-sheet-relationship.service.test.ts
 npm run test -- json-validator
 
 # Run tests with watch mode
@@ -472,6 +482,7 @@ npm run test:coverage
 - `src/services/zip-extractor.service.ts` - ZIP file extraction and handling
 - `src/services/ipfs-fetcher.service.ts` - IPFS data fetching service
 - `src/services/schema-manifest.service.ts` - Schema manifest management service
+- `src/services/fact-sheet-relationship.service.ts` - Fact sheet relationship generation service
 - `src/utils/` - Logging, validation, and progress utilities
 - `src/utils/single-property-file-scanner-v2.ts` - File scanner with structure-based datagroup recognition
 - `src/utils/fact-sheet.ts` - Fact sheet tool installation and HTML generation utilities
@@ -621,6 +632,34 @@ The unsigned transactions JSON contains an array of EIP-1474 compliant transacti
 - Generated nonces are sequential starting from the current account nonce
 - Gas estimates are fetched from the RPC provider when possible
 - All CIDs are properly converted to hashes for contract calls
+
+## Fact Sheet Relationship Generation
+
+The transform command includes automatic generation of relationships between data classes and fact sheets:
+
+### Workflow
+1. **Fact Sheet File Creation**: Generates `fact_sheet.json` with reference to `index.html`
+2. **Datagroup Analysis**: Identifies all datagroup root files by their structure (exactly 2 properties: label and relationships)
+3. **Schema Fetching**: 
+   - Retrieves datagroup schemas from IPFS using schema manifest
+   - For each relationship, fetches relationship schemas to identify "from" and "to" classes
+   - Builds a mapping of filenames to class names
+4. **Relationship Generation**:
+   - Creates `relationship_{filename}_to_fact_sheet.json` for each class file
+   - Updates datagroup files with new `{class}_has_fact_sheet` relationships
+5. **Error Handling**: Continues processing even if some schemas cannot be fetched
+
+### Generated Files
+- `fact_sheet.json`: References the HTML fact sheet
+- `relationship_{class}_to_fact_sheet.json`: Links each class to fact_sheet
+- Updated datagroup files with new fact_sheet relationships
+
+### Implementation
+The `FactSheetRelationshipService` handles all fact sheet relationship logic:
+- Caches fetched schemas to minimize IPFS requests
+- Handles complex relationship structures (arrays, nested objects)
+- Avoids duplicate class mappings
+- Gracefully handles null/undefined relationships
 
 ## Security Considerations
 

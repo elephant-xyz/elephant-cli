@@ -13,6 +13,8 @@ import {
 } from '../utils/fact-sheet.js';
 import { runAIAgent } from '../utils/ai-agent.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
+import { FactSheetRelationshipService } from '../services/fact-sheet-relationship.service.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 
 export interface TransformCommandOptions {
   outputZip?: string;
@@ -164,7 +166,7 @@ export async function handleTransform(options: TransformCommandOptions) {
     await generateHTMLFiles(tempInputDir, htmlOutputDir);
 
     // Step 3: Merge HTML files with JSON data and create the final ZIP
-    logger.info('Merging HTML files with transformed data...');
+    logger.info('Step 3: Merging HTML files with transformed data...');
 
     // The fact-sheet tool creates a subdirectory with the property name inside htmlOutputDir
     // We need to find that subdirectory and copy its contents (not the directory itself)
@@ -211,8 +213,34 @@ export async function handleTransform(options: TransformCommandOptions) {
       }
     }
 
-    // Step 4: Create the final ZIP archive
-    logger.info('Creating final output ZIP...');
+    // Step 4: Generate fact_sheet relationships
+    logger.info('Step 4: Generating fact_sheet relationships...');
+
+    try {
+      // Initialize services
+      const schemaManifestService = new SchemaManifestService();
+      const factSheetRelationshipService = new FactSheetRelationshipService(
+        schemaManifestService
+      );
+
+      // Generate all fact_sheet relationships
+      await factSheetRelationshipService.generateFactSheetRelationships(
+        propertyPath
+      );
+
+      logger.success('Successfully generated fact_sheet relationships');
+    } catch (error) {
+      logger.error(
+        `Failed to generate fact_sheet relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Continue even if relationship generation fails
+      logger.warn('Continuing without fact_sheet relationships');
+    }
+
+    // Step 5: Create the final ZIP archive
+    logger.info('Step 5: Creating final output ZIP...');
 
     // Create a new ZIP file
     const finalZip = new AdmZip();
