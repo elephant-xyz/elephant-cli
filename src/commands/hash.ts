@@ -199,11 +199,8 @@ export async function handleHash(
     });
     const allFiles = entries.filter((entry) => entry.isFile());
     const jsonFiles = allFiles.filter((file) => file.name.endsWith('.json'));
-    const htmlFiles = allFiles.filter((file) => file.name.endsWith('.html'));
-    const imageFiles = allFiles.filter((file) => {
-      const ext = path.extname(file.name).toLowerCase();
-      return ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext);
-    });
+    const htmlFiles = allFiles.filter((file) => isHtmlFile(file.name));
+    const imageFiles = allFiles.filter((file) => isImageFile(file.name));
 
     if (jsonFiles.length === 0) {
       logger.warn('No JSON files found in the property directory');
@@ -973,22 +970,15 @@ async function processDataForIPLD(
     }
 
     // It's a local path
-    // Check if it's an HTML file and we have a media directory CID
-    if (isHtmlFile(data) && mediaDirectoryCid) {
-      // For HTML files in the media directory, use the directory CID
-      linkedCIDs.push(mediaDirectoryCid);
-      return `ipfs://${mediaDirectoryCid}`;
-    } else if (isImageFile(data) || isHtmlFile(data)) {
-      // For images and HTML files without media directory, calculate individual CID
-      const cid = await calculateCIDForFile(
+    if (isImageFile(data) || isHtmlFile(data)) {
+      const cid = await getCidForFilePath(
         data,
         currentFilePath,
         services,
-        true, // treat as ipfs_uri format
-        linkedFilesData,
-        mediaDirectoryCid
+        linkedCIDs,
+        mediaDirectoryCid,
+        linkedFilesData
       );
-      linkedCIDs.push(cid);
       return `ipfs://${cid}`;
     }
 
@@ -1023,24 +1013,15 @@ async function processDataForIPLD(
       return data;
     } else {
       // This is a file path reference
-      // Check if it's an HTML file and we have a media directory CID
-      if (mediaDirectoryCid && isHtmlFile(pointerValue)) {
-        // For HTML files, use the media directory CID
-        linkedCIDs.push(mediaDirectoryCid);
-        return { '/': mediaDirectoryCid };
-      } else {
-        // For other files, calculate individual CID
-        const cid = await calculateCIDForFile(
-          pointerValue,
-          currentFilePath,
-          services,
-          false, // not necessarily an ipfs_uri format
-          linkedFilesData,
-          mediaDirectoryCid
-        );
-        linkedCIDs.push(cid);
-        return { '/': cid };
-      }
+      const cid = await getCidForFilePath(
+        pointerValue,
+        currentFilePath,
+        services,
+        linkedCIDs,
+        mediaDirectoryCid,
+        linkedFilesData
+      );
+      return { '/': cid };
     }
   }
 
@@ -1209,4 +1190,42 @@ function isImageFile(filePath: string): boolean {
 function isHtmlFile(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
   return ext === '.html' || ext === '.htm';
+}
+
+/**
+ * Get CID for a file path, using media directory CID for HTML files if available
+ */
+async function getCidForFilePath(
+  filePath: string,
+  currentFilePath: string,
+  services: {
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+  },
+  linkedCIDs: string[],
+  mediaDirectoryCid?: string,
+  linkedFilesData?: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }>
+): Promise<string> {
+  // For HTML files in the media directory, use the directory CID
+  if (isHtmlFile(filePath) && mediaDirectoryCid) {
+    linkedCIDs.push(mediaDirectoryCid);
+    return mediaDirectoryCid;
+  }
+
+  // For other files (including images and HTML without media directory), calculate individual CID
+  const cid = await calculateCIDForFile(
+    filePath,
+    currentFilePath,
+    services,
+    false, // not necessarily an ipfs_uri format
+    linkedFilesData,
+    mediaDirectoryCid
+  );
+  linkedCIDs.push(cid);
+  return cid;
 }
