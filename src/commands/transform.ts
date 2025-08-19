@@ -13,6 +13,8 @@ import {
 } from '../utils/fact-sheet.js';
 import { runAIAgent } from '../utils/ai-agent.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
+import { FactSheetRelationshipService } from '../services/fact-sheet-relationship.service.js';
+import { SchemaManifestService } from '../services/schema-manifest.service.js';
 
 export interface TransformCommandOptions {
   outputZip?: string;
@@ -209,6 +211,32 @@ export async function handleTransform(options: TransformCommandOptions) {
           logger.debug(`Copied ${entry.name} to property directory`);
         }
       }
+    }
+
+    // Step 3.5: Generate fact_sheet relationships
+    logger.info('Generating fact_sheet relationships...');
+
+    try {
+      // Initialize services
+      const schemaManifestService = new SchemaManifestService();
+      const factSheetRelationshipService = new FactSheetRelationshipService(
+        schemaManifestService
+      );
+
+      // Generate all fact_sheet relationships
+      await factSheetRelationshipService.generateFactSheetRelationships(
+        propertyPath
+      );
+
+      logger.success('Successfully generated fact_sheet relationships');
+    } catch (error) {
+      logger.error(
+        `Failed to generate fact_sheet relationships: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      // Continue even if relationship generation fails
+      logger.warn('Continuing without fact_sheet relationships');
     }
 
     // Step 4: Create the final ZIP archive
