@@ -1,3 +1,10 @@
+# [1.28.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.27.0...v1.28.0) (2025-08-19)
+
+
+### Features
+
+* Enhance `transform` command with automatic fact sheet relationship generation ([#90](https://github.com/elephant-xyz/elephant-cli/issues/90)) ([cb4131d](https://github.com/elephant-xyz/elephant-cli/commit/cb4131d5f0606bf3650b0118e820c91f2aefbff2))
+
 # [1.27.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.26.0...v1.27.0) (2025-08-18)
 
 
