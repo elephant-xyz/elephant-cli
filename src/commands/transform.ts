@@ -166,7 +166,7 @@ export async function handleTransform(options: TransformCommandOptions) {
     await generateHTMLFiles(tempInputDir, htmlOutputDir);
 
     // Step 3: Merge HTML files with JSON data and create the final ZIP
-    logger.info('Merging HTML files with transformed data...');
+    logger.info('Step 3: Merging HTML files with transformed data...');
 
     // The fact-sheet tool creates a subdirectory with the property name inside htmlOutputDir
     // We need to find that subdirectory and copy its contents (not the directory itself)
@@ -213,8 +213,8 @@ export async function handleTransform(options: TransformCommandOptions) {
       }
     }
 
-    // Step 3.5: Generate fact_sheet relationships
-    logger.info('Generating fact_sheet relationships...');
+    // Step 4: Generate fact_sheet relationships
+    logger.info('Step 4: Generating fact_sheet relationships...');
 
     try {
       // Initialize services
@@ -239,8 +239,8 @@ export async function handleTransform(options: TransformCommandOptions) {
       logger.warn('Continuing without fact_sheet relationships');
     }
 
-    // Step 4: Create the final ZIP archive
-    logger.info('Creating final output ZIP...');
+    // Step 5: Create the final ZIP archive
+    logger.info('Step 5: Creating final output ZIP...');
 
     // Create a new ZIP file
     const finalZip = new AdmZip();
