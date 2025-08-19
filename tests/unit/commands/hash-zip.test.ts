@@ -43,7 +43,6 @@ vi.mock('../../../src/services/schema-manifest.service.js', () => ({
 describe('Hash Command - ZIP Input', () => {
   let mockFileScannerService: any;
   let mockSchemaCacheService: any;
-  let mockJsonValidatorService: any;
   let mockCanonicalizerService: any;
   let mockCidCalculatorService: any;
   let mockCsvReporterService: any;
@@ -130,11 +129,6 @@ describe('Hash Command - ZIP Input', () => {
           relationships: { type: 'object' },
         },
       }),
-    };
-
-    mockJsonValidatorService = {
-      validate: vi.fn().mockResolvedValue({ valid: true }),
-      getErrorMessages: vi.fn().mockReturnValue([]),
     };
 
     mockCanonicalizerService = {
@@ -314,7 +308,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -416,7 +409,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -427,8 +419,10 @@ describe('Hash Command - ZIP Input', () => {
 
       await handleHash(options, serviceOverrides);
 
-      // Verify seed file was processed
-      expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
+      // Verify seed file was processed by checking CID calculation calls
+      expect(
+        mockCidCalculatorService.calculateCidFromCanonicalJson
+      ).toHaveBeenCalledTimes(2);
 
       // Verify CSV contains both entries with filePath and uploadedAt columns
       const csvContent = vi.mocked(fsPromises.writeFile).mock
@@ -475,7 +469,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -560,7 +553,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -635,7 +627,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -699,7 +690,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,
@@ -785,7 +775,6 @@ describe('Hash Command - ZIP Input', () => {
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
         schemaCacheService: mockSchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService,
         canonicalizerService: mockCanonicalizerService,
         cidCalculatorService: mockCidCalculatorService,
         csvReporterService: mockCsvReporterService,

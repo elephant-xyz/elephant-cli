@@ -218,4 +218,64 @@ export class CidCalculatorService {
       );
     }
   }
+
+  /**
+   * Calculate CID for a directory structure containing multiple files
+   * Uses DAG-PB format with UnixFS directory type
+   * Returns a CID v1 in base32 encoding (starts with "bafybei...")
+   */
+  async calculateDirectoryCid(
+    files: Array<{ name: string; content: Buffer }>
+  ): Promise<string> {
+    try {
+      // Create UnixFS directory metadata
+      const unixfsDir = new UnixFS({ type: 'directory' });
+
+      // Calculate CIDs for each file and create links
+      const links = [];
+      for (const file of files) {
+        // Calculate CID for this file
+        const fileCid = await this.calculateCidV1ForRawData(file.content);
+
+        // Parse the CID to get the multihash
+        const parsedCid = CID.parse(fileCid);
+
+        // Create a link for this file
+        links.push({
+          Name: file.name,
+          Hash: parsedCid,
+          Tsize: file.content.length,
+        });
+      }
+
+      // Sort links by name bytes for deterministic CID (required by DAG-PB spec)
+      links.sort((a, b) => {
+        const aBytes = Buffer.from(a.Name, 'utf-8');
+        const bBytes = Buffer.from(b.Name, 'utf-8');
+        return Buffer.compare(aBytes, bBytes);
+      });
+
+      // Create DAG-PB node with directory data and links
+      const dagPbNode = {
+        Data: unixfsDir.marshal(),
+        Links: links,
+      };
+
+      // Encode the DAG-PB node
+      const encoded = dagPB.encode(dagPbNode);
+
+      // Calculate SHA-256 hash
+      const hash = await sha256.digest(encoded);
+
+      // Create CID v1 with dag-pb codec (0x70)
+      const cid = CID.create(1, 0x70, hash);
+
+      // Return base32 string (standard for CID v1)
+      return cid.toString(base32);
+    } catch (error) {
+      throw new Error(
+        `Failed to calculate directory CID: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 }

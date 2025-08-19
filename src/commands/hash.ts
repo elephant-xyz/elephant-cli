@@ -8,7 +8,6 @@ import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
-import { JsonValidatorService } from '../services/json-validator.service.js';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
@@ -17,10 +16,7 @@ import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-import {
-  processSinglePropertyInput,
-  validateDataGroupSchema,
-} from '../utils/single-property-processor.js';
+import { processSinglePropertyInput } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
@@ -33,6 +29,13 @@ interface HashedFile {
   calculatedCid: string;
   transformedData: any;
   canonicalJson: string;
+}
+
+interface MediaFile {
+  originalPath: string;
+  fileName: string;
+  content: Buffer;
+  isHtml: boolean;
 }
 
 export interface HashCommandOptions {
@@ -84,7 +87,6 @@ export function registerHashCommand(program: Command) {
 export interface HashServiceOverrides {
   ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
-  jsonValidatorService?: JsonValidatorService;
   canonicalizerService?: IPLDCanonicalizerService;
   cidCalculatorService?: CidCalculatorService;
   csvReporterService?: CsvReporterService;
@@ -144,13 +146,6 @@ export async function handleHash(
   const schemaCacheService =
     serviceOverrides.schemaCacheService ??
     new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
-  const jsonValidatorService =
-    serviceOverrides.jsonValidatorService ??
-    new JsonValidatorService(
-      ipfsServiceForSchemas,
-      actualInputDir,
-      schemaCacheService
-    );
   const canonicalizerService =
     serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
@@ -172,6 +167,8 @@ export async function handleHash(
     serviceOverrides.progressTracker;
   const hashedFiles: HashedFile[] = [];
   const cidToFileMap = new Map<string, HashedFile>(); // Map CID to file for link replacement
+  const mediaFiles: MediaFile[] = []; // Collect HTML and image files
+  let mediaDirectoryCid: string | undefined; // CID for the media directory
 
   try {
     // Initialize csvReporterServiceInstance if not overridden
@@ -200,9 +197,10 @@ export async function handleHash(
     const entries = await fsPromises.readdir(actualInputDir, {
       withFileTypes: true,
     });
-    const jsonFiles = entries.filter(
-      (entry) => entry.isFile() && entry.name.endsWith('.json')
-    );
+    const allFiles = entries.filter((entry) => entry.isFile());
+    const jsonFiles = allFiles.filter((file) => file.name.endsWith('.json'));
+    const htmlFiles = allFiles.filter((file) => isHtmlFile(file.name));
+    const imageFiles = allFiles.filter((file) => isImageFile(file.name));
 
     if (jsonFiles.length === 0) {
       logger.warn('No JSON files found in the property directory');
@@ -212,8 +210,31 @@ export async function handleHash(
     }
 
     logger.success(
-      `Found ${jsonFiles.length} JSON files in property directory`
+      `Found ${jsonFiles.length} JSON files, ${htmlFiles.length} HTML files, and ${imageFiles.length} image files in property directory`
     );
+
+    // Collect HTML and image files as media files
+    for (const htmlFile of htmlFiles) {
+      const filePath = path.join(actualInputDir, htmlFile.name);
+      const content = await fsPromises.readFile(filePath);
+      mediaFiles.push({
+        originalPath: filePath,
+        fileName: htmlFile.name,
+        content,
+        isHtml: true,
+      });
+    }
+
+    for (const imageFile of imageFiles) {
+      const filePath = path.join(actualInputDir, imageFile.name);
+      const content = await fsPromises.readFile(filePath);
+      mediaFiles.push({
+        originalPath: filePath,
+        fileName: imageFile.name,
+        content,
+        isHtml: false,
+      });
+    }
 
     // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
@@ -222,8 +243,12 @@ export async function handleHash(
       propertyDirName,
       schemaManifestService
     );
-    const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
-      scanResult;
+    const {
+      allFiles: scannedJsonFiles,
+      validFilesCount,
+      descriptiveFilesCount,
+      schemaCids,
+    } = scanResult;
 
     logger.info('Scanning to count total files...');
     const totalFiles = validFilesCount;
@@ -290,15 +315,35 @@ export async function handleHash(
       );
     }
 
-    // The allFiles array is already populated from scanSinglePropertyDirectory
+    // Calculate directory CID for media files if any exist
+    if (mediaFiles.length > 0) {
+      logger.info('Calculating directory CID for HTML and image files...');
+      try {
+        const mediaFilesForCid = mediaFiles.map((file) => ({
+          name: file.fileName,
+          content: file.content,
+        }));
+        mediaDirectoryCid =
+          await cidCalculatorService.calculateDirectoryCid(mediaFilesForCid);
+        logger.success(
+          `Calculated media directory CID: ${mediaDirectoryCid} (dag-pb format)`
+        );
+      } catch (error) {
+        logger.error(
+          `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue without media directory CID
+      }
+    }
+
+    // The scannedJsonFiles array is already populated from scanSinglePropertyDirectory
 
     // Phase 2: Processing Files
-    progressTracker.setPhase('Processing Files', allFiles.length);
+    progressTracker.setPhase('Processing Files', scannedJsonFiles.length);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
     const servicesForProcessing = {
       schemaCacheService,
-      jsonValidatorService,
       canonicalizerService,
       cidCalculatorService,
       csvReporterService,
@@ -311,7 +356,7 @@ export async function handleHash(
     const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
 
     // Phase 1: Process all seed files first
-    const seedFiles = allFiles.filter(
+    const seedFiles = scannedJsonFiles.filter(
       (file) =>
         file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
         file.dataGroupCid ===
@@ -375,7 +420,7 @@ export async function handleHash(
     }
 
     // Phase 2: Process all non-seed files with the determined property CID
-    const nonSeedFiles = allFiles.filter(
+    const nonSeedFiles = scannedJsonFiles.filter(
       (file) =>
         file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID &&
         file.dataGroupCid !==
@@ -399,7 +444,8 @@ export async function handleHash(
               fileEntry,
               servicesForProcessing,
               hashedFiles,
-              cidToFileMap
+              cidToFileMap,
+              mediaDirectoryCid
             )
           )
         );
@@ -484,6 +530,12 @@ export async function handleHash(
       zip.addFile(zipPath, Buffer.from(hashedFile.canonicalJson, 'utf-8'));
     }
 
+    // Add media files (HTML and images) with their original names
+    for (const mediaFile of mediaFiles) {
+      const zipPath = path.join(propertyFolderName, mediaFile.fileName);
+      zip.addFile(zipPath, mediaFile.content);
+    }
+
     // Write the ZIP file
     zip.writeZip(options.outputZip);
     logger.success(`Output ZIP created: ${options.outputZip}`);
@@ -519,11 +571,17 @@ export async function handleHash(
     console.log(chalk.green('\n✅ Hash process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));
     console.log(
-      `  Total files scanned:    ${finalMetrics.total || totalFiles}`
+      `  Total JSON files scanned:    ${finalMetrics.total || totalFiles}`
     );
     console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
     console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
     console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
+    if (mediaFiles.length > 0) {
+      console.log(`  Media files included:    ${mediaFiles.length}`);
+      if (mediaDirectoryCid) {
+        console.log(`  Media directory CID:     ${mediaDirectoryCid}`);
+      }
+    }
 
     const totalHandled =
       (finalMetrics.skipped || 0) +
@@ -585,7 +643,6 @@ async function processSeedFile(
   fileEntry: FileEntry,
   services: {
     schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
     canonicalizerService: IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
@@ -603,7 +660,13 @@ async function processSeedFile(
 
   try {
     // Process the seed file exactly like a normal file
-    await processFileForHashing(fileEntry, services, hashedFiles, cidToFileMap);
+    await processFileForHashing(
+      fileEntry,
+      services,
+      hashedFiles,
+      cidToFileMap,
+      undefined
+    );
 
     // Check if processing was successful
     const latestFile = hashedFiles[hashedFiles.length - 1];
@@ -624,10 +687,10 @@ async function processSeedFile(
         `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
       );
     } else if (newErrorsOccurred) {
-      // Validation or processing failed
+      // Processing failed
       failedSeedDirectories.add(dirPath);
       logger.error(
-        `Seed validation/processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+        `Seed processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
       );
     } else {
       // No file added and no errors - this shouldn't happen, but treat as failure
@@ -650,7 +713,6 @@ async function processFileForHashing(
   fileEntry: FileEntry,
   services: {
     schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
     canonicalizerService: IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
@@ -658,7 +720,8 @@ async function processFileForHashing(
     ipldConverterService: IPLDConverterService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>
+  cidToFileMap: Map<string, HashedFile>,
+  mediaDirectoryCid?: string
 ): Promise<void> {
   let jsonData;
   try {
@@ -701,55 +764,8 @@ async function processFileForHashing(
       return;
     }
 
-    // Validate that the schema is a valid data group schema
-    const schemaValidation = validateDataGroupSchema(schema);
-    if (!schemaValidation.valid) {
-      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
-
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        errorPath: 'root',
-        errorMessage: error,
-        timestamp: new Date().toISOString(),
-      });
-      services.progressTracker.increment('errors');
-      return;
-    }
-
     // Check if data has IPLD links that need conversion
     let dataToProcess = jsonData;
-    const dataForValidation = jsonData;
-
-    // First validate the original data with file paths that can be resolved locally
-    // Note: We pass false to allow resolution of local file references for validation
-    const validationResult = await services.jsonValidatorService.validate(
-      dataForValidation,
-      schema,
-      fileEntry.filePath,
-      false // allow resolution of local file references for validation
-    );
-
-    if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
-
-      for (const errorInfo of errorMessages) {
-        await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
-          dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: errorInfo.path,
-          errorMessage: errorInfo.message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      services.progressTracker.increment('errors');
-      return;
-    }
 
     // Determine the property CID early for seed files
     const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
@@ -779,7 +795,8 @@ async function processFileForHashing(
           schema,
           services,
           hashedFiles,
-          cidToFileMap
+          cidToFileMap,
+          mediaDirectoryCid
         );
         dataToProcess = conversionResult.convertedData;
         linkedFilesFromConversion = conversionResult.linkedFiles;
@@ -871,7 +888,8 @@ async function convertToIPLDWithCIDCalculation(
     cidCalculatorService: CidCalculatorService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>
+  cidToFileMap: Map<string, HashedFile>,
+  mediaDirectoryCid?: string
 ): Promise<{
   convertedData: any;
   hasLinks: boolean;
@@ -900,7 +918,8 @@ async function convertToIPLDWithCIDCalculation(
     hashedFiles,
     cidToFileMap,
     undefined,
-    linkedFilesData
+    linkedFilesData,
+    mediaDirectoryCid
   );
 
   return {
@@ -928,7 +947,8 @@ async function processDataForIPLD(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>
+  }>,
+  mediaDirectoryCid?: string
 ): Promise<any> {
   // Handle string values for ipfs_url fields or ipfs_uri format
   if (
@@ -949,16 +969,16 @@ async function processDataForIPLD(
       // Not a CID, treat as local path
     }
 
-    // It's a local path, calculate CID for the file
-    if (isImageFile(data)) {
-      const cid = await calculateCIDForFile(
+    // It's a local path
+    if (isImageFile(data) || isHtmlFile(data)) {
+      const cid = await getCidForFilePath(
         data,
         currentFilePath,
         services,
-        true, // treat as ipfs_uri format
+        linkedCIDs,
+        mediaDirectoryCid,
         linkedFilesData
       );
-      linkedCIDs.push(cid);
       return `ipfs://${cid}`;
     }
 
@@ -992,15 +1012,15 @@ async function processDataForIPLD(
       linkedCIDs.push(pointerValue);
       return data;
     } else {
-      // This is a file path reference - calculate its CID
-      const cid = await calculateCIDForFile(
+      // This is a file path reference
+      const cid = await getCidForFilePath(
         pointerValue,
         currentFilePath,
         services,
-        false, // not necessarily an ipfs_uri format
+        linkedCIDs,
+        mediaDirectoryCid,
         linkedFilesData
       );
-      linkedCIDs.push(cid);
       return { '/': cid };
     }
   }
@@ -1019,7 +1039,8 @@ async function processDataForIPLD(
           hashedFiles,
           cidToFileMap,
           fieldName,
-          linkedFilesData
+          linkedFilesData,
+          mediaDirectoryCid
         )
       )
     );
@@ -1039,7 +1060,8 @@ async function processDataForIPLD(
         hashedFiles,
         cidToFileMap,
         key, // Pass the field name
-        linkedFilesData
+        linkedFilesData,
+        mediaDirectoryCid
       );
     }
   }
@@ -1062,7 +1084,8 @@ async function calculateCIDForFile(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>
+  }>,
+  mediaDirectoryCid?: string
 ): Promise<string> {
   let resolvedPath: string;
 
@@ -1108,7 +1131,8 @@ async function calculateCIDForFile(
         [], // Don't track in hashedFiles yet
         new Map(), // Don't track in cidToFileMap yet
         undefined, // No field name context
-        linkedFiles // Pass the same linkedFiles collection to track nested files
+        linkedFiles, // Pass the same linkedFiles collection to track nested files
+        mediaDirectoryCid // Pass through the media directory CID
       );
 
       const canonicalJson =
@@ -1158,4 +1182,50 @@ function isImageFile(filePath: string): boolean {
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
   const ext = path.extname(filePath).toLowerCase();
   return imageExtensions.includes(ext);
+}
+
+/**
+ * Check if a file is an HTML file based on its extension
+ */
+function isHtmlFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === '.html' || ext === '.htm';
+}
+
+/**
+ * Get CID for a file path, using media directory CID for HTML files if available
+ */
+async function getCidForFilePath(
+  filePath: string,
+  currentFilePath: string,
+  services: {
+    canonicalizerService: IPLDCanonicalizerService;
+    cidCalculatorService: CidCalculatorService;
+  },
+  linkedCIDs: string[],
+  mediaDirectoryCid?: string,
+  linkedFilesData?: Array<{
+    path: string;
+    cid: string;
+    canonicalJson: string;
+    processedData: any;
+  }>
+): Promise<string> {
+  // For HTML files in the media directory, use the directory CID
+  if (isHtmlFile(filePath) && mediaDirectoryCid) {
+    linkedCIDs.push(mediaDirectoryCid);
+    return mediaDirectoryCid;
+  }
+
+  // For other files (including images and HTML without media directory), calculate individual CID
+  const cid = await calculateCIDForFile(
+    filePath,
+    currentFilePath,
+    services,
+    false, // not necessarily an ipfs_uri format
+    linkedFilesData,
+    mediaDirectoryCid
+  );
+  linkedCIDs.push(cid);
+  return cid;
 }
