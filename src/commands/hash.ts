@@ -35,6 +35,13 @@ interface HashedFile {
   canonicalJson: string;
 }
 
+interface MediaFile {
+  originalPath: string;
+  fileName: string;
+  content: Buffer;
+  isHtml: boolean;
+}
+
 export interface HashCommandOptions {
   input: string;
   outputZip: string;
@@ -172,6 +179,8 @@ export async function handleHash(
     serviceOverrides.progressTracker;
   const hashedFiles: HashedFile[] = [];
   const cidToFileMap = new Map<string, HashedFile>(); // Map CID to file for link replacement
+  const mediaFiles: MediaFile[] = []; // Collect HTML and image files
+  let mediaDirectoryCid: string | undefined; // CID for the media directory
 
   try {
     // Initialize csvReporterServiceInstance if not overridden
@@ -200,9 +209,13 @@ export async function handleHash(
     const entries = await fsPromises.readdir(actualInputDir, {
       withFileTypes: true,
     });
-    const jsonFiles = entries.filter(
-      (entry) => entry.isFile() && entry.name.endsWith('.json')
-    );
+    const allFiles = entries.filter((entry) => entry.isFile());
+    const jsonFiles = allFiles.filter((file) => file.name.endsWith('.json'));
+    const htmlFiles = allFiles.filter((file) => file.name.endsWith('.html'));
+    const imageFiles = allFiles.filter((file) => {
+      const ext = path.extname(file.name).toLowerCase();
+      return ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext);
+    });
 
     if (jsonFiles.length === 0) {
       logger.warn('No JSON files found in the property directory');
@@ -212,8 +225,31 @@ export async function handleHash(
     }
 
     logger.success(
-      `Found ${jsonFiles.length} JSON files in property directory`
+      `Found ${jsonFiles.length} JSON files, ${htmlFiles.length} HTML files, and ${imageFiles.length} image files in property directory`
     );
+
+    // Collect HTML and image files as media files
+    for (const htmlFile of htmlFiles) {
+      const filePath = path.join(actualInputDir, htmlFile.name);
+      const content = await fsPromises.readFile(filePath);
+      mediaFiles.push({
+        originalPath: filePath,
+        fileName: htmlFile.name,
+        content,
+        isHtml: true,
+      });
+    }
+
+    for (const imageFile of imageFiles) {
+      const filePath = path.join(actualInputDir, imageFile.name);
+      const content = await fsPromises.readFile(filePath);
+      mediaFiles.push({
+        originalPath: filePath,
+        fileName: imageFile.name,
+        content,
+        isHtml: false,
+      });
+    }
 
     // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
@@ -222,8 +258,12 @@ export async function handleHash(
       propertyDirName,
       schemaManifestService
     );
-    const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
-      scanResult;
+    const {
+      allFiles: scannedJsonFiles,
+      validFilesCount,
+      descriptiveFilesCount,
+      schemaCids,
+    } = scanResult;
 
     logger.info('Scanning to count total files...');
     const totalFiles = validFilesCount;
@@ -290,10 +330,31 @@ export async function handleHash(
       );
     }
 
-    // The allFiles array is already populated from scanSinglePropertyDirectory
+    // Calculate directory CID for media files if any exist
+    if (mediaFiles.length > 0) {
+      logger.info('Calculating directory CID for HTML and image files...');
+      try {
+        const mediaFilesForCid = mediaFiles.map((file) => ({
+          name: file.fileName,
+          content: file.content,
+        }));
+        mediaDirectoryCid =
+          await cidCalculatorService.calculateDirectoryCid(mediaFilesForCid);
+        logger.success(
+          `Calculated media directory CID: ${mediaDirectoryCid} (dag-pb format)`
+        );
+      } catch (error) {
+        logger.error(
+          `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue without media directory CID
+      }
+    }
+
+    // The scannedJsonFiles array is already populated from scanSinglePropertyDirectory
 
     // Phase 2: Processing Files
-    progressTracker.setPhase('Processing Files', allFiles.length);
+    progressTracker.setPhase('Processing Files', scannedJsonFiles.length);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
 
     const servicesForProcessing = {
@@ -311,7 +372,7 @@ export async function handleHash(
     const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
 
     // Phase 1: Process all seed files first
-    const seedFiles = allFiles.filter(
+    const seedFiles = scannedJsonFiles.filter(
       (file) =>
         file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
         file.dataGroupCid ===
@@ -375,7 +436,7 @@ export async function handleHash(
     }
 
     // Phase 2: Process all non-seed files with the determined property CID
-    const nonSeedFiles = allFiles.filter(
+    const nonSeedFiles = scannedJsonFiles.filter(
       (file) =>
         file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID &&
         file.dataGroupCid !==
@@ -399,7 +460,8 @@ export async function handleHash(
               fileEntry,
               servicesForProcessing,
               hashedFiles,
-              cidToFileMap
+              cidToFileMap,
+              mediaDirectoryCid
             )
           )
         );
@@ -484,6 +546,12 @@ export async function handleHash(
       zip.addFile(zipPath, Buffer.from(hashedFile.canonicalJson, 'utf-8'));
     }
 
+    // Add media files (HTML and images) with their original names
+    for (const mediaFile of mediaFiles) {
+      const zipPath = path.join(propertyFolderName, mediaFile.fileName);
+      zip.addFile(zipPath, mediaFile.content);
+    }
+
     // Write the ZIP file
     zip.writeZip(options.outputZip);
     logger.success(`Output ZIP created: ${options.outputZip}`);
@@ -519,11 +587,17 @@ export async function handleHash(
     console.log(chalk.green('\n✅ Hash process finished\n'));
     console.log(chalk.bold('📊 Final Report:'));
     console.log(
-      `  Total files scanned:    ${finalMetrics.total || totalFiles}`
+      `  Total JSON files scanned:    ${finalMetrics.total || totalFiles}`
     );
     console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
     console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
     console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
+    if (mediaFiles.length > 0) {
+      console.log(`  Media files included:    ${mediaFiles.length}`);
+      if (mediaDirectoryCid) {
+        console.log(`  Media directory CID:     ${mediaDirectoryCid}`);
+      }
+    }
 
     const totalHandled =
       (finalMetrics.skipped || 0) +
@@ -603,7 +677,13 @@ async function processSeedFile(
 
   try {
     // Process the seed file exactly like a normal file
-    await processFileForHashing(fileEntry, services, hashedFiles, cidToFileMap);
+    await processFileForHashing(
+      fileEntry,
+      services,
+      hashedFiles,
+      cidToFileMap,
+      undefined
+    );
 
     // Check if processing was successful
     const latestFile = hashedFiles[hashedFiles.length - 1];
@@ -658,7 +738,8 @@ async function processFileForHashing(
     ipldConverterService: IPLDConverterService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>
+  cidToFileMap: Map<string, HashedFile>,
+  mediaDirectoryCid?: string
 ): Promise<void> {
   let jsonData;
   try {
@@ -779,7 +860,8 @@ async function processFileForHashing(
           schema,
           services,
           hashedFiles,
-          cidToFileMap
+          cidToFileMap,
+          mediaDirectoryCid
         );
         dataToProcess = conversionResult.convertedData;
         linkedFilesFromConversion = conversionResult.linkedFiles;
@@ -871,7 +953,8 @@ async function convertToIPLDWithCIDCalculation(
     cidCalculatorService: CidCalculatorService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>
+  cidToFileMap: Map<string, HashedFile>,
+  mediaDirectoryCid?: string
 ): Promise<{
   convertedData: any;
   hasLinks: boolean;
@@ -900,7 +983,8 @@ async function convertToIPLDWithCIDCalculation(
     hashedFiles,
     cidToFileMap,
     undefined,
-    linkedFilesData
+    linkedFilesData,
+    mediaDirectoryCid
   );
 
   return {
@@ -928,7 +1012,8 @@ async function processDataForIPLD(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>
+  }>,
+  mediaDirectoryCid?: string
 ): Promise<any> {
   // Handle string values for ipfs_url fields or ipfs_uri format
   if (
@@ -949,14 +1034,21 @@ async function processDataForIPLD(
       // Not a CID, treat as local path
     }
 
-    // It's a local path, calculate CID for the file
-    if (isImageFile(data)) {
+    // It's a local path
+    // Check if it's an HTML file and we have a media directory CID
+    if (isHtmlFile(data) && mediaDirectoryCid) {
+      // For HTML files in the media directory, use the directory CID
+      linkedCIDs.push(mediaDirectoryCid);
+      return `ipfs://${mediaDirectoryCid}`;
+    } else if (isImageFile(data) || isHtmlFile(data)) {
+      // For images and HTML files without media directory, calculate individual CID
       const cid = await calculateCIDForFile(
         data,
         currentFilePath,
         services,
         true, // treat as ipfs_uri format
-        linkedFilesData
+        linkedFilesData,
+        mediaDirectoryCid
       );
       linkedCIDs.push(cid);
       return `ipfs://${cid}`;
@@ -992,16 +1084,25 @@ async function processDataForIPLD(
       linkedCIDs.push(pointerValue);
       return data;
     } else {
-      // This is a file path reference - calculate its CID
-      const cid = await calculateCIDForFile(
-        pointerValue,
-        currentFilePath,
-        services,
-        false, // not necessarily an ipfs_uri format
-        linkedFilesData
-      );
-      linkedCIDs.push(cid);
-      return { '/': cid };
+      // This is a file path reference
+      // Check if it's an HTML file and we have a media directory CID
+      if (mediaDirectoryCid && isHtmlFile(pointerValue)) {
+        // For HTML files, use the media directory CID
+        linkedCIDs.push(mediaDirectoryCid);
+        return { '/': mediaDirectoryCid };
+      } else {
+        // For other files, calculate individual CID
+        const cid = await calculateCIDForFile(
+          pointerValue,
+          currentFilePath,
+          services,
+          false, // not necessarily an ipfs_uri format
+          linkedFilesData,
+          mediaDirectoryCid
+        );
+        linkedCIDs.push(cid);
+        return { '/': cid };
+      }
     }
   }
 
@@ -1019,7 +1120,8 @@ async function processDataForIPLD(
           hashedFiles,
           cidToFileMap,
           fieldName,
-          linkedFilesData
+          linkedFilesData,
+          mediaDirectoryCid
         )
       )
     );
@@ -1039,7 +1141,8 @@ async function processDataForIPLD(
         hashedFiles,
         cidToFileMap,
         key, // Pass the field name
-        linkedFilesData
+        linkedFilesData,
+        mediaDirectoryCid
       );
     }
   }
@@ -1062,7 +1165,8 @@ async function calculateCIDForFile(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>
+  }>,
+  mediaDirectoryCid?: string
 ): Promise<string> {
   let resolvedPath: string;
 
@@ -1108,7 +1212,8 @@ async function calculateCIDForFile(
         [], // Don't track in hashedFiles yet
         new Map(), // Don't track in cidToFileMap yet
         undefined, // No field name context
-        linkedFiles // Pass the same linkedFiles collection to track nested files
+        linkedFiles, // Pass the same linkedFiles collection to track nested files
+        mediaDirectoryCid // Pass through the media directory CID
       );
 
       const canonicalJson =
@@ -1158,4 +1263,12 @@ function isImageFile(filePath: string): boolean {
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
   const ext = path.extname(filePath).toLowerCase();
   return imageExtensions.includes(ext);
+}
+
+/**
+ * Check if a file is an HTML file based on its extension
+ */
+function isHtmlFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return ext === '.html' || ext === '.htm';
 }
