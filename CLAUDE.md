@@ -130,18 +130,20 @@ This command:
 8. Handles seed datagroup processing (processes seed files first)
 9. **Determines property CID** using priority: `--property-cid` option > calculated Seed CID > error
 10. **Calculates CIDs for all files without uploading to IPFS**
-11. **Replaces all file path links with calculated CIDs**
-12. **Canonicalizes all data**
-13. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
-14. **Outputs transformed data as a ZIP archive with CID-based filenames**
+11. **Calculates directory CID for HTML and image files** if present
+12. **Replaces all file path links with calculated CIDs**
+13. **Canonicalizes all data**
+14. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink) - fully compatible with submit-to-contract and upload commands
+15. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time
 - **ZIP Input Required**: Only accepts ZIP archives, not directories
-- **CSV Output**: Generates submission-ready CSV compatible with `submit-to-contract`
+- **CSV Output**: Generates submission-ready CSV compatible with `submit-to-contract` and `upload` commands
 - **CID Calculation**: Uses the same algorithm as `validate-and-upload --dry-run`
 - **Link Replacement**: Converts `{"/": "./file.json"}` references to `{"/": "calculated-cid"}`
 - **IPLD Support**: Handles IPLD links and ipfs_url fields correctly
+- **Media Processing**: Calculates directory CID for HTML and image files, includes as htmlLink in CSV
 - **Image Processing**: Calculates appropriate CIDs for image files with ipfs_uri format
 - **Seed Datagroup**: Processes seed files first and uses their CIDs for property identification
 - **Output Structure**: Creates ZIP with single `property-cid/file-cid.json` structure (no 'data' wrapper)

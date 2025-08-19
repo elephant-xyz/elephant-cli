@@ -458,10 +458,10 @@ export async function handleHash(
     // Phase 3: Generate CSV output and create output ZIP
     progressTracker.setPhase('Creating Output Files', 2);
 
-    // Generate CSV with hash results (similar to validate-and-upload but without htmlLink)
+    // Generate CSV with hash results
     logger.info('Generating CSV with hash results...');
     const csvData: string[] = [
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt', // Headers compatible with submit-to-contract
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink', // Headers compatible with submit-to-contract and upload
     ];
 
     // Process hashed files to generate CSV entries
@@ -492,9 +492,10 @@ export async function handleHash(
         // Normalize the path separators for consistency (use forward slashes)
         relativePath = relativePath.replace(/\\/g, '/');
 
-        // Add empty uploadedAt field for compatibility with submit-to-contract
+        // Add empty uploadedAt field and htmlLink with media directory CID if available
+        const htmlLink = mediaDirectoryCid ? `ipfs://${mediaDirectoryCid}` : '';
         csvData.push(
-          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},`
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,${htmlLink}`
         );
       }
     }
