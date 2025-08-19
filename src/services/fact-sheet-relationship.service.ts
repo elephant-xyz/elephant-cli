@@ -452,35 +452,20 @@ export class FactSheetRelationshipService {
             (m) => m.className === className
           );
 
-          if (classMappingsForClass.length === 1) {
-            // Single file for this class
-            const classMapping = classMappingsForClass[0];
-            const baseFileName = classMapping.fileName.replace('.json', '');
+          // Always create an array, even for single relationships
+          const relationshipArray = classMappingsForClass.map((mapping) => {
+            const baseFileName = mapping.fileName.replace('.json', '');
             const relationshipFileName = `relationship_${baseFileName}_to_fact_sheet.json`;
-
-            content.relationships[relationshipKey] = {
+            return {
               '/': `./${relationshipFileName}`,
             };
-            hasUpdates = true;
-            logger.debug(
-              `Added ${relationshipKey} to ${datagroupFile.fileName}`
-            );
-          } else if (classMappingsForClass.length > 1) {
-            // Multiple files for this class - create an array
-            const relationshipArray = classMappingsForClass.map((mapping) => {
-              const baseFileName = mapping.fileName.replace('.json', '');
-              const relationshipFileName = `relationship_${baseFileName}_to_fact_sheet.json`;
-              return {
-                '/': `./${relationshipFileName}`,
-              };
-            });
+          });
 
-            content.relationships[relationshipKey] = relationshipArray;
-            hasUpdates = true;
-            logger.debug(
-              `Added ${relationshipKey} array with ${relationshipArray.length} items to ${datagroupFile.fileName}`
-            );
-          }
+          content.relationships[relationshipKey] = relationshipArray;
+          hasUpdates = true;
+          logger.debug(
+            `Added ${relationshipKey} array with ${relationshipArray.length} item(s) to ${datagroupFile.fileName}`
+          );
         }
       }
 

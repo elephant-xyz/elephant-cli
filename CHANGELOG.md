@@ -1,3 +1,17 @@
+## [1.28.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.1...v1.28.2) (2025-08-19)
+
+
+### Bug Fixes
+
+* Ensure fact sheet relationships are always represented as arrays ([#92](https://github.com/elephant-xyz/elephant-cli/issues/92)) ([cf2417e](https://github.com/elephant-xyz/elephant-cli/commit/cf2417e4cba5796a1bf2548b0dc3e12ea87c2405))
+
+## [1.28.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.0...v1.28.1) (2025-08-19)
+
+
+### Bug Fixes
+
+* 'hash' command processes Fact Sheet data + remove validation from 'hash' command flow ([#91](https://github.com/elephant-xyz/elephant-cli/issues/91)) ([18c2a02](https://github.com/elephant-xyz/elephant-cli/commit/18c2a028a299391fc5a109ff26396a1fe6a85831))
+
 # [1.28.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.27.0...v1.28.0) (2025-08-19)
 
 

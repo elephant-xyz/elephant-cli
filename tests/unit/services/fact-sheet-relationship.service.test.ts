@@ -295,14 +295,18 @@ describe('FactSheetRelationshipService', () => {
         'address_has_fact_sheet'
       );
 
-      // Verify the relationship references
-      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual({
-        '/': './relationship_property_to_fact_sheet.json',
-      });
+      // Verify the relationship references (should always be arrays)
+      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual([
+        {
+          '/': './relationship_property_to_fact_sheet.json',
+        },
+      ]);
 
-      expect(datagroupContent.relationships.address_has_fact_sheet).toEqual({
-        '/': './relationship_address_to_fact_sheet.json',
-      });
+      expect(datagroupContent.relationships.address_has_fact_sheet).toEqual([
+        {
+          '/': './relationship_address_to_fact_sheet.json',
+        },
+      ]);
     });
 
     it('should handle arrays of relationships', async () => {
@@ -380,6 +384,24 @@ describe('FactSheetRelationshipService', () => {
           .catch(() => false);
         expect(exists).toBe(true);
       }
+
+      // Verify that datagroup was updated with fact_sheet relationships as arrays
+      const datagroupPath = path.join(tempDir, 'bafkreicountyschema.json');
+      const datagroupContent = JSON.parse(
+        await fsPromises.readFile(datagroupPath, 'utf-8')
+      );
+
+      // Property has multiple instances, should be an array with 2 items
+      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual([
+        { '/': './relationship_property1_to_fact_sheet.json' },
+        { '/': './relationship_property2_to_fact_sheet.json' },
+      ]);
+
+      // Address has multiple instances, should be an array with 2 items
+      expect(datagroupContent.relationships.address_has_fact_sheet).toEqual([
+        { '/': './relationship_address1_to_fact_sheet.json' },
+        { '/': './relationship_address2_to_fact_sheet.json' },
+      ]);
     });
 
     it('should handle null relationships gracefully', async () => {
@@ -545,12 +567,16 @@ describe('FactSheetRelationshipService', () => {
         await fsPromises.readFile(datagroupPath, 'utf-8')
       );
 
-      expect(datagroupContent.relationships).toHaveProperty(
-        'property_has_fact_sheet'
-      );
-      expect(datagroupContent.relationships).toHaveProperty(
-        'tax_has_fact_sheet'
-      );
+      // Verify fact_sheet relationships are arrays
+      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual([
+        { '/': './relationship_property_to_fact_sheet.json' },
+      ]);
+
+      // Tax has multiple instances, should be an array with 2 items
+      expect(datagroupContent.relationships.tax_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_1_to_fact_sheet.json' },
+        { '/': './relationship_tax_2_to_fact_sheet.json' },
+      ]);
     });
 
     it('should not duplicate class mappings', async () => {
