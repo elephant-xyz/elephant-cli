@@ -69,10 +69,6 @@ describe('Hash Command - Simple Media Files Test', () => {
           properties: { label: {}, relationships: {} },
         }),
       },
-      jsonValidatorService: {
-        validate: vi.fn().mockResolvedValue({ valid: true }),
-        getErrorMessages: vi.fn().mockReturnValue([]),
-      },
       canonicalizerService: {
         canonicalize: vi.fn().mockReturnValue('{}'),
       },

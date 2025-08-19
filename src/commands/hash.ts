@@ -8,7 +8,6 @@ import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
-import { JsonValidatorService } from '../services/json-validator.service.js';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
 import { CidCalculatorService } from '../services/cid-calculator.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
@@ -17,10 +16,7 @@ import { FileEntry } from '../types/submit.types.js';
 import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-import {
-  processSinglePropertyInput,
-  validateDataGroupSchema,
-} from '../utils/single-property-processor.js';
+import { processSinglePropertyInput } from '../utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
@@ -91,7 +87,6 @@ export function registerHashCommand(program: Command) {
 export interface HashServiceOverrides {
   ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
-  jsonValidatorService?: JsonValidatorService;
   canonicalizerService?: IPLDCanonicalizerService;
   cidCalculatorService?: CidCalculatorService;
   csvReporterService?: CsvReporterService;
@@ -151,13 +146,6 @@ export async function handleHash(
   const schemaCacheService =
     serviceOverrides.schemaCacheService ??
     new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
-  const jsonValidatorService =
-    serviceOverrides.jsonValidatorService ??
-    new JsonValidatorService(
-      ipfsServiceForSchemas,
-      actualInputDir,
-      schemaCacheService
-    );
   const canonicalizerService =
     serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
@@ -359,7 +347,6 @@ export async function handleHash(
 
     const servicesForProcessing = {
       schemaCacheService,
-      jsonValidatorService,
       canonicalizerService,
       cidCalculatorService,
       csvReporterService,
@@ -659,7 +646,6 @@ async function processSeedFile(
   fileEntry: FileEntry,
   services: {
     schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
     canonicalizerService: IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
@@ -704,10 +690,10 @@ async function processSeedFile(
         `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
       );
     } else if (newErrorsOccurred) {
-      // Validation or processing failed
+      // Processing failed
       failedSeedDirectories.add(dirPath);
       logger.error(
-        `Seed validation/processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
+        `Seed processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
       );
     } else {
       // No file added and no errors - this shouldn't happen, but treat as failure
@@ -730,7 +716,6 @@ async function processFileForHashing(
   fileEntry: FileEntry,
   services: {
     schemaCacheService: SchemaCacheService;
-    jsonValidatorService: JsonValidatorService;
     canonicalizerService: IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
     csvReporterService: CsvReporterService;
@@ -782,55 +767,8 @@ async function processFileForHashing(
       return;
     }
 
-    // Validate that the schema is a valid data group schema
-    const schemaValidation = validateDataGroupSchema(schema);
-    if (!schemaValidation.valid) {
-      const error = `Schema CID ${schemaCid} is not a valid data group schema. Data group schemas must describe an object with exactly two properties: "label" and "relationships". For valid data group schemas, please visit https://lexicon.elephant.xyz`;
-
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        errorPath: 'root',
-        errorMessage: error,
-        timestamp: new Date().toISOString(),
-      });
-      services.progressTracker.increment('errors');
-      return;
-    }
-
     // Check if data has IPLD links that need conversion
     let dataToProcess = jsonData;
-    const dataForValidation = jsonData;
-
-    // First validate the original data with file paths that can be resolved locally
-    // Note: We pass false to allow resolution of local file references for validation
-    const validationResult = await services.jsonValidatorService.validate(
-      dataForValidation,
-      schema,
-      fileEntry.filePath,
-      false // allow resolution of local file references for validation
-    );
-
-    if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
-
-      for (const errorInfo of errorMessages) {
-        await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
-          dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: errorInfo.path,
-          errorMessage: errorInfo.message,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      services.progressTracker.increment('errors');
-      return;
-    }
 
     // Determine the property CID early for seed files
     const isSeedFile = fileEntry.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID;
