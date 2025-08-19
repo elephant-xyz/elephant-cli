@@ -1,3 +1,10 @@
+## [1.28.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.1...v1.28.2) (2025-08-19)
+
+
+### Bug Fixes
+
+* Ensure fact sheet relationships are always represented as arrays ([#92](https://github.com/elephant-xyz/elephant-cli/issues/92)) ([cf2417e](https://github.com/elephant-xyz/elephant-cli/commit/cf2417e4cba5796a1bf2548b0dc3e12ea87c2405))
+
 ## [1.28.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.0...v1.28.1) (2025-08-19)
 
 
