@@ -59,7 +59,7 @@ export class FactSheetRelationshipService {
     // Build the full generation command
     let fullCommand: string | null = null;
     if (commitHash) {
-      fullCommand = `npx git+https://github.com/elephant-xyz/fact-sheet-template.git#${commitHash} generate --input \${inputDir} --output \${outputDir} --inline-js --inline-css --inline-svg`;
+      fullCommand = `npx -y git+https://github.com/elephant-xyz/fact-sheet-template.git#${commitHash} generate --input \${inputDir} --output \${outputDir} --inline-js --inline-css --inline-svg`;
     }
 
     const factSheetContent: {
