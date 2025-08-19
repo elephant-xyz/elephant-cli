@@ -4,6 +4,7 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { FactSheetRelationshipService } from '../../../src/services/fact-sheet-relationship.service.js';
 import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
+import * as factSheetUtils from '../../../src/utils/fact-sheet.js';
 
 describe('FactSheetRelationshipService', () => {
   let tempDir: string;
@@ -77,6 +78,11 @@ describe('FactSheetRelationshipService', () => {
       return label === 'County' ? 'bafkreicountyschema' : null;
     });
 
+    // Mock getFactSheetCommitHash to return a test commit hash
+    vi.spyOn(factSheetUtils, 'getFactSheetCommitHash').mockReturnValue(
+      'abc123def456789012345678901234567890abcd'
+    );
+
     // Create service with mocked fetch
     service = new FactSheetRelationshipService(schemaManifestService);
 
@@ -140,6 +146,24 @@ describe('FactSheetRelationshipService', () => {
       );
       expect(content).toEqual({
         ipfs_url: './index.html',
+        full_generation_command:
+          'npx git+https://github.com/elephant-xyz/fact-sheet-template.git#abc123def456789012345678901234567890abcd generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg',
+      });
+    });
+
+    it('should handle null commit hash gracefully', async () => {
+      // Mock getFactSheetCommitHash to return null
+      vi.spyOn(factSheetUtils, 'getFactSheetCommitHash').mockReturnValue(null);
+
+      await service.generateFactSheetFile(tempDir);
+
+      const factSheetPath = path.join(tempDir, 'fact_sheet.json');
+      const content = JSON.parse(
+        await fsPromises.readFile(factSheetPath, 'utf-8')
+      );
+      expect(content).toEqual({
+        ipfs_url: './index.html',
+        full_generation_command: null,
       });
     });
   });

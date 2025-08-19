@@ -6,6 +6,7 @@ import {
   DatagroupFile,
 } from '../utils/datagroup-analyzer.js';
 import { logger } from '../utils/logger.js';
+import { getFactSheetCommitHash } from '../utils/fact-sheet.js';
 
 interface ClassMapping {
   fileName: string;
@@ -51,8 +52,22 @@ export class FactSheetRelationshipService {
    */
   async generateFactSheetFile(outputDir: string): Promise<void> {
     const factSheetPath = path.join(outputDir, 'fact_sheet.json');
-    const factSheetContent = {
+
+    // Get the commit hash of the fact-sheet tool
+    const commitHash = getFactSheetCommitHash();
+
+    // Build the full generation command
+    let fullCommand: string | null = null;
+    if (commitHash) {
+      fullCommand = `npx git+https://github.com/elephant-xyz/fact-sheet-template.git#${commitHash} generate --input \${inputDir} --output \${outputDir} --inline-js --inline-css --inline-svg`;
+    }
+
+    const factSheetContent: {
+      ipfs_url: string;
+      full_generation_command: string | null;
+    } = {
       ipfs_url: './index.html',
+      full_generation_command: fullCommand,
     };
 
     await fsPromises.writeFile(
@@ -62,6 +77,13 @@ export class FactSheetRelationshipService {
     );
 
     logger.info(`Generated fact_sheet.json file at ${factSheetPath}`);
+    if (fullCommand) {
+      logger.debug(`Full generation command: ${fullCommand}`);
+    } else {
+      logger.debug(
+        'Could not determine fact-sheet tool version for generation command'
+      );
+    }
   }
 
   /**

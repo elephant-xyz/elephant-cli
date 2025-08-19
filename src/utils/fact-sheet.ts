@@ -128,6 +128,31 @@ export async function installOrUpdateFactSheet(): Promise<void> {
   }
 }
 
+export function getFactSheetCommitHash(): string | null {
+  try {
+    // The fact-sheet tool is typically installed in ~/.elephant-fact-sheet
+    const factSheetRepoPath = path.join(os.homedir(), '.elephant-fact-sheet');
+
+    if (!existsSync(factSheetRepoPath)) {
+      logger.debug('Fact-sheet repository not found at ~/.elephant-fact-sheet');
+      return null;
+    }
+
+    // Get the current commit hash
+    const commitHash = execSync('git rev-parse HEAD', {
+      cwd: factSheetRepoPath,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
+
+    logger.debug(`Fact-sheet tool commit hash: ${commitHash}`);
+    return commitHash;
+  } catch (error) {
+    logger.debug(`Could not get fact-sheet commit hash: ${error}`);
+    return null;
+  }
+}
+
 export async function generateHTMLFiles(
   inputDir: string,
   outputDir: string
