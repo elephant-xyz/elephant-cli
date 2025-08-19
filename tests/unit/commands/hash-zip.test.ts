@@ -420,7 +420,9 @@ describe('Hash Command - ZIP Input', () => {
       await handleHash(options, serviceOverrides);
 
       // Verify seed file was processed by checking CID calculation calls
-      expect(mockCidCalculatorService.calculateCidFromCanonicalJson).toHaveBeenCalledTimes(2);
+      expect(
+        mockCidCalculatorService.calculateCidFromCanonicalJson
+      ).toHaveBeenCalledTimes(2);
 
       // Verify CSV contains both entries with filePath and uploadedAt columns
       const csvContent = vi.mocked(fsPromises.writeFile).mock
