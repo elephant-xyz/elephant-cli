@@ -147,7 +147,7 @@ describe('FactSheetRelationshipService', () => {
       expect(content).toEqual({
         ipfs_url: './index.html',
         full_generation_command:
-          'npx git+https://github.com/elephant-xyz/fact-sheet-template.git#abc123def456789012345678901234567890abcd generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg',
+          'npx -y git+https://github.com/elephant-xyz/fact-sheet-template.git#abc123def456789012345678901234567890abcd generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg',
       });
     });
 
