@@ -129,11 +129,11 @@ This command:
 7. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
 8. Handles seed datagroup processing (processes seed files first)
 9. **Determines property CID** using priority: `--property-cid` option > calculated Seed CID > error
-10. **Calculates CIDs for all files without uploading to IPFS**
-11. **Calculates directory CID for HTML and image files** if present
+10. **Calculates CIDs for all JSON files without uploading to IPFS**
+11. **Attempts to calculate media directory CID** for HTML and image files (may not match Pinata's actual CID)
 12. **Replaces all file path links with calculated CIDs**
 13. **Canonicalizes all data**
-14. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink) - fully compatible with submit-to-contract and upload commands
+14. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink) - htmlLink uses `https://ipfs.io/ipfs/<CID>` format
 15. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
@@ -360,6 +360,33 @@ Common issues to check:
 7. **Schema Manifest Service**: Centralized service for fetching and managing datagroup schema mappings from Elephant Network
 8. **Flexible File Recognition**: Files are identified as datagroups by their structure (label + relationships) rather than requiring CID filenames
 
+## Technical Details: Media Directory CID Calculation
+
+### The Challenge
+When uploading media files (HTML, CSS, JS, images) to Pinata, the CID returned by their API doesn't match the CID calculated using standard IPFS DAG-PB/UnixFS format. This discrepancy occurs when using `wrapWithDirectory: false` with file paths that include directory prefixes.
+
+### Upload Process
+1. **Hash Command**: Calculates CIDs for all files including media, attempts to calculate directory CID using standard IPFS approach
+2. **Upload Command**: 
+   - Creates temporary directory with media files
+   - Uploads to Pinata with paths like `${propertyDir.name}_media/file.ext`
+   - Uses `wrapWithDirectory: false` in Pinata options
+   - Pinata returns a CID that doesn't match our calculation
+
+### What We've Tried
+1. **Standard wrapper structure**: Creating root -> directoryName -> files structure
+2. **Flat directory**: Just the files without wrapper
+3. **Raw codec for text files**: Using raw blocks instead of UnixFS for HTML/CSS/JS
+4. **Different Tsize calculations**: Various approaches to calculate directory sizes
+5. **Returning inner CID**: Returning the directory CID instead of root CID
+
+### Current Implementation
+- Uses standard IPFS DAG-PB format with UnixFS metadata
+- Creates a wrapper structure when directory name is provided
+- Sorts files alphabetically for deterministic CID
+- Acknowledges the CID may not match Pinata's actual result
+- CSV htmlLink field uses `https://ipfs.io/ipfs/<CID>` format instead of `ipfs://<CID>`
+
 ## Improvement Opportunities
 
 1. Add caching for blockchain queries
@@ -498,6 +525,7 @@ npm run test:coverage
 2. No caching of blockchain queries
 3. Single elephant address at a time
 4. No export formats (only console output)
+5. **Media directory CID calculation mismatch**: The `hash` command calculates media directory CIDs using standard IPFS DAG-PB format, but these may not match Pinata's actual CIDs. When Pinata receives files with paths like `dirname/file.ext` with `wrapWithDirectory: false`, it uses a non-standard internal calculation that differs from the standard IPFS approach. The hash command makes a best-effort calculation, but the actual CID will be determined during upload.
 
 ## JSON Validator with CID Support
 

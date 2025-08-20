@@ -234,56 +234,45 @@ export class CidCalculatorService {
     directoryName?: string
   ): Promise<string> {
     try {
-      // If a directory name is provided, we need to match Pinata's exact structure
-      // Pinata creates: root -> directoryName -> files
-      // And returns the CID of the root
+      // When we upload to Pinata with paths like "dirname/file.ext" and wrapWithDirectory: false,
+      // Pinata interprets this as a directory structure and creates an implicit root containing dirname.
+      // The returned CID is for this implicit root.
+
       if (directoryName) {
-        // First, create the inner directory with all the files
-        const innerDirNode = await this.createDirectoryDagPbNode(files);
-
-        // Encode the inner directory
-        const innerEncoded = dagPB.encode(innerDirNode);
-
-        // Calculate the hash for the inner directory
+        // Create a wrapper structure: root -> directoryName -> files
+        // This matches what Pinata creates when given "dirname/file.ext" paths
+        const dagPbNode = await this.createDirectoryDagPbNode(files);
+        const innerEncoded = dagPB.encode(dagPbNode);
         const innerHash = await sha256.digest(innerEncoded);
         const innerCid = CID.create(1, 0x70, innerHash);
 
-        // Calculate the total size of the inner directory
-        // This is the encoded size plus all the file sizes
-        let innerTotalSize = innerEncoded.length;
-        for (const link of innerDirNode.Links) {
-          innerTotalSize += link.Tsize;
+        // Calculate total size for the inner directory
+        let innerTsize = innerEncoded.length;
+        for (const link of dagPbNode.Links) {
+          innerTsize += link.Tsize;
         }
 
-        // Create the root directory that contains our named directory
+        // Create root directory containing the named directory
         const rootDir = new UnixFS({ type: 'directory' });
-
-        // The root has a single link to our named directory
-        const rootLinks = [
-          {
-            Name: directoryName,
-            Hash: innerCid,
-            Tsize: innerTotalSize,
-          },
-        ];
-
-        // Create DAG-PB node for the root
         const rootNode = {
           Data: rootDir.marshal(),
-          Links: rootLinks,
+          Links: [
+            {
+              Name: directoryName,
+              Hash: innerCid,
+              Tsize: innerTsize,
+            },
+          ],
         };
 
-        // Encode and hash the root
         const rootEncoded = dagPB.encode(rootNode);
         const rootHash = await sha256.digest(rootEncoded);
-
-        // Create CID v1 for the root
         const rootCid = CID.create(1, 0x70, rootHash);
 
-        // Return the root CID in base32
+        // Return the root CID - this is the standard IPFS approach
+        // Note: This may not match Pinata's actual CID due to their non-standard handling
         return rootCid.toString(base32);
       } else {
-        // No wrapper directory, use flat structure
         return this.calculateDirectoryCidFlat(files);
       }
     } catch (error) {
@@ -328,8 +317,7 @@ export class CidCalculatorService {
     // Calculate CIDs for each file and create links
     const links = [];
     for (const file of files) {
-      // For files in a directory, use UnixFS format
-      // This is the standard IPFS approach
+      // Use standard UnixFS format for all files
       const unixfsFile = new UnixFS({
         type: 'file',
         data: new Uint8Array(file.content),

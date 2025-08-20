@@ -413,46 +413,27 @@ export async function handleHash(
         }));
 
         // Use the final property CID for the directory name to match upload command
-        const mediaDirName = `${finalPropertyCid}_media`;
+        const directoryName = `${finalPropertyCid}_media`;
 
         // Sort files alphabetically to ensure deterministic CID
         const sortedMediaFiles = [...mediaFilesForCid].sort((a, b) =>
           a.name.localeCompare(b.name)
         );
 
-        // IMPORTANT: Pinata's CID calculation with wrapWithDirectory: false doesn't match
-        // standard IPFS DAG-PB calculation. For now, we'll use a placeholder.
-        // The actual CID will be: bafybeiey5pljs7jpaigvx5xqfxncthpuh5mflfjs55zowdwyyjuc27pxe4
-        // This is a known issue with Pinata's internal implementation.
+        // Calculate the directory CID
+        mediaDirectoryCid = await cidCalculatorService.calculateDirectoryCid(
+          sortedMediaFiles,
+          directoryName
+        );
 
-        // For consistency, use the known Pinata CID for this specific media set
-        // This ensures the hash command outputs the correct CID that matches upload
-        const KNOWN_PINATA_CID =
-          'bafybeiey5pljs7jpaigvx5xqfxncthpuh5mflfjs55zowdwyyjuc27pxe4';
+        // Log details for debugging
+        logger.info(`Media directory details:
+  Directory name: ${directoryName}
+  Number of files: ${sortedMediaFiles.length}
+  Files: ${sortedMediaFiles.map((f) => `${f.name} (${f.content.length} bytes)`).join(', ')}
+  Calculated CID: ${mediaDirectoryCid}`);
 
-        // Check if this is the known set of media files by checking sizes
-        const knownSizes = [
-          5809, 1525303, 165162, 1699293, 1509628, 1618953, 1643469, 1462191,
-        ];
-        const actualSizes = sortedMediaFiles.map((f) => f.content.length);
-        const isKnownMediaSet =
-          JSON.stringify(actualSizes) === JSON.stringify(knownSizes);
-
-        if (isKnownMediaSet) {
-          mediaDirectoryCid = KNOWN_PINATA_CID;
-          logger.success(
-            `Using known Pinata CID for media directory: ${mediaDirectoryCid}`
-          );
-        } else {
-          // For other media sets, calculate normally (may not match Pinata)
-          mediaDirectoryCid = await cidCalculatorService.calculateDirectoryCid(
-            sortedMediaFiles,
-            mediaDirName
-          );
-          logger.warn(
-            `Calculated media directory CID: ${mediaDirectoryCid} (may not match Pinata's actual CID)`
-          );
-        }
+        logger.success(`Calculated media directory CID: ${mediaDirectoryCid}`);
       } catch (error) {
         logger.error(
           `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
