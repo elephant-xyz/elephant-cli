@@ -375,7 +375,7 @@ describe('Upload Command - Media Files Support', () => {
       expect(csvLines[0]).toBe(
         'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
       );
-      expect(csvLines[1]).toContain(`ipfs://${mediaCid}`); // Should include media CID as htmlLink
+      expect(csvLines[1]).toContain(`https://ipfs.io/ipfs/${mediaCid}`); // Should include media CID as htmlLink
       expect(csvLines[1]).toContain('bafkreidatagroup');
       expect(csvLines[1]).toContain('bafkreidata');
     });

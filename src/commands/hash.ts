@@ -534,7 +534,9 @@ export async function handleHash(
         relativePath = relativePath.replace(/\\/g, '/');
 
         // Add empty uploadedAt field and htmlLink with media directory CID if available
-        const htmlLink = mediaDirectoryCid ? `ipfs://${mediaDirectoryCid}` : '';
+        const htmlLink = mediaDirectoryCid
+          ? `https://ipfs.io/ipfs/${mediaDirectoryCid}`
+          : '';
         csvData.push(
           `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,${htmlLink}`
         );

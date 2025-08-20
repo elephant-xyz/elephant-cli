@@ -354,7 +354,9 @@ export async function handleUpload(
 
             // Add a CSV row for each datagroup file
             const uploadTimestamp = new Date().toISOString();
-            const htmlLink = result.mediaCid ? `ipfs://${result.mediaCid}` : '';
+            const htmlLink = result.mediaCid
+              ? `https://ipfs.io/ipfs/${result.mediaCid}`
+              : '';
             for (const dgFile of datagroupFiles) {
               csvData.push(
                 `${result.propertyDir},${dgFile.dataGroupCid},${dgFile.dataCid},${dgFile.fileName},${uploadTimestamp},${htmlLink}`

@@ -158,7 +158,7 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     );
 
     // Check data line includes htmlLink with media directory CID
-    expect(csvLines[1]).toContain('ipfs://bafybeimediadir123');
+    expect(csvLines[1]).toContain('https://ipfs.io/ipfs/bafybeimediadir123');
 
     // Verify directory CID was calculated for media files with directory name
     expect(
