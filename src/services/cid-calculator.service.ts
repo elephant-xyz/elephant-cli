@@ -225,57 +225,122 @@ export class CidCalculatorService {
    * Returns a CID v1 in base32 encoding (starts with "bafybei...")
    */
   async calculateDirectoryCid(
-    files: Array<{ name: string; content: Buffer }>
+    files: Array<{ name: string; content: Buffer }>,
+    directoryName?: string
   ): Promise<string> {
     try {
-      // Create UnixFS directory metadata
-      const unixfsDir = new UnixFS({ type: 'directory' });
+      // If a directory name is provided, wrap the files in that directory
+      // This matches how Pinata creates directory structures
+      if (directoryName) {
+        // First, create the inner directory DAG-PB node
+        const innerDirNode = await this.createDirectoryDagPbNode(files);
 
-      // Calculate CIDs for each file and create links
-      const links = [];
-      for (const file of files) {
-        // Calculate CID for this file
-        const fileCid = await this.calculateCidV1ForRawData(file.content);
+        // Encode the inner directory to get its size
+        const innerEncoded = dagPB.encode(innerDirNode);
 
-        // Parse the CID to get the multihash
-        const parsedCid = CID.parse(fileCid);
+        // Calculate the hash for the inner directory
+        const innerHash = await sha256.digest(innerEncoded);
+        const innerCid = CID.create(1, 0x70, innerHash);
 
-        // Create a link for this file
-        links.push({
-          Name: file.name,
-          Hash: parsedCid,
-          Tsize: file.content.length,
-        });
+        // Create a UnixFS directory for the wrapper
+        const wrapperDir = new UnixFS({ type: 'directory' });
+
+        // Create a single link to the inner directory
+        // The Tsize should be the size of the encoded inner directory DAG-PB node
+        const wrapperLinks = [
+          {
+            Name: directoryName,
+            Hash: innerCid,
+            Tsize: innerEncoded.length,
+          },
+        ];
+
+        // Create DAG-PB node for the wrapper directory
+        const wrapperNode = {
+          Data: wrapperDir.marshal(),
+          Links: wrapperLinks,
+        };
+
+        // Encode and hash the wrapper
+        const encoded = dagPB.encode(wrapperNode);
+        const hash = await sha256.digest(encoded);
+
+        // Create CID v1 with dag-pb codec
+        const cid = CID.create(1, 0x70, hash);
+
+        // Return base32 string
+        return cid.toString(base32);
+      } else {
+        // No wrapper directory, use flat structure
+        return this.calculateDirectoryCidFlat(files);
       }
-
-      // Sort links by name bytes for deterministic CID (required by DAG-PB spec)
-      links.sort((a, b) => {
-        const aBytes = Buffer.from(a.Name, 'utf-8');
-        const bBytes = Buffer.from(b.Name, 'utf-8');
-        return Buffer.compare(aBytes, bBytes);
-      });
-
-      // Create DAG-PB node with directory data and links
-      const dagPbNode = {
-        Data: unixfsDir.marshal(),
-        Links: links,
-      };
-
-      // Encode the DAG-PB node
-      const encoded = dagPB.encode(dagPbNode);
-
-      // Calculate SHA-256 hash
-      const hash = await sha256.digest(encoded);
-
-      // Create CID v1 with dag-pb codec (0x70)
-      const cid = CID.create(1, 0x70, hash);
-
-      // Return base32 string (standard for CID v1)
-      return cid.toString(base32);
     } catch (error) {
       throw new Error(
         `Failed to calculate directory CID: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * Calculate CID for a flat directory structure (no wrapper)
+   * Internal helper method
+   */
+  private async calculateDirectoryCidFlat(
+    files: Array<{ name: string; content: Buffer }>
+  ): Promise<string> {
+    const dagPbNode = await this.createDirectoryDagPbNode(files);
+
+    // Encode the DAG-PB node
+    const encoded = dagPB.encode(dagPbNode);
+
+    // Calculate SHA-256 hash
+    const hash = await sha256.digest(encoded);
+
+    // Create CID v1 with dag-pb codec (0x70)
+    const cid = CID.create(1, 0x70, hash);
+
+    // Return base32 string (standard for CID v1)
+    return cid.toString(base32);
+  }
+
+  /**
+   * Create a DAG-PB node for a directory with files
+   * Internal helper method
+   */
+  private async createDirectoryDagPbNode(
+    files: Array<{ name: string; content: Buffer }>
+  ): Promise<any> {
+    // Create UnixFS directory metadata
+    const unixfsDir = new UnixFS({ type: 'directory' });
+
+    // Calculate CIDs for each file and create links
+    const links = [];
+    for (const file of files) {
+      // Calculate CID for this file
+      const fileCid = await this.calculateCidV1ForRawData(file.content);
+
+      // Parse the CID to get the multihash
+      const parsedCid = CID.parse(fileCid);
+
+      // Create a link for this file
+      links.push({
+        Name: file.name,
+        Hash: parsedCid,
+        Tsize: file.content.length,
+      });
+    }
+
+    // Sort links by name bytes for deterministic CID (required by DAG-PB spec)
+    links.sort((a, b) => {
+      const aBytes = Buffer.from(a.Name, 'utf-8');
+      const bBytes = Buffer.from(b.Name, 'utf-8');
+      return Buffer.compare(aBytes, bBytes);
+    });
+
+    // Create DAG-PB node with directory data and links
+    return {
+      Data: unixfsDir.marshal(),
+      Links: links,
+    };
   }
 }

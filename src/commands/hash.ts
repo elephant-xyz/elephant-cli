@@ -324,10 +324,19 @@ export async function handleHash(
           name: file.fileName,
           content: file.content,
         }));
-        mediaDirectoryCid =
-          await cidCalculatorService.calculateDirectoryCid(mediaFilesForCid);
+
+        // Determine the directory name for media files
+        // This should match what the upload command uses
+        const propertyDirName = path.basename(actualInputDir);
+        const mediaDirName = `${propertyDirName}_media`;
+
+        // Pass the directory name to match Pinata's wrapped directory structure
+        mediaDirectoryCid = await cidCalculatorService.calculateDirectoryCid(
+          mediaFilesForCid,
+          mediaDirName
+        );
         logger.success(
-          `Calculated media directory CID: ${mediaDirectoryCid} (dag-pb format)`
+          `Calculated media directory CID: ${mediaDirectoryCid} (dag-pb format with wrapper)`
         );
       } catch (error) {
         logger.error(

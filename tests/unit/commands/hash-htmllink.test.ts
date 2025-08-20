@@ -160,14 +160,15 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     // Check data line includes htmlLink with media directory CID
     expect(csvLines[1]).toContain('ipfs://bafybeimediadir123');
 
-    // Verify directory CID was calculated for media files
+    // Verify directory CID was calculated for media files with directory name
     expect(
       mockServices.cidCalculatorService.calculateDirectoryCid
     ).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ name: 'index.html' }),
         expect.objectContaining({ name: 'logo.png' }),
-      ])
+      ]),
+      'extracted_media' // The directory name based on property directory
     );
   });
 
