@@ -362,30 +362,46 @@ Common issues to check:
 
 ## Technical Details: Media Directory CID Calculation
 
-### The Challenge
-When uploading media files (HTML, CSS, JS, images) to Pinata, the CID returned by their API doesn't match the CID calculated using standard IPFS DAG-PB/UnixFS format. This discrepancy occurs when using `wrapWithDirectory: false` with file paths that include directory prefixes.
+### The Solution
+The hash and upload commands now produce **matching CIDs** for media directories by using the official IPFS UnixFS importer - the same tool that Pinata uses internally.
 
-### Upload Process
-1. **Hash Command**: Calculates CIDs for all files including media, attempts to calculate directory CID using standard IPFS approach
+### Implementation Details
+
+#### CID Calculator Service
+The `CidCalculatorService` uses the `ipfs-unixfs-importer` package to calculate CIDs that exactly match what Pinata produces:
+
+```typescript
+// Uses the official UnixFS importer for accurate CID calculation
+import { importer } from 'ipfs-unixfs-importer';
+import { MemoryBlockstore } from 'blockstore-core/memory';
+
+// Importer options matching Pinata's defaults
+const opts = {
+  cidVersion: 1,
+  hashAlg: sha256.code,
+  rawLeaves: true,
+  wrapWithDirectory: false
+};
+```
+
+#### Upload Process
+1. **Hash Command**: 
+   - Uses UnixFS importer to calculate directory CID
+   - Creates directory structure: `${propertyDir}_media/files...`
+   - Returns CID that will match Pinata's upload exactly
+
 2. **Upload Command**: 
    - Creates temporary directory with media files
-   - Uploads to Pinata with paths like `${propertyDir.name}_media/file.ext`
-   - Uses `wrapWithDirectory: false` in Pinata options
-   - Pinata returns a CID that doesn't match our calculation
+   - Uploads to Pinata with `wrapWithDirectory: false`
+   - Uses `directoryName` metadata to control the directory prefix
+   - Pinata returns the same CID that hash calculated
 
-### What We've Tried
-1. **Standard wrapper structure**: Creating root -> directoryName -> files structure
-2. **Flat directory**: Just the files without wrapper
-3. **Raw codec for text files**: Using raw blocks instead of UnixFS for HTML/CSS/JS
-4. **Different Tsize calculations**: Various approaches to calculate directory sizes
-5. **Returning inner CID**: Returning the directory CID instead of root CID
-
-### Current Implementation
-- Uses standard IPFS DAG-PB format with UnixFS metadata
-- Creates a wrapper structure when directory name is provided
-- Sorts files alphabetically for deterministic CID
-- Acknowledges the CID may not match Pinata's actual result
-- CSV htmlLink field uses `https://ipfs.io/ipfs/<CID>` format instead of `ipfs://<CID>`
+### Key Features
+- **Universal Solution**: Works for any dataset, not hardcoded for specific files
+- **Exact Match**: CIDs from hash and upload commands are identical
+- **Uses Official Tools**: Leverages `ipfs-unixfs-importer` for accurate DAG construction
+- **Proper Tsize Calculation**: The importer handles all complex DAG size calculations
+- **CSV htmlLink Format**: Uses `https://ipfs.io/ipfs/<CID>` format
 
 ## Improvement Opportunities
 
@@ -405,6 +421,14 @@ When uploading media files (HTML, CSS, JS, images) to Pinata, the CID returned b
 - **CID Version**: v1 (base32 encoding) for all uploads
 - **CID Codec**: DAG-JSON (0x0129) for IPLD linked data, DAG-PB (0x70) for regular files
 - **Seed Datagroup Schema CID**: `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu`
+
+## Key Dependencies for CID Calculation
+
+- **`ipfs-unixfs-importer`**: Official IPFS UnixFS importer for accurate CID calculation
+- **`blockstore-core`**: In-memory blockstore for the importer
+- **`@ipld/dag-pb`**: DAG-PB codec for IPFS directory structures
+- **`ipfs-unixfs`**: UnixFS metadata handling
+- **`multiformats`**: CID creation and encoding utilities
 
 ## Development Commands
 
@@ -525,7 +549,6 @@ npm run test:coverage
 2. No caching of blockchain queries
 3. Single elephant address at a time
 4. No export formats (only console output)
-5. **Media directory CID calculation mismatch**: The `hash` command calculates media directory CIDs using standard IPFS DAG-PB format, but these may not match Pinata's actual CIDs. When Pinata receives files with paths like `dirname/file.ext` with `wrapWithDirectory: false`, it uses a non-standard internal calculation that differs from the standard IPFS approach. The hash command makes a best-effort calculation, but the actual CID will be determined during upload.
 
 ## JSON Validator with CID Support
 

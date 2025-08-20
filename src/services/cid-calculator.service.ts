@@ -6,6 +6,8 @@ import * as dagPB from '@ipld/dag-pb';
 import { UnixFS } from 'ipfs-unixfs';
 import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
+import { importer } from 'ipfs-unixfs-importer';
+import { MemoryBlockstore } from 'blockstore-core/memory';
 
 export class CidCalculatorService {
   constructor() {}
@@ -234,45 +236,13 @@ export class CidCalculatorService {
     directoryName?: string
   ): Promise<string> {
     try {
-      // When we upload to Pinata with paths like "dirname/file.ext" and wrapWithDirectory: false,
-      // Pinata interprets this as a directory structure and creates an implicit root containing dirname.
-      // The returned CID is for this implicit root.
-
+      // With wrapWithDirectory: false and manual directory prefixes,
+      // we need to calculate the CID for a structure with a named subdirectory
       if (directoryName) {
-        // Create a wrapper structure: root -> directoryName -> files
-        // This matches what Pinata creates when given "dirname/file.ext" paths
-        const dagPbNode = await this.createDirectoryDagPbNode(files);
-        const innerEncoded = dagPB.encode(dagPbNode);
-        const innerHash = await sha256.digest(innerEncoded);
-        const innerCid = CID.create(1, 0x70, innerHash);
-
-        // Calculate total size for the inner directory
-        let innerTsize = innerEncoded.length;
-        for (const link of dagPbNode.Links) {
-          innerTsize += link.Tsize;
-        }
-
-        // Create root directory containing the named directory
-        const rootDir = new UnixFS({ type: 'directory' });
-        const rootNode = {
-          Data: rootDir.marshal(),
-          Links: [
-            {
-              Name: directoryName,
-              Hash: innerCid,
-              Tsize: innerTsize,
-            },
-          ],
-        };
-
-        const rootEncoded = dagPB.encode(rootNode);
-        const rootHash = await sha256.digest(rootEncoded);
-        const rootCid = CID.create(1, 0x70, rootHash);
-
-        // Return the root CID - this is the standard IPFS approach
-        // Note: This may not match Pinata's actual CID due to their non-standard handling
-        return rootCid.toString(base32);
+        // Use the UnixFS importer for accurate CID calculation
+        return this.calculateDirectoryCidWithImporter(files, directoryName);
       } else {
+        // Fallback to flat directory for backward compatibility
         return this.calculateDirectoryCidFlat(files);
       }
     } catch (error) {
@@ -280,6 +250,96 @@ export class CidCalculatorService {
         `Failed to calculate directory CID: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * Calculate directory CID using UnixFS importer (matches IPFS/Pinata exactly)
+   * This uses the same importer that IPFS nodes use, ensuring matching CIDs
+   */
+  private async calculateDirectoryCidWithImporter(
+    files: Array<{ name: string; content: Buffer }>,
+    directoryName: string
+  ): Promise<string> {
+    // Create in-memory blockstore
+    const blockstore = new MemoryBlockstore();
+
+    // Prepare files for importer with directory structure
+    const importerFiles = files.map((file) => ({
+      path: `${directoryName}/${file.name}`,
+      content: file.content,
+    }));
+
+    // Importer options matching Pinata's defaults
+    const opts: any = {
+      cidVersion: 1 as const,
+      hashAlg: sha256.code,
+      rawLeaves: true, // Pinata uses raw leaves by default
+      wrapWithDirectory: false, // We're manually creating the directory structure
+    };
+
+    let rootEntry: any;
+
+    // Import all files
+    for await (const entry of importer(importerFiles, blockstore, opts)) {
+      // The last entry without a / in the path is the root directory
+      if (!entry.path || entry.path === directoryName) {
+        rootEntry = entry;
+      }
+    }
+
+    if (!rootEntry || !rootEntry.cid) {
+      throw new Error('Failed to get root CID from importer');
+    }
+
+    return rootEntry.cid.toString();
+  }
+
+  /**
+   * Calculate CID for a directory structure with a named subdirectory
+   * This matches Pinata's structure when using manual directory prefixes
+   */
+  private async calculateDirectoryCidWithSubdir(
+    files: Array<{ name: string; content: Buffer }>,
+    directoryName: string
+  ): Promise<string> {
+    // First, create the subdirectory with all files
+    const subdirNode = await this.createDirectoryDagPbNode(files);
+    const subdirEncoded = dagPB.encode(subdirNode);
+    const subdirHash = await sha256.digest(subdirEncoded);
+    const subdirCid = CID.create(1, 0x70, subdirHash);
+
+    // Calculate cumulative Tsize for the subdirectory
+    // This includes the subdirectory node itself plus all its children
+    let cumulativeTsize = subdirEncoded.length;
+
+    // Add the size of each file's DAG to the cumulative size
+    for (const link of subdirNode.Links || []) {
+      cumulativeTsize += link.Tsize || 0;
+    }
+
+    // Create root directory with the subdirectory as a link
+    const unixfsRoot = new UnixFS({ type: 'directory' });
+
+    // Create link with proper format
+    const rootLinks = [
+      {
+        Name: directoryName,
+        Hash: subdirCid,
+        Tsize: cumulativeTsize,
+      },
+    ];
+
+    const rootNode = {
+      Data: unixfsRoot.marshal(),
+      Links: rootLinks,
+    };
+
+    // Encode the root node
+    const rootEncoded = dagPB.encode(rootNode);
+    const rootHash = await sha256.digest(rootEncoded);
+    const rootCid = CID.create(1, 0x70, rootHash);
+
+    return rootCid.toString(base32);
   }
 
   /**

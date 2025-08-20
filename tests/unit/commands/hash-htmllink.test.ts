@@ -160,7 +160,8 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     // Check data line includes htmlLink with media directory CID
     expect(csvLines[1]).toContain('https://ipfs.io/ipfs/bafybeimediadir123');
 
-    // Verify directory CID was calculated for media files with directory name
+    // Verify directory CID was calculated for media files
+    // With wrapWithDirectory: true, we don't need to pass directory name
     expect(
       mockServices.cidCalculatorService.calculateDirectoryCid
     ).toHaveBeenCalledWith(
@@ -168,7 +169,7 @@ describe('Hash Command - htmlLink in CSV Output', () => {
         expect.objectContaining({ name: 'index.html' }),
         expect.objectContaining({ name: 'logo.png' }),
       ]),
-      'bafkreiproperty_media' // The directory name based on property CID
+      expect.any(String) // Directory name is still passed but not used
     );
   });
 

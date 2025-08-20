@@ -236,6 +236,7 @@ export async function handleUpload(
             tempMediaDir,
             {
               name: `${propertyDir.name}_media`,
+              directoryName: `${propertyDir.name}_media`, // Use this for IPFS structure
               keyvalues: {
                 source: 'elephant-cli-upload-media',
                 propertyId: propertyDir.name,
@@ -276,6 +277,7 @@ export async function handleUpload(
         // Upload the JSON directory to IPFS
         const uploadResult = await pinataService.uploadDirectory(tempJsonDir, {
           name: propertyDir.name,
+          directoryName: propertyDir.name, // Use property CID as directory name
           keyvalues: {
             source: 'elephant-cli-upload',
             propertyId: propertyDir.name,
