@@ -1,3 +1,10 @@
+## [1.28.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.2...v1.28.3) (2025-08-20)
+
+
+### Bug Fixes
+
+* `upload` command handles fact-sheet data ([#93](https://github.com/elephant-xyz/elephant-cli/issues/93)) ([b7642fa](https://github.com/elephant-xyz/elephant-cli/commit/b7642fa2d6e371e6be104d9edabcfeace78a6224))
+
 ## [1.28.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.1...v1.28.2) (2025-08-19)
 
 
