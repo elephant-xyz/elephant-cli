@@ -20,6 +20,7 @@ import { processSinglePropertyInput } from '../utils/single-property-processor.j
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
+import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
 import { CID } from 'multiformats/cid';
 
 interface HashedFile {
@@ -315,26 +316,8 @@ export async function handleHash(
       );
     }
 
-    // Calculate directory CID for media files if any exist
-    if (mediaFiles.length > 0) {
-      logger.info('Calculating directory CID for HTML and image files...');
-      try {
-        const mediaFilesForCid = mediaFiles.map((file) => ({
-          name: file.fileName,
-          content: file.content,
-        }));
-        mediaDirectoryCid =
-          await cidCalculatorService.calculateDirectoryCid(mediaFilesForCid);
-        logger.success(
-          `Calculated media directory CID: ${mediaDirectoryCid} (dag-pb format)`
-        );
-      } catch (error) {
-        logger.error(
-          `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
-        );
-        // Continue without media directory CID
-      }
-    }
+    // We need to calculate the media directory CID after determining the final property CID
+    // So we'll move this calculation to after the property CID determination
 
     // The scannedJsonFiles array is already populated from scanSinglePropertyDirectory
 
@@ -419,6 +402,46 @@ export async function handleHash(
       throw new Error(errorMsg);
     }
 
+    // Now calculate directory CID for media files if any exist
+    // We use the final property CID to match what the upload command does
+    if (mediaFiles.length > 0) {
+      logger.info('Calculating directory CID for HTML and image files...');
+      try {
+        const mediaFilesForCid = mediaFiles.map((file) => ({
+          name: file.fileName,
+          content: file.content,
+        }));
+
+        // Use the final property CID for the directory name to match upload command
+        const directoryName = `${finalPropertyCid}_media`;
+
+        // Sort files alphabetically to ensure deterministic CID
+        const sortedMediaFiles = [...mediaFilesForCid].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+
+        // Calculate the directory CID
+        mediaDirectoryCid = await cidCalculatorService.calculateDirectoryCid(
+          sortedMediaFiles,
+          directoryName
+        );
+
+        // Log details for debugging
+        logger.info(`Media directory details:
+  Directory name: ${directoryName}
+  Number of files: ${sortedMediaFiles.length}
+  Files: ${sortedMediaFiles.map((f) => `${f.name} (${f.content.length} bytes)`).join(', ')}
+  Calculated CID: ${mediaDirectoryCid}`);
+
+        logger.success(`Calculated media directory CID: ${mediaDirectoryCid}`);
+      } catch (error) {
+        logger.error(
+          `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue without media directory CID
+      }
+    }
+
     // Phase 2: Process all non-seed files with the determined property CID
     const nonSeedFiles = scannedJsonFiles.filter(
       (file) =>
@@ -457,10 +480,10 @@ export async function handleHash(
     // Phase 3: Generate CSV output and create output ZIP
     progressTracker.setPhase('Creating Output Files', 2);
 
-    // Generate CSV with hash results (similar to validate-and-upload but without htmlLink)
+    // Generate CSV with hash results
     logger.info('Generating CSV with hash results...');
     const csvData: string[] = [
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt', // Headers compatible with submit-to-contract
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink', // Headers compatible with submit-to-contract and upload
     ];
 
     // Process hashed files to generate CSV entries
@@ -491,9 +514,12 @@ export async function handleHash(
         // Normalize the path separators for consistency (use forward slashes)
         relativePath = relativePath.replace(/\\/g, '/');
 
-        // Add empty uploadedAt field for compatibility with submit-to-contract
+        // Add empty uploadedAt field and htmlLink with media directory CID if available
+        const htmlLink = mediaDirectoryCid
+          ? `https://ipfs.io/ipfs/${mediaDirectoryCid}`
+          : '';
         csvData.push(
-          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},`
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,${htmlLink}`
         );
       }
     }
@@ -576,12 +602,6 @@ export async function handleHash(
     console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
     console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
     console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
-    if (mediaFiles.length > 0) {
-      console.log(`  Media files included:    ${mediaFiles.length}`);
-      if (mediaDirectoryCid) {
-        console.log(`  Media directory CID:     ${mediaDirectoryCid}`);
-      }
-    }
 
     const totalHandled =
       (finalMetrics.skipped || 0) +
@@ -1173,23 +1193,6 @@ async function calculateCIDForFile(
     `Calculated CID for linked file ${resolvedPath}: ${calculatedCid}`
   );
   return calculatedCid;
-}
-
-/**
- * Check if a file is an image based on its extension
- */
-function isImageFile(filePath: string): boolean {
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
-  const ext = path.extname(filePath).toLowerCase();
-  return imageExtensions.includes(ext);
-}
-
-/**
- * Check if a file is an HTML file based on its extension
- */
-function isHtmlFile(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return ext === '.html' || ext === '.htm';
 }
 
 /**

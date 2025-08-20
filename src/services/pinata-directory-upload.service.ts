@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js';
 export interface PinataMetadata {
   name?: string;
   keyvalues?: Record<string, string | number | Date | null | undefined>;
+  directoryName?: string; // Override for the directory name in IPFS structure
 }
 
 export interface DirectoryUploadResult {
@@ -64,34 +65,32 @@ export class PinataDirectoryUploadService {
       // Create form data for the upload
       const form = new FormData();
 
-      // Get the directory name to use as the root folder
-      const dirName = metadata?.name || path.basename(directoryPath);
+      // Get the directory name to use as prefix
+      // Use metadata.directoryName if provided, otherwise use basename
+      const dirName = metadata?.directoryName || path.basename(directoryPath);
 
-      // Add each file to the form data with its relative path
-      // When uploading multiple files as a directory, Pinata expects them to have
-      // paths that include the directory name
+      // Add each file to the form data with directory prefix
+      // With wrapWithDirectory: false, we manually add directory structure
       for (const filePath of files) {
         const relativePath = this.getRelativePath(directoryPath, filePath);
         const fileContent = await fsPromises.readFile(filePath);
 
-        // Include directory name in the path for proper directory structure
-        // This creates a structure like: dirName/file1.json, dirName/file2.json
+        // Add directory name as prefix to create directory structure
         const ipfsPath = `${dirName}/${relativePath}`;
 
-        // Create a File object with the IPFS path to preserve directory structure
+        // Create a File object for the content with the full path
         const file = new File([fileContent], ipfsPath, {
           type: 'application/octet-stream',
         });
 
         logger.debug(`Adding file to upload: ${ipfsPath}`);
 
-        // Append file with the filepath to preserve directory structure
-        // Use the same key 'file' for all files
-        form.append('file', file, ipfsPath);
+        // Append file - the File's name includes directory structure
+        form.append('file', file);
       }
 
       // Configure upload options - use CID v1
-      // Don't use wrapWithDirectory since we're already creating the directory structure
+      // Use wrapWithDirectory: false since we're manually handling directory structure
       const pinataOptions = {
         cidVersion: 1,
         wrapWithDirectory: false,

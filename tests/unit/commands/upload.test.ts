@@ -115,15 +115,16 @@ describe('Upload Command', () => {
       progressTracker: mockProgress,
     });
 
-    // Verify the single directory was uploaded
+    // Verify the single directory was uploaded (JSON files)
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      singlePropertyPath,
+      expect.stringContaining('_json_temp'),
       expect.objectContaining({
         name: 'bafybeisinglecid',
         keyvalues: {
           source: 'elephant-cli-upload',
           propertyId: 'bafybeisinglecid',
+          type: 'json',
         },
       })
     );
@@ -196,15 +197,16 @@ describe('Upload Command', () => {
     expect(mockZipExtractor.isZipFile).toHaveBeenCalledWith(mockZipPath);
     expect(mockZipExtractor.extractZip).toHaveBeenCalledWith(mockZipPath);
 
-    // Verify only ONE directory upload
+    // Verify directory upload for JSON files (media files are handled separately)
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      path.join(singlePropertyExtracted, 'bafybeiabc123'),
+      expect.stringContaining('_json_temp'),
       expect.objectContaining({
         name: 'bafybeiabc123',
         keyvalues: {
           source: 'elephant-cli-upload',
           propertyId: 'bafybeiabc123',
+          type: 'json',
         },
       })
     );
@@ -218,10 +220,10 @@ describe('Upload Command', () => {
     // Verify cleanup
     expect(mockZipExtractor.cleanup).toHaveBeenCalledWith(tempDir);
 
-    // Verify CSV output was created with new format
+    // Verify CSV output was created with new format including htmlLink column
     const csvContent = await fsPromises.readFile(options.outputCsv!, 'utf-8');
     expect(csvContent).toContain(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
     );
   });
 
@@ -286,10 +288,10 @@ describe('Upload Command', () => {
     // Verify progress tracking for error
     expect(mockProgress.increment).toHaveBeenCalledWith('errors');
 
-    // Verify CSV was created (content testing would require mocking datagroup analyzer)
+    // Verify CSV was created with new format including htmlLink column
     const csvContent = await fsPromises.readFile(options.outputCsv!, 'utf-8');
     expect(csvContent).toContain(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
     );
   });
 

@@ -8,6 +8,7 @@ import { PinataDirectoryUploadService } from '../services/pinata-directory-uploa
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { analyzeDatagroupFiles } from '../utils/datagroup-analyzer.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
+import { isMediaFile } from '../utils/file-type-helpers.js';
 
 export interface UploadCommandOptions {
   input: string;
@@ -170,19 +171,27 @@ export async function handleUpload(
       success: boolean;
       cid?: string;
       error?: string;
+      mediaCid?: string; // CID for HTML and image files
     }> = [];
 
     for (const propertyDir of propertyDirs) {
       logger.info(`Uploading property directory: ${propertyDir.name}`);
 
       try {
-        // Check if directory contains JSON files
-        const propertyFiles = await fsPromises.readdir(propertyDir.path);
-        const jsonFilesInDir = propertyFiles.filter((file) =>
-          file.endsWith('.json')
-        );
+        // Check directory contents and separate JSON from media files
+        const propertyFiles = await fsPromises.readdir(propertyDir.path, {
+          withFileTypes: true,
+        });
 
-        if (jsonFilesInDir.length === 0) {
+        const jsonFiles = propertyFiles
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+          .map((entry) => entry.name);
+
+        const mediaFiles = propertyFiles
+          .filter((entry) => entry.isFile() && isMediaFile(entry.name))
+          .map((entry) => entry.name);
+
+        if (jsonFiles.length === 0) {
           logger.warn(
             `No JSON files found in ${propertyDir.name}, skipping...`
           );
@@ -191,20 +200,93 @@ export async function handleUpload(
         }
 
         logger.technical(
-          `Uploading ${jsonFilesInDir.length} files from ${propertyDir.name}`
+          `Found ${jsonFiles.length} JSON files and ${mediaFiles.length} media files in ${propertyDir.name}`
         );
 
-        // Upload the directory to IPFS
-        const uploadResult = await pinataService.uploadDirectory(
+        // Create temporary directories for separate uploads
+        const tempJsonDir = path.join(
           propertyDir.path,
-          {
-            name: propertyDir.name,
-            keyvalues: {
-              source: 'elephant-cli-upload',
-              propertyId: propertyDir.name,
-            },
-          }
+          '..',
+          `${propertyDir.name}_json_temp`
         );
+        const tempMediaDir = path.join(
+          propertyDir.path,
+          '..',
+          `${propertyDir.name}_media_temp`
+        );
+
+        let mediaCid: string | undefined;
+
+        // Upload media files first if they exist
+        if (mediaFiles.length > 0) {
+          logger.info(`Uploading ${mediaFiles.length} media files...`);
+
+          // Create temp directory for media files
+          await fsPromises.mkdir(tempMediaDir, { recursive: true });
+
+          // Copy media files to temp directory
+          for (const mediaFile of mediaFiles) {
+            const sourcePath = path.join(propertyDir.path, mediaFile);
+            const destPath = path.join(tempMediaDir, mediaFile);
+            await fsPromises.copyFile(sourcePath, destPath);
+          }
+
+          // Upload media directory to IPFS
+          const mediaUploadResult = await pinataService.uploadDirectory(
+            tempMediaDir,
+            {
+              name: `${propertyDir.name}_media`,
+              directoryName: `${propertyDir.name}_media`, // Use this for IPFS structure
+              keyvalues: {
+                source: 'elephant-cli-upload-media',
+                propertyId: propertyDir.name,
+                type: 'media',
+              },
+            }
+          );
+
+          if (mediaUploadResult.success) {
+            mediaCid = mediaUploadResult.cid;
+            logger.success(
+              `Successfully uploaded media files - CID: ${mediaCid}`
+            );
+          } else {
+            logger.error(
+              `Failed to upload media files: ${mediaUploadResult.error}`
+            );
+          }
+
+          // Clean up temp media directory
+          await fsPromises.rm(tempMediaDir, { recursive: true, force: true });
+        }
+
+        // Create temp directory for JSON files
+        await fsPromises.mkdir(tempJsonDir, { recursive: true });
+
+        // Copy JSON files to temp directory
+        for (const jsonFile of jsonFiles) {
+          const sourcePath = path.join(propertyDir.path, jsonFile);
+          const destPath = path.join(tempJsonDir, jsonFile);
+          await fsPromises.copyFile(sourcePath, destPath);
+        }
+
+        logger.technical(
+          `Uploading ${jsonFiles.length} JSON files from ${propertyDir.name}`
+        );
+
+        // Upload the JSON directory to IPFS
+        const uploadResult = await pinataService.uploadDirectory(tempJsonDir, {
+          name: propertyDir.name,
+          directoryName: propertyDir.name, // Use property CID as directory name
+          keyvalues: {
+            source: 'elephant-cli-upload',
+            propertyId: propertyDir.name,
+            type: 'json',
+          },
+        });
+
+        // Clean up temp JSON directory
+        await fsPromises.rm(tempJsonDir, { recursive: true, force: true });
 
         if (uploadResult.success) {
           logger.success(
@@ -214,6 +296,7 @@ export async function handleUpload(
             propertyDir: propertyDir.name,
             success: true,
             cid: uploadResult.cid,
+            mediaCid: mediaCid,
           });
           progressTracker.increment('processed');
         } else {
@@ -224,6 +307,7 @@ export async function handleUpload(
             propertyDir: propertyDir.name,
             success: false,
             error: uploadResult.error,
+            mediaCid: mediaCid,
           });
           progressTracker.increment('errors');
         }
@@ -245,9 +329,9 @@ export async function handleUpload(
     if (options.outputCsv) {
       logger.info('Generating CSV report...');
 
-      // CSV header matching hash command format
+      // CSV header matching hash command format with htmlLink column
       const csvData: string[] = [
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt',
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink',
       ];
 
       // Initialize schema manifest service for analyzing datagroup files (reuse if provided)
@@ -272,9 +356,12 @@ export async function handleUpload(
 
             // Add a CSV row for each datagroup file
             const uploadTimestamp = new Date().toISOString();
+            const htmlLink = result.mediaCid
+              ? `https://ipfs.io/ipfs/${result.mediaCid}`
+              : '';
             for (const dgFile of datagroupFiles) {
               csvData.push(
-                `${result.propertyDir},${dgFile.dataGroupCid},${dgFile.dataCid},${dgFile.fileName},${uploadTimestamp}`
+                `${result.propertyDir},${dgFile.dataGroupCid},${dgFile.dataCid},${dgFile.fileName},${uploadTimestamp},${htmlLink}`
               );
             }
 
@@ -317,16 +404,6 @@ export async function handleUpload(
       if (options.outputCsv) {
         console.log(`\n  Output CSV: ${options.outputCsv}`);
       }
-    }
-
-    // Print successful uploads with their CIDs
-    if (successful > 0 && !isTestMode) {
-      console.log(chalk.green('\n📦 Uploaded directories:'));
-      uploadResults
-        .filter((r) => r.success)
-        .forEach((r) => {
-          console.log(`  ${r.propertyDir}: ${chalk.cyan(r.cid)}`);
-        });
     }
 
     // Cleanup temporary directory

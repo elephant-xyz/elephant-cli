@@ -129,19 +129,21 @@ This command:
 7. **Validates that schemas are valid data group schemas** (must have exactly two properties: `label` and `relationships`)
 8. Handles seed datagroup processing (processes seed files first)
 9. **Determines property CID** using priority: `--property-cid` option > calculated Seed CID > error
-10. **Calculates CIDs for all files without uploading to IPFS**
-11. **Replaces all file path links with calculated CIDs**
-12. **Canonicalizes all data**
-13. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt) - fully compatible with submit-to-contract
-14. **Outputs transformed data as a ZIP archive with CID-based filenames**
+10. **Calculates CIDs for all JSON files without uploading to IPFS**
+11. **Attempts to calculate media directory CID** for HTML and image files (may not match Pinata's actual CID)
+12. **Replaces all file path links with calculated CIDs**
+13. **Canonicalizes all data**
+14. **Generates CSV file with hash results** (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink) - htmlLink uses `https://ipfs.io/ipfs/<CID>` format
+15. **Outputs transformed data as a ZIP archive with CID-based filenames**
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time
 - **ZIP Input Required**: Only accepts ZIP archives, not directories
-- **CSV Output**: Generates submission-ready CSV compatible with `submit-to-contract`
+- **CSV Output**: Generates submission-ready CSV compatible with `submit-to-contract` and `upload` commands
 - **CID Calculation**: Uses the same algorithm as `validate-and-upload --dry-run`
 - **Link Replacement**: Converts `{"/": "./file.json"}` references to `{"/": "calculated-cid"}`
 - **IPLD Support**: Handles IPLD links and ipfs_url fields correctly
+- **Media Processing**: Calculates directory CID for HTML and image files, includes as htmlLink in CSV
 - **Image Processing**: Calculates appropriate CIDs for image files with ipfs_uri format
 - **Seed Datagroup**: Processes seed files first and uses their CIDs for property identification
 - **Output Structure**: Creates ZIP with single `property-cid/file-cid.json` structure (no 'data' wrapper)
@@ -153,18 +155,21 @@ This command:
 1. **Takes ZIP output from hash command** containing a single property directory with CID-named files
 2. **Extracts ZIP to temporary directory** for processing
 3. **Validates single property structure** (rejects multiple property directories)
-4. **Uploads the property directory to IPFS via Pinata** in a single API request
-5. **Analyzes datagroup files** to generate proper CSV output
-6. **Generates CSV compatible with submit-to-contract** with actual upload timestamps
+4. **Separates JSON files from media files** (HTML and images)
+5. **Uploads media files as separate IPFS directory** if present
+6. **Uploads JSON files to IPFS via Pinata** as separate directory
+7. **Analyzes datagroup files** to generate proper CSV output
+8. **Generates CSV compatible with submit-to-contract** with actual upload timestamps and htmlLink
 
 Key features:
 - **Single Property Only**: Processes data for one property at a time (matches hash command)
-- **Optimized for Upload**: No validation or CID calculation - just pure upload functionality
-- **Batch Upload**: Uploads entire directory as single IPFS object
+- **Media Files Support**: Handles HTML and image files separately from JSON data
+- **Dual Upload**: Uploads JSON and media files as separate IPFS directories
 - **Smart Structure Detection**: Handles hash command output (property directory with CID-named files)
 - **Datagroup Analysis**: Identifies datagroup root files by structure (label + relationships keys)
 - **Schema Manifest Integration**: Uses schema manifest to map labels to datagroup CIDs
-- **CSV Generation**: Creates submission-ready CSV with proper format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt)
+- **Enhanced CSV Generation**: Creates submission-ready CSV with format (propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, htmlLink)
+- **HTML Link Support**: Includes IPFS link to media directory in CSV output when media files are present
 - **Environment Variable Support**: Can use PINATA_JWT from environment if not provided via CLI
 - **Progress Tracking**: Visual progress indicators during upload
 - **Error Recovery**: Graceful error handling with proper cleanup
@@ -355,6 +360,49 @@ Common issues to check:
 7. **Schema Manifest Service**: Centralized service for fetching and managing datagroup schema mappings from Elephant Network
 8. **Flexible File Recognition**: Files are identified as datagroups by their structure (label + relationships) rather than requiring CID filenames
 
+## Technical Details: Media Directory CID Calculation
+
+### The Solution
+The hash and upload commands now produce **matching CIDs** for media directories by using the official IPFS UnixFS importer - the same tool that Pinata uses internally.
+
+### Implementation Details
+
+#### CID Calculator Service
+The `CidCalculatorService` uses the `ipfs-unixfs-importer` package to calculate CIDs that exactly match what Pinata produces:
+
+```typescript
+// Uses the official UnixFS importer for accurate CID calculation
+import { importer } from 'ipfs-unixfs-importer';
+import { MemoryBlockstore } from 'blockstore-core/memory';
+
+// Importer options matching Pinata's defaults
+const opts = {
+  cidVersion: 1,
+  hashAlg: sha256.code,
+  rawLeaves: true,
+  wrapWithDirectory: false
+};
+```
+
+#### Upload Process
+1. **Hash Command**: 
+   - Uses UnixFS importer to calculate directory CID
+   - Creates directory structure: `${propertyDir}_media/files...`
+   - Returns CID that will match Pinata's upload exactly
+
+2. **Upload Command**: 
+   - Creates temporary directory with media files
+   - Uploads to Pinata with `wrapWithDirectory: false`
+   - Uses `directoryName` metadata to control the directory prefix
+   - Pinata returns the same CID that hash calculated
+
+### Key Features
+- **Universal Solution**: Works for any dataset, not hardcoded for specific files
+- **Exact Match**: CIDs from hash and upload commands are identical
+- **Uses Official Tools**: Leverages `ipfs-unixfs-importer` for accurate DAG construction
+- **Proper Tsize Calculation**: The importer handles all complex DAG size calculations
+- **CSV htmlLink Format**: Uses `https://ipfs.io/ipfs/<CID>` format
+
 ## Improvement Opportunities
 
 1. Add caching for blockchain queries
@@ -373,6 +421,14 @@ Common issues to check:
 - **CID Version**: v1 (base32 encoding) for all uploads
 - **CID Codec**: DAG-JSON (0x0129) for IPLD linked data, DAG-PB (0x70) for regular files
 - **Seed Datagroup Schema CID**: `bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu`
+
+## Key Dependencies for CID Calculation
+
+- **`ipfs-unixfs-importer`**: Official IPFS UnixFS importer for accurate CID calculation
+- **`blockstore-core`**: In-memory blockstore for the importer
+- **`@ipld/dag-pb`**: DAG-PB codec for IPFS directory structures
+- **`ipfs-unixfs`**: UnixFS metadata handling
+- **`multiformats`**: CID creation and encoding utilities
 
 ## Development Commands
 

@@ -445,7 +445,7 @@ elephant-cli check-transaction-status transaction-ids.csv --rpc-url https://poly
 
 ### Hash Command
 
-The `hash` command calculates CIDs for all files in your data, replaces file path links with their corresponding CIDs, and outputs the transformed data as a ZIP archive with CID-based filenames. This is useful for:
+The `hash` command calculates CIDs for all files in your data, replaces file path links with their corresponding CIDs, calculates a directory CID for HTML and image files if present, and outputs the transformed data as a ZIP archive with CID-based filenames. This is useful for:
 
 - Pre-calculating CIDs without uploading to IPFS
 - Verifying what CIDs your data will have after upload
@@ -481,6 +481,7 @@ This ensures that all files in a single property have a consistent property CID 
 - Handles IPLD links and ipfs_url fields
 - Processes seed datagroup files correctly
 - Outputs a ZIP archive with transformed data, using CIDs as filenames
+- Calculates directory CID for HTML and image files (included as htmlLink in CSV)
 - Validates data against schemas before processing
 
 **Output Structure:**
@@ -509,15 +510,15 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 
 **Features:**
 - Uploads single property directory to IPFS in one request
-- Generates CSV report compatible with `submit-to-contract` command
+- Generates CSV report compatible with `submit-to-contract` and `upload` commands
 - Single property only - matches `hash` command output structure
 - No validation or CID calculation - just pure upload
 
 **CSV Output Format:**
 The CSV output matches the `hash` command format but includes actual upload timestamps:
 ```
-propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-bafkreiproperty...,bafkreidatagroupschema1...,bafkreidatagrouprootfile1...,bafkreidatagroupfile1....json,2024-08-11T20:35:00.687Z
+propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
+bafkreiproperty...,bafkreidatagroupschema1...,bafkreidatagrouprootfile1...,bafkreidatagroupfile1....json,2024-08-11T20:35:00.687Z,https://ipfs.io/ipfs/bafybeibeeaa5gxifjqaaneyoxjz37tbp3gu7avghwlcepcbtsbmso3mzrq
 ```
 
 **Workflow Example:**
@@ -632,8 +633,9 @@ elephant-cli hash property-data.zip \
 - **Requires ZIP input** containing single property data
 - Validates all JSON files against their schemas
 - Calculates CIDs for all files (including linked files)
+- Calculates directory CID for HTML and image files if present
 - Replaces file path links with calculated CIDs
-- Generates CSV with hash results (fully compatible with submit-to-contract)
+- Generates CSV with hash results (includes htmlLink column for media directory)
 - Creates output ZIP with CID-named files
 
 **Key Features:**
