@@ -280,15 +280,6 @@ export class CidCalculatorService {
         // Create CID v1 for the root
         const rootCid = CID.create(1, 0x70, rootHash);
 
-        // Debug logging for directory structure
-        if (process.env.DEBUG_CID_CALC) {
-          console.log(`\nDirectory structure:`);
-          console.log(`  Inner directory CID: ${innerCid.toString(base32)}`);
-          console.log(`  Inner directory Tsize: ${innerTotalSize}`);
-          console.log(`  Directory name: ${directoryName}`);
-          console.log(`  Root CID: ${rootCid.toString(base32)}`);
-        }
-
         // Return the root CID in base32
         return rootCid.toString(base32);
       } else {
@@ -349,16 +340,6 @@ export class CidCalculatorService {
       // Calculate the file's CID
       const fileHash = await sha256.digest(encodedFile);
       const fileCid = CID.create(1, 0x70, fileHash);
-
-      // Debug logging for each file
-      if (process.env.DEBUG_CID_CALC) {
-        console.log(`File: ${file.name}`);
-        console.log(`  Content size: ${file.content.length} bytes`);
-        console.log(`  UnixFS Data size: ${unixfsFile.marshal().length} bytes`);
-        console.log(`  DAG-PB encoded size: ${encodedFile.length} bytes`);
-        console.log(`  File CID: ${fileCid.toString(base32)}`);
-        console.log(`  Tsize: ${encodedFile.length}`);
-      }
 
       // Create a link for this file
       // Tsize must be the size of the entire DAG object (encoded size)

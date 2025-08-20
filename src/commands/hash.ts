@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import crypto from 'crypto';
 import { Semaphore } from 'async-mutex';
 import AdmZip from 'adm-zip';
 import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
@@ -413,32 +412,12 @@ export async function handleHash(
           content: file.content,
         }));
 
-        // Debug: Log the files being processed with detailed info
-        logger.info('Media files for CID calculation:');
-        mediaFilesForCid.forEach((file) => {
-          // Calculate a simple hash of the content for debugging
-          const contentHash = crypto
-            .createHash('sha256')
-            .update(file.content)
-            .digest('hex')
-            .substring(0, 8);
-          logger.info(
-            `  - ${file.name}: ${file.content.length} bytes (sha256: ${contentHash}...)`
-          );
-        });
-
         // Use the final property CID for the directory name to match upload command
-        // The upload command uses the property directory name from the ZIP structure
         const mediaDirName = `${finalPropertyCid}_media`;
-        logger.info(`Media directory wrapper name: ${mediaDirName}`);
-        logger.info(`Property CID being used: ${finalPropertyCid}`);
 
         // Sort files alphabetically to ensure deterministic CID
         const sortedMediaFiles = [...mediaFilesForCid].sort((a, b) =>
           a.name.localeCompare(b.name)
-        );
-        logger.info(
-          `Files sorted alphabetically: ${sortedMediaFiles.map((f) => f.name).join(', ')}`
         );
 
         // IMPORTANT: Pinata's CID calculation with wrapWithDirectory: false doesn't match
@@ -640,12 +619,6 @@ export async function handleHash(
     console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
     console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
     console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
-    if (mediaFiles.length > 0) {
-      console.log(`  Media files included:    ${mediaFiles.length}`);
-      if (mediaDirectoryCid) {
-        console.log(`  Media directory CID:     ${mediaDirectoryCid}`);
-      }
-    }
 
     const totalHandled =
       (finalMetrics.skipped || 0) +
