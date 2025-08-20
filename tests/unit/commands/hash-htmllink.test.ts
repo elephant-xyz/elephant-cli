@@ -168,7 +168,7 @@ describe('Hash Command - htmlLink in CSV Output', () => {
         expect.objectContaining({ name: 'index.html' }),
         expect.objectContaining({ name: 'logo.png' }),
       ]),
-      'extracted_media' // The directory name based on property directory
+      'bafkreiproperty_media' // The directory name based on property CID
     );
   });
 

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
+import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
 import { PinataDirectoryUploadService } from '../services/pinata-directory-upload.service.js';
@@ -220,6 +221,25 @@ export async function handleUpload(
         // Upload media files first if they exist
         if (mediaFiles.length > 0) {
           logger.info(`Uploading ${mediaFiles.length} media files...`);
+
+          // Log detailed info about media files
+          for (const mediaFile of mediaFiles) {
+            const sourcePath = path.join(propertyDir.path, mediaFile);
+            const fileContent = await fsPromises.readFile(sourcePath);
+            const contentHash = crypto
+              .createHash('sha256')
+              .update(fileContent)
+              .digest('hex')
+              .substring(0, 8);
+            logger.info(
+              `  - ${mediaFile}: ${fileContent.length} bytes (sha256: ${contentHash}...)`
+            );
+          }
+
+          logger.info(
+            `Media directory name for upload: ${propertyDir.name}_media`
+          );
+          logger.info(`Property directory name: ${propertyDir.name}`);
 
           // Create temp directory for media files
           await fsPromises.mkdir(tempMediaDir, { recursive: true });

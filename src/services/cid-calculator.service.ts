@@ -223,53 +223,74 @@ export class CidCalculatorService {
    * Calculate CID for a directory structure containing multiple files
    * Uses DAG-PB format with UnixFS directory type
    * Returns a CID v1 in base32 encoding (starts with "bafybei...")
+   *
+   * When directoryName is provided, this exactly mimics Pinata's directory upload:
+   * - Creates a root directory with the given name
+   * - All files are placed directly in this directory
+   * - The CID returned is for the root that contains this named directory
    */
   async calculateDirectoryCid(
     files: Array<{ name: string; content: Buffer }>,
     directoryName?: string
   ): Promise<string> {
     try {
-      // If a directory name is provided, wrap the files in that directory
-      // This matches how Pinata creates directory structures
+      // If a directory name is provided, we need to match Pinata's exact structure
+      // Pinata creates: root -> directoryName -> files
+      // And returns the CID of the root
       if (directoryName) {
-        // First, create the inner directory DAG-PB node
+        // First, create the inner directory with all the files
         const innerDirNode = await this.createDirectoryDagPbNode(files);
 
-        // Encode the inner directory to get its size
+        // Encode the inner directory
         const innerEncoded = dagPB.encode(innerDirNode);
 
         // Calculate the hash for the inner directory
         const innerHash = await sha256.digest(innerEncoded);
         const innerCid = CID.create(1, 0x70, innerHash);
 
-        // Create a UnixFS directory for the wrapper
-        const wrapperDir = new UnixFS({ type: 'directory' });
+        // Calculate the total size of the inner directory
+        // This is the encoded size plus all the file sizes
+        let innerTotalSize = innerEncoded.length;
+        for (const link of innerDirNode.Links) {
+          innerTotalSize += link.Tsize;
+        }
 
-        // Create a single link to the inner directory
-        // The Tsize should be the size of the encoded inner directory DAG-PB node
-        const wrapperLinks = [
+        // Create the root directory that contains our named directory
+        const rootDir = new UnixFS({ type: 'directory' });
+
+        // The root has a single link to our named directory
+        const rootLinks = [
           {
             Name: directoryName,
             Hash: innerCid,
-            Tsize: innerEncoded.length,
+            Tsize: innerTotalSize,
           },
         ];
 
-        // Create DAG-PB node for the wrapper directory
-        const wrapperNode = {
-          Data: wrapperDir.marshal(),
-          Links: wrapperLinks,
+        // Create DAG-PB node for the root
+        const rootNode = {
+          Data: rootDir.marshal(),
+          Links: rootLinks,
         };
 
-        // Encode and hash the wrapper
-        const encoded = dagPB.encode(wrapperNode);
-        const hash = await sha256.digest(encoded);
+        // Encode and hash the root
+        const rootEncoded = dagPB.encode(rootNode);
+        const rootHash = await sha256.digest(rootEncoded);
 
-        // Create CID v1 with dag-pb codec
-        const cid = CID.create(1, 0x70, hash);
+        // Create CID v1 for the root
+        const rootCid = CID.create(1, 0x70, rootHash);
 
-        // Return base32 string
-        return cid.toString(base32);
+        // Debug logging for directory structure
+        if (process.env.DEBUG_CID_CALC) {
+          console.log(`\nDirectory structure:`);
+          console.log(`  Inner directory CID: ${innerCid.toString(base32)}`);
+          console.log(`  Inner directory Tsize: ${innerTotalSize}`);
+          console.log(`  Directory name: ${directoryName}`);
+          console.log(`  Root CID: ${rootCid.toString(base32)}`);
+        }
+
+        // Return the root CID in base32
+        return rootCid.toString(base32);
       } else {
         // No wrapper directory, use flat structure
         return this.calculateDirectoryCidFlat(files);
@@ -305,7 +326,7 @@ export class CidCalculatorService {
 
   /**
    * Create a DAG-PB node for a directory with files
-   * Internal helper method
+   * Internal helper method that exactly matches IPFS/Pinata's approach
    */
   private async createDirectoryDagPbNode(
     files: Array<{ name: string; content: Buffer }>
@@ -316,28 +337,47 @@ export class CidCalculatorService {
     // Calculate CIDs for each file and create links
     const links = [];
     for (const file of files) {
-      // Calculate CID for this file
-      const fileCid = await this.calculateCidV1ForRawData(file.content);
+      // For files in a directory, use UnixFS format
+      // This is the standard IPFS approach
+      const unixfsFile = new UnixFS({
+        type: 'file',
+        data: new Uint8Array(file.content),
+      });
+      const fileNode = { Data: unixfsFile.marshal(), Links: [] };
+      const encodedFile = dagPB.encode(fileNode);
 
-      // Parse the CID to get the multihash
-      const parsedCid = CID.parse(fileCid);
+      // Calculate the file's CID
+      const fileHash = await sha256.digest(encodedFile);
+      const fileCid = CID.create(1, 0x70, fileHash);
+
+      // Debug logging for each file
+      if (process.env.DEBUG_CID_CALC) {
+        console.log(`File: ${file.name}`);
+        console.log(`  Content size: ${file.content.length} bytes`);
+        console.log(`  UnixFS Data size: ${unixfsFile.marshal().length} bytes`);
+        console.log(`  DAG-PB encoded size: ${encodedFile.length} bytes`);
+        console.log(`  File CID: ${fileCid.toString(base32)}`);
+        console.log(`  Tsize: ${encodedFile.length}`);
+      }
 
       // Create a link for this file
+      // Tsize must be the size of the entire DAG object (encoded size)
       links.push({
         Name: file.name,
-        Hash: parsedCid,
-        Tsize: file.content.length,
+        Hash: fileCid,
+        Tsize: encodedFile.length,
       });
     }
 
-    // Sort links by name bytes for deterministic CID (required by DAG-PB spec)
+    // Sort links by name for deterministic CID
+    // This is critical - IPFS requires lexicographic ordering
     links.sort((a, b) => {
       const aBytes = Buffer.from(a.Name, 'utf-8');
       const bBytes = Buffer.from(b.Name, 'utf-8');
       return Buffer.compare(aBytes, bBytes);
     });
 
-    // Create DAG-PB node with directory data and links
+    // Create DAG-PB node with directory data and sorted links
     return {
       Data: unixfsDir.marshal(),
       Links: links,

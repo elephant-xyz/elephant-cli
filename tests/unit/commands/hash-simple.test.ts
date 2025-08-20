@@ -156,7 +156,7 @@ describe('Hash Command - Simple Media Files Test', () => {
         expect.objectContaining({ name: 'index.html' }),
         expect.objectContaining({ name: 'image.png' }),
       ]),
-      'extracted_media' // The directory name based on property directory
+      'bafkreiproperty_media' // The directory name based on property CID
     );
   });
 });
