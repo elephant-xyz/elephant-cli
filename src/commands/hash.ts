@@ -334,12 +334,9 @@ export async function handleHash(
       ipldConverterService,
     };
 
-    // Map to store seed CIDs for directories
-    const seedCidMap = new Map<string, string>(); // directory path -> calculated seed CID
-    const failedSeedDirectories = new Set<string>(); // directory paths with failed seeds
-
-    // Phase 1: Process all seed files first
-    const seedFiles = scannedJsonFiles.filter(
+    // Phase 1: Process ONLY the seed datagroup file first to get property CID
+    // This is the file with label "Seed" and relationships, not other files in the directory
+    const seedDatagroupFile = scannedJsonFiles.find(
       (file) =>
         file.dataGroupCid === SEED_DATAGROUP_SCHEMA_CID ||
         file.dataGroupCid ===
@@ -348,32 +345,27 @@ export async function handleHash(
 
     let calculatedSeedCid: string | undefined;
 
-    if (seedFiles.length > 0) {
-      logger.info(`Processing ${seedFiles.length} seed files first...`);
+    if (seedDatagroupFile) {
+      logger.info(
+        'Processing seed datagroup file to determine property CID...'
+      );
 
-      const seedPromises: Promise<void>[] = [];
-      for (const seedFile of seedFiles) {
-        seedPromises.push(
-          localProcessingSemaphore.runExclusive(async () => {
-            await processSeedFile(
-              seedFile,
-              servicesForProcessing,
-              hashedFiles,
-              cidToFileMap,
-              seedCidMap,
-              failedSeedDirectories
-            );
-          })
+      // First, calculate the raw seed CID without processing any links
+      // This gives us a temporary property CID to use for media directory calculation
+      const seedFileContent = await fsPromises.readFile(
+        seedDatagroupFile.filePath,
+        'utf-8'
+      );
+      const seedData = JSON.parse(seedFileContent);
+      const seedCanonicalJson = canonicalizerService.canonicalize(seedData);
+      calculatedSeedCid =
+        await cidCalculatorService.calculateCidFromCanonicalJson(
+          seedCanonicalJson
         );
-      }
 
-      await Promise.all(seedPromises);
-      logger.info(`Completed processing ${seedFiles.length} seed files`);
-
-      // Get the calculated seed CID if available
-      if (seedCidMap.size > 0) {
-        calculatedSeedCid = Array.from(seedCidMap.values())[0];
-      }
+      logger.info(
+        `Initial seed datagroup CID calculated: ${calculatedSeedCid}`
+      );
     }
 
     // Determine the final property CID based on the priority:
@@ -442,22 +434,74 @@ export async function handleHash(
       }
     }
 
-    // Phase 2: Process all non-seed files with the determined property CID
-    const nonSeedFiles = scannedJsonFiles.filter(
-      (file) =>
-        file.dataGroupCid !== SEED_DATAGROUP_SCHEMA_CID &&
-        file.dataGroupCid !==
-          schemaManifestService.getDataGroupCidByLabel('Seed')
+    // Phase 2: Process ALL files including the seed datagroup WITH links
+    // Now that we have the media directory CID, we can properly process all files
+
+    // First, process the seed datagroup WITH its links converted
+    if (seedDatagroupFile) {
+      logger.info('Re-processing seed datagroup with IPLD links...');
+
+      // Update the seed datagroup file entry with the correct property CID
+      const updatedSeedFile = {
+        ...seedDatagroupFile,
+        propertyCid: finalPropertyCid,
+      };
+
+      await processFileForHashing(
+        updatedSeedFile,
+        servicesForProcessing,
+        hashedFiles,
+        cidToFileMap,
+        mediaDirectoryCid // Now we have media CID for any HTML references
+      );
+
+      // Verify the seed CID matches what we calculated
+      const processedSeedFile = hashedFiles.find(
+        (f) => f.originalPath === seedDatagroupFile.filePath
+      );
+
+      if (processedSeedFile) {
+        // The seed CID should now match because it was processed with all links
+        logger.info(
+          `Seed datagroup final CID: ${processedSeedFile.calculatedCid}`
+        );
+
+        // Update the property CID to ensure consistency
+        processedSeedFile.propertyCid = processedSeedFile.calculatedCid;
+
+        // If this is different from our initial calculation, update the final property CID
+        // only if user didn't provide one
+        if (
+          !options.propertyCid &&
+          processedSeedFile.calculatedCid !== calculatedSeedCid
+        ) {
+          // The seed CID changed after processing links
+          // This is expected when the seed has relationships that needed to be converted
+          logger.info(
+            `Property CID updated after processing links: ${processedSeedFile.calculatedCid}`
+          );
+          finalPropertyCid = processedSeedFile.calculatedCid;
+
+          // Update all remaining files to use the new property CID
+        }
+      }
+    }
+
+    // Now process remaining files (excluding seed which was just processed)
+    const remainingFiles = scannedJsonFiles.filter(
+      (file) => file.filePath !== seedDatagroupFile?.filePath
     );
 
     // Update all files to use the final property CID
-    const updatedFiles = nonSeedFiles.map((file) => ({
+    const updatedFiles = remainingFiles.map((file) => ({
       ...file,
       propertyCid: finalPropertyCid,
     }));
 
     if (updatedFiles.length > 0) {
-      logger.info(`Processing ${updatedFiles.length} non-seed files...`);
+      logger.info(
+        `Processing ${updatedFiles.length} remaining files with media CID available...`
+      );
 
       const allOperationPromises: Promise<void>[] = [];
       for (const fileEntry of updatedFiles) {
@@ -468,7 +512,7 @@ export async function handleHash(
               servicesForProcessing,
               hashedFiles,
               cidToFileMap,
-              mediaDirectoryCid
+              mediaDirectoryCid // Now all files have access to media CID
             )
           )
         );
@@ -659,76 +703,6 @@ export async function handleHash(
   }
 }
 
-async function processSeedFile(
-  fileEntry: FileEntry,
-  services: {
-    schemaCacheService: SchemaCacheService;
-    canonicalizerService: IPLDCanonicalizerService;
-    cidCalculatorService: CidCalculatorService;
-    csvReporterService: CsvReporterService;
-    progressTracker: SimpleProgress;
-    ipldConverterService: IPLDConverterService;
-  },
-  hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>,
-  seedCidMap: Map<string, string>,
-  failedSeedDirectories: Set<string>
-): Promise<void> {
-  const dirPath = path.dirname(fileEntry.filePath);
-  const hashedFilesCountBefore = hashedFiles.length;
-  const errorsCountBefore = services.progressTracker.getMetrics().errors;
-
-  try {
-    // Process the seed file exactly like a normal file
-    await processFileForHashing(
-      fileEntry,
-      services,
-      hashedFiles,
-      cidToFileMap,
-      undefined
-    );
-
-    // Check if processing was successful
-    const latestFile = hashedFiles[hashedFiles.length - 1];
-    const fileAdded =
-      hashedFiles.length > hashedFilesCountBefore &&
-      latestFile &&
-      latestFile.originalPath === fileEntry.filePath;
-
-    const errorsCountAfter = services.progressTracker.getMetrics().errors;
-    const newErrorsOccurred = errorsCountAfter > errorsCountBefore;
-
-    if (fileAdded) {
-      // Successful processing
-      seedCidMap.set(dirPath, latestFile.calculatedCid);
-      // Update the seed file's property CID to the calculated CID
-      latestFile.propertyCid = latestFile.calculatedCid;
-      logger.debug(
-        `Stored seed CID ${latestFile.calculatedCid} for directory ${dirPath}`
-      );
-    } else if (newErrorsOccurred) {
-      // Processing failed
-      failedSeedDirectories.add(dirPath);
-      logger.error(
-        `Seed processing failed for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
-      );
-    } else {
-      // No file added and no errors - this shouldn't happen, but treat as failure
-      failedSeedDirectories.add(dirPath);
-      logger.error(
-        `Seed processing completed without success or error for ${fileEntry.filePath}. All other files in directory ${dirPath} will be skipped.`
-      );
-    }
-  } catch (error) {
-    // Mark this directory as having a failed seed
-    failedSeedDirectories.add(dirPath);
-    logger.error(
-      `Seed processing failed for ${fileEntry.filePath}: ${error instanceof Error ? error.message : String(error)}. All other files in directory ${dirPath} will be skipped.`
-    );
-    throw error; // Re-throw to maintain error reporting
-  }
-}
-
 async function processFileForHashing(
   fileEntry: FileEntry,
   services: {
@@ -769,19 +743,30 @@ async function processFileForHashing(
 
   try {
     const schemaCid = fileEntry.dataGroupCid;
-    const schema = await services.schemaCacheService.getSchema(schemaCid);
-    if (!schema) {
-      const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
-      await services.csvReporterService.logError({
-        propertyCid: fileEntry.propertyCid,
-        dataGroupCid: fileEntry.dataGroupCid,
-        filePath: fileEntry.filePath,
-        errorPath: 'root',
-        errorMessage: error,
-        timestamp: new Date().toISOString(),
-      });
-      services.progressTracker.increment('errors');
-      return;
+    let schema = null;
+
+    // Only try to load schema if we have a valid dataGroupCid
+    if (schemaCid && schemaCid.trim() !== '') {
+      schema = await services.schemaCacheService.getSchema(schemaCid);
+      if (!schema) {
+        const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
+        await services.csvReporterService.logError({
+          propertyCid: fileEntry.propertyCid,
+          dataGroupCid: fileEntry.dataGroupCid,
+          filePath: fileEntry.filePath,
+          errorPath: 'root',
+          errorMessage: error,
+          timestamp: new Date().toISOString(),
+        });
+        services.progressTracker.increment('errors');
+        return;
+      }
+    } else {
+      // No schema for non-datagroup files like fact_sheet.json
+      // We still need to process them for IPLD links
+      logger.debug(
+        `No dataGroupCid for ${fileEntry.filePath}, processing without schema validation`
+      );
     }
 
     // Check if data has IPLD links that need conversion
@@ -798,10 +783,19 @@ async function processFileForHashing(
     }> = [];
 
     // After successful validation, process IPLD links to convert file paths to CIDs
-    if (
-      services.ipldConverterService &&
-      services.ipldConverterService.hasIPLDLinks(jsonData, schema)
-    ) {
+    const hasLinks = services.ipldConverterService?.hasIPLDLinks(
+      jsonData,
+      schema
+    );
+
+    // Special debug for fact_sheet.json
+    if (fileEntry.filePath.includes('fact_sheet')) {
+      logger.info(
+        `Processing fact_sheet.json: hasLinks=${hasLinks}, ipfs_url="${jsonData.ipfs_url}", mediaDirectoryCid=${mediaDirectoryCid}`
+      );
+    }
+
+    if (services.ipldConverterService && hasLinks) {
       logger.debug(
         `Data has IPLD links, converting file paths to CIDs for ${fileEntry.filePath}`
       );
@@ -1214,13 +1208,26 @@ async function getCidForFilePath(
     processedData: any;
   }>
 ): Promise<string> {
-  // For HTML files in the media directory, use the directory CID
-  if (isHtmlFile(filePath) && mediaDirectoryCid) {
+  // For HTML files, always use the media directory CID
+  if (isHtmlFile(filePath)) {
+    if (!mediaDirectoryCid) {
+      // This should only happen if the seed datagroup file references HTML, which is unusual
+      // Log a warning and throw an error to make this explicit
+      logger.error(
+        `HTML file ${filePath} referenced but media directory CID not available. ` +
+          `This typically happens when the seed datagroup file references HTML files. ` +
+          `The seed datagroup should not reference HTML files directly.`
+      );
+      throw new Error(
+        `Cannot process HTML reference in seed datagroup file. ` +
+          `HTML files should only be referenced by other data files, not the seed datagroup.`
+      );
+    }
     linkedCIDs.push(mediaDirectoryCid);
     return mediaDirectoryCid;
   }
 
-  // For other files (including images and HTML without media directory), calculate individual CID
+  // For non-HTML files (JSON and images), calculate individual CID
   const cid = await calculateCIDForFile(
     filePath,
     currentFilePath,

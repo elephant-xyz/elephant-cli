@@ -393,8 +393,10 @@ describe('Hash Command - ZIP Input', () => {
 
       // Mock CID calculation for seed file
       const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      const seedProcessedCid = 'bafkreiseedprocessedcid123456789'; // CID after processing links
       mockCidCalculatorService.calculateCidFromCanonicalJson
-        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for raw seed
+        .mockResolvedValueOnce(seedProcessedCid) // Second call for processed seed with links
         .mockResolvedValue(
           'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
         );
@@ -420,9 +422,10 @@ describe('Hash Command - ZIP Input', () => {
       await handleHash(options, serviceOverrides);
 
       // Verify seed file was processed by checking CID calculation calls
+      // Now we calculate seed CID twice: once raw, once with links processed
       expect(
         mockCidCalculatorService.calculateCidFromCanonicalJson
-      ).toHaveBeenCalledTimes(2);
+      ).toHaveBeenCalledTimes(3);
 
       // Verify CSV contains both entries with filePath, uploadedAt, and htmlLink columns
       const csvContent = vi.mocked(fsPromises.writeFile).mock
@@ -537,8 +540,12 @@ describe('Hash Command - ZIP Input', () => {
 
       // Mock CID calculation for seed file
       const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      // With the new implementation, seed is processed twice and the final CID
+      // (with links) is used as the property CID
+      const seedProcessedCid = 'bafkreiseedprocessedcid123456789';
       mockCidCalculatorService.calculateCidFromCanonicalJson
-        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for raw seed
+        .mockResolvedValueOnce(seedProcessedCid) // Second call for processed seed with links
         .mockResolvedValue(
           'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
         );
@@ -563,7 +570,7 @@ describe('Hash Command - ZIP Input', () => {
 
       await handleHash(options, serviceOverrides);
 
-      // Verify the CSV contains the calculated seed CID as property CID
+      // Verify the CSV contains the processed seed CID as property CID
       const csvContent = vi.mocked(fsPromises.writeFile).mock
         .calls[0][1] as string;
       const csvLines = csvContent.split('\n');
@@ -571,8 +578,8 @@ describe('Hash Command - ZIP Input', () => {
       for (let i = 1; i < csvLines.length; i++) {
         const line = csvLines[i];
         if (line && !line.includes(SEED_DATAGROUP_SCHEMA_CID)) {
-          // Non-seed files should use the seed CID as property CID
-          expect(line).toContain(seedCalculatedCid);
+          // Non-seed files should use the processed seed CID as property CID
+          expect(line).toContain(seedProcessedCid);
         }
       }
     });
@@ -674,8 +681,12 @@ describe('Hash Command - ZIP Input', () => {
 
       // Mock CID calculation for seed file
       const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      // With the new implementation, seed is processed twice and the final CID
+      // (with links) is used as the property CID
+      const seedProcessedCid = 'bafkreiseedprocessedcid123456789';
       mockCidCalculatorService.calculateCidFromCanonicalJson
-        .mockResolvedValueOnce(seedCalculatedCid) // First call for seed file
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for raw seed
+        .mockResolvedValueOnce(seedProcessedCid) // Second call for processed seed with links
         .mockResolvedValue(
           'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
         );
@@ -704,12 +715,12 @@ describe('Hash Command - ZIP Input', () => {
       const mockZip = vi.mocked(AdmZip).mock.results[0].value;
       expect(mockZip.addFile).toHaveBeenCalled();
 
-      // Check that the folder name in the ZIP path is the seed CID, not the original directory name
+      // Check that the folder name in the ZIP path is the processed seed CID, not the original directory name
       const addFileCalls = mockZip.addFile.mock.calls;
       for (const call of addFileCalls) {
         const zipPath = call[0] as string;
-        // The path should start with the seed CID
-        expect(zipPath).toMatch(new RegExp(`^${seedCalculatedCid}/`));
+        // The path should start with the processed seed CID (final property CID)
+        expect(zipPath).toMatch(new RegExp(`^${seedProcessedCid}/`));
         // The path should NOT start with 'property-dir' or any other incorrect value
         expect(zipPath).not.toMatch(/^property-dir\//);
         expect(zipPath).not.toMatch(/^SEED_PENDING:/);
@@ -758,8 +769,10 @@ describe('Hash Command - ZIP Input', () => {
 
       // Mock CID calculation for seed file
       const seedCalculatedCid = 'bafkreiseedcalculatedcid123456789';
+      const seedProcessedCid = 'bafkreiseedprocessedcid123456789'; // CID after processing links
       mockCidCalculatorService.calculateCidFromCanonicalJson
-        .mockResolvedValueOnce(seedCalculatedCid)
+        .mockResolvedValueOnce(seedCalculatedCid) // First call for raw seed
+        .mockResolvedValueOnce(seedProcessedCid) // Second call for processed seed with links
         .mockResolvedValue(
           'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
         );
