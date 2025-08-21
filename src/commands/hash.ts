@@ -39,6 +39,41 @@ interface MediaFile {
   isHtml: boolean;
 }
 
+/**
+ * Replace HTML file paths with media directory CID in the data structure
+ */
+function replaceHtmlPathsWithCid(data: any, mediaDirectoryCid: string): any {
+  if (!data || typeof data !== 'object') {
+    // For string values that might be ipfs:// URIs with HTML paths
+    if (typeof data === 'string') {
+      // Check if it's an ipfs:// URI with an HTML file path
+      if (data.startsWith('ipfs://') && isHtmlFile(data.substring(7))) {
+        // Replace with proper IPFS URI using media directory CID
+        return `ipfs://${mediaDirectoryCid}`;
+      }
+      // Check if it's just an HTML file path
+      if (isHtmlFile(data)) {
+        return mediaDirectoryCid;
+      }
+    }
+    return data;
+  }
+
+  // Handle arrays
+  if (Array.isArray(data)) {
+    return data.map((item) => replaceHtmlPathsWithCid(item, mediaDirectoryCid));
+  }
+
+  // Handle objects
+  const processed: any = {};
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      processed[key] = replaceHtmlPathsWithCid(data[key], mediaDirectoryCid);
+    }
+  }
+  return processed;
+}
+
 export interface HashCommandOptions {
   input: string;
   outputZip: string;
@@ -475,6 +510,24 @@ export async function handleHash(
       }
 
       await Promise.all(allOperationPromises);
+    }
+
+    // Phase 2.5: Post-process to replace HTML file paths with media directory CID
+    if (mediaDirectoryCid) {
+      logger.info('Replacing HTML file paths with media directory CID...');
+      for (const hashedFile of hashedFiles) {
+        // Check if transformedData contains HTML file paths that need replacement
+        hashedFile.transformedData = replaceHtmlPathsWithCid(
+          hashedFile.transformedData,
+          mediaDirectoryCid
+        );
+        // Recalculate canonical JSON after replacement
+        hashedFile.canonicalJson = canonicalizerService.canonicalize(
+          hashedFile.transformedData
+        );
+        // Note: We don't recalculate the CID for the file itself - that stays the same
+        // The CID represents the original content with the path reference
+      }
     }
 
     // Phase 3: Generate CSV output and create output ZIP
@@ -1118,6 +1171,16 @@ async function calculateCIDForFile(
     resolvedPath = path.join(currentDir, filePath);
   }
 
+  // HTML files should not reach this function - they're handled by getCidForFilePath
+  // This is a safeguard to catch any logic errors
+  if (isHtmlFile(resolvedPath)) {
+    logger.error(
+      `HTML file ${resolvedPath} reached calculateCIDForFile - this indicates a logic error. HTML files should be handled by media directory CID.`
+    );
+    // Return a placeholder to avoid breaking the flow
+    return 'HTML_FILE_SHOULD_USE_MEDIA_CID';
+  }
+
   // Check if it's an image file and schema expects IPFS URI
   const isImage = isImageFile(resolvedPath) && isIpfsUriFormat;
 
@@ -1214,13 +1277,21 @@ async function getCidForFilePath(
     processedData: any;
   }>
 ): Promise<string> {
-  // For HTML files in the media directory, use the directory CID
-  if (isHtmlFile(filePath) && mediaDirectoryCid) {
+  // For HTML files, use media directory CID if available, otherwise keep the path
+  if (isHtmlFile(filePath)) {
+    if (!mediaDirectoryCid) {
+      // Media directory CID not yet available - keep the original path
+      // It will be replaced in post-processing
+      logger.debug(
+        `HTML file ${filePath} referenced but media directory CID not yet available. Keeping original path for later replacement.`
+      );
+      return filePath;
+    }
     linkedCIDs.push(mediaDirectoryCid);
     return mediaDirectoryCid;
   }
 
-  // For other files (including images and HTML without media directory), calculate individual CID
+  // For non-HTML files (JSON and images), calculate individual CID
   const cid = await calculateCIDForFile(
     filePath,
     currentFilePath,
