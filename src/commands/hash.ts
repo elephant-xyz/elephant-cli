@@ -1171,16 +1171,6 @@ async function calculateCIDForFile(
     resolvedPath = path.join(currentDir, filePath);
   }
 
-  // HTML files should not reach this function - they're handled by getCidForFilePath
-  // This is a safeguard to catch any logic errors
-  if (isHtmlFile(resolvedPath)) {
-    logger.error(
-      `HTML file ${resolvedPath} reached calculateCIDForFile - this indicates a logic error. HTML files should be handled by media directory CID.`
-    );
-    // Return a placeholder to avoid breaking the flow
-    return 'HTML_FILE_SHOULD_USE_MEDIA_CID';
-  }
-
   // Check if it's an image file and schema expects IPFS URI
   const isImage = isImageFile(resolvedPath) && isIpfsUriFormat;
 
