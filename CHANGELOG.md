@@ -1,3 +1,10 @@
+## [1.28.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.3...v1.28.4) (2025-08-21)
+
+
+### Bug Fixes
+
+* Fix HTML file path replacement with media directory CID ([#95](https://github.com/elephant-xyz/elephant-cli/issues/95)) ([864f7ef](https://github.com/elephant-xyz/elephant-cli/commit/864f7ef1108edcfb9f79ac5ffb5bbf12034579d3))
+
 ## [1.28.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.2...v1.28.3) (2025-08-20)
 
 
