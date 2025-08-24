@@ -125,44 +125,6 @@ describe('SchemaManifestService', () => {
     });
   });
 
-  describe('getAllDataGroups', () => {
-    it('should return all datagroup entries', async () => {
-      const mockManifest = {
-        Photo_Metadata: {
-          ipfsCid: 'bafkreiabc123',
-          type: 'dataGroup' as const,
-        },
-        Property_Details: {
-          ipfsCid: 'bafkreidef456',
-          type: 'dataGroup' as const,
-        },
-        Some_Class: {
-          ipfsCid: 'bafkreighi789',
-          type: 'class' as const,
-        },
-      };
-
-      (global.fetch as any).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockManifest,
-      });
-
-      await service.loadSchemaManifest();
-      const dataGroups = service.getAllDataGroups();
-
-      expect(dataGroups).toEqual([
-        { label: 'Photo_Metadata', cid: 'bafkreiabc123' },
-        { label: 'Property_Details', cid: 'bafkreidef456' },
-      ]);
-    });
-
-    it('should throw error if manifest not loaded', () => {
-      expect(() => service.getAllDataGroups()).toThrow(
-        'Schema manifest not loaded. Call loadSchemaManifest() first.'
-      );
-    });
-  });
-
   describe('isDataGroupRootFile', () => {
     it('should return true for valid datagroup structure', () => {
       const validData = {

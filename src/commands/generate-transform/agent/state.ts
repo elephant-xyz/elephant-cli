@@ -2,6 +2,7 @@ import { Annotation } from '@langchain/langgraph';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { loadPrompt, type PromptKey } from '../prompts/registry.js';
+import { logger } from '../../../utils/logger.js';
 
 export type ScriptItem = {
   path: string;
@@ -94,13 +95,17 @@ export async function buildPriorContext(state: AgentState): Promise<string> {
 ${content}
 `);
       }
-    } catch {}
+    } catch {
+      logger.warn(`Unable to read ${priorScriptsDir}`);
+    }
   }
   if (priorErrorsPath) {
     try {
       const csv = await fs.readFile(priorErrorsPath, 'utf-8');
       chunks.push(`Validation errors CSV (${priorErrorsPath}):\n${csv}`);
-    } catch {}
+    } catch {
+      logger.warn(`Unable to read ${priorErrorsPath}`);
+    }
   }
   return chunks.length ? `\n\n# Prior Context\n${chunks.join('\n\n')}` : '';
 }

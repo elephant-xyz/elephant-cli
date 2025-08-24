@@ -8,8 +8,6 @@ import {
   MockInstance,
 } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import * as fs from 'fs';
-import path from 'path';
 import * as child_process from 'child_process';
 import * as os_module from 'os';
 import { logger } from '../../../src/utils/logger.js';
@@ -19,17 +17,11 @@ import {
 } from '../../../src/commands/validate.js';
 import { FileScannerService } from '../../../src/services/file-scanner.service.js';
 import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
-import {
-  JsonValidatorService,
-  ValidationError,
-} from '../../../src/services/json-validator.service.js';
+import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 import { IPFSService } from '../../../src/services/ipfs.service.js';
-import { ReportSummary, FileEntry } from '../../../src/types/submit.types.js';
-import { DEFAULT_IPFS_GATEWAY } from '../../../src/config/constants.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
-import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
 
 // Mock the single-property-processor module
 vi.mock('../../../src/utils/single-property-processor.js', () => ({
@@ -123,7 +115,6 @@ vi.mock('../../../src/utils/logger.js', () => ({
 import { processSinglePropertyInput } from '../../../src/utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../../../src/utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../../../src/utils/single-property-file-scanner-v2.js';
-import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 
 describe('handleValidate', () => {
   let mockFileScannerService: Partial<FileScannerService>;
@@ -134,15 +125,8 @@ describe('handleValidate', () => {
   let mockIpfsService: Partial<IPFSService>;
   let mockCleanup: vi.Mock;
 
-  let exitSpy: MockInstance;
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Mock process.exit
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
-      throw new Error(`process.exit(${code})`);
-    });
 
     // Mock execSync to return a valid ulimit value
     vi.mocked(child_process.execSync).mockReturnValue('1024\n');

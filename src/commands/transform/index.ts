@@ -92,7 +92,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     async () => {
       try {
         await fs.rm(tempRoot, { recursive: true, force: true });
-      } catch {}
+      } catch {
+        logger.warn(`Unable to remove ${tempRoot}`);
+      }
     },
   ];
 
@@ -355,7 +357,9 @@ async function normalizeInputsForScripts(
     try {
       const st = await fs.stat(src);
       if (st.isFile()) await fs.copyFile(src, path.join(tempRoot, name));
-    } catch {}
+    } catch {
+      logger.warn(`Unable to copy ${src} to ${tempRoot}`);
+    }
   };
   await copyIfExists('unnormalized_address.json');
   await copyIfExists('property_seed.json');

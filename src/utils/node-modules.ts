@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { logger } from './logger.js';
 
 export interface LinkOptions {
   source?: 'tool' | 'project';
@@ -15,7 +16,9 @@ function findNearestNodeModules(startDir: string): string | null {
       if (st.isDirectory()) {
         return fs.realpathSync(candidate);
       }
-    } catch {}
+    } catch {
+      logger.warn(`Unable to find node_modules in ${dir}`);
+    }
     const parent: string = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -29,7 +32,9 @@ function ensureSymlinkDir(targetAbs: string, linkPathAbs: string): void {
   const replaceWithLink = (): void => {
     try {
       fs.rmSync(linkPathAbs, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      logger.warn(`Unable to remove ${linkPathAbs}`);
+    }
     fs.symlinkSync(targetAbs, linkPathAbs, linkType);
   };
   try {
