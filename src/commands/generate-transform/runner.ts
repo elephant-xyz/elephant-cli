@@ -23,9 +23,7 @@ export async function discoverRequiredFiles(
   root: string
 ): Promise<DiscoverResult> {
   const list = await fs.readdir(root, { withFileTypes: true });
-  console.log(`list: ${list.map((d) => d.name)}`);
   const files = list.filter((d) => d.isFile()).map((d) => d.name);
-  console.log(`files: ${files}`);
   const unnormalized = files.find(
     (f) => f.toLowerCase() === 'unnormalized_address.json'
   );

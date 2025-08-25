@@ -3,38 +3,32 @@ Begin with a concise checklist (3-7 bullets) of what you will do; keep items con
 ## Requirements
 
 - **Input Handling:**
-
   - Analyze the HTML content provided in the user message as `input_html` (from file `{input_html_file}`), which contains a single property's details.
   - Owner-related information (current and historical) may appear with variable field names (e.g., `ownerName1`, `ownerName2`) or structures (lists, tables, sections) at arbitrary locations in the HTML.
 
 - **HTML Parsing:**
-
   - Parse and extract all data using only `cheerio`.
 
 - **Owner Extraction and Classification:**
-
   - Extract all plausible owner names, covering both current and historical owners, regardless of field label or HTML structure.
   - Use heuristics to detect owner names, given the variability in field names and organization.
   - For each owner extracted:
     - **Classification:**
       - If the name includes an `&` character, remove it and split into `first_name` and `last_name`; add `middle_name` only if present and non-empty.
       - _Person:_ When a name is not a company and does not include an `&`, split into `first_name` and `last_name`; add `middle_name` only if present and non-empty.
-      - _Company:_ Classify as a company if the name contains any of: `Inc`, `LLC`, `Ltd`, `Foundation`, `Alliance`, `Solutions`, `Corp`, `Co`, `Services` (case-insensitive).
+      - _Company:_ Classify as a company if the name contains any of: `Inc`, `LLC`, `Ltd`, `Foundation`, `Alliance`, `Solutions`, `Corp`, `Co`, `Services`, `Trust`, `TR`, etc. make sure, to extract all companies (case-insensitive).
     - Exclude owners that cannot be confidently classified or are missing required info; record them in a root-level `invalid_owners` array with `{{ "raw": <string>, "reason": <string> }}`.
   - Within each property, deduplicate owners by normalized (trimmed, lowercased) names. Exclude any null, empty, or duplicate owner values.
 
 - **Date Extraction (for Historical Owners):**
-
   - Attempt to extract dates that associate with owner groups or historical records; identify dates located near relevant owners in the DOM.
   - Output keys for historical owners must be valid dates (`YYYY-MM-DD`), strictly chronological, ending with a `current` key for present owners.
   - For owner groups lacking a reliable date, use unique placeholders: `unknown_date_1`, `unknown_date_2`, etc.
 
 - **Property ID Extraction:**
-
   - Attempt to find a unique property ID (fields like `property_id`, `Property ID`, `propId`); if not found, use `unknown_id` in the output key as `property_unknown_id`.
 
 - **Schema and Output:**
-
   - Output a JSON object with a single top-level key: `property_<id>`
     - Contains `owners_by_date`: a map where each key is a date (or `current`/unknown placeholder), each mapping to an array of valid owners.
   - Saves the output as `{owner_data_file}`.

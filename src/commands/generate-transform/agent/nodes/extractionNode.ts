@@ -162,6 +162,11 @@ export async function extractionNode(
     // File doesn't exist yet, that's ok
   }
 
+  const ownerDataContent = await fs.readFile(
+    path.join(state.tempDir, state.filenames.OWNER_DATA),
+    'utf-8'
+  );
+
   // Prepare initial message with all file contents
   const initialMessage = `Start by creating the extraction script and processing all input files. Make sure to extract all sales-taxes-owners data.
 
@@ -196,6 +201,9 @@ ${layoutDataContent}
     : ''
 }
 
+<owner_data>
+${ownerDataContent || 'File not available'}
+</owner_data>
 Use the provided file contents above for analysis. You still have access to write_file and run_js tools for creating and executing scripts.`;
 
   logger.info('agent: generator msg: Creating extraction scripts');
