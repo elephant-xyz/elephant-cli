@@ -1,3 +1,11 @@
+# [1.29.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.4...v1.29.0) (2025-08-25)
+
+
+### Features
+
+* Export CidHexConverterService for library use in index.ts ([#97](https://github.com/elephant-xyz/elephant-cli/issues/97)) ([2e88138](https://github.com/elephant-xyz/elephant-cli/commit/2e88138c5e58882681571f901583914b0c29d258))
+* generate-transform ([#96](https://github.com/elephant-xyz/elephant-cli/issues/96)) ([9a76221](https://github.com/elephant-xyz/elephant-cli/commit/9a762213a9beeb0049ac9fed7dbdb55c62293bc6))
+
 ## [1.28.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.3...v1.28.4) (2025-08-21)
 
 
