@@ -40,42 +40,37 @@ export function buildAgentGraph(
   retryPolicy: RetryPolicy,
   onProgress?: GraphProgressCallback
 ) {
-  const workflow = new StateGraph(AgentStateAnnotation)
-    .addNode(
-      'ownerAnalysis',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: ownerAnalysis');
-        onProgress?.({ type: 'node_start', name: 'ownerAnalysis' });
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await ownerAnalysisNode(state, chat);
-        logger.info('node_end: ownerAnalysis');
-        onProgress?.({ type: 'node_end', name: 'ownerAnalysis' });
-        return result;
-      },
-      {
-        retryPolicy: {
-          maxAttempts: retryPolicy.maxAttempts,
-          retryOn: retryPolicy.retryOn,
-        },
+  const withCommon =
+    <N extends GraphNodeName>(
+      name: N,
+      fn: (state: AgentState, chat: ChatModel) => Promise<Partial<AgentState>>
+    ) =>
+    async (
+      state: AgentState,
+      config?: RunnableConfig
+    ): Promise<Partial<AgentState>> => {
+      logger.info(`node_start: ${name}`);
+      onProgress?.({ type: 'node_start', name });
+      const chat = config?.configurable?.chat_model as ChatModel;
+      if (!chat) {
+        throw new Error('Chat model not provided in config');
       }
-    )
+      const result = await fn(state, chat);
+      logger.info(`node_end: ${name}`);
+      onProgress?.({ type: 'node_end', name });
+      return result;
+    };
+
+  const workflow = new StateGraph(AgentStateAnnotation)
+    .addNode('ownerAnalysis', withCommon('ownerAnalysis', ownerAnalysisNode), {
+      retryPolicy: {
+        maxAttempts: retryPolicy.maxAttempts,
+        retryOn: retryPolicy.retryOn,
+      },
+    })
     .addNode(
       'structureExtraction',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: structureExtraction');
-        onProgress?.({ type: 'node_start', name: 'structureExtraction' });
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await structureExtractionNode(state, chat);
-        logger.info('node_end: structureExtraction');
-        onProgress?.({ type: 'node_end', name: 'structureExtraction' });
-        return result;
-      },
+      withCommon('structureExtraction', structureExtractionNode),
       {
         retryPolicy: {
           maxAttempts: retryPolicy.maxAttempts,
@@ -83,27 +78,12 @@ export function buildAgentGraph(
         },
       }
     )
-    .addNode(
-      'extraction',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: extraction');
-        onProgress?.({ type: 'node_start', name: 'extraction' });
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await extractionNode(state, chat);
-        logger.info('node_end: extraction');
-        onProgress?.({ type: 'node_end', name: 'extraction' });
-        return result;
+    .addNode('extraction', withCommon('extraction', extractionNode), {
+      retryPolicy: {
+        maxAttempts: retryPolicy.maxAttempts,
+        retryOn: retryPolicy.retryOn,
       },
-      {
-        retryPolicy: {
-          maxAttempts: retryPolicy.maxAttempts,
-          retryOn: retryPolicy.retryOn,
-        },
-      }
-    )
+    })
     .addEdge(START, 'ownerAnalysis')
     .addEdge(START, 'structureExtraction')
     .addEdge('structureExtraction', 'extraction')

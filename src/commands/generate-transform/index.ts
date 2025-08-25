@@ -44,13 +44,13 @@ export function registerGenerateTransformCommand(program: Command): void {
         spinner.succeed('Model initialized.');
 
         spinner.start('Preparing workspace...');
-        const humanizeNode = (
-          name: 'ownerAnalysis' | 'structureExtraction' | 'extraction'
-        ): string => {
-          if (name === 'ownerAnalysis') return 'Owner analysis';
-          if (name === 'structureExtraction') return 'Structure extraction';
-          return 'Data extraction';
-        };
+        const nodeLabels = {
+          ownerAnalysis: 'Owner analysis',
+          structureExtraction: 'Structure extraction',
+          extraction: 'Data extraction',
+        } as const;
+        const humanizeNode = (name: keyof typeof nodeLabels): string =>
+          nodeLabels[name];
 
         const out = await generateTransform(inputZip, model, {
           outputZip: opts.outputZip,
@@ -61,33 +61,30 @@ export function registerGenerateTransformCommand(program: Command): void {
               return;
             }
             if (evt.kind === 'phase') {
-              if (evt.phase === 'initializing') {
-                spinner.start('Preparing workspace...');
-                return;
-              }
-              if (evt.phase === 'unzipping') {
-                spinner.start('Unzipping input...');
-                return;
-              }
-              if (evt.phase === 'discovering') {
-                spinner.start('Discovering required files...');
-                return;
-              }
-              if (evt.phase === 'preparing') {
-                spinner.start(evt.message || 'Preparing inputs...');
-                return;
-              }
-              if (evt.phase === 'running_graph') {
-                spinner.start('Running generation pipeline...');
-                return;
-              }
-              if (evt.phase === 'bundling') {
-                spinner.start('Bundling output...');
-                return;
-              }
-              if (evt.phase === 'completed') {
-                spinner.succeed('Generation pipeline completed.');
-                return;
+              switch (evt.phase) {
+                case 'initializing':
+                  spinner.start('Preparing workspace...');
+                  break;
+                case 'unzipping':
+                  spinner.start('Unzipping input...');
+                  break;
+                case 'discovering':
+                  spinner.start('Discovering required files...');
+                  break;
+                case 'preparing':
+                  spinner.start(evt.message || 'Preparing inputs...');
+                  break;
+                case 'running_graph':
+                  spinner.start('Running generation pipeline...');
+                  break;
+                case 'bundling':
+                  spinner.start('Bundling output...');
+                  break;
+                case 'completed':
+                  spinner.succeed('Generation pipeline completed.');
+                  break;
+                default:
+                  break;
               }
               return;
             }

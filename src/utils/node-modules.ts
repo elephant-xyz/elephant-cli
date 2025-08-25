@@ -43,7 +43,7 @@ function resolveNodeModulesViaRequire(
     try {
       const resolved = req.resolve(`${name}/package.json`);
       let dir = path.dirname(resolved);
-      while (true) {
+      for (;;) {
         if (path.basename(dir) === 'node_modules') {
           try {
             return fs.realpathSync(dir);

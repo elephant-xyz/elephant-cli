@@ -50,7 +50,12 @@ export async function fetchSchemas(
           if (Object.hasOwn(properties, 'request_identifier')) {
             delete properties.request_identifier;
           }
-          properties.required = properties.required?.filter(
+          if (!Array.isArray(schemaParsed.required)) {
+            throw new Error(
+              `Schema ${schemaName} has invalid required field: ${properties.required}. Should be an array.`
+            );
+          }
+          schemaParsed.required = properties.required?.filter(
             (prop: string) =>
               prop !== 'source_http_request' && prop !== 'request_identifier'
           );
