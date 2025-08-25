@@ -102,10 +102,13 @@ export class PinataService {
       try {
         logger.debug(`Attempt ${attempt + 1} to upload ${metadata.name}`);
 
-        // Use native File and FormData (Node 18+)
-        const file = new File([fileBuffer], metadata.name || 'file', {
-          type: mimeType,
-        });
+        const file = new File(
+          [fileBuffer as unknown as BlobPart],
+          metadata.name || 'file',
+          {
+            type: mimeType,
+          }
+        );
         const form = new FormData();
         form.append('file', file);
         // Use CID v1 by default for all uploads
@@ -317,13 +320,11 @@ export class PinataService {
     try {
       logger.debug(`Starting directory upload for: ${directoryPath}`);
 
-      // Check if directory exists
       const dirStats = await stat(directoryPath).catch(() => null);
       if (!dirStats || !dirStats.isDirectory()) {
         throw new Error(`Directory not found: ${directoryPath}`);
       }
 
-      // Read all files in the directory recursively
       const files = await this.getAllFiles(directoryPath);
 
       if (files.length === 0) {
@@ -332,25 +333,25 @@ export class PinataService {
 
       logger.debug(`Found ${files.length} files to upload`);
 
-      // Create form data using native FormData
       const form = new FormData();
 
-      // Add each file to the form data with its relative path
       for (const filePath of files) {
         const relativePath = this.getRelativePath(directoryPath, filePath);
         const fileContent = await readFile(filePath);
 
-        // Create a File object with the relative path
-        const file = new File([fileContent], relativePath, {
-          type: 'application/octet-stream',
-        });
+        const file = new File(
+          [fileContent as unknown as BlobPart],
+          relativePath,
+          {
+            type: 'application/octet-stream',
+          }
+        );
 
         logger.info(`relativePath is ${relativePath}`);
         // Append with the filepath parameter to preserve directory structure
         form.append('file', file, relativePath);
       }
 
-      // Use CID v1 by default for all uploads
       form.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
       if (metadata) {
         const pinataMetadata = JSON.stringify({
@@ -360,18 +361,14 @@ export class PinataService {
         form.append('pinataMetadata', pinataMetadata);
       }
 
-      // Wait for rate limit before making the request
       await this.rateLimiter.waitForToken();
 
-      // Track request count
       this.trackRequest();
 
-      // Make the request using fetch with native FormData
       const response = await fetch(this.pinataApiUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.pinataJwt}`,
-          // Let fetch set the Content-Type with boundary
         },
         body: form,
       });
