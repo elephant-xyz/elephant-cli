@@ -75,3 +75,6 @@ registerFetchDataCommand(program);
 registerTransformCommand(program);
 
 program.parse();
+
+// Export services for use as a library
+export { CidHexConverterService } from './services/index.js';
