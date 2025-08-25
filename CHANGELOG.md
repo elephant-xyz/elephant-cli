@@ -1,3 +1,10 @@
+## [1.29.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.0...v1.29.1) (2025-08-25)
+
+
+### Bug Fixes
+
+* fix owners data and other prompts ([#98](https://github.com/elephant-xyz/elephant-cli/issues/98)) ([44dd43f](https://github.com/elephant-xyz/elephant-cli/commit/44dd43f3985a3abf9c0d83f95d25d4690098b48e))
+
 # [1.29.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.4...v1.29.0) (2025-08-25)
 
 
