@@ -3,6 +3,7 @@ import { logger } from '../../utils/logger.js';
 import { defaultGenerateTransformConfig } from './config.js';
 import { generateTransform } from './runner.js';
 import { ChatOpenAI } from '@langchain/openai';
+import { createSpinner } from '../../utils/progress.js';
 
 export function registerGenerateTransformCommand(program: Command): void {
   program
@@ -30,7 +31,9 @@ export function registerGenerateTransformCommand(program: Command): void {
       }
 
       const cfg = defaultGenerateTransformConfig;
+      const spinner = createSpinner('Initializing...');
       try {
+        spinner.start('Initializing OpenAI model...');
         const model = new ChatOpenAI({
           model: cfg.modelName,
           streaming: false,
@@ -38,12 +41,70 @@ export function registerGenerateTransformCommand(program: Command): void {
           temperature: cfg.temperature,
           maxRetries: 4,
         });
+        spinner.succeed('Model initialized.');
+
+        spinner.start('Preparing workspace...');
+        const humanizeNode = (
+          name: 'ownerAnalysis' | 'structureExtraction' | 'extraction'
+        ): string => {
+          if (name === 'ownerAnalysis') return 'Owner analysis';
+          if (name === 'structureExtraction') return 'Structure extraction';
+          return 'Data extraction';
+        };
+
         const out = await generateTransform(inputZip, model, {
           outputZip: opts.outputZip,
           config: cfg,
+          onProgress: (evt) => {
+            if (evt.kind === 'message') {
+              spinner.text = evt.message;
+              return;
+            }
+            if (evt.kind === 'phase') {
+              if (evt.phase === 'initializing') {
+                spinner.start('Preparing workspace...');
+                return;
+              }
+              if (evt.phase === 'unzipping') {
+                spinner.start('Unzipping input...');
+                return;
+              }
+              if (evt.phase === 'discovering') {
+                spinner.start('Discovering required files...');
+                return;
+              }
+              if (evt.phase === 'preparing') {
+                spinner.start(evt.message || 'Preparing inputs...');
+                return;
+              }
+              if (evt.phase === 'running_graph') {
+                spinner.start('Running generation pipeline...');
+                return;
+              }
+              if (evt.phase === 'bundling') {
+                spinner.start('Bundling output...');
+                return;
+              }
+              if (evt.phase === 'completed') {
+                spinner.succeed('Generation pipeline completed.');
+                return;
+              }
+              return;
+            }
+            if (evt.kind === 'node') {
+              const label = humanizeNode(evt.name);
+              if (evt.stage === 'start') {
+                spinner.start(`Running ${label}...`);
+                return;
+              }
+              spinner.succeed(`${label} completed.`);
+            }
+          },
         });
+        spinner.succeed('Generation complete.');
         logger.success(`Generated ${out}`);
       } catch (e) {
+        spinner.fail('generate-transform failed');
         logger.error(`generate-transform failed: ${String(e)}`);
         process.exitCode = 1;
       }
