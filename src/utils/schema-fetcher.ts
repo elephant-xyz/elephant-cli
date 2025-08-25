@@ -55,7 +55,7 @@ export async function fetchSchemas(
               `Schema ${schemaName} has invalid required field: ${properties.required}. Should be an array.`
             );
           }
-          schemaParsed.required = properties.required?.filter(
+          schemaParsed.required = schemaParsed.required?.filter(
             (prop: string) =>
               prop !== 'source_http_request' && prop !== 'request_identifier'
           );
