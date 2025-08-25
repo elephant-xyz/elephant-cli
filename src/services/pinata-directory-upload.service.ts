@@ -62,34 +62,25 @@ export class PinataDirectoryUploadService {
 
       logger.technical(`Found ${files.length} files to upload as directory`);
 
-      // Create form data for the upload
       const form = new FormData();
 
-      // Get the directory name to use as prefix
-      // Use metadata.directoryName if provided, otherwise use basename
       const dirName = metadata?.directoryName || path.basename(directoryPath);
 
-      // Add each file to the form data with directory prefix
-      // With wrapWithDirectory: false, we manually add directory structure
       for (const filePath of files) {
         const relativePath = this.getRelativePath(directoryPath, filePath);
         const fileContent = await fsPromises.readFile(filePath);
 
-        // Add directory name as prefix to create directory structure
         const ipfsPath = `${dirName}/${relativePath}`;
 
-        // Create a File object for the content with the full path
-        const file = new File([fileContent], ipfsPath, {
+        const file = new File([fileContent as unknown as BlobPart], ipfsPath, {
           type: 'application/octet-stream',
         });
 
         logger.debug(`Adding file to upload: ${ipfsPath}`);
 
-        // Append file - the File's name includes directory structure
         form.append('file', file);
       }
 
-      // Configure upload options - use CID v1
       // Use wrapWithDirectory: false since we're manually handling directory structure
       const pinataOptions = {
         cidVersion: 1,
@@ -97,7 +88,6 @@ export class PinataDirectoryUploadService {
       };
       form.append('pinataOptions', JSON.stringify(pinataOptions));
 
-      // Add metadata if provided
       if (metadata) {
         const pinataMetadata = {
           name: metadata.name || path.basename(directoryPath),
@@ -106,7 +96,6 @@ export class PinataDirectoryUploadService {
         form.append('pinataMetadata', JSON.stringify(pinataMetadata));
       }
 
-      // Make the upload request
       logger.info(
         `Uploading directory ${directoryPath} to IPFS (${files.length} files)...`
       );

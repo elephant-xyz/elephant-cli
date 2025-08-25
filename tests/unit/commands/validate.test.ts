@@ -8,8 +8,6 @@ import {
   MockInstance,
 } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import * as fs from 'fs';
-import path from 'path';
 import * as child_process from 'child_process';
 import * as os_module from 'os';
 import { logger } from '../../../src/utils/logger.js';
@@ -19,17 +17,11 @@ import {
 } from '../../../src/commands/validate.js';
 import { FileScannerService } from '../../../src/services/file-scanner.service.js';
 import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
-import {
-  JsonValidatorService,
-  ValidationError,
-} from '../../../src/services/json-validator.service.js';
+import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 import { IPFSService } from '../../../src/services/ipfs.service.js';
-import { ReportSummary, FileEntry } from '../../../src/types/submit.types.js';
-import { DEFAULT_IPFS_GATEWAY } from '../../../src/config/constants.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
-import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
 
 // Mock the single-property-processor module
 vi.mock('../../../src/utils/single-property-processor.js', () => ({
@@ -123,9 +115,9 @@ vi.mock('../../../src/utils/logger.js', () => ({
 import { processSinglePropertyInput } from '../../../src/utils/single-property-processor.js';
 import { calculateEffectiveConcurrency } from '../../../src/utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../../../src/utils/single-property-file-scanner-v2.js';
-import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 
 describe('handleValidate', () => {
+  let exitSpy: MockInstance<[code?: number | undefined], never>;
   let mockFileScannerService: Partial<FileScannerService>;
   let mockSchemaCacheService: Partial<SchemaCacheService>;
   let mockJsonValidatorService: Partial<JsonValidatorService>;
@@ -134,15 +126,13 @@ describe('handleValidate', () => {
   let mockIpfsService: Partial<IPFSService>;
   let mockCleanup: vi.Mock;
 
-  let exitSpy: MockInstance;
-
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock process.exit
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
-      throw new Error(`process.exit(${code})`);
-    });
+    // Prevent tests from failing due to process.exit and allow assertions
+    exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined) as unknown as never);
 
     // Mock execSync to return a valid ulimit value
     vi.mocked(child_process.execSync).mockReturnValue('1024\n');
@@ -341,6 +331,7 @@ describe('handleValidate', () => {
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining('✅ All files passed validation!')
     );
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle validation errors and write them to CSV', async () => {
@@ -384,6 +375,7 @@ describe('handleValidate', () => {
     expect(logger.technical).toHaveBeenCalledWith(
       'Validation errors will be saved to: test_errors.csv'
     );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle invalid directory structure', async () => {
@@ -409,6 +401,7 @@ describe('handleValidate', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'No JSON files found in the property directory'
     );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle seed files validation', async () => {
@@ -443,6 +436,7 @@ describe('handleValidate', () => {
     expect(logger.info).toHaveBeenCalledWith(
       'Validating 1 seed files first...'
     );
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should skip files in directories with failed seed validation', async () => {
@@ -505,6 +499,7 @@ describe('handleValidate', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Skipping file')
     );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle invalid data group schema', async () => {
@@ -561,6 +556,8 @@ describe('handleValidate', () => {
         errorMessage: expect.stringContaining('File read/parse error'),
       })
     );
+    // Final metrics mock reports 0 errors, so no exit expected here
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle schema loading errors', async () => {
@@ -584,6 +581,8 @@ describe('handleValidate', () => {
         errorMessage: expect.stringContaining('Could not load schema'),
       })
     );
+    // Final metrics mock reports 0 errors, so no exit expected here
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle concurrency limits', async () => {
@@ -611,6 +610,7 @@ describe('handleValidate', () => {
       fallback: 10,
       windowsFactor: 4,
     });
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle no files to validate', async () => {
@@ -634,6 +634,7 @@ describe('handleValidate', () => {
       'No JSON files found in the property directory'
     );
     expect(mockCsvReporterService.finalize).toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle critical errors during validation', async () => {
@@ -645,20 +646,19 @@ describe('handleValidate', () => {
       input: '/test/input.zip',
     };
 
-    await expect(
-      handleValidate(options, {
-        fileScannerService: mockFileScannerService as FileScannerService,
-        schemaCacheService: mockSchemaCacheService as SchemaCacheService,
-        jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
-        csvReporterService: mockCsvReporterService as CsvReporterService,
-        progressTracker: mockProgressTracker as SimpleProgress,
-        ipfsServiceForSchemas: mockIpfsService as IPFSService,
-      })
-    ).rejects.toThrow('process.exit(1)');
+    await handleValidate(options, {
+      fileScannerService: mockFileScannerService as FileScannerService,
+      schemaCacheService: mockSchemaCacheService as SchemaCacheService,
+      jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
+      csvReporterService: mockCsvReporterService as CsvReporterService,
+      progressTracker: mockProgressTracker as SimpleProgress,
+      ipfsServiceForSchemas: mockIpfsService as IPFSService,
+    });
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('CRITICAL_ERROR_VALIDATE')
     );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('should handle invalid ZIP input', async () => {
@@ -669,6 +669,11 @@ describe('handleValidate', () => {
     const options: ValidateCommandOptions = {
       input: '/test/not-a-zip.txt',
     };
+
+    // Force process.exit to throw to stop execution early (before destructuring)
+    exitSpy.mockImplementationOnce((() => {
+      throw new Error('process.exit(1)');
+    }) as unknown as never);
 
     await expect(
       handleValidate(options, {
@@ -684,5 +689,6 @@ describe('handleValidate', () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('Failed to process input')
     );
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });
