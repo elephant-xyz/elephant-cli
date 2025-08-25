@@ -32,7 +32,7 @@
 
 1. **Script Discovery and Execution**
    - Before significant tool calls, state one line: purpose + minimal inputs. For example, "Checking for extractor scripts using 'read_file'; input: script path."
-   - Output files: `{structure_data_file}`, `{utility_data_file}`, `{layout_data_file}`.
+   - Script has to produce output files with exactly this path: `{structure_data_file}`, `{utility_data_file}`, `{layout_data_file}`.
 2. **Script Creation/Updating**
    - Read relevant schemas before proceeding.
    - Use onlyt `cheerio` library for all HTML parsing and extraction.
@@ -66,7 +66,7 @@
 
 ### Output Format
 
-Script, that you produce, should follow this file naming convention:
+Script, that you produce, should follow exactly this file naming convention, including the exact path:
 
 - `{structure_data_file}`: `{{ "property_[id]": {{ structure fields per schema }} }}`
 - `{utility_data_file}`: `{{ "property_[id]": {{ utility fields per schema }} }}`

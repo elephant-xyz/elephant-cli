@@ -115,52 +115,34 @@ export async function extractionNode(
   let unnormalizedAddressContent = '';
   let propertySeedContent = '';
 
-  try {
-    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
-    inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read input HTML: ${err}`);
-  }
+  const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
+  inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
 
-  try {
-    const unnormalizedPath = path.join(
-      state.tempDir,
-      state.filenames.UNNORMALIZED_ADDRESS
-    );
-    unnormalizedAddressContent = await fs.readFile(unnormalizedPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read unnormalized address: ${err}`);
-  }
+  const unnormalizedPath = path.join(
+    state.tempDir,
+    state.filenames.UNNORMALIZED_ADDRESS
+  );
+  unnormalizedAddressContent = await fs.readFile(unnormalizedPath, 'utf-8');
 
-  try {
-    const seedPath = path.join(state.tempDir, state.filenames.PROPERTY_SEED);
-    propertySeedContent = await fs.readFile(seedPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read property seed: ${err}`);
-  }
+  const seedPath = path.join(state.tempDir, state.filenames.PROPERTY_SEED);
+  propertySeedContent = await fs.readFile(seedPath, 'utf-8');
 
   let utilitiesDataContent = '';
   let layoutDataContent = '';
 
-  try {
-    const utilitiesDataPath = path.join(
-      state.tempDir,
-      state.filenames.UTILITIES_DATA
-    );
-    utilitiesDataContent = await fs.readFile(utilitiesDataPath, 'utf-8');
-  } catch {
-    // File doesn't exist yet, that's ok
-  }
+  const utilitiesDataPath = path.join(
+    state.tempDir,
+    state.filenames.UTILITIES_DATA
+  );
+  utilitiesDataContent = await fs.readFile(utilitiesDataPath, 'utf-8');
 
-  try {
-    const layoutDataPath = path.join(
-      state.tempDir,
-      state.filenames.LAYOUT_DATA
-    );
-    layoutDataContent = await fs.readFile(layoutDataPath, 'utf-8');
-  } catch {
-    // File doesn't exist yet, that's ok
-  }
+  const layoutDataPath = path.join(state.tempDir, state.filenames.LAYOUT_DATA);
+  layoutDataContent = await fs.readFile(layoutDataPath, 'utf-8');
+
+  const ownerDataContent = await fs.readFile(
+    path.join(state.tempDir, state.filenames.OWNER_DATA),
+    'utf-8'
+  );
 
   // Prepare initial message with all file contents
   const initialMessage = `Start by creating the extraction script and processing all input files. Make sure to extract all sales-taxes-owners data.
@@ -196,6 +178,9 @@ ${layoutDataContent}
     : ''
 }
 
+<owner_data>
+${ownerDataContent || 'File not available'}
+</owner_data>
 Use the provided file contents above for analysis. You still have access to write_file and run_js tools for creating and executing scripts.`;
 
   logger.info('agent: generator msg: Creating extraction scripts');

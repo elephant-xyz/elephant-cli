@@ -23,9 +23,7 @@ export async function discoverRequiredFiles(
   root: string
 ): Promise<DiscoverResult> {
   const list = await fs.readdir(root, { withFileTypes: true });
-  console.log(`list: ${list.map((d) => d.name)}`);
   const files = list.filter((d) => d.isFile()).map((d) => d.name);
-  console.log(`files: ${files}`);
   const unnormalized = files.find(
     (f) => f.toLowerCase() === 'unnormalized_address.json'
   );
@@ -112,16 +110,46 @@ export type GenerateTransformOptions = {
   config?: Partial<GenerateTransformConfig>;
 };
 
+export type TransformProgressPhase =
+  | 'initializing'
+  | 'unzipping'
+  | 'discovering'
+  | 'preparing'
+  | 'running_graph'
+  | 'bundling'
+  | 'completed';
+
+export type TransformNodeName =
+  | 'ownerAnalysis'
+  | 'structureExtraction'
+  | 'extraction';
+
+export type TransformProgressEvent =
+  | { kind: 'phase'; phase: TransformProgressPhase; message?: string }
+  | { kind: 'node'; stage: 'start' | 'end'; name: TransformNodeName }
+  | { kind: 'message'; message: string };
+
+export type TransformProgressCallback = (event: TransformProgressEvent) => void;
+
+export type GenerateTransformOptionsWithProgress = GenerateTransformOptions & {
+  onProgress?: TransformProgressCallback;
+};
+
 export async function generateTransform(
   inputZip: string,
   chat: ChatModel,
-  options: GenerateTransformOptions
+  options: GenerateTransformOptionsWithProgress
 ): Promise<string> {
+  const report = (e: TransformProgressEvent): void => {
+    options.onProgress?.(e);
+  };
+
   const cfg: GenerateTransformConfig = {
     ...defaultGenerateTransformConfig,
     ...(options.config || {}),
   };
 
+  report({ kind: 'phase', phase: 'initializing' });
   const tempRoot = await createTempDir('elephant-gentrans');
   const workDir = path.join(tempRoot, 'work');
   const scriptsDir = path.join(tempRoot, 'scripts');
@@ -129,14 +157,17 @@ export async function generateTransform(
   await fs.mkdir(workDir, { recursive: true });
   await fs.mkdir(scriptsDir, { recursive: true });
   await fs.mkdir(ownersDir, { recursive: true });
+  report({ kind: 'phase', phase: 'unzipping' });
   unzipTo(inputZip, tempRoot);
 
+  report({ kind: 'phase', phase: 'discovering' });
   const { unnormalized, seed, html, priorScriptsDir, priorErrorsPath } =
     await discoverRequiredFiles(tempRoot);
 
   // Normalize discovered HTML path to tempRoot/input.html for downstream scripts
   const inputHtmlPath = path.join(tempRoot, 'input.html');
   const isHtml = /\.html?$/i.test(html);
+  report({ kind: 'phase', phase: 'preparing', message: 'Normalizing inputs' });
   if (isHtml && html !== inputHtmlPath) {
     try {
       await fs.copyFile(html, inputHtmlPath);
@@ -182,10 +213,25 @@ export async function generateTransform(
     schemas: await fetchSchemas(),
   };
 
-  await runThreeNodeGraph(state, chat, {
-    maxAttempts: cfg.retryMaxAttempts,
-  });
+  report({ kind: 'phase', phase: 'running_graph' });
+  await runThreeNodeGraph(
+    state,
+    chat,
+    {
+      maxAttempts: cfg.retryMaxAttempts,
+    },
+    (evt) => {
+      if (evt.type === 'node_start') {
+        report({ kind: 'node', stage: 'start', name: evt.name });
+      }
+      if (evt.type === 'node_end') {
+        report({ kind: 'node', stage: 'end', name: evt.name });
+      }
+    }
+  );
 
+  report({ kind: 'phase', phase: 'bundling' });
   await bundleOutput(tempRoot, path.resolve(options.outputZip), cfg.modelName);
+  report({ kind: 'phase', phase: 'completed' });
   return path.resolve(options.outputZip);
 }

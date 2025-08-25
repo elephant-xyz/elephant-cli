@@ -44,9 +44,21 @@ export async function fetchSchemas(
         }
         if (Object.hasOwn(schemaParsed, 'properties')) {
           const properties = schemaParsed.properties;
-          if (Object.hasOwn(properties, 'sourceHttpRequest')) {
-            delete properties.sourceHttpRequest;
+          if (Object.hasOwn(properties, 'source_http_request')) {
+            delete properties.source_http_request;
           }
+          if (Object.hasOwn(properties, 'request_identifier')) {
+            delete properties.request_identifier;
+          }
+          if (!Array.isArray(schemaParsed.required)) {
+            throw new Error(
+              `Schema ${schemaName} has invalid required field: ${properties.required}. Should be an array.`
+            );
+          }
+          schemaParsed.required = schemaParsed.required?.filter(
+            (prop: string) =>
+              prop !== 'source_http_request' && prop !== 'request_identifier'
+          );
           schemaParsed.properties = properties;
         }
         return [schemaName, JSON.stringify(schemaParsed)];
