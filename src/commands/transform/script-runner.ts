@@ -88,8 +88,6 @@ export async function runScriptsPipeline(
         'utilityMapping.js',
       ];
       logger.error(`Script ${names[idx]} failed with code ${res.code}`);
-      logger.error(res.stderr);
-      logger.error(res.stdout);
       if (res.stderr) logger.error(res.stderr.trim());
       if (res.stdout) logger.error(res.stdout.trim());
       throw new Error(`Script failed: ${names[idx]}`);

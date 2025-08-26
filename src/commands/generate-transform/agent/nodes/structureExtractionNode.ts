@@ -100,8 +100,8 @@ export async function structureExtractionNode(
   // Read input HTML file
   let inputFileContent = '';
   try {
-    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_FILE);
-    inputFileContent = await fs.readFile(inputHtmlPath, 'utf-8');
+    const inputFilePath = path.join(state.tempDir, state.filenames.INPUT_FILE);
+    inputFileContent = await fs.readFile(inputFilePath, 'utf-8');
   } catch (err) {
     logger.warn(`Could not read input HTML: ${err}`);
   }

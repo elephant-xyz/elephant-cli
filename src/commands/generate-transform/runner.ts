@@ -47,15 +47,9 @@ export async function discoverRequiredFiles(
   let inputFileName = undefined;
   if (input.endsWith('.html')) {
     inputFileName = 'input.html';
-  } else if (input.endsWith('.json')) {
-    inputFileName = 'input.json';
   } else {
-    console.error(
-      chalk.red(
-        'Input should contain unnormalized_address.json, property_seed.json, and an HTML/JSON file'
-      )
-    );
-    throw new Error('E_INPUT_MISSING');
+    // file can be only be json as this is validated when finding the `input` file
+    inputFileName = 'input.json';
   }
   await fs.rename(path.join(root, input), path.join(root, inputFileName));
   let priorScriptsDir: string | undefined;

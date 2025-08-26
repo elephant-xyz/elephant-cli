@@ -43,7 +43,7 @@ const FILENAMES = {
 };
 
 export function buildFilename(inputFilename: string): typeof FILENAMES {
-  const filenames = structuredClone(FILENAMES);
+  const filenames = { ...FILENAMES };
   filenames.INPUT_FILE = inputFilename;
   return filenames;
 }
