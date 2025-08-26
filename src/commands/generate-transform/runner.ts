@@ -44,6 +44,20 @@ export async function discoverRequiredFiles(
     );
     throw new Error('E_INPUT_MISSING');
   }
+  let inputFileName = undefined;
+  if (input.endsWith('.html')) {
+    inputFileName = 'input.html';
+  } else if (input.endsWith('.json')) {
+    inputFileName = 'input.json';
+  } else {
+    console.error(
+      chalk.red(
+        'Input should contain unnormalized_address.json, property_seed.json, and an HTML/JSON file'
+      )
+    );
+    throw new Error('E_INPUT_MISSING');
+  }
+  await fs.rename(path.join(root, input), path.join(root, inputFileName));
   let priorScriptsDir: string | undefined;
   try {
     const scriptsCandidate = path.join(root, 'scripts');
@@ -58,7 +72,7 @@ export async function discoverRequiredFiles(
   return {
     unnormalized: path.join(root, unnormalized),
     seed: path.join(root, seed),
-    input: path.join(root, input),
+    input: inputFileName,
     priorScriptsDir,
     priorErrorsPath: errorCsv ? path.join(root, errorCsv) : undefined,
   };
