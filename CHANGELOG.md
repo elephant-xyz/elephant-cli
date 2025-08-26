@@ -1,3 +1,10 @@
+## [1.29.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.3...v1.29.4) (2025-08-26)
+
+
+### Bug Fixes
+
+* fix node-modules resolution ([#103](https://github.com/elephant-xyz/elephant-cli/issues/103)) ([38e3dd7](https://github.com/elephant-xyz/elephant-cli/commit/38e3dd797e4ccdf1247f22d867e94bb5e2ebf5bf))
+
 ## [1.29.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.2...v1.29.3) (2025-08-26)
 
 
