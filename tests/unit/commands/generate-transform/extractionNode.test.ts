@@ -37,11 +37,12 @@ vi.mock('../../../../src/commands/generate-transform/agent/utils.js', () => ({
 import { extractionNode } from '../../../../src/commands/generate-transform/agent/nodes/extractionNode.js';
 import { invokeAgent } from '../../../../src/commands/generate-transform/agent/utils.js';
 import { logger } from '../../../../src/utils/logger.js';
+import { FilenameKey } from '../../../../src/commands/generate-transform/config/filenames.js';
 
 describe('extractionNode', () => {
   let tempDir: string;
   const filenames = {
-    INPUT_HTML: 'input.html',
+    INPUT_FILE: 'input.html',
     UNNORMALIZED_ADDRESS: 'unnormalized_address.json',
     PROPERTY_SEED: 'property_seed.json',
     UTILITIES_DATA: 'utilities.json',
@@ -50,7 +51,7 @@ describe('extractionNode', () => {
     DATA_DIR: 'data',
     OWNER_DATA: 'owner_data.json',
     STRUCTURE_DATA: 'structure.json',
-  } as const;
+  } as const as Record<FilenameKey, string>;
 
   const baseState = {
     tempDir: '',
@@ -59,7 +60,7 @@ describe('extractionNode', () => {
       seed: '',
       html: '',
     },
-    filenames: filenames as unknown as Record<string, string>,
+    filenames: filenames,
     generatedScripts: [],
     attempts: 0,
     logs: [],
@@ -74,7 +75,7 @@ describe('extractionNode', () => {
 
     // Required files
     await fs.writeFile(
-      path.join(tempDir, filenames.INPUT_HTML),
+      path.join(tempDir, filenames.INPUT_FILE),
       '<html>hi</html>'
     );
     await fs.writeFile(
@@ -114,7 +115,7 @@ describe('extractionNode', () => {
     const firstCall = vi.mocked(invokeAgent).mock.calls[0];
     expect(firstCall).toBeDefined();
     const generatorMsg = firstCall[1] as string;
-    expect(generatorMsg).toContain('<input_html>');
+    expect(generatorMsg).toContain('<input_file>');
     expect(generatorMsg).toContain('<unnormalized_address>');
     expect(generatorMsg).toContain('<property_seed>');
     // Optional blocks should be omitted when not present

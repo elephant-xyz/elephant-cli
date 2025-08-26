@@ -21,7 +21,7 @@ export async function ownerAnalysisNode(
   const baseTemplate = await promptRegistry.getPromptTemplate('owner-analysis');
 
   const templateVars = {
-    input_html_file: state.filenames.INPUT_HTML,
+    input_file: state.filenames.INPUT_FILE,
     owner_data_file: state.filenames.OWNER_DATA,
     owner_script: state.filenames.OWNER_MAPPING_SCRIPT,
   };
@@ -51,10 +51,10 @@ export async function ownerAnalysisNode(
   } as any);
 
   // Read input HTML file
-  let inputHtmlContent = '';
+  let inputFileContent = '';
   try {
-    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
-    inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
+    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_FILE);
+    inputFileContent = await fs.readFile(inputHtmlPath, 'utf-8');
   } catch (err) {
     logger.warn(`Could not read input HTML: ${err}`);
   }
@@ -64,9 +64,9 @@ export async function ownerAnalysisNode(
 
 Available file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 Use the provided file content above for analysis. You still have access to write_file and run_js tools for creating and executing scripts.`;
 

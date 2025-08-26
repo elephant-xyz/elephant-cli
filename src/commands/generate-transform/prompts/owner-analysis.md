@@ -3,11 +3,14 @@ Begin with a concise checklist (3-7 bullets) of what you will do; keep items con
 ## Requirements
 
 - **Input Handling:**
-  - Analyze the HTML content provided in the user message as `input_html` (from file `{input_html_file}`), which contains a single property's details.
+  - Analyze the content provided in the user message as `input_file` (from file `{input_file}`), which contains a single property's details.
   - Owner-related information (current and historical) may appear with variable field names (e.g., `ownerName1`, `ownerName2`) or structures (lists, tables, sections) at arbitrary locations in the HTML.
 
 - **HTML Parsing:**
   - Parse and extract all data using only `cheerio`.
+
+- **JSON Processing:**
+  - Use vanilla JavaScript for JSON processing.
 
 - **Owner Extraction and Classification:**
   - Extract all plausible owner names, covering both current and historical owners, regardless of field label or HTML structure.
@@ -40,7 +43,7 @@ Begin with a concise checklist (3-7 bullets) of what you will do; keep items con
 
 ## Tasks
 
-1. Analyze the HTML content provided in the user message as `input_html` to understand its structure
+1. Analyze the HTML content provided in the user message as `input_file` to understand its structure
 2. Create a transformation script.
 3. Use `write_file` to write out created script to `{owner_script}`.
 4. use `run_js` to test a script

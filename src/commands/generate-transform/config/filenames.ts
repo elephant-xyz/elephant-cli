@@ -1,9 +1,9 @@
 /**
  * Centralized filename constants for the generate-transform command
  */
-export const FILENAMES = {
+const FILENAMES = {
   // Input files
-  INPUT_HTML: 'input.html',
+  INPUT_FILE: 'input.html',
   UNNORMALIZED_ADDRESS: 'unnormalized_address.json',
   PROPERTY_SEED: 'property_seed.json',
 
@@ -40,7 +40,13 @@ export const FILENAMES = {
   OUTPUT_LAYOUT_PREFIX: 'data/layout_',
   OUTPUT_RELATIONSHIP_SALES_PERSON: 'data/relationship_sales_person.json',
   OUTPUT_RELATIONSHIP_SALES_COMPANY: 'data/relationship_sales_company.json',
-} as const;
+};
+
+export function buildFilename(inputFilename: string): typeof FILENAMES {
+  const filenames = structuredClone(FILENAMES);
+  filenames.INPUT_FILE = inputFilename;
+  return filenames;
+}
 
 export type FilenameKey = keyof typeof FILENAMES;
 export type FilenameValue = (typeof FILENAMES)[FilenameKey];

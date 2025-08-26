@@ -43,7 +43,7 @@ export async function extractionNode(
     person_schema: state.schemas?.person,
     company_schema: state.schemas?.company,
     // Add filename variables
-    input_html_file: state.filenames.INPUT_HTML,
+    input_file: state.filenames.INPUT_FILE,
     unnormalized_address_file: state.filenames.UNNORMALIZED_ADDRESS,
     property_seed_file: state.filenames.PROPERTY_SEED,
     utilities_data_file: state.filenames.UTILITIES_DATA,
@@ -111,12 +111,12 @@ export async function extractionNode(
     configurable: { thread_id: evaluatorThreadId },
   } as const;
 
-  let inputHtmlContent = '';
+  let inputFileContent = '';
   let unnormalizedAddressContent = '';
   let propertySeedContent = '';
 
-  const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
-  inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
+  const inputFilePath = path.join(state.tempDir, state.filenames.INPUT_FILE);
+  inputFileContent = await fs.readFile(inputFilePath, 'utf-8');
 
   const unnormalizedPath = path.join(
     state.tempDir,
@@ -183,9 +183,9 @@ export async function extractionNode(
 
 Available file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 <unnormalized_address>
 ${unnormalizedAddressContent || 'File not available'}
@@ -264,9 +264,9 @@ Use the provided file contents above for analysis. You still have access to writ
 
 Available input file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 <unnormalized_address>
 ${unnormalizedAddressContent || 'File not available'}

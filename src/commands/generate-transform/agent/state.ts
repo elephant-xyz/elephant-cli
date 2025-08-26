@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { loadPrompt, type PromptKey } from '../prompts/registry.js';
 import { logger } from '../../../utils/logger.js';
+import { FilenameKey } from '../config/filenames.js';
 
 export type ScriptItem = {
   path: string;
@@ -16,11 +17,11 @@ export const AgentStateAnnotation = Annotation.Root({
   inputPaths: Annotation<{
     unnormalized: string;
     seed: string;
-    html: string;
+    input: string;
     priorScriptsDir?: string;
     priorErrorsPath?: string;
   }>,
-  filenames: Annotation<Record<string, string>>,
+  filenames: Annotation<Record<FilenameKey, string>>,
   generatedScripts: Annotation<ScriptItem[]>({
     reducer: (current: ScriptItem[], update: ScriptItem[]) =>
       current.concat(update),
