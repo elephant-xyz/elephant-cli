@@ -8,13 +8,13 @@ import {
 import { type AgentState, type ChatModel } from './agent/state.js';
 import { runThreeNodeGraph } from './agent/graph.js';
 import { fetchSchemas } from '../../utils/schema-fetcher.js';
-import { FILENAMES } from './config/filenames.js';
+import { buildFilename } from './config/filenames.js';
 import chalk from 'chalk';
 
 export type DiscoverResult = {
   unnormalized: string;
   seed: string;
-  html: string;
+  input: string;
   priorScriptsDir?: string;
   priorErrorsPath?: string;
 };
@@ -28,7 +28,7 @@ export async function discoverRequiredFiles(
     (f) => f.toLowerCase() === 'unnormalized_address.json'
   );
   const seed = files.find((f) => f.toLowerCase() === 'property_seed.json');
-  const html =
+  const input =
     files.find((f) => /\.html?$/i.test(f)) ||
     files.find(
       (f) =>
@@ -36,7 +36,7 @@ export async function discoverRequiredFiles(
         f !== 'unnormalized_address.json' &&
         f !== 'property_seed.json'
     );
-  if (!unnormalized || !seed || !html) {
+  if (!unnormalized || !seed || !input) {
     console.error(
       chalk.red(
         'Input should contain unnormalized_address.json, property_seed.json, and an HTML/JSON file'
@@ -44,6 +44,14 @@ export async function discoverRequiredFiles(
     );
     throw new Error('E_INPUT_MISSING');
   }
+  let inputFileName = undefined;
+  if (input.endsWith('.html')) {
+    inputFileName = 'input.html';
+  } else {
+    // file can be only be json as this is validated when finding the `input` file
+    inputFileName = 'input.json';
+  }
+  await fs.rename(path.join(root, input), path.join(root, inputFileName));
   let priorScriptsDir: string | undefined;
   try {
     const scriptsCandidate = path.join(root, 'scripts');
@@ -58,7 +66,7 @@ export async function discoverRequiredFiles(
   return {
     unnormalized: path.join(root, unnormalized),
     seed: path.join(root, seed),
-    html: path.join(root, html),
+    input: inputFileName,
     priorScriptsDir,
     priorErrorsPath: errorCsv ? path.join(root, errorCsv) : undefined,
   };
@@ -161,21 +169,8 @@ export async function generateTransform(
   unzipTo(inputZip, tempRoot);
 
   report({ kind: 'phase', phase: 'discovering' });
-  const { unnormalized, seed, html, priorScriptsDir, priorErrorsPath } =
+  const { unnormalized, seed, input, priorScriptsDir, priorErrorsPath } =
     await discoverRequiredFiles(tempRoot);
-
-  // Normalize discovered HTML path to tempRoot/input.html for downstream scripts
-  const inputHtmlPath = path.join(tempRoot, 'input.html');
-  const isHtml = /\.html?$/i.test(html);
-  report({ kind: 'phase', phase: 'preparing', message: 'Normalizing inputs' });
-  if (isHtml && html !== inputHtmlPath) {
-    try {
-      await fs.copyFile(html, inputHtmlPath);
-    } catch {
-      const buf = await fs.readFile(html);
-      await fs.writeFile(inputHtmlPath, buf);
-    }
-  }
 
   // Ensure JSON inputs are available at stable paths in temp root (keep originals intact)
   const unnormalizedTarget = path.join(tempRoot, 'unnormalized_address.json');
@@ -196,17 +191,18 @@ export async function generateTransform(
       await fs.writeFile(seedTarget, buf);
     }
   }
+  const filenames = buildFilename(input);
 
   const state: AgentState = {
     tempDir: tempRoot,
     inputPaths: {
       unnormalized: unnormalizedTarget,
       seed: seedTarget,
-      html: isHtml ? inputHtmlPath : html,
+      input: input,
       priorScriptsDir,
       priorErrorsPath,
     },
-    filenames: FILENAMES,
+    filenames: filenames,
     generatedScripts: [],
     attempts: 0,
     logs: [],

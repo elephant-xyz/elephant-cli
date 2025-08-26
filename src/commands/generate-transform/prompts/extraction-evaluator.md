@@ -18,12 +18,11 @@ Start with a concise checklist (3-7 bullets) of your conceptual validation actio
 
 For each sampled property, proceed as follows:
 
-1. Examine the input content (provided in user message as `input_html`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`), and their corresponding outputs from `{data_dir}/`.
+1. Examine the input content (provided in user message as `input_file`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`), and their corresponding outputs from `{data_dir}/`.
 
 - Use `list_dir` tool to list files in the data directory.
 - Use `read_file` tool to access output files from `{data_dir}/` directory for evaluation.
 - The input files are already provided in the user message - you don't need to read them.
-
   - Thoroughly review all provided schemas:
     <property_schema>
     {property_schema}

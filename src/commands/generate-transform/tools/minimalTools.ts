@@ -14,7 +14,7 @@ import { linkNodeModulesIntoTemp } from '../../../utils/node-modules.js';
 export class MinimalTools {
   constructor(private readonly tempDir: string) {
     this.tempDir = tempDir;
-    linkNodeModulesIntoTemp(this.tempDir, { source: 'tool' });
+    linkNodeModulesIntoTemp(this.tempDir);
   }
 
   async readFile(relPath: string): Promise<string> {

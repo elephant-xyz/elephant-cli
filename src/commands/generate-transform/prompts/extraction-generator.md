@@ -5,14 +5,13 @@ You must systematically adhere to these principles:
 - **Owners** information must always be built using `{owner_data_file}`.
 - **Utilities** information must always be built using `{utilities_data_file}`.
 - **Layout** information must always be built using `{layout_data_file}`.
-- All other required data must be built from `{input_html_file}`.
+- All other required data must be built from `{input_file}`.
 - Do NOT attempt to programmatically validate outputs against JSON Schema. Schema conformity is required, but you should not perform explicit validation or test runs.
 - Preserve detailed, step-by-step reasoning and refinement throughout.
 
 # Task Workflow
 
 1.  **Initial Analysis**
-
     - Understand customr formats from the schema:
       <custom_formats>
 
@@ -93,26 +92,25 @@ You must systematically adhere to these principles:
       <layout_schema>
       {layout_schema}
       </layout_schema>
-    - Analyze the provided file contents (`input_html`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
+    - Analyze the provided file contents (`input_file`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
     - The file contents are already provided to you in the user message - you don't need to read them.
     - Explicitly note for each target data area the exact supporting data source(s):
       - Owners: from `owner_data` content (if available in user message)
       - Utilities: from `utilities_data` content (if available in user message)
       - Layout: from `layout_data` content (if available in user message)
-      - Property: from `input_html` content
-      - Address: from `unnormalized_address` content and `input_html` content
-      - Tax: from `input_html` content
-      - Flood: from `input_html` content
-      - Sales: from `input_html` content
-      - Structure: from `input_html` content
-      - Lot: from `input_html` content
+      - Property: from `input_file` content
+      - Address: from `unnormalized_address` content and `input_file` content
+      - Tax: from `input_file` content
+      - Flood: from `input_file` content
+      - Sales: from `input_file` content
+      - Structure: from `input_file` content
+      - Lot: from `input_file` content
     - Never extract owner, utilities, or layout data from HTML: always use the defined JSON sources (provided as `owner_data`, `utilities_data`, `layout_data` in user message).
-    - Use all other fields/data from the HTML content (provided as `input_html` in user message).
+    - Use all other fields/data from the HTML content (provided as `input_file` in user message).
 
 2.  **Script Development or Update**
-
     - Modify or create `{data_extractor_script}` only if it does not exist or per evaluator agent feedback.
-    - Scripts should read input file from `{input_html_file}`, `{unnormalized_address_file}`, `{property_seed_file}` and write output files to `{data_dir}/`.
+    - Scripts should read input file from `{input_file}`, `{unnormalized_address_file}`, `{property_seed_file}` and write output files to `{data_dir}/`.
     - DO NOT create any input files. They are already created and the content is provided in the user message.
     - Make sure, that the scripts extracts all the required data from the designated sources above for each data area.
     - Before any coding, map how each schema field will be extracted from the appropriate source via step-by-step reasoning.
@@ -124,7 +122,6 @@ You must systematically adhere to these principles:
       - Do not populate `source_http_request` and `request_identifier` in output data.
 
 3.  **Output Specification**
-
     - For each property, generate these files inside the `{data_dir}` directory :
       - `property.json` (This is required for the property data extraction)
       - `address.json` (fields: street_number, street_name, etc.; extracted with any supporting files as appropriate)
@@ -205,6 +202,7 @@ Check for existence of necessary data before file creation; never generate empty
 - Chain-of-thought reasoning should always precede extraction or output creation.
 - Persist until the evaluator agent confirms all requirements are fully met.
 - Use only the `cheerio` library for HTML extraction if needed.
+- Use vanilla JavaScript for JSON processing.
 - Owners, utility, and layout data must NEVER be extracted from HTML—ALWAYS their respective JSON files.
 
 Remember:  
