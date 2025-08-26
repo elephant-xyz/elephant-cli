@@ -1,3 +1,10 @@
+## [1.29.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.1...v1.29.2) (2025-08-26)
+
+
+### Bug Fixes
+
+* fix `generate-transform` failing, when there is no utilities ([#101](https://github.com/elephant-xyz/elephant-cli/issues/101)) ([5ac2261](https://github.com/elephant-xyz/elephant-cli/commit/5ac22618386df5feaa970960cea79b0e3d072819))
+
 ## [1.29.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.0...v1.29.1) (2025-08-25)
 
 
