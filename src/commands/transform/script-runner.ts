@@ -65,7 +65,7 @@ export async function runScriptsPipeline(
     if (!found) throw new Error(`Required script not found: ${name}`);
     return found;
   };
-  linkNodeModulesIntoTemp(workDir, { source: 'project' });
+  linkNodeModulesIntoTemp(workDir);
   const owner = await resolveScript('ownerMapping.js');
   const structure = await resolveScript('structureMapping.js');
   const layout = await resolveScript('layoutMapping.js');
@@ -98,6 +98,7 @@ export async function runScriptsPipeline(
   const finalRes = await execNode(extraction, [], workDir, timeoutMs);
   if (finalRes.code !== 0) {
     if (finalRes.stderr) logger.error(finalRes.stderr.trim());
+    if (finalRes.stdout) logger.error(finalRes.stdout.trim());
     throw new Error('dataExtraction.js failed');
   }
 }
