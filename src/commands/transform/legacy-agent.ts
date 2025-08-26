@@ -228,6 +228,7 @@ function buildAIAgentArgs(
 
   for (const [key, value] of Object.entries(options)) {
     if (key === 'outputZip') continue;
+    if (key === 'legacyMode') continue;
     const argName = key.replace(/([A-Z])/g, '-$1').toLowerCase();
     if (typeof value === 'boolean') {
       if (value) args.push(`--${argName}`);

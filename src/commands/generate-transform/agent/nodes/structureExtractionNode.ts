@@ -34,7 +34,7 @@ export async function structureExtractionNode(
     utility_schema: state.schemas?.utility,
     layout_schema: state.schemas?.layout,
     // Add filename variables
-    input_html_file: state.filenames.INPUT_HTML,
+    input_file: state.filenames.INPUT_FILE,
     structure_data_file: state.filenames.STRUCTURE_DATA,
     utility_data_file: state.filenames.UTILITIES_DATA,
     layout_data_file: state.filenames.LAYOUT_DATA,
@@ -98,10 +98,10 @@ export async function structureExtractionNode(
   } as const;
 
   // Read input HTML file
-  let inputHtmlContent = '';
+  let inputFileContent = '';
   try {
-    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
-    inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
+    const inputFilePath = path.join(state.tempDir, state.filenames.INPUT_FILE);
+    inputFileContent = await fs.readFile(inputFilePath, 'utf-8');
   } catch (err) {
     logger.warn(`Could not read input HTML: ${err}`);
   }
@@ -111,9 +111,9 @@ export async function structureExtractionNode(
 
 Available file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 Use the provided file content above for analysis. You still have access to write_file and run_js tools for creating and executing scripts.`;
 
@@ -166,9 +166,9 @@ Use the provided file content above for analysis. You still have access to write
 
 Available file contents for reference:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 ${
   structureDataContent

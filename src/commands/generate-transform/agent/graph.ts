@@ -20,44 +20,57 @@ export type RetryPolicy = {
   retryOn?: (error: unknown) => boolean;
 };
 
+export type GraphNodeName =
+  | 'ownerAnalysis'
+  | 'structureExtraction'
+  | 'extraction';
+
+export type GraphProgressEvent =
+  | { type: 'node_start'; name: GraphNodeName }
+  | { type: 'node_end'; name: GraphNodeName };
+
+export type GraphProgressCallback = (event: GraphProgressEvent) => void;
+
 /**
  * Build the agent graph with LangGraph StateGraph
  * @param retryPolicy - Retry policy for nodes
  * @returns Compiled graph ready for execution
  */
-export function buildAgentGraph(retryPolicy: RetryPolicy) {
-  const workflow = new StateGraph(AgentStateAnnotation)
-    .addNode(
-      'ownerAnalysis',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: ownerAnalysis');
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await ownerAnalysisNode(state, chat);
-        logger.info('node_end: ownerAnalysis');
-        return result;
-      },
-      {
-        retryPolicy: {
-          maxAttempts: retryPolicy.maxAttempts,
-          retryOn: retryPolicy.retryOn,
-        },
+export function buildAgentGraph(
+  retryPolicy: RetryPolicy,
+  onProgress?: GraphProgressCallback
+) {
+  const withCommon =
+    <N extends GraphNodeName>(
+      name: N,
+      fn: (state: AgentState, chat: ChatModel) => Promise<Partial<AgentState>>
+    ) =>
+    async (
+      state: AgentState,
+      config?: RunnableConfig
+    ): Promise<Partial<AgentState>> => {
+      logger.info(`node_start: ${name}`);
+      onProgress?.({ type: 'node_start', name });
+      const chat = config?.configurable?.chat_model as ChatModel;
+      if (!chat) {
+        throw new Error('Chat model not provided in config');
       }
-    )
+      const result = await fn(state, chat);
+      logger.info(`node_end: ${name}`);
+      onProgress?.({ type: 'node_end', name });
+      return result;
+    };
+
+  const workflow = new StateGraph(AgentStateAnnotation)
+    .addNode('ownerAnalysis', withCommon('ownerAnalysis', ownerAnalysisNode), {
+      retryPolicy: {
+        maxAttempts: retryPolicy.maxAttempts,
+        retryOn: retryPolicy.retryOn,
+      },
+    })
     .addNode(
       'structureExtraction',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: structureExtraction');
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await structureExtractionNode(state, chat);
-        logger.info('node_end: structureExtraction');
-        return result;
-      },
+      withCommon('structureExtraction', structureExtractionNode),
       {
         retryPolicy: {
           maxAttempts: retryPolicy.maxAttempts,
@@ -65,25 +78,12 @@ export function buildAgentGraph(retryPolicy: RetryPolicy) {
         },
       }
     )
-    .addNode(
-      'extraction',
-      async (state: AgentState, config?: RunnableConfig) => {
-        logger.info('node_start: extraction');
-        const chat = config?.configurable?.chat_model as ChatModel;
-        if (!chat) {
-          throw new Error('Chat model not provided in config');
-        }
-        const result = await extractionNode(state, chat);
-        logger.info('node_end: extraction');
-        return result;
+    .addNode('extraction', withCommon('extraction', extractionNode), {
+      retryPolicy: {
+        maxAttempts: retryPolicy.maxAttempts,
+        retryOn: retryPolicy.retryOn,
       },
-      {
-        retryPolicy: {
-          maxAttempts: retryPolicy.maxAttempts,
-          retryOn: retryPolicy.retryOn,
-        },
-      }
-    )
+    })
     .addEdge(START, 'ownerAnalysis')
     .addEdge(START, 'structureExtraction')
     .addEdge('structureExtraction', 'extraction')
@@ -104,9 +104,10 @@ export function buildAgentGraph(retryPolicy: RetryPolicy) {
 export async function runThreeNodeGraph(
   initial: AgentState,
   chat: ChatModel,
-  retry: RetryPolicy
+  retry: RetryPolicy,
+  onProgress?: GraphProgressCallback
 ): Promise<AgentState> {
-  const graph = buildAgentGraph(retry);
+  const graph = buildAgentGraph(retry, onProgress);
 
   const config: RunnableConfig = {
     configurable: {

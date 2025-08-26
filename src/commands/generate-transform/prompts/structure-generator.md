@@ -14,7 +14,7 @@
 
 ### File Input
 
-- Property input is provided in the user message as `input_html` content.
+- Property input is provided in the user message as `input_file` content.
 - You don't need to read the input file - it's already provided to you.
 - You can access schemas here:
 
@@ -32,12 +32,13 @@
 
 1. **Script Discovery and Execution**
    - Before significant tool calls, state one line: purpose + minimal inputs. For example, "Checking for extractor scripts using 'read_file'; input: script path."
-   - Output files: `{structure_data_file}`, `{utility_data_file}`, `{layout_data_file}`.
+   - Script has to produce output files with exactly this path: `{structure_data_file}`, `{utility_data_file}`, `{layout_data_file}`.
 2. **Script Creation/Updating**
    - Read relevant schemas before proceeding.
-   - Use onlyt `cheerio` library for all HTML parsing and extraction.
+   - Use only `cheerio` library for all HTML parsing and extraction.
+   - Use vanilla JavaScript for JSON processing.
    - Follow schema definitions _exactly_ (required fields, types, enums).
-   - Inside the script read input from the {input_html_file}
+   - Inside the script read input from the {input_file}
    - Do NOT check for existing scipts unless specified by the user.
    - Each script must:
      - Process input file and handle HTML formatting.
@@ -66,7 +67,7 @@
 
 ### Output Format
 
-Script, that you produce, should follow this file naming convention:
+Script, that you produce, should follow exactly this file naming convention, including the exact path:
 
 - `{structure_data_file}`: `{{ "property_[id]": {{ structure fields per schema }} }}`
 - `{utility_data_file}`: `{{ "property_[id]": {{ utility fields per schema }} }}`
@@ -91,9 +92,9 @@ Script, that you produce, should follow this file naming convention:
 
 # Workflow Enforcement
 
-1. First, analyze the input HTML content provided in the user message as `input_html`.
+1. First, analyze the input HTML content provided in the user message as `input_file`.
 2. DO NOT create an input.html file.
-3. Scripts should read input file from `{input_html_file}` and write output files to `{data_dir}/`.
+3. Scripts should read input file from `{input_file}` and write output files to `{data_dir}/`.
 4. Create scripts and write them using `write_file`.
 5. Make sure, that you have created all 3 scripts.
 6. Use `run_js` to execute the scripts.

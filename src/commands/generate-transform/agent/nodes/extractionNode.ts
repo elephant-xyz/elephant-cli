@@ -43,7 +43,7 @@ export async function extractionNode(
     person_schema: state.schemas?.person,
     company_schema: state.schemas?.company,
     // Add filename variables
-    input_html_file: state.filenames.INPUT_HTML,
+    input_file: state.filenames.INPUT_FILE,
     unnormalized_address_file: state.filenames.UNNORMALIZED_ADDRESS,
     property_seed_file: state.filenames.PROPERTY_SEED,
     utilities_data_file: state.filenames.UTILITIES_DATA,
@@ -111,36 +111,26 @@ export async function extractionNode(
     configurable: { thread_id: evaluatorThreadId },
   } as const;
 
-  let inputHtmlContent = '';
+  let inputFileContent = '';
   let unnormalizedAddressContent = '';
   let propertySeedContent = '';
 
-  try {
-    const inputHtmlPath = path.join(state.tempDir, state.filenames.INPUT_HTML);
-    inputHtmlContent = await fs.readFile(inputHtmlPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read input HTML: ${err}`);
-  }
+  const inputFilePath = path.join(state.tempDir, state.filenames.INPUT_FILE);
+  inputFileContent = await fs.readFile(inputFilePath, 'utf-8');
 
-  try {
-    const unnormalizedPath = path.join(
-      state.tempDir,
-      state.filenames.UNNORMALIZED_ADDRESS
-    );
-    unnormalizedAddressContent = await fs.readFile(unnormalizedPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read unnormalized address: ${err}`);
-  }
+  const unnormalizedPath = path.join(
+    state.tempDir,
+    state.filenames.UNNORMALIZED_ADDRESS
+  );
+  unnormalizedAddressContent = await fs.readFile(unnormalizedPath, 'utf-8');
 
-  try {
-    const seedPath = path.join(state.tempDir, state.filenames.PROPERTY_SEED);
-    propertySeedContent = await fs.readFile(seedPath, 'utf-8');
-  } catch (err) {
-    logger.warn(`Could not read property seed: ${err}`);
-  }
+  const seedPath = path.join(state.tempDir, state.filenames.PROPERTY_SEED);
+  propertySeedContent = await fs.readFile(seedPath, 'utf-8');
 
   let utilitiesDataContent = '';
   let layoutDataContent = '';
+  let ownerDataContent = '';
+  let structureDataContent = '';
 
   try {
     const utilitiesDataPath = path.join(
@@ -148,8 +138,10 @@ export async function extractionNode(
       state.filenames.UTILITIES_DATA
     );
     utilitiesDataContent = await fs.readFile(utilitiesDataPath, 'utf-8');
-  } catch {
-    // File doesn't exist yet, that's ok
+  } catch (error) {
+    logger.warn(
+      `Utilities data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   try {
@@ -158,8 +150,32 @@ export async function extractionNode(
       state.filenames.LAYOUT_DATA
     );
     layoutDataContent = await fs.readFile(layoutDataPath, 'utf-8');
-  } catch {
-    // File doesn't exist yet, that's ok
+  } catch (error) {
+    logger.warn(
+      `Layout data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  try {
+    ownerDataContent = await fs.readFile(
+      path.join(state.tempDir, state.filenames.OWNER_DATA),
+      'utf-8'
+    );
+  } catch (error) {
+    logger.warn(
+      `Owner data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  try {
+    structureDataContent = await fs.readFile(
+      path.join(state.tempDir, state.filenames.STRUCTURE_DATA),
+      'utf-8'
+    );
+  } catch (error) {
+    logger.warn(
+      `Structure data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   // Prepare initial message with all file contents
@@ -167,9 +183,9 @@ export async function extractionNode(
 
 Available file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 <unnormalized_address>
 ${unnormalizedAddressContent || 'File not available'}
@@ -196,6 +212,17 @@ ${layoutDataContent}
     : ''
 }
 
+${
+  structureDataContent
+    ? `<structure_data>
+${structureDataContent}
+</structure_data>`
+    : ''
+}
+
+<owner_data>
+${ownerDataContent || 'File not available'}
+</owner_data>
 Use the provided file contents above for analysis. You still have access to write_file and run_js tools for creating and executing scripts.`;
 
   logger.info('agent: generator msg: Creating extraction scripts');
@@ -237,9 +264,9 @@ Use the provided file contents above for analysis. You still have access to writ
 
 Available input file contents:
 
-<input_html>
-${inputHtmlContent || 'File not available'}
-</input_html>
+<input_file>
+${inputFileContent || 'File not available'}
+</input_file>
 
 <unnormalized_address>
 ${unnormalizedAddressContent || 'File not available'}

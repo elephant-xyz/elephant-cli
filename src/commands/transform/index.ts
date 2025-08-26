@@ -375,7 +375,7 @@ async function normalizeInputsForScripts(
         f !== 'property_seed.json'
     );
   if (htmlOrJson) {
-    const destName = /\.html?$/i.test(htmlOrJson) ? 'input.html' : htmlOrJson;
+    const destName = /\.html?$/i.test(htmlOrJson) ? 'input.html' : 'input.json';
     await fs.copyFile(
       path.join(inputsDir, htmlOrJson),
       path.join(tempRoot, destName)

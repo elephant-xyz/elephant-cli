@@ -3,29 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logger } from './logger.js';
 
-export interface LinkOptions {
-  source?: 'tool' | 'project';
-}
-
-function findNearestNodeModules(startDir: string): string | null {
-  let dir: string = path.resolve(startDir);
-  for (;;) {
-    const candidate: string = path.join(dir, 'node_modules');
-    try {
-      const st: fs.Stats = fs.statSync(candidate);
-      if (st.isDirectory()) {
-        return fs.realpathSync(candidate);
-      }
-    } catch {
-      logger.warn(`Unable to find node_modules in ${dir}`);
-    }
-    const parent: string = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
-}
-
 function ensureSymlinkDir(targetAbs: string, linkPathAbs: string): void {
   const linkType: fs.symlink.Type =
     process.platform === 'win32' ? 'junction' : 'dir';
@@ -57,21 +34,17 @@ function ensureSymlinkDir(targetAbs: string, linkPathAbs: string): void {
   }
 }
 
-export function linkNodeModulesIntoTemp(
-  tempDir: string,
-  opts: LinkOptions = { source: 'tool' }
-): void {
-  const resolvedTemp: string = path.resolve(tempDir);
-  fs.mkdirSync(resolvedTemp, { recursive: true });
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const startDir: string =
-    opts.source === 'project' ? process.cwd() : moduleDir;
-  const nodeModules: string | null = findNearestNodeModules(startDir);
-  if (nodeModules === null) {
-    throw new Error(
-      `Unable to locate a node_modules directory starting from: ${startDir}`
-    );
+function findCheerioNodeModules(): string {
+  const modulePath = fileURLToPath(import.meta.resolve('cheerio'));
+  const match = modulePath.match(/(.*node_modules)/);
+  if (!match) {
+    throw new Error('Failed to find node_modules directory');
   }
-  const linkPath: string = path.join(resolvedTemp, 'node_modules');
+  return match[1];
+}
+
+export function linkNodeModulesIntoTemp(tempDir: string): void {
+  const nodeModules: string = findCheerioNodeModules();
+  const linkPath: string = path.join(tempDir, 'node_modules');
   ensureSymlinkDir(nodeModules, linkPath);
 }

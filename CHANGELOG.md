@@ -1,3 +1,17 @@
+## [1.29.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.1...v1.29.2) (2025-08-26)
+
+
+### Bug Fixes
+
+* fix `generate-transform` failing, when there is no utilities ([#101](https://github.com/elephant-xyz/elephant-cli/issues/101)) ([5ac2261](https://github.com/elephant-xyz/elephant-cli/commit/5ac22618386df5feaa970960cea79b0e3d072819))
+
+## [1.29.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.0...v1.29.1) (2025-08-25)
+
+
+### Bug Fixes
+
+* fix owners data and other prompts ([#98](https://github.com/elephant-xyz/elephant-cli/issues/98)) ([44dd43f](https://github.com/elephant-xyz/elephant-cli/commit/44dd43f3985a3abf9c0d83f95d25d4690098b48e))
+
 # [1.29.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.28.4...v1.29.0) (2025-08-25)
 
 
