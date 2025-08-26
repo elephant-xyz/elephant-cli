@@ -129,20 +129,54 @@ export async function extractionNode(
 
   let utilitiesDataContent = '';
   let layoutDataContent = '';
+  let ownerDataContent = '';
+  let structureDataContent = '';
 
-  const utilitiesDataPath = path.join(
-    state.tempDir,
-    state.filenames.UTILITIES_DATA
-  );
-  utilitiesDataContent = await fs.readFile(utilitiesDataPath, 'utf-8');
+  try {
+    const utilitiesDataPath = path.join(
+      state.tempDir,
+      state.filenames.UTILITIES_DATA
+    );
+    utilitiesDataContent = await fs.readFile(utilitiesDataPath, 'utf-8');
+  } catch (error) {
+    logger.warn(
+      `Utilities data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
-  const layoutDataPath = path.join(state.tempDir, state.filenames.LAYOUT_DATA);
-  layoutDataContent = await fs.readFile(layoutDataPath, 'utf-8');
+  try {
+    const layoutDataPath = path.join(
+      state.tempDir,
+      state.filenames.LAYOUT_DATA
+    );
+    layoutDataContent = await fs.readFile(layoutDataPath, 'utf-8');
+  } catch (error) {
+    logger.warn(
+      `Layout data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
-  const ownerDataContent = await fs.readFile(
-    path.join(state.tempDir, state.filenames.OWNER_DATA),
-    'utf-8'
-  );
+  try {
+    ownerDataContent = await fs.readFile(
+      path.join(state.tempDir, state.filenames.OWNER_DATA),
+      'utf-8'
+    );
+  } catch (error) {
+    logger.warn(
+      `Owner data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  try {
+    structureDataContent = await fs.readFile(
+      path.join(state.tempDir, state.filenames.STRUCTURE_DATA),
+      'utf-8'
+    );
+  } catch (error) {
+    logger.warn(
+      `Structure data file not found: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
   // Prepare initial message with all file contents
   const initialMessage = `Start by creating the extraction script and processing all input files. Make sure to extract all sales-taxes-owners data.
@@ -175,6 +209,14 @@ ${
     ? `<layout_data>
 ${layoutDataContent}
 </layout_data>`
+    : ''
+}
+
+${
+  structureDataContent
+    ? `<structure_data>
+${structureDataContent}
+</structure_data>`
     : ''
 }
 
