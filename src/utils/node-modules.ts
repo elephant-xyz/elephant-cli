@@ -45,6 +45,7 @@ function findCheerioNodeModules(): string {
 
 export function linkNodeModulesIntoTemp(tempDir: string): void {
   const nodeModules: string = findCheerioNodeModules();
+  logger.info(`Linking node_modules from ${nodeModules} to ${tempDir}`);
   const linkPath: string = path.join(tempDir, 'node_modules');
   ensureSymlinkDir(nodeModules, linkPath);
 }
