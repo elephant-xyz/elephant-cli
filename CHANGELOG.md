@@ -1,3 +1,10 @@
+## [1.29.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.2...v1.29.3) (2025-08-26)
+
+
+### Bug Fixes
+
+* allow json files, corectlly resolve the node_modules path ([#102](https://github.com/elephant-xyz/elephant-cli/issues/102)) ([1c8dbe7](https://github.com/elephant-xyz/elephant-cli/commit/1c8dbe76d819b07ddaa938cb0bf2fd235608bd29))
+
 ## [1.29.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.1...v1.29.2) (2025-08-26)
 
 
