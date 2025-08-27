@@ -1,3 +1,10 @@
+# [1.31.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.30.0...v1.31.0) (2025-08-27)
+
+
+### Features
+
+* **prepare:** add prepare command ([#106](https://github.com/elephant-xyz/elephant-cli/issues/106)) ([4b4c206](https://github.com/elephant-xyz/elephant-cli/commit/4b4c2065d6b0ec876c9384a6c330ccee693f6f4e))
+
 # [1.30.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.4...v1.30.0) (2025-08-27)
 
 
