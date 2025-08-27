@@ -26,7 +26,7 @@ export async function prepare(
 ) {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
-    const dir = await extractZipToTemp(inputZip, root, 'input');
+    const dir = await extractZipToTemp(inputZip, root);
 
     const seed = await fs.readFile(
       path.join(dir, 'property_seed.json'),
