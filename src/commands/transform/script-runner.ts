@@ -1,21 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import AdmZip from 'adm-zip';
 import { spawn } from 'child_process';
 import { logger } from '../../utils/logger.js';
 import { linkNodeModulesIntoTemp } from '../../utils/node-modules.js';
-
-export async function extractZipToTemp(
-  zipPath: string,
-  tempRoot: string,
-  subdir: string
-): Promise<string> {
-  const outDir = path.join(tempRoot, subdir);
-  await fs.mkdir(outDir, { recursive: true });
-  const zip = new AdmZip(zipPath);
-  zip.extractAllTo(outDir, true);
-  return outDir;
-}
+import { extractZipToTemp } from '../../utils/zip.js';
 
 function execNode(
   entryAbsPath: string,
