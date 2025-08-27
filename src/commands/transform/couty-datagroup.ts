@@ -114,7 +114,7 @@ export function createCountyDataGroup(
       salesHistoryHasCompany.push(ref);
       continue;
     }
-    
+
     // Deed relationships
     if (lower.includes('relationship_deed') && lower.includes('file')) {
       deedHasFile.push(ref);
