@@ -1,3 +1,10 @@
+# [1.30.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.4...v1.30.0) (2025-08-27)
+
+
+### Features
+
+* **generate-transform:** Adding deed to generate transformation ([#105](https://github.com/elephant-xyz/elephant-cli/issues/105)) ([c7d1009](https://github.com/elephant-xyz/elephant-cli/commit/c7d1009c3b4669c96971cb94c5f0ee5b1742454d))
+
 ## [1.29.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.29.3...v1.29.4) (2025-08-26)
 
 
