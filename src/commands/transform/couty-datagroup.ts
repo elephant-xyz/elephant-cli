@@ -18,6 +18,8 @@ export interface Relationships {
   property_has_utility?: IPLDRef;
   sales_history_has_person?: IPLDRef[];
   sales_history_has_company?: IPLDRef[];
+  deed_has_file?: IPLDRef[];
+  sales_history_has_deed?: IPLDRef[];
 }
 
 export interface CountyData {
@@ -40,6 +42,8 @@ export function createCountyDataGroup(
   const propertyHasLayout: IPLDRef[] = [];
   const salesHistoryHasPerson: IPLDRef[] = [];
   const salesHistoryHasCompany: IPLDRef[] = [];
+  const deedHasFile: IPLDRef[] = [];
+  const salesHistoryHasDeed: IPLDRef[] = [];
 
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
@@ -110,6 +114,16 @@ export function createCountyDataGroup(
       salesHistoryHasCompany.push(ref);
       continue;
     }
+
+    // Deed relationships
+    if (lower.includes('relationship_deed') && lower.includes('file')) {
+      deedHasFile.push(ref);
+      continue;
+    }
+    if (lower.includes('relationship_sales') && lower.includes('deed')) {
+      salesHistoryHasDeed.push(ref);
+      continue;
+    }
   }
 
   const relationships: Relationships = {};
@@ -140,6 +154,12 @@ export function createCountyDataGroup(
   }
   if (salesHistoryHasCompany.length) {
     relationships.sales_history_has_company = salesHistoryHasCompany;
+  }
+  if (deedHasFile.length) {
+    relationships.deed_has_file = deedHasFile;
+  }
+  if (salesHistoryHasDeed.length) {
+    relationships.sales_history_has_deed = salesHistoryHasDeed;
   }
 
   return {

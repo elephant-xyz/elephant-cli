@@ -42,6 +42,8 @@ export async function extractionNode(
     sales_history: state.schemas?.sales_history,
     person_schema: state.schemas?.person,
     company_schema: state.schemas?.company,
+    deed_schema: state.schemas?.deed,
+    file_schema: state.schemas?.file,
     // Add filename variables
     input_file: state.filenames.INPUT_FILE,
     unnormalized_address_file: state.filenames.UNNORMALIZED_ADDRESS,
@@ -51,6 +53,7 @@ export async function extractionNode(
     data_extractor_script: state.filenames.DATA_EXTRACTOR_SCRIPT,
     data_dir: state.filenames.DATA_DIR,
     owner_data_file: state.filenames.OWNER_DATA,
+    deed_data_file: state.filenames.OUTPUT_DEED_PREFIX,
   };
 
   logger.info(
