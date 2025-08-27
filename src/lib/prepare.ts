@@ -6,7 +6,7 @@ import { extractZipToTemp } from '../utils/zip.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
 
-export type PrepareOptions = { noBrowser?: boolean };
+export type PrepareOptions = { browser?: boolean };
 
 type Prepared = { content: string; type: 'json' | 'html' };
 
@@ -40,9 +40,8 @@ export async function prepare(
     if (!req) throw new Error('property_seed.json missing source_http_request');
     if (!id) throw new Error('property_seed.json missing request_identifier');
 
-    const noBrowser = options.noBrowser ?? false;
     const prepared =
-      req.method === 'GET' && !noBrowser
+      req.method === 'GET' && options.browser
         ? await withBrowser(req)
         : await withFetch(req);
 
@@ -63,11 +62,25 @@ export async function prepare(
 }
 
 async function withFetch(req: Requset): Promise<Prepared> {
-  const res = await fetch(constructUrl(req), {
-    method: req.method,
-    headers: req.headers,
-    body: req.body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(constructUrl(req), {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+    });
+  } catch (e) {
+    const code = undiciErrorCode(e);
+    if (code === 'UND_ERR_CONNECT_TIMEOUT') {
+      console.error(
+        chalk.red(
+          'TimeoutError: Try changing the gelocation of your IP address to avoid geo-restrictions.'
+        )
+      );
+    }
+
+    throw e;
+  }
   if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
   const txt = await res.text();
   const type = res.headers.get('content-type')?.includes('html')
@@ -238,4 +251,34 @@ function constructUrl(req: Requset) {
   }
   url.search = query.toString();
   return url.toString();
+}
+
+function undiciErrorCode(e: unknown): string | undefined {
+  // Direct
+  if (
+    typeof e === 'object' &&
+    e &&
+    'code' in e &&
+    typeof (e as any).code === 'string'
+  ) {
+    return (e as any).code;
+  }
+  // Cause chain
+  const cause = (e as any)?.cause;
+  if (
+    typeof cause === 'object' &&
+    cause &&
+    'code' in cause &&
+    typeof cause.code === 'string'
+  ) {
+    return cause.code;
+  }
+  // AggregateError (sometimes Undici wraps connection errors)
+  if (e instanceof AggregateError) {
+    for (const inner of e.errors ?? []) {
+      const c = undiciErrorCode(inner);
+      if (c) return c;
+    }
+  }
+  return undefined;
 }

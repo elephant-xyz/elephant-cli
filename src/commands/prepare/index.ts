@@ -6,7 +6,7 @@ import { prepare as prepareCore } from '../../lib/prepare.js';
 
 export interface PrepareCommandOptions {
   outputZip: string;
-  noBrowser?: boolean;
+  browser?: boolean;
 }
 
 export function registerPrepareCommand(program: Command) {
@@ -30,9 +30,8 @@ export async function handlePrepare(
   console.log();
 
   const spinner = createSpinner(`Preparing data from ${inputZip}...`);
-  spinner.start('Preparing...');
   await prepareCore(inputZip, options.outputZip, {
-    noBrowser: options.noBrowser,
+    browser: options.browser,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);
