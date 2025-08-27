@@ -25,6 +25,7 @@ import { registerHashCommand } from './commands/hash.js';
 import { registerUploadCommand } from './commands/upload.js';
 import { registerTransformCommand } from './commands/transform/index.js';
 import { registerGenerateTransformCommand } from './commands/generate-transform/index.js';
+import { registerPrepareCommand } from './commands/prepare/index.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -75,6 +76,7 @@ registerFetchDataCommand(program);
 // Register transform command
 registerTransformCommand(program);
 registerGenerateTransformCommand(program);
+registerPrepareCommand(program);
 
 program.parse();
 

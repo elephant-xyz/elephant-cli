@@ -35,8 +35,8 @@ The Elephant Network CLI provides three main workflows:
 Plus utility commands:
 
 - **🔄 CID-Hex Conversion** - Convert between IPFS CIDs and Ethereum hex hashes
- - **🔀 Transform** - Run generated scripts to produce Lexicon outputs + fact sheets, or use legacy AI mode with `--legacy-mode`
- - **🧪 Generate-Transform** - Generate county extraction scripts from minimal inputs (LLM-assisted)
+- **🔀 Transform** - Run generated scripts to produce Lexicon outputs + fact sheets, or use legacy AI mode with `--legacy-mode`
+- **🧪 Generate-Transform** - Generate county extraction scripts from minimal inputs (LLM-assisted)
 
 ## Workflow 1: Preparing and Uploading Data
 
@@ -62,6 +62,7 @@ your-data/
 You can provide a ZIP file containing the directory structure.
 
 **For multiple properties** (validate-and-upload):
+
 ```bash
 # Structure: ZIP containing multiple property directories
 zip -r multi-property.zip your-data/
@@ -75,6 +76,7 @@ elephant-cli validate-and-upload ./multi-property.zip
 ```
 
 **For single property** (validate and hash commands):
+
 ```bash
 # Structure: ZIP containing single property data directly
 zip -r single-property.zip 074527L1060260060/
@@ -103,6 +105,7 @@ elephant-cli hash ./single-property.zip
 ### **Flexible File Naming:**
 
 Files can have any name. The system automatically recognizes datagroup root files by their structure:
+
 - Must have exactly two properties: `label` and `relationships`
 - The `label` value is matched against the Elephant Network schema manifest to determine the datagroup CID
 
@@ -470,6 +473,7 @@ elephant-cli hash ./single-property.zip --property-cid bafkreiexample123
 **Property CID Determination:**
 
 The hash command determines the property CID using the following priority:
+
 1. **User-provided CID** via `--property-cid` option (highest priority)
 2. **Calculated Seed datagroup CID** if a Seed file exists in the data
 3. **Error** if neither is available
@@ -477,6 +481,7 @@ The hash command determines the property CID using the following priority:
 This ensures that all files in a single property have a consistent property CID in the output.
 
 **Features:**
+
 - Calculates CIDs for all files using the same algorithm as `validate-and-upload --dry-run`
 - Replaces file path references (e.g., `{"/": "./file.json"}`) with calculated CIDs
 - Handles IPLD links and ipfs_url fields
@@ -486,6 +491,7 @@ This ensures that all files in a single property have a consistent property CID 
 - Validates data against schemas before processing
 
 **Output Structure:**
+
 ```
 hashed-data.zip
 └── property-cid-1/
@@ -510,6 +516,7 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 ```
 
 **Features:**
+
 - Uploads single property directory to IPFS in one request
 - Generates CSV report compatible with `submit-to-contract` and `upload` commands
 - Single property only - matches `hash` command output structure
@@ -517,12 +524,14 @@ elephant-cli upload hashed-data.zip --output-csv upload-results.csv
 
 **CSV Output Format:**
 The CSV output matches the `hash` command format but includes actual upload timestamps:
+
 ```
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
 bafkreiproperty...,bafkreidatagroupschema1...,bafkreidatagrouprootfile1...,bafkreidatagroupfile1....json,2024-08-11T20:35:00.687Z,https://ipfs.io/ipfs/bafybeibeeaa5gxifjqaaneyoxjz37tbp3gu7avghwlcepcbtsbmso3mzrq
 ```
 
 **Workflow Example:**
+
 ```bash
 # Step 1: Calculate CIDs offline
 elephant-cli hash property-data.zip
@@ -573,6 +582,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 ```
 
 **Transaction Mode Details:**
+
 - Fetches transaction data from the blockchain
 - Decodes `submitBatchData` calls to extract property, data group, and data hashes
 - Converts hashes to CIDs using the `CidHexConverterService` (raw codec, base32 encoding)
@@ -580,6 +590,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - Downloads all referenced data recursively
 
 **Features:**
+
 - Recursively follows all CID references in JSON data
 - Replaces CID references with local file paths
 - Preserves data structure and relationships
@@ -588,6 +599,7 @@ elephant-cli fetch-data 0x1234567890abcdef... \
 - **Outputs as ZIP file** for easy distribution and archiving
 
 **ZIP File Structure:**
+
 ```
 my-data.zip/
 └── data/                        # Top-level data folder
@@ -607,6 +619,7 @@ my-data.zip/
 ### Hash Command (Offline CID Calculation)
 
 The `hash` command allows you to calculate CIDs for all files in a single property ZIP archive without uploading to IPFS. This is useful for:
+
 - Offline CID calculation and verification
 - Pre-computing CIDs before submission
 - Testing data transformations locally
@@ -631,6 +644,7 @@ elephant-cli hash property-data.zip \
 ```
 
 **What this does:**
+
 - **Requires ZIP input** containing single property data
 - Validates all JSON files against their schemas
 - Calculates CIDs for all files (including linked files)
@@ -640,6 +654,7 @@ elephant-cli hash property-data.zip \
 - Creates output ZIP with CID-named files
 
 **Key Features:**
+
 - **Completely offline** - no network requests or IPFS uploads
 - **Single property processing** - optimized for processing one property at a time
 - **IPLD link resolution** - automatically converts file paths to CIDs
@@ -647,11 +662,13 @@ elephant-cli hash property-data.zip \
 - **CSV output** - generates submission-ready CSV compatible with submit-to-contract
 
 **Input Requirements:**
+
 - Must be a ZIP file (directories not supported)
 - Should contain data for a single property
 - Files must follow standard naming convention (schema CID as filename)
 
 **Output Structure:**
+
 ```
 hashed-data.zip/
 └── bafkreiproperty.../           # Property CID folder
@@ -777,6 +794,7 @@ elephant-cli transform --legacy-mode --output-zip transformed-data.zip [other-fl
 - Packages results as `transformed-data.zip` with a top-level `data/` directory inside.
 
 For the complete workflow, including validation and iterating on scripts, see `docs/GENERATE-TRANSFORM-WORKFLOW.md`.
+
 - `--group county` with `--input-zip` for county data transformation
 - `--output-zip` to specify the output file (default: transformed-data.zip)
 - Any additional AI-agent specific options
@@ -787,6 +805,51 @@ For the complete workflow, including validation and iterating on scripts, see `d
 - Generating web-viewable fact sheets for property information
 - Preparing data for validation and upload to IPFS
 - Streamlining the data transformation workflow
+
+### Prepare Command
+
+Fetches the original source page or API response referenced in `property_seed.json` and packages it with the seed files for reproducible processing.
+
+```bash
+# Input ZIP must contain at top level:
+#   - property_seed.json (with source_http_request and request_identifier)
+#   - unnormalized_address.json
+
+# Basic usage
+elephant-cli prepare input.zip --output-zip prepared-data.zip
+
+# Force direct HTTP fetch (disable headless browser)
+elephant-cli prepare input.zip --output-zip prepared-data.zip --no-browser
+```
+
+**What it does:**
+
+- Reads `source_http_request` and `request_identifier` from `property_seed.json`
+- Verifies `unnormalized_address.json` exists
+- Builds the URL from `url` and `multiValueQueryString`
+- Fetches content using either:
+  - Headless browser (default for GET): renders dynamic pages and handles simple interstitials
+  - Direct HTTP fetch: used for POST or when `--no-browser` is set
+- Writes fetched content to `<request_identifier>.html` or `<request_identifier>.json`
+- Outputs a ZIP including the original files and the new fetched file
+
+**Options:**
+
+- `--output-zip <path>`: Output ZIP file path (required)
+- `--no-browser`: Disable headless browser; use direct HTTP fetch only
+
+**Output structure:**
+
+```
+prepared-data.zip/
+├── property_seed.json
+├── unnormalized_address.json
+└── <request_identifier>.html | <request_identifier>.json
+```
+
+**Platform notes:**
+
+- Headless browser mode supports Linux and macOS. Use `--no-browser` for simple API endpoints.
 
 ## Advanced Features
 
