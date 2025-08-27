@@ -43,6 +43,7 @@ export async function extractionNode(
     person_schema: state.schemas?.person,
     company_schema: state.schemas?.company,
     deed_schema: state.schemas?.deed,
+    file_schema: state.schemas?.file,
     // Add filename variables
     input_file: state.filenames.INPUT_FILE,
     unnormalized_address_file: state.filenames.UNNORMALIZED_ADDRESS,

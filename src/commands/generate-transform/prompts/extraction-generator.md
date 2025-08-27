@@ -4,9 +4,9 @@ You must systematically adhere to these principles:
 
 - **Owners** information must always be built using `{owner_data_file}`.
 - **Utilities** information must always be built using `{utilities_data_file}`.
-      - **Layout** information must always be built using `{layout_data_file}`.
-      - **Deed** information must be built from `{input_file}`.
-      - All other required data must be built from `{input_file}`.
+- **Layout** information must always be built using `{layout_data_file}`.
+- **Deed** information must be built from `{input_file}`.
+- All other required data must be built from `{input_file}`.
 - Do NOT attempt to programmatically validate outputs against JSON Schema. Schema conformity is required, but you should not perform explicit validation or test runs.
 - Preserve detailed, step-by-step reasoning and refinement throughout.
 
@@ -96,6 +96,9 @@ You must systematically adhere to these principles:
       <deed_schema>
       {deed_schema}
       </deed_schema>
+      <file_schema>
+      {file_schema}
+      </file_schema>
     - Analyze the provided file contents (`input_file`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
     - The file contents are already provided to you in the user message - you don't need to read them.
     - Explicitly note for each target data area the exact supporting data source(s):
@@ -108,6 +111,7 @@ You must systematically adhere to these principles:
       - Flood: from `input_file` content
       - Sales: from `input_file` content
       - Deeds: from `input_file` content
+      - Files: from `input_file` content (for deed document references)
       - Structure: from `input_file` content
       - Lot: from `input_file` content
     - Never extract owner, utilities, or layout data from HTML: always use the defined JSON sources (provided as `owner_data`, `utilities_data`, `layout_data` in user message).
@@ -135,6 +139,7 @@ You must systematically adhere to these principles:
       - `flood_storm_information.json`
       - `sales_*.json`
       - `deed_*.json`
+      - `file_*.json`
       - `person_*.json` or `company_*.json` (never both; non-applicable type is null)
       - `structure.json`, `utility.json`, `layout_*.json`
       - `relationship_sales_person.json` and `relationship_sales_company.json` (according to owner/sales relationships)
