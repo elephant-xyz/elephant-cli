@@ -5,6 +5,8 @@ import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
+import { Browser as PuppeteerBrowser } from 'puppeteer';
+import { TimeoutError } from 'puppeteer';
 
 export type PrepareOptions = { browser?: boolean };
 
@@ -92,21 +94,36 @@ async function withFetch(req: Requset): Promise<Prepared> {
 
 async function withBrowser(req: Requset): Promise<Prepared> {
   logger.info('Preparing with browser...');
-  const puppeteer = await import('puppeteer-core');
-  const { default: Chromium } = await import('@sparticuz/chromium');
-  logger.info('Launching browser...');
-  const browser = await puppeteer.launch({
-    ignoreDefaultArgs: ['--disable-extensions'],
-    executablePath: await Chromium.executablePath(),
-    headless: 'shell',
-    args: [
-      ...Chromium.args,
-      '--hide-scrollbars',
-      '--disable-web-security',
-      '--no-sandbox',
-    ],
-    timeout: 30000,
-  });
+  let browser: PuppeteerBrowser;
+  if (process.platform === 'linux') {
+    const puppeteer = await import('puppeteer');
+    const { default: Chromium } = await import('@sparticuz/chromium');
+    logger.info('Launching browser...');
+    browser = await puppeteer.launch({
+      ignoreDefaultArgs: ['--disable-extensions'],
+      executablePath: await Chromium.executablePath(),
+      headless: 'shell',
+      args: [
+        ...Chromium.args,
+        '--hide-scrollbars',
+        '--disable-web-security',
+        '--no-sandbox',
+      ],
+      timeout: 30000,
+    });
+  } else if (process.platform === 'darwin') {
+    const puppeteer = await import('puppeteer');
+    logger.info('Launching browser...');
+    browser = await puppeteer.launch({
+      headless: true,
+      timeout: 30000,
+    });
+  } else {
+    const errorMessage =
+      'Unsupported platform. Only Linux and macOS are supported.';
+    console.log(chalk.red(errorMessage));
+    throw new Error(errorMessage);
+  }
   try {
     logger.info('Creating page...');
     const page = await browser.newPage();
@@ -122,13 +139,15 @@ async function withBrowser(req: Requset): Promise<Prepared> {
     });
     logger.info('Navigating to URL...');
     try {
-      await page.goto(constructUrl(req), {
+      const url = constructUrl(req);
+      logger.info(`Navigating to URL: ${url}`);
+      await page.goto(url, {
         waitUntil: 'networkidle2',
         timeout: 60000,
       });
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
-      if (e instanceof puppeteer.TimeoutError) {
+      if (e instanceof TimeoutError) {
         console.error(
           chalk.red(
             'TimeoutError: Try changing the gelocation of your IP address to avoid geo-restrictions.'
@@ -165,6 +184,10 @@ async function withBrowser(req: Requset): Promise<Prepared> {
         Number(s.zIndex) > 0;
       if (!vis) return null;
       const btn =
+        (modal.querySelector('#btnContinue') as
+          | HTMLInputElement
+          | HTMLButtonElement
+          | null) ||
         (modal.querySelector(
           'input[name="btnContinue"]'
         ) as HTMLInputElement | null) ||
@@ -177,7 +200,9 @@ async function withBrowser(req: Requset): Promise<Prepared> {
       if (!btn) return null;
       const sel = btn.name
         ? `input[name="${btn.name}"]`
-        : 'input[value="Continue"]';
+        : btn.id === 'btnContinue'
+          ? '#btnContinue'
+          : 'input[value="Continue"]';
       return { buttonSelector: sel };
     });
 
@@ -188,54 +213,55 @@ async function withBrowser(req: Requset): Promise<Prepared> {
           timeout: 5000,
         });
         await page.click(info.buttonSelector);
+        logger.info(`Clicked continue button: ${info.buttonSelector}`);
         try {
-          await Promise.race([
-            page.waitForNavigation({
-              waitUntil: 'networkidle2',
-              timeout: 30000,
-            }),
-            page
-              .waitForFunction(
-                () => {
-                  const modal = document.getElementById('pnlIssues');
-                  if (!modal) return true;
-                  const style = window.getComputedStyle(modal);
-                  return (
-                    style.display === 'none' || style.visibility === 'hidden'
-                  );
-                },
-                { timeout: 30000 }
-              )
-              .catch(() => {}),
-          ]);
+          await page.waitForNavigation({
+            waitUntil: 'networkidle2',
+            timeout: 30000,
+          });
         } catch {
-          // ignore
+          logger.warn('No navigation after continue; waiting for content');
         }
-        await page
-          .waitForFunction(
-            () =>
-              document.querySelector('#parcelLabel') ||
-              document.querySelector('.sectionTitle') ||
-              document.querySelector('[id*="Property"]'),
-            { timeout: 15000 }
-          )
-          .catch(() => {});
       } catch {
-        // ignore
+        logger.warn('Failed to wait for continue button');
       }
     }
+
+    await Promise.race([
+      page
+        .waitForFunction(() => document.readyState === 'complete', {
+          timeout: 15000,
+        })
+        .catch(() => null),
+      page
+        .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
+        .catch(() => null),
+      page
+        .waitForFunction(
+          () =>
+            document.querySelector('#valueGrid') ||
+            document.querySelector('#PropertyDetails') ||
+            document.querySelector('#PropertyDetailsCurrent') ||
+            document.querySelector('#divDisplayParcelOwner') ||
+            document.querySelector('#divDisplayParcelPhoto'),
+          { timeout: 15000 }
+        )
+        .catch(() => null),
+    ]);
 
     await page
       .waitForFunction(
         () =>
-          document.querySelector('#parcelLabel') ||
-          document.querySelector('.sectionTitle') ||
-          document.querySelector('table.detailsTable') ||
-          document.querySelector('.textPanel') ||
-          document.querySelector('[id*="Property"]'),
-        { timeout: 5000 }
+          document.querySelector('#valueGrid') ||
+          document.querySelector('#PropertyDetails') ||
+          document.querySelector('#PropertyDetailsCurrent') ||
+          document.querySelector('#divDisplayParcelOwner') ||
+          document.querySelector('#divDisplayParcelPhoto'),
+        { timeout: 30000 }
       )
-      .catch(() => {});
+      .catch(() => {
+        logger.warn('Deep content not detected; proceeding with current DOM');
+      });
 
     const html = await page.content();
     return { content: html, type: 'html' } as Prepared;

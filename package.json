@@ -60,6 +60,7 @@
     "ora": "^8.2.0",
     "p-limit": "^6.2.0",
     "prettier": "^3.2.5",
+    "puppeteer": "^24.17.0",
     "puppeteer-core": "^24.17.0",
     "winston": "^3.17.0"
   },
