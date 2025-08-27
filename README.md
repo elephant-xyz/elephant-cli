@@ -808,22 +808,48 @@ For the complete workflow, including validation and iterating on scripts, see `d
 
 ### Prepare Command
 
-The `prepare` command prepares data from the output of the `transform` command for seed datagroup further processing. The input ZIP should be the output of the `transform` command for seed datagroup.
+Fetches the original source page or API response referenced in `property_seed.json` and packages it with the seed files for reproducible processing.
 
 ```bash
-# Basic usage
-elephant-cli prepare transformed-data.zip --output-zip prepared-data.zip
+# Input ZIP must contain at top level:
+#   - property_seed.json (with source_http_request and request_identifier)
+#   - unnormalized_address.json
 
-# Disable headless browser functionality
-elephant-cli prepare transformed-data.zip --output-zip prepared-data.zip --no-browser
+# Basic usage
+elephant-cli prepare input.zip --output-zip prepared-data.zip
+
+# Force direct HTTP fetch (disable headless browser)
+elephant-cli prepare input.zip --output-zip prepared-data.zip --no-browser
 ```
 
-**Features:**
+**What it does:**
 
-- Takes the output ZIP from the `transform` command as input
-- Prepares data for subsequent processing steps
-- Optional headless browser functionality can be disabled with `--no-browser`
-- Outputs prepared data to the specified ZIP file
+- Reads `source_http_request` and `request_identifier` from `property_seed.json`
+- Verifies `unnormalized_address.json` exists
+- Builds the URL from `url` and `multiValueQueryString`
+- Fetches content using either:
+  - Headless browser (default for GET): renders dynamic pages and handles simple interstitials
+  - Direct HTTP fetch: used for POST or when `--no-browser` is set
+- Writes fetched content to `<request_identifier>.html` or `<request_identifier>.json`
+- Outputs a ZIP including the original files and the new fetched file
+
+**Options:**
+
+- `--output-zip <path>`: Output ZIP file path (required)
+- `--no-browser`: Disable headless browser; use direct HTTP fetch only
+
+**Output structure:**
+
+```
+prepared-data.zip/
+├── property_seed.json
+├── unnormalized_address.json
+└── <request_identifier>.html | <request_identifier>.json
+```
+
+**Platform notes:**
+
+- Headless browser mode supports Linux and macOS. Use `--no-browser` for simple API endpoints.
 
 ## Advanced Features
 

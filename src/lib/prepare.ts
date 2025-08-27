@@ -34,7 +34,14 @@ export async function prepare(
       path.join(dir, 'property_seed.json'),
       'utf-8'
     );
-    await fs.access(path.join(dir, 'unnormalized_address.json'));
+    try {
+      await fs.access(path.join(dir, 'unnormalized_address.json'));
+    } catch {
+      console.error(
+        chalk.red('unnormalized_address.json is missing in the input zip')
+      );
+      throw new Error('unnormalized_address.json is missing in the input zip');
+    }
 
     const obj = JSON.parse(seed) as Record<string, unknown>;
     const req = obj.source_http_request as Requset | undefined;
