@@ -7,6 +7,7 @@ Validate input/output property-related data thoroughly in these categories:
 - Layout Validation
 - Tax History Validation
 - Owner Validation
+- Deed Validation
 - Relationship Validation
 - Address Validation
 
@@ -57,9 +58,13 @@ For each sampled property, proceed as follows:
     <layout_schema>
     {layout_schema}
     </layout_schema>
+    <deed_schema>
+    {deed_schema}
+    </deed_schema>
 
 2. For each validation category, perform all checks personally:
-   - **Layout Validation:** Extract and count bedrooms/bathrooms in input; compare against `layout_*.json` in output. Ensure counts match precisely. Ensure, that data logically matches `{layout_data_file}`. Layouts is required data, when there is a data inside {layout_data_file}
+    - **Layout Validation:** Extract and count bedrooms/bathrooms in input; compare against `layout_*.json` in output. Ensure counts match precisely. Ensure, that data logically matches `{layout_data_file}`. Layouts is required data, when there is a data inside {layout_data_file}
+   - **Deed Validation:** Extract deed information annd compare against `deed_*.json` in output. Ensure deed relationships are properly established.
    - **Tax History Validation:** List years in input; cross-check with `tax_*.json`. Confirm a matching file exists for every year, with no duplicates or omissions.
    - **Owner Validation:** Verify each owner has exactly one corresponding `person_*.json` or `company_*.json` file.
    - **Relationship Validation:** Match each `sales_*.json` entry to its `relationship_sales_*_person/company_*.json` files, ensuring buyer(s) link precisely.

@@ -38,8 +38,11 @@ const FILENAMES = {
   OUTPUT_STRUCTURE: 'data/structure.json',
   OUTPUT_UTILITY: 'data/utility.json',
   OUTPUT_LAYOUT_PREFIX: 'data/layout_',
+  OUTPUT_DEED_PREFIX: 'data/deed_',
   OUTPUT_RELATIONSHIP_SALES_PERSON: 'data/relationship_sales_person.json',
   OUTPUT_RELATIONSHIP_SALES_COMPANY: 'data/relationship_sales_company.json',
+  OUTPUT_RELATIONSHIP_DEED_FILE: 'data/relationship_deed_file.json',
+  OUTPUT_RELATIONSHIP_SALES_DEED: 'data/relationship_sales_deed.json',
 };
 
 export function buildFilename(inputFilename: string): typeof FILENAMES {
