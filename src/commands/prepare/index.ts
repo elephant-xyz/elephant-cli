@@ -16,7 +16,7 @@ export function registerPrepareCommand(program: Command) {
       'Prepare data from transform output ZIP for further processing'
     )
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
-    .option('--no-browser', 'Disable headless browser functionality', false)
+    .option('--no-browser', 'Disable headless browser functionality')
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
     });

@@ -62,6 +62,7 @@ export async function prepare(
 }
 
 async function withFetch(req: Requset): Promise<Prepared> {
+  logger.info('Preparing with fetch...');
   let res: Response;
   try {
     res = await fetch(constructUrl(req), {
