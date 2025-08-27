@@ -3,7 +3,6 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { logger } from '../../utils/logger.js';
 import { linkNodeModulesIntoTemp } from '../../utils/node-modules.js';
-import { extractZipToTemp } from '../../utils/zip.js';
 
 function execNode(
   entryAbsPath: string,

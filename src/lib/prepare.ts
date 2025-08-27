@@ -3,6 +3,8 @@ import { tmpdir } from 'os';
 import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
+import { logger } from '../utils/logger.js';
+import chalk from 'chalk';
 
 export type PrepareOptions = { noBrowser?: boolean };
 
@@ -75,8 +77,10 @@ async function withFetch(req: Requset): Promise<Prepared> {
 }
 
 async function withBrowser(req: Requset): Promise<Prepared> {
+  logger.info('Preparing with browser...');
   const puppeteer = await import('puppeteer-core');
   const { default: Chromium } = await import('@sparticuz/chromium');
+  logger.info('Launching browser...');
   const browser = await puppeteer.launch({
     ignoreDefaultArgs: ['--disable-extensions'],
     executablePath: await Chromium.executablePath(),
@@ -90,6 +94,7 @@ async function withBrowser(req: Requset): Promise<Prepared> {
     timeout: 30000,
   });
   try {
+    logger.info('Creating page...');
     const page = await browser.newPage();
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -101,10 +106,23 @@ async function withBrowser(req: Requset): Promise<Prepared> {
       'Accept-Language': 'en-US,en;q=0.9',
       Accept: 'text/html,application/xhtml+xml',
     });
-    await page.goto(constructUrl(req), {
-      waitUntil: 'networkidle2',
-      timeout: 60000,
-    });
+    logger.info('Navigating to URL...');
+    try {
+      await page.goto(constructUrl(req), {
+        waitUntil: 'networkidle2',
+        timeout: 60000,
+      });
+    } catch (e) {
+      logger.error(`Error navigating to URL: ${e}`);
+      if (e instanceof puppeteer.TimeoutError) {
+        console.error(
+          chalk.red(
+            'TimeoutError: Try changing the gelocation of your IP address to avoid geo-restrictions.'
+          )
+        );
+      }
+      throw e;
+    }
 
     await Promise.race([
       page
