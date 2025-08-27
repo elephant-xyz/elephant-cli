@@ -12,7 +12,7 @@ export type PrepareOptions = { browser?: boolean };
 
 type Prepared = { content: string; type: 'json' | 'html' };
 
-type Requset = {
+type Request = {
   url: string;
   method: 'GET' | 'POST';
   multiValueQueryString: Record<string, string[]>;
@@ -44,7 +44,7 @@ export async function prepare(
     }
 
     const obj = JSON.parse(seed) as Record<string, unknown>;
-    const req = obj.source_http_request as Requset | undefined;
+    const req = obj.source_http_request as Request | undefined;
     const id = obj.request_identifier as string | undefined;
     if (!req) throw new Error('property_seed.json missing source_http_request');
     if (!id) throw new Error('property_seed.json missing request_identifier');
@@ -70,7 +70,7 @@ export async function prepare(
   }
 }
 
-async function withFetch(req: Requset): Promise<Prepared> {
+async function withFetch(req: Request): Promise<Prepared> {
   logger.info('Preparing with fetch...');
   let res: Response;
   try {
@@ -84,7 +84,7 @@ async function withFetch(req: Requset): Promise<Prepared> {
     if (code === 'UND_ERR_CONNECT_TIMEOUT') {
       console.error(
         chalk.red(
-          'TimeoutError: Try changing the gelocation of your IP address to avoid geo-restrictions.'
+          'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
         )
       );
     }
@@ -99,7 +99,7 @@ async function withFetch(req: Requset): Promise<Prepared> {
   return { content: txt, type };
 }
 
-async function withBrowser(req: Requset): Promise<Prepared> {
+async function withBrowser(req: Request): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
   if (process.platform === 'linux') {
@@ -157,7 +157,7 @@ async function withBrowser(req: Requset): Promise<Prepared> {
       if (e instanceof TimeoutError) {
         console.error(
           chalk.red(
-            'TimeoutError: Try changing the gelocation of your IP address to avoid geo-restrictions.'
+            'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
           )
         );
       }
@@ -277,7 +277,7 @@ async function withBrowser(req: Requset): Promise<Prepared> {
   }
 }
 
-function constructUrl(req: Requset) {
+function constructUrl(req: Request) {
   const url = new URL(req.url);
   const query = new URLSearchParams();
   for (const [key, values] of Object.entries(req.multiValueQueryString)) {
