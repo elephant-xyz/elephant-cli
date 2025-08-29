@@ -109,19 +109,19 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    if (!options.factSheetOnly) {
-      if (options.scriptsZip) {
-        logger.info('Extracting scripts to tempdir...');
-        const scriptsDir = await extractZipToTemp(
-          options.scriptsZip!,
-          tempRoot,
-          'scripts'
-        );
-        await handleCountyTransform(scriptsDir, tempRoot);
-      } else {
-        logger.info('Processing seed data group...');
-        await handleSeedTransform(tempRoot);
-      }
+    if (options.factSheetOnly) {
+      // The transformation is skipped when factSheetOnly is true.
+    } else if (options.scriptsZip) {
+      logger.info('Extracting scripts to tempdir...');
+      const scriptsDir = await extractZipToTemp(
+        options.scriptsZip!,
+        tempRoot,
+        'scripts'
+      );
+      await handleCountyTransform(scriptsDir, tempRoot);
+    } else {
+      logger.info('Processing seed data group...');
+      await handleSeedTransform(tempRoot);
     }
 
     await generateFactSheet(tempRoot);
