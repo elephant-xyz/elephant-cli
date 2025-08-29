@@ -27,6 +27,7 @@ export interface TransformCommandOptions {
   scriptsZip?: string;
   inputsZip?: string;
   legacyMode?: boolean;
+  factSheetOnly?: boolean;
   [key: string]: any;
 }
 
@@ -61,6 +62,11 @@ export function registerTransformCommand(program: Command) {
       'Input ZIP for scripts mode (must include unnormalized_address.json, property_seed.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
+    .option(
+      '--factSheetOnly',
+      'Use for only generating fact_sheet data and relationships',
+      false
+    )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
     });
@@ -108,7 +114,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    if (options.scriptsZip) {
+    if (options.factSheetOnly) {
+      // The transformation is skipped when factSheetOnly is true.
+    } else if (options.scriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
         options.scriptsZip!,
