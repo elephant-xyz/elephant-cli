@@ -62,6 +62,11 @@ export function registerTransformCommand(program: Command) {
       'Input ZIP for scripts mode (must include unnormalized_address.json, property_seed.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
+    .option(
+      '--factSheetOnly',
+      'Use for only generating fact_sheet data and relationships',
+      false
+    )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
     });
