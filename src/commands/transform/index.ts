@@ -27,6 +27,7 @@ export interface TransformCommandOptions {
   scriptsZip?: string;
   inputsZip?: string;
   legacyMode?: boolean;
+  factSheetOnly?: boolean;
   [key: string]: any;
 }
 
@@ -108,17 +109,19 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    if (options.scriptsZip) {
-      logger.info('Extracting scripts to tempdir...');
-      const scriptsDir = await extractZipToTemp(
-        options.scriptsZip!,
-        tempRoot,
-        'scripts'
-      );
-      await handleCountyTransform(scriptsDir, tempRoot);
-    } else {
-      logger.info('Processing seed data group...');
-      await handleSeedTransform(tempRoot);
+    if (!options.factSheetOnly) {
+      if (options.scriptsZip) {
+        logger.info('Extracting scripts to tempdir...');
+        const scriptsDir = await extractZipToTemp(
+          options.scriptsZip!,
+          tempRoot,
+          'scripts'
+        );
+        await handleCountyTransform(scriptsDir, tempRoot);
+      } else {
+        logger.info('Processing seed data group...');
+        await handleSeedTransform(tempRoot);
+      }
     }
 
     await generateFactSheet(tempRoot);
