@@ -1,27 +1,38 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 
-// Mock IpfsService
-const mockFetchContent = vi.fn();
-vi.mock('../../../src/services/ipfs.service', () => ({
-  IpfsService: vi.fn().mockImplementation(() => ({
-    fetchContent: mockFetchContent,
-  })),
-}));
+vi.mock('../../../src/utils/schema-fetcher.js', () => {
+  return {
+    fetchFromIpfs: vi.fn(),
+  };
+});
 
 import {
   SchemaCacheService,
   JSONSchema,
 } from '../../../src/services/schema-cache.service';
-import { IpfsService } from '../../../src/services/ipfs.service';
+import { fetchFromIpfs } from '../../../src/utils/schema-fetcher.js';
 
 describe('SchemaCacheService', () => {
   let schemaCacheService: SchemaCacheService;
-  let mockIpfsService: IpfsService;
+  let cacheDir: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIpfsService = new IpfsService('http://test-gateway/');
-    schemaCacheService = new SchemaCacheService(mockIpfsService, 3); // Small cache for testing
+    cacheDir = path.join(
+      process.cwd(),
+      'tmp',
+      `schema-cache-${Math.random().toString(36).slice(2)}`
+    );
+    fs.mkdirSync(cacheDir, { recursive: true });
+    schemaCacheService = new SchemaCacheService(cacheDir);
+  });
+
+  afterEach(() => {
+    if (cacheDir && fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
 
   describe('has method', () => {
@@ -34,16 +45,16 @@ describe('SchemaCacheService', () => {
         type: 'object',
         properties: { test: { type: 'string' } },
       };
-      mockFetchContent.mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schema))
-      );
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schema));
 
-      await schemaCacheService.getSchema('test-cid');
+      await schemaCacheService.get('test-cid');
       expect(schemaCacheService.has('test-cid')).toBe(true);
     });
   });
 
-  describe('getSchema', () => {
+  describe('get', () => {
     it('should download and cache schema on first request', async () => {
       const schema: JSONSchema = {
         type: 'object',
@@ -54,62 +65,66 @@ describe('SchemaCacheService', () => {
         required: ['name'],
       };
 
-      mockFetchContent.mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schema))
-      );
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schema));
 
-      const result = await schemaCacheService.getSchema('test-cid');
+      const result = await schemaCacheService.get('test-cid');
 
-      expect(mockFetchContent).toHaveBeenCalledWith('test-cid');
+      expect(fetchFromIpfs).toHaveBeenCalledWith('test-cid');
       expect(result).toEqual(schema);
       expect(schemaCacheService.has('test-cid')).toBe(true);
     });
 
     it('should return cached schema on subsequent requests', async () => {
       const schema: JSONSchema = { type: 'object' };
-      mockFetchContent.mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schema))
-      );
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schema));
 
-      // First request
-      const result1 = await schemaCacheService.getSchema('test-cid');
-      expect(mockFetchContent).toHaveBeenCalledTimes(1);
+      const result1 = await schemaCacheService.get('test-cid');
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(1);
 
-      // Second request should use cache
-      const result2 = await schemaCacheService.getSchema('test-cid');
-      expect(mockFetchContent).toHaveBeenCalledTimes(1); // No additional calls
+      const result2 = await schemaCacheService.get('test-cid');
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(1);
       expect(result2).toEqual(schema);
       expect(result1).toEqual(result2);
     });
 
     it('should handle JSON parsing errors', async () => {
-      mockFetchContent.mockResolvedValueOnce(Buffer.from('invalid json'));
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce('invalid json');
 
-      await expect(schemaCacheService.getSchema('invalid-cid')).rejects.toThrow(
-        'Failed to download or parse schema invalid-cid'
-      );
+      await expect(schemaCacheService.get('invalid-cid')).rejects.toThrow();
     });
 
     it('should handle IPFS download errors', async () => {
-      mockFetchContent.mockRejectedValueOnce(new Error('Network error'));
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(schemaCacheService.getSchema('error-cid')).rejects.toThrow(
-        'Failed to download or parse schema error-cid: Network error'
+      await expect(schemaCacheService.get('error-cid')).rejects.toThrow(
+        'Network error'
       );
     });
 
     it('should reject non-object schemas', async () => {
-      mockFetchContent.mockResolvedValueOnce(Buffer.from('"not an object"'));
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce('"not an object"');
 
-      await expect(schemaCacheService.getSchema('string-cid')).rejects.toThrow(
+      await expect(schemaCacheService.get('string-cid')).rejects.toThrow(
         'Invalid JSON schema: not an object'
       );
     });
 
     it('should reject null schemas', async () => {
-      mockFetchContent.mockResolvedValueOnce(Buffer.from('null'));
+      (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce('null');
 
-      await expect(schemaCacheService.getSchema('null-cid')).rejects.toThrow(
+      await expect(schemaCacheService.get('null-cid')).rejects.toThrow(
         'Invalid JSON schema: not an object'
       );
     });

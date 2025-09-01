@@ -4,7 +4,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import AdmZip from 'adm-zip';
-import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
+import { CID } from 'multiformats/cid';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
@@ -13,7 +13,6 @@ import { CidCalculatorService } from '../services/cid-calculator.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { FileEntry } from '../types/submit.types.js';
-import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 import { processSinglePropertyInput } from '../utils/single-property-processor.js';
@@ -21,7 +20,6 @@ import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.j
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
-import { CID } from 'multiformats/cid';
 
 interface HashedFile {
   originalPath: string;
@@ -86,7 +84,6 @@ export function registerHashCommand(program: Command) {
 }
 
 export interface HashServiceOverrides {
-  ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   canonicalizerService?: IPLDCanonicalizerService;
   cidCalculatorService?: CidCalculatorService;
@@ -141,12 +138,8 @@ export async function handleHash(
   let csvReporterServiceInstance: CsvReporterService | undefined =
     serviceOverrides.csvReporterService;
 
-  const ipfsServiceForSchemas =
-    serviceOverrides.ipfsServiceForSchemas ??
-    new IPFSService(DEFAULT_IPFS_GATEWAY);
   const schemaCacheService =
-    serviceOverrides.schemaCacheService ??
-    new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
+    serviceOverrides.schemaCacheService ?? new SchemaCacheService();
   const canonicalizerService =
     serviceOverrides.canonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
@@ -294,7 +287,7 @@ export async function handleHash(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
-            await schemaCacheService.getSchema(schemaCid);
+            await schemaCacheService.get(schemaCid);
             prefetchedCount++;
             fetchSuccess = true;
           } catch (error) {
@@ -747,7 +740,7 @@ async function processFileForHashing(
 
     // Only try to load schema if we have a valid dataGroupCid
     if (schemaCid && schemaCid.trim() !== '') {
-      schema = await services.schemaCacheService.getSchema(schemaCid);
+      schema = await services.schemaCacheService.get(schemaCid);
       if (!schema) {
         const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
         await services.csvReporterService.logError({

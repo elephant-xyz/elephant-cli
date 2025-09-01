@@ -10,7 +10,6 @@ import {
   installOrUpdateFactSheet,
   generateHTMLFiles,
 } from '../utils/fact-sheet.js';
-import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
@@ -23,7 +22,6 @@ import { PinataService } from '../services/pinata.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
-import { IPFSService } from '../services/ipfs.service.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 
@@ -284,7 +282,6 @@ export function registerValidateAndUploadCommand(program: Command) {
 
 export interface ValidateAndUploadServiceOverrides {
   fileScannerService?: FileScannerService;
-  ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   jsonValidatorService?: JsonValidatorService;
   jsonCanonicalizerService?:
@@ -421,19 +418,11 @@ export async function handleValidateAndUpload(
 
   const fileScannerService =
     serviceOverrides.fileScannerService ?? new FileScannerService();
-  const ipfsServiceForSchemas =
-    serviceOverrides.ipfsServiceForSchemas ??
-    new IPFSService(DEFAULT_IPFS_GATEWAY);
   const schemaCacheService =
-    serviceOverrides.schemaCacheService ??
-    new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
+    serviceOverrides.schemaCacheService ?? new SchemaCacheService();
   const jsonValidatorService =
     serviceOverrides.jsonValidatorService ??
-    new JsonValidatorService(
-      ipfsServiceForSchemas,
-      options.inputDir,
-      schemaCacheService
-    );
+    new JsonValidatorService(options.inputDir, schemaCacheService);
   const jsonCanonicalizerService =
     serviceOverrides.jsonCanonicalizerService ?? new IPLDCanonicalizerService();
   const cidCalculatorService =
@@ -547,7 +536,7 @@ export async function handleValidateAndUpload(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
-            await schemaCacheService.getSchema(schemaCid);
+            await schemaCacheService.get(schemaCid);
             prefetchedCount++;
             fetchSuccess = true;
           } catch (error) {
@@ -1099,7 +1088,7 @@ async function processFileAndGetUploadPromise(
 
   try {
     const schemaCid = fileEntry.dataGroupCid;
-    const schema = await services.schemaCacheService.getSchema(schemaCid);
+    const schema = await services.schemaCacheService.get(schemaCid);
     if (!schema) {
       const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
       await services.csvReporterService.logError({

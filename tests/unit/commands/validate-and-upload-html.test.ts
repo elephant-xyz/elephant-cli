@@ -84,7 +84,7 @@ describe('validate-and-upload HTML generation', () => {
     } as unknown as FileScannerService;
 
     mockSchemaCacheService = {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },
@@ -357,7 +357,6 @@ describe('validate-and-upload HTML generation', () => {
       pinataService: mockPinataService,
       csvReporterService: mockCsvReporterService,
       progressTracker: mockProgressTracker,
-      ipfsServiceForSchemas: mockIpfsService,
     });
 
     // Should not install/update fact-sheet in dry-run

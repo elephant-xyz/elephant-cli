@@ -62,7 +62,8 @@
     "prettier": "^3.2.5",
     "puppeteer": "^24.17.0",
     "puppeteer-core": "^24.17.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.3.0",

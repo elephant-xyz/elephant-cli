@@ -18,6 +18,7 @@ import {
 } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
+import { SchemaCacheService } from '../../services/schema-cache.service.js';
 
 const INPUT_DIR = 'input';
 const OUTPUT_DIR = 'data';
@@ -183,8 +184,10 @@ async function generateFactSheet(tempRoot: string) {
     }
   }
   const schemaManifestService = new SchemaManifestService();
+  const schemaCacheService = new SchemaCacheService();
   const factSheetRelationshipService = new FactSheetRelationshipService(
-    schemaManifestService
+    schemaManifestService,
+    schemaCacheService
   );
 
   await factSheetRelationshipService.generateFactSheetRelationships(outputPath);

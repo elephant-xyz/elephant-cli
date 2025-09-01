@@ -69,7 +69,7 @@ describe('Hash Command - htmlLink in CSV Output', () => {
 
     const mockServices = {
       schemaCacheService: {
-        getSchema: vi.fn().mockResolvedValue({
+        get: vi.fn().mockResolvedValue({
           type: 'object',
           properties: { label: {}, relationships: {} },
         }),
