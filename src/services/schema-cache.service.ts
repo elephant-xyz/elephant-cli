@@ -27,14 +27,12 @@ export class SchemaCacheService {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     } catch (error) {
       logger.error(`Error creating schema cache directory: ${error}`);
-      return;
     }
     let files: string[] = [];
     try {
       files = fs.readdirSync(this.cacheDir);
     } catch (error) {
       logger.error(`Error reading schema cache directory: ${error}`);
-      return;
     }
     files
       .filter((f) => f.endsWith('.json'))
@@ -45,7 +43,7 @@ export class SchemaCacheService {
           const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
           this.cache.set(schemaCid, data);
         } catch (error) {
-          console.error(`Error loading schema ${schemaCid}: ${error}`);
+          logger.error(`Error loading schema ${schemaCid}: ${error}`);
         }
       });
   }
