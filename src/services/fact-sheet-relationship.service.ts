@@ -139,7 +139,6 @@ export class FactSheetRelationshipService {
       datagroupContent.relationships ?? {}
     ).filter(([relName]) => !relName.endsWith('fact_sheet'));
 
-    // Map each relationship entry -> async expansion into ClassMappings
     const nestedMappings = await Promise.all(
       relationshipEntries.map(async ([relName, relValue]) => {
         const schemaEntry = datagroupSchema.properties.relationships.properties[
