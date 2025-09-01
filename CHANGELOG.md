@@ -1,3 +1,10 @@
+## [1.31.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.0...v1.31.1) (2025-09-01)
+
+
+### Bug Fixes
+
+* fix ipfs download timeout ([#110](https://github.com/elephant-xyz/elephant-cli/issues/110)) ([370cc82](https://github.com/elephant-xyz/elephant-cli/commit/370cc82e719c37e65e5b1d6c23658e4045a3a38f))
+
 # [1.31.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.30.0...v1.31.0) (2025-08-27)
 
 
