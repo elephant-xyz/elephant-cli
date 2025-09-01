@@ -484,6 +484,41 @@ export class FactSheetRelationshipService {
   }
 
   /**
+   * Check if a datagroup already has fact sheet relationships
+   */
+  private async hasExistingFactSheetRelationships(
+    datagroupFile: DatagroupFile
+  ): Promise<boolean> {
+    try {
+      const content = JSON.parse(
+        await fsPromises.readFile(datagroupFile.filePath, 'utf-8')
+      );
+
+      if (!content.relationships) {
+        return false;
+      }
+
+      // Check if any relationship key ends with "_has_fact_sheet"
+      const hasFactSheetRelationship = Object.keys(content.relationships).some(
+        (key) => key.endsWith('_has_fact_sheet')
+      );
+
+      if (hasFactSheetRelationship) {
+        logger.info(
+          `Datagroup ${datagroupFile.fileName} already has fact_sheet relationships, skipping processing`
+        );
+      }
+
+      return hasFactSheetRelationship;
+    } catch (error) {
+      logger.error(
+        `Error checking datagroup ${datagroupFile.fileName}: ${error}`
+      );
+      return false;
+    }
+  }
+
+  /**
    * Main method to generate all fact_sheet relationships
    */
   async generateFactSheetRelationships(outputDir: string): Promise<void> {
@@ -514,9 +549,30 @@ export class FactSheetRelationshipService {
       );
       logger.info(`Found ${datagroupFiles.length} datagroup files`);
 
+      // Filter out datagroups that already have fact sheet relationships
+      const datagroupsToProcess: DatagroupFile[] = [];
+      for (const datagroupFile of datagroupFiles) {
+        const hasExisting =
+          await this.hasExistingFactSheetRelationships(datagroupFile);
+        if (!hasExisting) {
+          datagroupsToProcess.push(datagroupFile);
+        }
+      }
+
+      if (datagroupsToProcess.length === 0) {
+        logger.info(
+          'All datagroups already have fact_sheet relationships, skipping generation'
+        );
+        return;
+      }
+
+      logger.info(
+        `Processing ${datagroupsToProcess.length} datagroup(s) without fact_sheet relationships`
+      );
+
       // Step 3: Process each datagroup to collect class mappings
       const allClassMappings: ClassMapping[] = [];
-      for (const datagroupFile of datagroupFiles) {
+      for (const datagroupFile of datagroupsToProcess) {
         logger.debug(
           `Processing datagroup: ${datagroupFile.label} (${datagroupFile.fileName})`
         );
@@ -543,9 +599,9 @@ export class FactSheetRelationshipService {
         `Generated ${newRelationshipFiles.size} fact_sheet relationship files`
       );
 
-      // Step 5: Update datagroup files with new relationships
+      // Step 5: Update datagroup files with new relationships (only those we processed)
       await this.updateDatagroupFiles(
-        datagroupFiles,
+        datagroupsToProcess,
         allClassMappings,
         newRelationshipFiles
       );

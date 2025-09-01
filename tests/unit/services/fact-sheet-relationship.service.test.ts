@@ -657,6 +657,298 @@ describe('FactSheetRelationshipService', () => {
       expect(propertyRelFiles.length).toBe(1);
       expect(addressRelFiles.length).toBe(1);
     });
+
+    it('should skip datagroups that already have fact_sheet relationships', async () => {
+      // Create a datagroup that already has fact_sheet relationships
+      const datagroupWithExisting = {
+        label: 'County',
+        relationships: {
+          property_has_address: {
+            '/': './relationship_property_address.json',
+          },
+          property_has_fact_sheet: [
+            { '/': './relationship_property_to_fact_sheet.json' },
+          ],
+          address_has_fact_sheet: [
+            { '/': './relationship_address_to_fact_sheet.json' },
+          ],
+        },
+      };
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'bafkreicountyschema.json'),
+        JSON.stringify(datagroupWithExisting, null, 2)
+      );
+
+      // Create the referenced files
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_property_address.json'),
+        JSON.stringify(
+          {
+            from: { '/': './property.json' },
+            to: { '/': './address.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'property.json'),
+        JSON.stringify({ id: '123' }, null, 2)
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'address.json'),
+        JSON.stringify({ street: '123 Main St' }, null, 2)
+      );
+
+      // Pre-create the existing fact_sheet relationship files
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_property_to_fact_sheet.json'),
+        JSON.stringify(
+          {
+            from: { '/': './property.json' },
+            to: { '/': './fact_sheet.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_address_to_fact_sheet.json'),
+        JSON.stringify(
+          {
+            from: { '/': './address.json' },
+            to: { '/': './fact_sheet.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      // Run the service
+      await service.generateFactSheetRelationships(tempDir);
+
+      // fact_sheet.json should still be created
+      const factSheetPath = path.join(tempDir, 'fact_sheet.json');
+      const factSheetExists = await fsPromises
+        .access(factSheetPath)
+        .then(() => true)
+        .catch(() => false);
+      expect(factSheetExists).toBe(true);
+
+      // The datagroup file should NOT be modified (still has the same relationships)
+      const datagroupPath = path.join(tempDir, 'bafkreicountyschema.json');
+      const datagroupContent = JSON.parse(
+        await fsPromises.readFile(datagroupPath, 'utf-8')
+      );
+
+      // Should still have the original fact_sheet relationships
+      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual([
+        { '/': './relationship_property_to_fact_sheet.json' },
+      ]);
+      expect(datagroupContent.relationships.address_has_fact_sheet).toEqual([
+        { '/': './relationship_address_to_fact_sheet.json' },
+      ]);
+
+      // Should not have created duplicate relationship files
+      const files = await fsPromises.readdir(tempDir);
+      const propertyRelFiles = files.filter(
+        (f) => f === 'relationship_property_to_fact_sheet.json'
+      );
+      const addressRelFiles = files.filter(
+        (f) => f === 'relationship_address_to_fact_sheet.json'
+      );
+
+      expect(propertyRelFiles.length).toBe(1);
+      expect(addressRelFiles.length).toBe(1);
+    });
+
+    it('should process only datagroups without fact_sheet relationships when mixed', async () => {
+      // Create two datagroups - one with existing fact_sheet relationships, one without
+      const datagroupWithExisting = {
+        label: 'County',
+        relationships: {
+          property_has_address: {
+            '/': './relationship_property_address.json',
+          },
+          property_has_fact_sheet: [
+            { '/': './relationship_property_to_fact_sheet.json' },
+          ],
+        },
+      };
+
+      const datagroupWithoutExisting = {
+        label: 'Seed',
+        relationships: {
+          property_has_address: {
+            '/': './relationship_property_to_address.json',
+          },
+        },
+      };
+
+      // Update mock schema manifest to include both datagroups
+      mockSchemaManifest.Seed = {
+        ipfsCid: 'bafkreiseedschema',
+        type: 'dataGroup',
+      };
+
+      // Mock to handle both datagroups
+      vi.spyOn(
+        schemaManifestService,
+        'getDataGroupCidByLabel'
+      ).mockImplementation((label) => {
+        if (label === 'County') return 'bafkreicountyschema';
+        if (label === 'Seed') return 'bafkreiseedschema';
+        return null;
+      });
+
+      // Mock fetch for both schemas
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (
+          url.includes('bafkreicountyschema') ||
+          url.includes('bafkreiseedschema')
+        ) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockDatagroupSchema),
+          });
+        }
+        if (url.includes('bafkreirelationshipschema')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockRelationshipSchema),
+          });
+        }
+        if (url.includes('bafkreipropertyclass')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockPropertyClassSchema),
+          });
+        }
+        if (url.includes('bafkreiaddressclass')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockAddressClassSchema),
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        });
+      }) as any;
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'bafkreicountyschema.json'),
+        JSON.stringify(datagroupWithExisting, null, 2)
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'bafkreiseedschema.json'),
+        JSON.stringify(datagroupWithoutExisting, null, 2)
+      );
+
+      // Create necessary files
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_property_address.json'),
+        JSON.stringify(
+          {
+            from: { '/': './property.json' },
+            to: { '/': './address.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_property_to_address.json'),
+        JSON.stringify(
+          {
+            from: { '/': './property2.json' },
+            to: { '/': './address2.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'property.json'),
+        JSON.stringify({ id: '123' }, null, 2)
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'property2.json'),
+        JSON.stringify({ id: '456' }, null, 2)
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'address.json'),
+        JSON.stringify({ street: '123 Main St' }, null, 2)
+      );
+
+      await fsPromises.writeFile(
+        path.join(tempDir, 'address2.json'),
+        JSON.stringify({ street: '456 Oak Ave' }, null, 2)
+      );
+
+      // Pre-create existing fact_sheet relationship for County datagroup
+      await fsPromises.writeFile(
+        path.join(tempDir, 'relationship_property_to_fact_sheet.json'),
+        JSON.stringify(
+          {
+            from: { '/': './property.json' },
+            to: { '/': './fact_sheet.json' },
+          },
+          null,
+          2
+        )
+      );
+
+      await service.generateFactSheetRelationships(tempDir);
+
+      // County datagroup should NOT be modified
+      const countyContent = JSON.parse(
+        await fsPromises.readFile(
+          path.join(tempDir, 'bafkreicountyschema.json'),
+          'utf-8'
+        )
+      );
+      expect(countyContent.relationships.property_has_fact_sheet).toEqual([
+        { '/': './relationship_property_to_fact_sheet.json' },
+      ]);
+      expect(
+        countyContent.relationships.address_has_fact_sheet
+      ).toBeUndefined();
+
+      // Seed datagroup SHOULD be updated with new fact_sheet relationships
+      const seedContent = JSON.parse(
+        await fsPromises.readFile(
+          path.join(tempDir, 'bafkreiseedschema.json'),
+          'utf-8'
+        )
+      );
+      expect(seedContent.relationships.property_has_fact_sheet).toBeDefined();
+      expect(seedContent.relationships.address_has_fact_sheet).toBeDefined();
+
+      // Check that new relationship files were created for Seed datagroup classes
+      const expectedNewFiles = [
+        'relationship_property2_to_fact_sheet.json',
+        'relationship_address2_to_fact_sheet.json',
+      ];
+
+      for (const file of expectedNewFiles) {
+        const exists = await fsPromises
+          .access(path.join(tempDir, file))
+          .then(() => true)
+          .catch(() => false);
+        expect(exists).toBe(true);
+      }
+    });
   });
 
   describe('error handling', () => {
