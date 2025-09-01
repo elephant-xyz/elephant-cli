@@ -184,10 +184,10 @@ async function generateFactSheet(tempRoot: string) {
     }
   }
   const schemaManifestService = new SchemaManifestService();
-  const schmemaCacheService = new SchemaCacheService();
+  const schemaCacheService = new SchemaCacheService();
   const factSheetRelationshipService = new FactSheetRelationshipService(
     schemaManifestService,
-    schmemaCacheService
+    schemaCacheService
   );
 
   await factSheetRelationshipService.generateFactSheetRelationships(outputPath);

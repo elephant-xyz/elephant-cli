@@ -115,7 +115,7 @@ export class FactSheetRelationshipService {
    */
   private async processDatagroup(
     datagroupFile: DatagroupFile,
-    outputDir: string // kept for signature parity; not used here
+    outputDir: string
   ): Promise<ReadonlyArray<ClassMapping>> {
     const datagroupContent = JSON.parse(
       await fsPromises.readFile(datagroupFile.filePath, 'utf-8')
