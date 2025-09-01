@@ -115,7 +115,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
     if (options.factSheetOnly) {
-      // The transformation is skipped when factSheetOnly is true.
+      await handleSkippingTransform(tempRoot);
     } else if (options.scriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
@@ -198,6 +198,23 @@ async function generateFactSheet(tempRoot: string) {
   await factSheetRelationshipService.generateFactSheetRelationships(outputPath);
 
   logger.success('Successfully generated fact_sheet relationships');
+}
+
+async function handleSkippingTransform(tempRoot: string) {
+  // Copy input files directly to output directory for fact sheet generation
+  logger.info(
+    'Copying input files to output directory for fact sheet generation...'
+  );
+  const outputDir = path.join(tempRoot, OUTPUT_DIR);
+  await fs.mkdir(outputDir, { recursive: true });
+
+  const inputFiles = await fs.readdir(path.join(tempRoot, INPUT_DIR));
+  for (const file of inputFiles) {
+    const srcPath = path.join(tempRoot, INPUT_DIR, file);
+    const destPath = path.join(outputDir, file);
+    await fs.copyFile(srcPath, destPath);
+    logger.debug(`Copied ${file} to output directory`);
+  }
 }
 
 async function moveDirectory(src: string, dest: string): Promise<void> {
