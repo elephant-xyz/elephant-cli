@@ -2,6 +2,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { fetchFromIpfs } from '../utils/schema-fetcher.js';
+import { logger } from '../utils/logger.js';
 
 export type JSONSchema = {
   $schema?: string;
@@ -25,14 +26,14 @@ export class SchemaCacheService {
     try {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     } catch (error) {
-      console.error(`Error creating schema cache directory: ${error}`);
+      logger.error(`Error creating schema cache directory: ${error}`);
       return;
     }
     let files: string[] = [];
     try {
       files = fs.readdirSync(this.cacheDir);
     } catch (error) {
-      console.error(`Error reading schema cache directory: ${error}`);
+      logger.error(`Error reading schema cache directory: ${error}`);
       return;
     }
     files
