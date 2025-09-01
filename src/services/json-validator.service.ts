@@ -6,6 +6,7 @@ import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
+import { fetchFromIpfs } from '../utils/schema-fetcher.js';
 import { logger } from '../utils/logger.js';
 
 export interface ValidationError {
@@ -481,9 +482,15 @@ export class JsonValidatorService {
 
       if (isCID) {
         try {
-          const schema = await this.schemaCacheService.get(pointerValue);
+          const text = await fetchFromIpfs(pointerValue);
+          let value: unknown = text;
+          try {
+            value = JSON.parse(text);
+          } catch {
+            // leave as string when not JSON
+          }
           return await this.resolveCIDPointers(
-            schema,
+            value,
             currentFilePath,
             schema,
             cidAllowedMap,
