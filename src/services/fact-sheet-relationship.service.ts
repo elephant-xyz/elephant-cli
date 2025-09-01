@@ -139,62 +139,60 @@ export class FactSheetRelationshipService {
       datagroupContent.relationships ?? {}
     ).filter(([relName]) => !relName.endsWith('fact_sheet'));
 
-    const classMappings: ClassMapping[] = [];
+    // Map each relationship entry -> async expansion into ClassMappings
+    const nestedMappings = await Promise.all(
+      relationshipEntries.map(async ([relName, relValue]) => {
+        const schemaEntry = datagroupSchema.properties.relationships.properties[
+          relName
+        ] as { cid: string } | { items: { cid: string } } | undefined;
 
-    for (const [relName, relValue] of relationshipEntries) {
-      const schemaEntry = datagroupSchema.properties.relationships.properties[
-        relName
-      ] as { cid: string } | { items: { cid: string } } | undefined;
+        if (!schemaEntry) {
+          const errorMessage = `No CID found for relationship ${relName} in datagroup schema, processing data directly`;
+          logger.error(errorMessage);
+          throw new Error(errorMessage);
+        }
 
-      if (!schemaEntry) {
-        // No schema entry present (e.g., property_has_tax). Derive from filenames.
-        await this.extractFileMappingsWithoutSchema(
-          relValue,
-          relName,
-          classMappings,
-          outputDir
+        const schemaCid =
+          'items' in schemaEntry ? schemaEntry.items.cid : schemaEntry.cid;
+
+        const relationshipSchema = RelationshipSchema.parse(
+          await this.schemaCache.get(schemaCid)
         );
-        continue;
-      }
 
-      const schemaCid =
-        'items' in schemaEntry ? schemaEntry.items.cid : schemaEntry.cid;
+        const [fromClassSchema, toClassSchema] = await Promise.all([
+          this.schemaCache
+            .get(relationshipSchema.properties.from.cid)
+            .then((v) => ClassSchema.parse(v)),
+          this.schemaCache
+            .get(relationshipSchema.properties.to.cid)
+            .then((v) => ClassSchema.parse(v)),
+        ]);
 
-      const relationshipSchema = RelationshipSchema.parse(
-        await this.schemaCache.get(schemaCid)
-      );
+        const fromClassName = fromClassSchema.title;
+        const toClassName = toClassSchema.title;
 
-      const [fromClassSchema, toClassSchema] = await Promise.all([
-        this.schemaCache
-          .get(relationshipSchema.properties.from.cid)
-          .then((v) => ClassSchema.parse(v)),
-        this.schemaCache
-          .get(relationshipSchema.properties.to.cid)
-          .then((v) => ClassSchema.parse(v)),
-      ]);
+        const relationships = Array.isArray(relValue) ? relValue : [relValue];
 
-      const fromClassName = fromClassSchema.title;
-      const toClassName = toClassSchema.title;
+        const perRelMappings = await Promise.all(
+          relationships.map(async (rel) => {
+            const { from, to } = await this.extractFileNamesFromRelationship(
+              rel,
+              outputDir
+            );
 
-      const relationships = Array.isArray(relValue) ? relValue : [relValue];
-      for (const rel of relationships) {
-        if (!rel || typeof rel !== 'object') {
-          continue;
-        }
-        const { from, to } = await this.extractFileNamesFromRelationship(
-          rel as IPLDLink,
-          outputDir
+            return [
+              { fileName: from, className: fromClassName } as const,
+              { fileName: to, className: toClassName } as const,
+            ];
+          })
         );
-        if (!classMappings.some((m) => m.fileName === from)) {
-          classMappings.push({ fileName: from, className: fromClassName });
-        }
-        if (!classMappings.some((m) => m.fileName === to)) {
-          classMappings.push({ fileName: to, className: toClassName });
-        }
-      }
-    }
 
-    return classMappings;
+        return perRelMappings.flat();
+      })
+    );
+
+    const result: ReadonlyArray<ClassMapping> = nestedMappings.flat();
+    return result;
   }
 
   private async extractFileNamesFromRelationship(
