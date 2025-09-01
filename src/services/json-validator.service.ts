@@ -6,7 +6,6 @@ import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
-import { IPFSService } from './ipfs.service.js';
 import { logger } from '../utils/logger.js';
 
 export interface ValidationError {
@@ -25,17 +24,10 @@ export interface ValidationResult {
 export class JsonValidatorService {
   private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
-  private ipfsService: IPFSService;
-  private schemaCacheService?: SchemaCacheService;
-  private schemaCache: Map<string, JSONSchema> = new Map();
-  private baseDirectory?: string;
+  private schemaCacheService: SchemaCacheService;
+  private baseDirectory: string;
 
-  constructor(
-    ipfsService: IPFSService,
-    baseDirectory?: string,
-    schemaCacheService?: SchemaCacheService
-  ) {
-    this.ipfsService = ipfsService;
+  constructor(baseDirectory: string, schemaCacheService: SchemaCacheService) {
     this.baseDirectory = baseDirectory;
     this.schemaCacheService = schemaCacheService;
     this.ajv = new Ajv({
@@ -164,42 +156,9 @@ export class JsonValidatorService {
   }
 
   private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
-    // Check local cache first
-    if (this.schemaCache.has(cidStr)) {
-      return this.schemaCache.get(cidStr)!;
-    }
-
-    // Try schema cache service first (handles special schemas)
-    if (this.schemaCacheService) {
-      try {
-        const schema = await this.schemaCacheService.getSchema(cidStr);
-        if (schema) {
-          this.schemaCache.set(cidStr, schema);
-          return schema;
-        }
-      } catch (e) {
-        logger.error(
-          `Schema cache service failed to fetch schema for CID ${cidStr}: ${e instanceof Error ? e.message : String(e)}`
-        );
-        // If schema cache service fails, continue to IPFS fetch
-      }
-    }
-
     try {
-      // Validate CID format
       CID.parse(cidStr);
-
-      // Fetch schema content from IPFS
-      const buffer = await this.ipfsService.fetchContent(cidStr);
-      const schemaText = buffer.toString('utf-8');
-      const schema = JSON.parse(schemaText) as JSONSchema;
-
-      // Don't validate here because the schema might contain nested CID references
-      // Validation will happen after all CID references are resolved
-
-      // Cache the schema
-      this.schemaCache.set(cidStr, schema);
-
+      const schema = await this.schemaCacheService.get(cidStr);
       return schema;
     } catch (error) {
       throw new Error(
@@ -521,27 +480,15 @@ export class JsonValidatorService {
       }
 
       if (isCID) {
-        // It's a valid CID, fetch from IPFS
         try {
-          const contentBuffer =
-            await this.ipfsService.fetchContent(pointerValue);
-          const contentText = contentBuffer.toString('utf-8');
-
-          // Try to parse as JSON
-          try {
-            const parsed = JSON.parse(contentText);
-            // Recursively resolve any nested CID pointers
-            return await this.resolveCIDPointers(
-              parsed,
-              currentFilePath,
-              schema,
-              cidAllowedMap,
-              currentPath
-            );
-          } catch {
-            // Return as string if not valid JSON
-            return contentText;
-          }
+          const schema = await this.schemaCacheService.get(pointerValue);
+          return await this.resolveCIDPointers(
+            schema,
+            currentFilePath,
+            schema,
+            cidAllowedMap,
+            currentPath
+          );
         } catch (error) {
           throw new Error(
             `Failed to resolve CID pointer: ${error instanceof Error ? error.message : String(error)}`
