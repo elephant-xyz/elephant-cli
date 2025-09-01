@@ -4,7 +4,10 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { FactSheetRelationshipService } from '../../../src/services/fact-sheet-relationship.service.js';
 import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
-import { SchemaCacheService, type JSONSchema } from '../../../src/services/schema-cache.service.js';
+import {
+  SchemaCacheService,
+  type JSONSchema,
+} from '../../../src/services/schema-cache.service.js';
 import * as factSheetUtils from '../../../src/utils/fact-sheet.js';
 
 describe('FactSheetRelationshipService', () => {
@@ -490,14 +493,18 @@ describe('FactSheetRelationshipService', () => {
         return label === 'County' ? 'bafkreicountyschema' : null;
       });
 
-      const testSchemaCache = new SchemaCacheService(path.join(tempDir, 'cache-err'));
+      const testSchemaCache = new SchemaCacheService(
+        path.join(tempDir, 'cache-err')
+      );
       const testService = new FactSheetRelationshipService(
         testSchemaManifestService,
         testSchemaCache
       );
 
       // Force schema cache retrieval to fail (simulates IPFS fetch failure)
-      vi.spyOn(testSchemaCache, 'get').mockRejectedValue(new Error('Network error'));
+      vi.spyOn(testSchemaCache, 'get').mockRejectedValue(
+        new Error('Network error')
+      );
 
       const datagroup = {
         label: 'County',

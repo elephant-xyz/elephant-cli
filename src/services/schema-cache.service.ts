@@ -6,7 +6,7 @@ import { fetchFromIpfs } from '../utils/schema-fetcher.js';
 export type JSONSchema = {
   $schema?: string;
   type: string;
-  properties: Record<string, JSONSchema>;
+  properties?: Record<string, JSONSchema>;
   required?: string[];
   additionalProperties?: boolean;
   title?: string;

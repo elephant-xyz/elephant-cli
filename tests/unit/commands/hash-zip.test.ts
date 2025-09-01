@@ -122,7 +122,7 @@ describe('Hash Command - ZIP Input', () => {
     };
 
     mockSchemaCacheService = {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },
