@@ -28,6 +28,7 @@ export interface TransformCommandOptions {
   scriptsZip?: string;
   inputsZip?: string;
   legacyMode?: boolean;
+  factSheetOnly?: boolean;
   [key: string]: any;
 }
 
@@ -62,6 +63,11 @@ export function registerTransformCommand(program: Command) {
       'Input ZIP for scripts mode (must include unnormalized_address.json, property_seed.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
+    .option(
+      '--factSheetOnly',
+      'Use for only generating fact_sheet data and relationships',
+      false
+    )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
     });
@@ -109,7 +115,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    if (options.scriptsZip) {
+    if (options.factSheetOnly) {
+      await handleSkippingTransform(tempRoot);
+    } else if (options.scriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
         options.scriptsZip!,
@@ -193,6 +201,23 @@ async function generateFactSheet(tempRoot: string) {
   await factSheetRelationshipService.generateFactSheetRelationships(outputPath);
 
   logger.success('Successfully generated fact_sheet relationships');
+}
+
+async function handleSkippingTransform(tempRoot: string) {
+  // Copy input files directly to output directory for fact sheet generation
+  logger.info(
+    'Copying input files to output directory for fact sheet generation...'
+  );
+  const outputDir = path.join(tempRoot, OUTPUT_DIR);
+  await fs.mkdir(outputDir, { recursive: true });
+
+  const inputFiles = await fs.readdir(path.join(tempRoot, INPUT_DIR));
+  for (const file of inputFiles) {
+    const srcPath = path.join(tempRoot, INPUT_DIR, file);
+    const destPath = path.join(outputDir, file);
+    await fs.copyFile(srcPath, destPath);
+    logger.debug(`Copied ${file} to output directory`);
+  }
 }
 
 async function moveDirectory(src: string, dest: string): Promise<void> {
