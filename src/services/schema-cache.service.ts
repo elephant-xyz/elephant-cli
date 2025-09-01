@@ -22,15 +22,31 @@ export class SchemaCacheService {
   ) {
     this.cacheDir = cacheDir;
     this.cache = new Map();
-    fs.mkdirSync(this.cacheDir, { recursive: true });
-    for (const file of fs.readdirSync(this.cacheDir)) {
-      if (file.endsWith('.json')) {
-        const filePath = path.join(this.cacheDir, file);
-        const schemaCId = file.replace('.json', '');
-        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        this.cache.set(schemaCId, data);
-      }
+    try {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
+    } catch (error) {
+      console.error(`Error creating schema cache directory: ${error}`);
+      return;
     }
+    let files: string[] = [];
+    try {
+      files = fs.readdirSync(this.cacheDir);
+    } catch (error) {
+      console.error(`Error reading schema cache directory: ${error}`);
+      return;
+    }
+    files
+      .filter((f) => f.endsWith('.json'))
+      .forEach((file) => {
+        const filePath = path.join(this.cacheDir, file);
+        const schemaCid = file.replace('.json', '');
+        try {
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          this.cache.set(schemaCid, data);
+        } catch (error) {
+          console.error(`Error loading schema ${schemaCid}: ${error}`);
+        }
+      });
   }
 
   has(cid: string): boolean {
