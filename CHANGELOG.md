@@ -1,3 +1,10 @@
+## [1.31.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.2...v1.31.3) (2025-09-02)
+
+
+### Bug Fixes
+
+* increase maxRetries from 3 to 7 in ApiSubmissionService ([#113](https://github.com/elephant-xyz/elephant-cli/issues/113)) ([a0be2ae](https://github.com/elephant-xyz/elephant-cli/commit/a0be2ae8cfca8580169ce9d4f0c0f2a0a887dd57))
+
 ## [1.31.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.1...v1.31.2) (2025-09-02)
 
 
