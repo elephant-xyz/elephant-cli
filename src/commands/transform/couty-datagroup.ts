@@ -144,7 +144,7 @@ export function createCountyDataGroup(
     relationships.property_has_flood_storm_information =
       propertyHasFloodStormInformation;
   }
-  if (propertyHasFile) relationships.property_has_file = propertyHasFile;
+  if (propertyHasFile.length) relationships.property_has_file = propertyHasFile;
   if (propertyHasStructure)
     relationships.property_has_structure = propertyHasStructure;
   if (propertyHasUtility)
