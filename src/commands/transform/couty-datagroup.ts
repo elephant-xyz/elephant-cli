@@ -13,7 +13,7 @@ export interface Relationships {
   property_has_sales_history?: IPLDRef[];
   property_has_layout?: IPLDRef[];
   property_has_flood_storm_information?: IPLDRef;
-  property_has_file?: IPLDRef;
+  property_has_file?: IPLDRef[];
   property_has_structure?: IPLDRef;
   property_has_utility?: IPLDRef;
   sales_history_has_person?: IPLDRef[];
@@ -44,13 +44,13 @@ export function createCountyDataGroup(
   const salesHistoryHasCompany: IPLDRef[] = [];
   const deedHasFile: IPLDRef[] = [];
   const salesHistoryHasDeed: IPLDRef[] = [];
+  const propertyHasFile: IPLDRef[] = [];
 
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
   let propertyHasFloodStormInformation: IPLDRef | undefined;
   let propertyHasUtility: IPLDRef | undefined;
   let propertyHasStructure: IPLDRef | undefined;
-  let propertyHasFile: IPLDRef | undefined;
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
@@ -101,7 +101,7 @@ export function createCountyDataGroup(
     }
     if (lower.includes('property_file')) {
       // Not assigned in the original loop, but present in the schema.
-      propertyHasFile = ref;
+      propertyHasFile.push(ref);
       continue;
     }
 
