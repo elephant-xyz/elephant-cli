@@ -9,7 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { handleLegacyTransform } from './legacy-agent.js';
 import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
-import { createCountyDataGroup } from './couty-datagroup.js';
+import { createCountyDataGroup } from './county-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
 import {
   checkFactSheetInstalled,
