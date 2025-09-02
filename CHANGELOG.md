@@ -1,3 +1,10 @@
+## [1.31.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.1...v1.31.2) (2025-09-02)
+
+
+### Bug Fixes
+
+* update property_has_file type to array in Relationships interface ([#112](https://github.com/elephant-xyz/elephant-cli/issues/112)) ([7f725f1](https://github.com/elephant-xyz/elephant-cli/commit/7f725f1ad8b20e22100cd4de050a21e32f78b256))
+
 ## [1.31.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.0...v1.31.1) (2025-09-01)
 
 
