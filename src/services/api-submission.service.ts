@@ -10,7 +10,7 @@ export class ApiSubmissionService {
   private apiKey: string;
   private oracleKeyId: string;
   private baseUrl: string;
-  private maxRetries: number = 3;
+  private maxRetries: number = 7;
   private retryDelay: number = 1000; // 1 second
 
   constructor(domain: string, apiKey: string, oracleKeyId: string) {
