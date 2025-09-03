@@ -19,6 +19,7 @@ import {
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
+import { parseMultiValueQueryString } from './sourceHttpRequest.js';
 
 const INPUT_DIR = 'input';
 const OUTPUT_DIR = 'data';
@@ -238,7 +239,7 @@ async function handleSeedTransform(tempRoot: string) {
     url: seedRow.url,
     method: seedRow.method,
     multiValueQueryString: seedRow.multiValueQueryString?.trim()
-      ? JSON.parse(seedRow.multiValueQueryString)
+      ? parseMultiValueQueryString(seedRow.multiValueQueryString)
       : {},
   };
   const propSeedJson = JSON.stringify({
