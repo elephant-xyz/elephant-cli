@@ -237,7 +237,9 @@ async function handleSeedTransform(tempRoot: string) {
   const sourceHttpRequest = {
     url: seedRow.url,
     method: seedRow.method,
-    multiValueQueryString: JSON.parse(seedRow.multiValueQueryString),
+    multiValueQueryString: seedRow.multiValueQueryString?.trim()
+      ? JSON.parse(seedRow.multiValueQueryString)
+      : {},
   };
   const propSeedJson = JSON.stringify({
     parcel_id: seedRow.parcel_id,
