@@ -1,3 +1,10 @@
+## [1.31.6](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.5...v1.31.6) (2025-09-03)
+
+
+### Bug Fixes
+
+* cli exit 1 when upload to ipfs fails ([#116](https://github.com/elephant-xyz/elephant-cli/issues/116)) ([36fd870](https://github.com/elephant-xyz/elephant-cli/commit/36fd8705010ba4b8c57394e39d184dc3055822a1))
+
 ## [1.31.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.4...v1.31.5) (2025-09-03)
 
 
