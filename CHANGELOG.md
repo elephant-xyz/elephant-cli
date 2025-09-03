@@ -1,3 +1,10 @@
+## [1.31.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.4...v1.31.5) (2025-09-03)
+
+
+### Bug Fixes
+
+* **transform:** allow for invlaid json multiValueQueryString ([#115](https://github.com/elephant-xyz/elephant-cli/issues/115)) ([c703bd3](https://github.com/elephant-xyz/elephant-cli/commit/c703bd3091db55a13b375a27b039379592d2d0ee))
+
 ## [1.31.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.3...v1.31.4) (2025-09-03)
 
 
