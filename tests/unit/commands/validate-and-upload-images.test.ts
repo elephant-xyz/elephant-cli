@@ -73,7 +73,7 @@ describe('validate-and-upload with image support', () => {
     // Mock schema cache service with valid data group schema
     // Data group schemas must have exactly 2 properties: label and relationships
     mockSchemaCacheService = {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },

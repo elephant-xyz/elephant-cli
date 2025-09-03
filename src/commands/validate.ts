@@ -3,7 +3,6 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
-import { DEFAULT_IPFS_GATEWAY } from '../config/constants.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { SchemaCacheService } from '../services/schema-cache.service.js';
@@ -11,7 +10,6 @@ import { JsonValidatorService } from '../services/json-validator.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { FileEntry } from '../types/submit.types.js';
-import { IPFSService } from '../services/ipfs.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
 import {
   processSinglePropertyInput,
@@ -57,7 +55,6 @@ export function registerValidateCommand(program: Command) {
 }
 
 export interface ValidateServiceOverrides {
-  ipfsServiceForSchemas?: IPFSService;
   schemaCacheService?: SchemaCacheService;
   jsonValidatorService?: JsonValidatorService;
   csvReporterService?: CsvReporterService;
@@ -109,19 +106,11 @@ export async function handleValidate(
   let csvReporterServiceInstance: CsvReporterService | undefined =
     serviceOverrides.csvReporterService;
 
-  const ipfsServiceForSchemas =
-    serviceOverrides.ipfsServiceForSchemas ??
-    new IPFSService(DEFAULT_IPFS_GATEWAY);
   const schemaCacheService =
-    serviceOverrides.schemaCacheService ??
-    new SchemaCacheService(ipfsServiceForSchemas, config.schemaCacheSize);
+    serviceOverrides.schemaCacheService ?? new SchemaCacheService();
   const jsonValidatorService =
     serviceOverrides.jsonValidatorService ??
-    new JsonValidatorService(
-      ipfsServiceForSchemas,
-      actualInputDir,
-      schemaCacheService
-    );
+    new JsonValidatorService(actualInputDir, schemaCacheService);
   const schemaManifestService =
     serviceOverrides.schemaManifestService ?? new SchemaManifestService();
 
@@ -227,7 +216,7 @@ export async function handleValidate(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
-            await schemaCacheService.getSchema(schemaCid);
+            await schemaCacheService.get(schemaCid);
             prefetchedCount++;
             fetchSuccess = true;
           } catch (error) {
@@ -503,7 +492,7 @@ async function validateFile(
 
   try {
     const schemaCid = fileEntry.dataGroupCid;
-    const schema = await services.schemaCacheService.getSchema(schemaCid);
+    const schema = await services.schemaCacheService.get(schemaCid);
     if (!schema) {
       const error = `Could not load schema ${schemaCid} for ${fileEntry.filePath}`;
       await services.csvReporterService.logError({

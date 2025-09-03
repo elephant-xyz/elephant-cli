@@ -1,33 +1,52 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { JsonValidatorService } from '../../../src/services/json-validator.service';
-import { JSONSchema } from '../../../src/services/schema-cache.service';
-import { IPFSService } from '../../../src/services/ipfs.service';
+import {
+  JSONSchema,
+  SchemaCacheService,
+} from '../../../src/services/schema-cache.service';
 import { promises as fsPromises } from 'fs';
+import fs from 'fs';
+import path from 'path';
 
-vi.mock('fs', () => ({
-  promises: {
-    readFile: vi.fn(),
-  },
-}));
+vi.mock('../../../src/utils/schema-fetcher.js', () => {
+  return {
+    fetchFromIpfs: vi.fn(),
+  };
+});
+import { fetchFromIpfs } from '../../../src/utils/schema-fetcher.js';
+
+vi.mock('fs', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      readFile: vi.fn(),
+    },
+  };
+});
 
 describe('JsonValidatorService', () => {
   let jsonValidator: JsonValidatorService;
-  let mockIPFSService: IPFSService;
+  let cacheDir: string;
+  let schemaCacheService: SchemaCacheService;
 
   beforeEach(() => {
-    // Create mock IPFS service
-    mockIPFSService = {
-      fetchContent: vi
-        .fn()
-        .mockResolvedValue(Buffer.from('{"type": "string"}')),
-    } as any;
-
-    jsonValidator = new JsonValidatorService(mockIPFSService);
     vi.clearAllMocks();
+    cacheDir = path.join(
+      process.cwd(),
+      'tmp',
+      `schema-cache-${Math.random().toString(36).slice(2)}`
+    );
+    fs.mkdirSync(cacheDir, { recursive: true });
+    schemaCacheService = new SchemaCacheService(cacheDir);
+    jsonValidator = new JsonValidatorService('', schemaCacheService);
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    if (cacheDir && fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
 
   describe('validate', () => {
@@ -498,10 +517,10 @@ describe('JsonValidatorService', () => {
         required: ['name', 'value'],
       };
 
-      // Mock IPFS service to return the embedded schema
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(embeddedSchema))
-      );
+      // Mock IPFS fetcher to return the embedded schema
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(embeddedSchema));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -519,7 +538,7 @@ describe('JsonValidatorService', () => {
 
       const result = await jsonValidator.validate(validData, schema);
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(mockCID);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(mockCID);
     });
 
     it('should fail validation when data does not match CID schema', async () => {
@@ -533,9 +552,9 @@ describe('JsonValidatorService', () => {
         required: ['name', 'value'],
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(embeddedSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(embeddedSchema));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -564,9 +583,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(embeddedSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(embeddedSchema));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -584,15 +603,15 @@ describe('JsonValidatorService', () => {
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(true);
       // Should only fetch once due to caching
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(1);
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(1);
     });
 
     it('should handle IPFS fetch errors gracefully', async () => {
       const mockCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
-      vi.mocked(mockIPFSService.fetchContent).mockRejectedValueOnce(
-        new Error('IPFS gateway timeout')
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockRejectedValueOnce(new Error('IPFS gateway timeout'));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -613,9 +632,9 @@ describe('JsonValidatorService', () => {
     it('should handle invalid JSON in CID content', async () => {
       const mockCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from('{ invalid json ]')
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce('{ invalid json ]');
 
       const schema: JSONSchema = {
         type: 'object',
@@ -653,9 +672,9 @@ describe('JsonValidatorService', () => {
         required: ['bio'],
       };
 
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema1)))
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schema2)));
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(schema1))
+        .mockResolvedValueOnce(JSON.stringify(schema2));
 
       const rootSchema: JSONSchema = {
         type: 'object',
@@ -676,8 +695,8 @@ describe('JsonValidatorService', () => {
 
       const result = await jsonValidator.validate(validData, rootSchema);
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(mockCID1);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(mockCID2);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(mockCID1);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(mockCID2);
     });
 
     it('should validate arrays with CID item schemas', async () => {
@@ -691,9 +710,9 @@ describe('JsonValidatorService', () => {
         required: ['id'],
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(itemSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(itemSchema));
 
       const schema: JSONSchema = {
         type: 'array',
@@ -714,9 +733,9 @@ describe('JsonValidatorService', () => {
       const mockCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       // Return valid JSON but invalid schema
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify({ type: 'invalid-type' }))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify({ type: 'invalid-type' }));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -756,9 +775,9 @@ describe('JsonValidatorService', () => {
       };
 
       // Mock IPFS to return the content and schema
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaContent))) // Schema fetch first
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(actualContent))); // Content fetch second
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(schemaContent)) // Schema fetch first
+        .mockResolvedValueOnce(JSON.stringify(actualContent)); // Content fetch second
 
       // Schema has a property that references another schema via CID
       const schema: JSONSchema = {
@@ -777,8 +796,8 @@ describe('JsonValidatorService', () => {
       const result = await jsonValidator.validate(data, schema);
 
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(contentCID);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(schemaCID);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(contentCID);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(schemaCID);
     });
 
     it('should reject root schema that is a CID link', async () => {
@@ -799,7 +818,7 @@ describe('JsonValidatorService', () => {
         'Root schema cannot be a CID link'
       );
       // IPFS should not be called
-      expect(mockIPFSService.fetchContent).not.toHaveBeenCalled();
+      expect(fetchFromIpfs).not.toHaveBeenCalled();
     });
 
     it('should NOT resolve CID pointers when schema is not a CID link', async () => {
@@ -821,14 +840,14 @@ describe('JsonValidatorService', () => {
       // Should validate the pointer object as-is, not resolve it
       expect(result.valid).toBe(true);
       // IPFS should not be called since pointer is not resolved
-      expect(mockIPFSService.fetchContent).not.toHaveBeenCalled();
+      expect(fetchFromIpfs).not.toHaveBeenCalled();
     });
 
     it('should NOT resolve file path pointers when schema is not a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
 
       // Schema is a regular object schema, not a CID link
@@ -870,9 +889,9 @@ describe('JsonValidatorService', () => {
         required: ['name', 'age'],
       };
 
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaContent))) // Schema fetch first
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(invalidContent))); // Content fetch second
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(schemaContent)) // Schema fetch first
+        .mockResolvedValueOnce(JSON.stringify(invalidContent)); // Content fetch second
 
       const schema: JSONSchema = {
         type: 'object',
@@ -900,9 +919,9 @@ describe('JsonValidatorService', () => {
         minLength: 10,
       };
 
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaContent)))
-        .mockResolvedValueOnce(Buffer.from(textContent));
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(schemaContent))
+        .mockResolvedValueOnce(textContent);
 
       const schema: JSONSchema = {
         type: 'object',
@@ -959,11 +978,11 @@ describe('JsonValidatorService', () => {
       vi.clearAllMocks();
 
       // Set up fresh mocks
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(userSchemaData))) // User schema fetch first
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(profileSchemaData))) // Profile schema fetch second
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(userData))) // User data fetch third
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(profileData))); // Profile data fetch fourth
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(userSchemaData)) // User schema fetch first
+        .mockResolvedValueOnce(JSON.stringify(profileSchemaData)) // Profile schema fetch second
+        .mockResolvedValueOnce(JSON.stringify(userData)) // User data fetch third
+        .mockResolvedValueOnce(JSON.stringify(profileData)); // Profile data fetch fourth
 
       const schema: JSONSchema = {
         type: 'object',
@@ -979,7 +998,7 @@ describe('JsonValidatorService', () => {
 
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(4);
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(4);
     });
 
     it('should NOT resolve nested CID pointers when nested schema is not a CID link', async () => {
@@ -1009,9 +1028,9 @@ describe('JsonValidatorService', () => {
       vi.clearAllMocks();
 
       // Set up fresh mocks
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(userSchemaData))) // User schema fetch first
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(userData))); // User data fetch second
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(userSchemaData)) // User schema fetch first
+        .mockResolvedValueOnce(JSON.stringify(userData)); // User data fetch second
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1028,7 +1047,7 @@ describe('JsonValidatorService', () => {
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(true);
       // Should only fetch 2 times: user data and user schema, not profile data
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(2);
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(2);
     });
 
     it('should handle arrays with CID pointers when items schema is a CID link', async () => {
@@ -1047,10 +1066,10 @@ describe('JsonValidatorService', () => {
         required: ['id', 'value'],
       };
 
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(itemSchema))) // Item schema first
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(content1))) // Content 1 second
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(content2))); // Content 2 third
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(itemSchema)) // Item schema first
+        .mockResolvedValueOnce(JSON.stringify(content1)) // Content 1 second
+        .mockResolvedValueOnce(JSON.stringify(content2)); // Content 2 third
 
       const schema: JSONSchema = {
         type: 'array',
@@ -1064,7 +1083,7 @@ describe('JsonValidatorService', () => {
 
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledTimes(3);
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(3);
     });
 
     it('should NOT resolve CID pointers in arrays when items schema is not a CID link', async () => {
@@ -1086,7 +1105,7 @@ describe('JsonValidatorService', () => {
       const result = await jsonValidator.validate(data, schema);
       expect(result.valid).toBe(true);
       // IPFS should not be called since pointers are not resolved
-      expect(mockIPFSService.fetchContent).not.toHaveBeenCalled();
+      expect(fetchFromIpfs).not.toHaveBeenCalled();
     });
 
     it('should handle IPFS fetch errors for CID pointers', async () => {
@@ -1094,8 +1113,8 @@ describe('JsonValidatorService', () => {
       const schemaCID = 'QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB';
 
       // Mock schema resolution to succeed, then data CID resolution to fail
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify({ type: 'object' }))) // Schema fetch succeeds
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify({ type: 'object' })) // Schema fetch succeeds
         .mockRejectedValueOnce(new Error('IPFS gateway error')); // Data CID fetch fails
 
       const schema: JSONSchema = {
@@ -1122,8 +1141,8 @@ describe('JsonValidatorService', () => {
     it('should resolve relative file paths in data when schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1140,9 +1159,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1169,8 +1188,8 @@ describe('JsonValidatorService', () => {
     it('should NOT resolve relative file paths when schema is not a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
 
       const schema: JSONSchema = {
@@ -1193,8 +1212,8 @@ describe('JsonValidatorService', () => {
     it('should handle nested relative paths when nested schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const profileSchemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1210,9 +1229,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(profileSchemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(profileSchemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1242,8 +1261,8 @@ describe('JsonValidatorService', () => {
     it('should fail when file does not exist and property schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1252,9 +1271,9 @@ describe('JsonValidatorService', () => {
       );
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1273,8 +1292,8 @@ describe('JsonValidatorService', () => {
     it('should prefer CID over file path when both are possible and schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1288,9 +1307,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent)
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify(schemaData)))
-        .mockResolvedValueOnce(Buffer.from(JSON.stringify({ source: 'ipfs' })));
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(schemaData))
+        .mockResolvedValueOnce(JSON.stringify({ source: 'ipfs' }));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1307,20 +1326,23 @@ describe('JsonValidatorService', () => {
       const result = await jsonValidatorWithBaseDir.validate(data, schema);
 
       expect(result.valid).toBe(true);
-      expect(mockIPFSService.fetchContent).toHaveBeenCalledWith(validCID);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(validCID);
       // File system should not be accessed for valid CIDs
       expect(fsPromises.readFile).not.toHaveBeenCalled();
     });
 
     it('should fail when no base directory is provided for relative paths and property schema is a CID link', async () => {
       // Create validator without base directory
-      const jsonValidatorNoBaseDir = new JsonValidatorService(mockIPFSService);
+      const jsonValidatorNoBaseDir = new JsonValidatorService(
+        '',
+        schemaCacheService
+      );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1339,8 +1361,8 @@ describe('JsonValidatorService', () => {
     it('should handle absolute file paths when schema is a CID link', async () => {
       // Create validator with base directory (should be ignored for absolute paths)
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        '/test/data'
+        '/test/data',
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1356,9 +1378,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1384,7 +1406,10 @@ describe('JsonValidatorService', () => {
 
     it('should handle absolute paths without base directory when schema is a CID link', async () => {
       // Create validator without base directory
-      const jsonValidatorNoBaseDir = new JsonValidatorService(mockIPFSService);
+      const jsonValidatorNoBaseDir = new JsonValidatorService(
+        '',
+        schemaCacheService
+      );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       vi.mocked(fsPromises.readFile).mockResolvedValueOnce(
@@ -1398,9 +1423,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1427,8 +1452,8 @@ describe('JsonValidatorService', () => {
     it('should handle paths starting with ./ when schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1443,9 +1468,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1472,8 +1497,8 @@ describe('JsonValidatorService', () => {
     it('should handle nested file path pointers when schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1491,9 +1516,9 @@ describe('JsonValidatorService', () => {
         },
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1523,8 +1548,8 @@ describe('JsonValidatorService', () => {
     it('should handle file read errors with descriptive messages when property schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1532,9 +1557,9 @@ describe('JsonValidatorService', () => {
       vi.mocked(fsPromises.readFile).mockRejectedValueOnce(fileError);
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1555,15 +1580,15 @@ describe('JsonValidatorService', () => {
     it('should handle empty string as pointer value when property schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1584,8 +1609,8 @@ describe('JsonValidatorService', () => {
     it('should handle permission errors when reading files and property schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1593,9 +1618,9 @@ describe('JsonValidatorService', () => {
       vi.mocked(fsPromises.readFile).mockRejectedValueOnce(permissionError);
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1616,8 +1641,8 @@ describe('JsonValidatorService', () => {
     it('should handle circular file references gracefully when property schema is a CID link', async () => {
       const baseDir = '/test/data';
       const jsonValidatorWithBaseDir = new JsonValidatorService(
-        mockIPFSService,
-        baseDir
+        baseDir,
+        schemaCacheService
       );
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
@@ -1637,9 +1662,9 @@ describe('JsonValidatorService', () => {
       });
 
       const schemaData = { type: 'object' };
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(schemaData))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(schemaData));
 
       const schema: JSONSchema = {
         type: 'object',
@@ -1667,9 +1692,9 @@ describe('JsonValidatorService', () => {
         minLength: 5,
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(cidSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(cidSchema));
 
       // Main schema with CID link that allows null
       const schema: JSONSchema = {
@@ -1702,9 +1727,9 @@ describe('JsonValidatorService', () => {
         minLength: 5,
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(cidSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(cidSchema));
 
       // Main schema with CID link that allows null
       const schema: JSONSchema = {
@@ -1740,9 +1765,9 @@ describe('JsonValidatorService', () => {
         minLength: 10,
       };
 
-      vi.mocked(mockIPFSService.fetchContent).mockResolvedValueOnce(
-        Buffer.from(JSON.stringify(cidSchema))
-      );
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(JSON.stringify(cidSchema));
 
       // Main schema with CID link that allows null
       const schema: JSONSchema = {

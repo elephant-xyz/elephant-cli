@@ -1,93 +1,74 @@
-import { IPFSService } from './ipfs.service.js';
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+import { fetchFromIpfs } from '../utils/schema-fetcher.js';
+import { logger } from '../utils/logger.js';
 
-export interface JSONSchema {
+export type JSONSchema = {
   $schema?: string;
-  type?: string;
-  properties?: Record<string, unknown>;
+  type: string;
+  properties?: Record<string, JSONSchema>;
   required?: string[];
   additionalProperties?: boolean;
+  title?: string;
   [key: string]: unknown;
-}
+};
 
 export class SchemaCacheService {
   private cache: Map<string, JSONSchema>;
-  private readonly maxSize: number;
-  private accessOrder: string[];
+  private readonly cacheDir: string;
 
   constructor(
-    private ipfsService: IPFSService,
-    maxSize = 1000
+    cacheDir: string = path.join(os.homedir(), '.elephant-cli', 'schema-cache')
   ) {
+    this.cacheDir = cacheDir;
     this.cache = new Map();
-    this.maxSize = maxSize;
-    this.accessOrder = [];
+    try {
+      fs.mkdirSync(this.cacheDir, { recursive: true });
+    } catch (error) {
+      logger.error(`Error creating schema cache directory: ${error}`);
+    }
+    let files: string[] = [];
+    try {
+      files = fs.readdirSync(this.cacheDir);
+    } catch (error) {
+      logger.error(`Error reading schema cache directory: ${error}`);
+    }
+    files
+      .filter((f) => f.endsWith('.json'))
+      .forEach((file) => {
+        const filePath = path.join(this.cacheDir, file);
+        const schemaCid = file.replace('.json', '');
+        try {
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          this.cache.set(schemaCid, data);
+        } catch (error) {
+          logger.error(`Error loading schema ${schemaCid}: ${error}`);
+        }
+      });
   }
 
   has(cid: string): boolean {
     return this.cache.has(cid);
   }
 
-  get(cid: string): JSONSchema | undefined {
-    const schema = this.cache.get(cid);
-    if (schema) {
-      // Move to end of access order (most recently used)
-      const index = this.accessOrder.indexOf(cid);
-      if (index > -1) {
-        this.accessOrder.splice(index, 1);
-      }
-      this.accessOrder.push(cid);
-    }
-    return schema;
-  }
+  private async fetchSchema(cid: string): Promise<JSONSchema> {
+    const schema = JSON.parse(await fetchFromIpfs(cid));
 
-  private put(cid: string, schema: JSONSchema): void {
-    // If already in cache, just update it
-    if (this.cache.has(cid)) {
-      this.cache.set(cid, schema);
-      // Move to end of access order
-      const index = this.accessOrder.indexOf(cid);
-      if (index > -1) {
-        this.accessOrder.splice(index, 1);
-      }
-      this.accessOrder.push(cid);
-      return;
-    }
-
-    // If cache is at capacity, evict least recently used items (10% of cache)
-    if (this.cache.size >= this.maxSize) {
-      const evictCount = Math.ceil(this.maxSize * 0.1); // Evict 10% of items
-      for (let i = 0; i < evictCount && this.accessOrder.length > 0; i++) {
-        const lruCid = this.accessOrder.shift()!;
-        this.cache.delete(lruCid);
-      }
+    if (typeof schema !== 'object' || schema === null) {
+      throw new Error(`Invalid JSON schema: not an object`);
     }
 
     this.cache.set(cid, schema);
-    this.accessOrder.push(cid);
+
+    await fs.promises.writeFile(
+      path.join(this.cacheDir, `${cid}.json`),
+      JSON.stringify(schema),
+      'utf-8'
+    );
+    return schema;
   }
-
-  async getSchema(dataGroupCid: string): Promise<JSONSchema> {
-    // Check cache first
-    const cached = this.get(dataGroupCid);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const schemaBuffer = await this.ipfsService.fetchContent(dataGroupCid);
-      const schemaText = schemaBuffer.toString('utf-8');
-      const schema: JSONSchema = JSON.parse(schemaText);
-
-      if (typeof schema !== 'object' || schema === null) {
-        throw new Error(`Invalid JSON schema: not an object`);
-      }
-      this.put(dataGroupCid, schema);
-
-      return schema;
-    } catch (error) {
-      throw new Error(
-        `Failed to download or parse schema ${dataGroupCid}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+  async get(cid: string): Promise<JSONSchema> {
+    return this.cache.get(cid) || (await this.fetchSchema(cid));
   }
 }

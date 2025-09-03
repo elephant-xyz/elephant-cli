@@ -1,3 +1,38 @@
+## [1.31.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.4...v1.31.5) (2025-09-03)
+
+
+### Bug Fixes
+
+* **transform:** allow for invlaid json multiValueQueryString ([#115](https://github.com/elephant-xyz/elephant-cli/issues/115)) ([c703bd3](https://github.com/elephant-xyz/elephant-cli/commit/c703bd3091db55a13b375a27b039379592d2d0ee))
+
+## [1.31.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.3...v1.31.4) (2025-09-03)
+
+
+### Bug Fixes
+
+* handle empty multiValueQueryString in seed transform ([#114](https://github.com/elephant-xyz/elephant-cli/issues/114)) ([d50fa9f](https://github.com/elephant-xyz/elephant-cli/commit/d50fa9fa654426fd710592be44cfd6dcae200bdf))
+
+## [1.31.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.2...v1.31.3) (2025-09-02)
+
+
+### Bug Fixes
+
+* increase maxRetries from 3 to 7 in ApiSubmissionService ([#113](https://github.com/elephant-xyz/elephant-cli/issues/113)) ([a0be2ae](https://github.com/elephant-xyz/elephant-cli/commit/a0be2ae8cfca8580169ce9d4f0c0f2a0a887dd57))
+
+## [1.31.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.1...v1.31.2) (2025-09-02)
+
+
+### Bug Fixes
+
+* update property_has_file type to array in Relationships interface ([#112](https://github.com/elephant-xyz/elephant-cli/issues/112)) ([7f725f1](https://github.com/elephant-xyz/elephant-cli/commit/7f725f1ad8b20e22100cd4de050a21e32f78b256))
+
+## [1.31.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.0...v1.31.1) (2025-09-01)
+
+
+### Bug Fixes
+
+* fix ipfs download timeout ([#110](https://github.com/elephant-xyz/elephant-cli/issues/110)) ([370cc82](https://github.com/elephant-xyz/elephant-cli/commit/370cc82e719c37e65e5b1d6c23658e4045a3a38f))
+
 # [1.31.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.30.0...v1.31.0) (2025-08-27)
 
 
