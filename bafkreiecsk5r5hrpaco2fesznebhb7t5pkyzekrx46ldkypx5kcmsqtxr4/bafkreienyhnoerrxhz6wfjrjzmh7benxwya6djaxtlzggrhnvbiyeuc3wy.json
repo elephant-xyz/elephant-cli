@@ -1,0 +1,1 @@
+{"full_generation_command":"npx -y git+https://github.com/elephant-xyz/fact-sheet-template.git#ee432d3a13aae6f5c44d923ee20082dfefec5834 generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg","ipfs_url":"ipfs://bafybeiccht63hxgyotampfkiqabl4scsy63txvw2y7lbpxl4kswxgvylx4"}
