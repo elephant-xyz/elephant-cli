@@ -397,11 +397,16 @@ export async function handleUpload(
     if (!isTestMode) {
       if (failed > 0) {
         console.log(chalk.red('\n❌ Upload process failed\n'));
-        console.log(chalk.bold('📊 Final Report:'));
-        console.log(`  Total directories:    ${propertyDirs.length}`);
-        console.log(`  Successfully uploaded: ${successful}`);
-        console.log(`  Failed uploads:       ${failed}`);
+      } else {
+        console.log(chalk.green('\n✅ Upload process finished\n'));
+      }
 
+      console.log(chalk.bold('📊 Final Report:'));
+      console.log(`  Total directories:    ${propertyDirs.length}`);
+      console.log(`  Successfully uploaded: ${successful}`);
+      console.log(`  Failed uploads:       ${failed}`);
+
+      if (failed > 0) {
         // Show failed upload details
         const failedUploads = uploadResults.filter((r) => !r.success);
         console.log(chalk.red('\n❌ Failed uploads:'));
@@ -412,22 +417,14 @@ export async function handleUpload(
             )
           );
         });
+      }
 
-        if (options.outputCsv) {
-          console.log(`\n  Output CSV: ${options.outputCsv}`);
-        }
+      if (options.outputCsv) {
+        console.log(`\n  Output CSV: ${options.outputCsv}`);
+      }
 
+      if (failed > 0) {
         process.exit(1);
-      } else {
-        console.log(chalk.green('\n✅ Upload process finished\n'));
-        console.log(chalk.bold('📊 Final Report:'));
-        console.log(`  Total directories:    ${propertyDirs.length}`);
-        console.log(`  Successfully uploaded: ${successful}`);
-        console.log(`  Failed uploads:       ${failed}`);
-
-        if (options.outputCsv) {
-          console.log(`\n  Output CSV: ${options.outputCsv}`);
-        }
       }
     }
 
