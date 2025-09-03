@@ -85,6 +85,7 @@ describe('ApiSubmissionService', () => {
     });
 
     it('should retry on failure', async () => {
+      vi.useFakeTimers();
       (global.fetch as any)
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({
@@ -92,22 +93,39 @@ describe('ApiSubmissionService', () => {
           json: async () => ({ transaction_hash: '0xabcdef1234567890' }),
         });
 
-      const result = await service.submitTransaction(mockUnsignedTx, 0);
+      const promise = service.submitTransaction(mockUnsignedTx, 0);
+
+      // Advance timer for first retry delay (1 second)
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const result = await promise;
 
       expect(result.transaction_hash).toBe('0xabcdef1234567890');
       expect(global.fetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
     });
 
     it('should throw after max retries', async () => {
+      vi.useFakeTimers();
       (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
-      await expect(
-        service.submitTransaction(mockUnsignedTx, 0)
-      ).rejects.toThrow(
-        'Failed to submit batch 1 after 3 attempts: Network error'
+      const promise = service
+        .submitTransaction(mockUnsignedTx, 0)
+        .catch((e) => e);
+
+      // Advance timers for all retry delays
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(1000 * Math.pow(2, i));
+      }
+
+      const error = await promise;
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe(
+        'Failed to submit batch 1 after 7 attempts: Network error'
       );
 
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(7);
+      vi.useRealTimers();
     });
 
     it('should handle API error responses', async () => {

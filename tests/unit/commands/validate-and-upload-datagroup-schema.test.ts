@@ -22,7 +22,6 @@ import { CidCalculatorService } from '../../../src/services/cid-calculator.servi
 import { PinataService } from '../../../src/services/pinata.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
-import { IPFSService } from '../../../src/services/ipfs.service.js';
 import { ReportSummary } from '../../../src/types/submit.types.js';
 
 vi.mock('fs', () => ({
@@ -52,7 +51,6 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
   let mockPinataService: PinataService;
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
-  let mockIpfsService: IPFSService;
   let loggerErrorSpy: MockInstance;
 
   beforeEach(() => {
@@ -137,8 +135,6 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       }),
     } as any;
 
-    mockIpfsService = {} as any;
-
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
   });
 
@@ -157,12 +153,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(validSchema),
+        get: vi.fn().mockResolvedValue(validSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -184,12 +179,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -222,12 +216,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -258,12 +251,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -294,12 +286,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -331,12 +322,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -359,12 +349,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
 
     it('should reject null or undefined schema', async () => {
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -389,12 +378,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       const invalidSchema = 'not an object';
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -424,12 +412,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -456,12 +443,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -482,12 +468,11 @@ describe('ValidateAndUploadCommand - Data Group Schema Validation', () => {
       };
 
       mockSchemaCacheService = {
-        getSchema: vi.fn().mockResolvedValue(invalidSchema),
+        get: vi.fn().mockResolvedValue(invalidSchema),
       } as any;
 
       const serviceOverrides = {
         fileScannerService: mockFileScannerService,
-        ipfsServiceForSchemas: mockIpfsService,
         schemaCacheService: mockSchemaCacheService,
         jsonValidatorService: mockJsonValidatorService,
         jsonCanonicalizerService: mockJsonCanonicalizerService,

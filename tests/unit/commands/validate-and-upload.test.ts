@@ -9,8 +9,6 @@ import {
 } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import * as fs from 'fs';
-import path from 'path';
-import * as child_process from 'child_process';
 import * as os from 'os';
 import { logger } from '../../../src/utils/logger.js';
 import {
@@ -28,10 +26,7 @@ import { CidCalculatorService } from '../../../src/services/cid-calculator.servi
 import { PinataService } from '../../../src/services/pinata.service.js';
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
-import { IPFSService } from '../../../src/services/ipfs.service.js';
 import { ReportSummary, FileEntry } from '../../../src/types/submit.types.js';
-import { DEFAULT_IPFS_GATEWAY } from '../../../src/config/constants.js';
-import { ProgressTracker } from '../../../src/utils/progress-tracker.js';
 
 // Define local WalletService interface HERE, before it's used.
 interface WalletService {
@@ -113,7 +108,6 @@ describe('ValidateAndUploadCommand', () => {
   let mockPinataService: PinataService;
   let mockCsvReporterService: CsvReporterService;
   let mockProgressTracker: SimpleProgress;
-  let mockIpfsService: IPFSService;
   let mockWalletService: WalletService;
   let loggerErrorSpy: MockInstance;
   let loggerWarnSpy: MockInstance;
@@ -171,7 +165,7 @@ describe('ValidateAndUploadCommand', () => {
     } as any;
 
     mockSchemaCacheService = {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },
@@ -251,8 +245,6 @@ describe('ValidateAndUploadCommand', () => {
       }),
     } as any;
 
-    mockIpfsService = {} as any;
-
     vi.mocked(fs.readFileSync).mockImplementation((filePath: any) => {
       if (filePath.includes('property1')) {
         return JSON.stringify({ name: 'Test Property 1' });
@@ -278,7 +270,6 @@ describe('ValidateAndUploadCommand', () => {
   it('should successfully validate and upload files', async () => {
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -297,7 +288,7 @@ describe('ValidateAndUploadCommand', () => {
       '/test/input'
     );
 
-    expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
+    expect(mockSchemaCacheService.get).toHaveBeenCalledTimes(2);
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
     expect(mockJsonCanonicalizerService.canonicalize).toHaveBeenCalledTimes(2);
     expect(
@@ -333,7 +324,6 @@ describe('ValidateAndUploadCommand', () => {
     const dryRunOptions = { ...mockOptions, dryRun: true };
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -363,7 +353,6 @@ describe('ValidateAndUploadCommand', () => {
     };
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -382,7 +371,7 @@ describe('ValidateAndUploadCommand', () => {
     );
 
     // Should have processed both files
-    expect(mockSchemaCacheService.getSchema).toHaveBeenCalledTimes(2);
+    expect(mockSchemaCacheService.get).toHaveBeenCalledTimes(2);
     expect(mockJsonValidatorService.validate).toHaveBeenCalledTimes(2);
   });
 
@@ -396,7 +385,7 @@ describe('ValidateAndUploadCommand', () => {
       },
     };
 
-    vi.mocked(mockSchemaCacheService.getSchema).mockResolvedValue(
+    vi.mocked(mockSchemaCacheService.get).mockResolvedValue(
       validDataGroupSchema
     );
 
@@ -420,7 +409,6 @@ describe('ValidateAndUploadCommand', () => {
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -476,7 +464,7 @@ describe('ValidateAndUploadCommand', () => {
         relationships: { type: 'array' },
       },
     };
-    vi.mocked(mockSchemaCacheService.getSchema).mockResolvedValue(
+    vi.mocked(mockSchemaCacheService.get).mockResolvedValue(
       validDataGroupSchema
     );
 
@@ -497,7 +485,6 @@ describe('ValidateAndUploadCommand', () => {
 
     const serviceOverrides = {
       fileScannerService: mockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -545,7 +532,6 @@ describe('ValidateAndUploadCommand', () => {
 
     const serviceOverrides = {
       fileScannerService: specificMockFileScannerService,
-      ipfsServiceForSchemas: mockIpfsService,
       schemaCacheService: mockSchemaCacheService,
       jsonValidatorService: mockJsonValidatorService,
       jsonCanonicalizerService: mockJsonCanonicalizerService,
@@ -627,7 +613,6 @@ describe('ValidateAndUploadCommand', () => {
       jsonCanonicalizerService: mockJsonCanonicalizerService,
       cidCalculatorService: mockCidCalculatorService,
       pinataService: mockPinataService,
-      ipfsServiceForSchemas: mockIpfsService,
       progressTracker: mockProgressTracker,
     });
 

@@ -205,7 +205,7 @@ describe('handleValidate', () => {
     };
 
     mockSchemaCacheService = {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },
@@ -503,7 +503,7 @@ describe('handleValidate', () => {
   });
 
   it('should handle invalid data group schema', async () => {
-    mockSchemaCacheService.getSchema = vi.fn().mockResolvedValue({
+    mockSchemaCacheService.get = vi.fn().mockResolvedValue({
       type: 'object',
       properties: {
         // Missing required properties
@@ -561,7 +561,7 @@ describe('handleValidate', () => {
   });
 
   it('should handle schema loading errors', async () => {
-    mockSchemaCacheService.getSchema = vi.fn().mockResolvedValue(null);
+    mockSchemaCacheService.get = vi.fn().mockResolvedValue(null);
 
     const options: ValidateCommandOptions = {
       input: '/test/input.zip',

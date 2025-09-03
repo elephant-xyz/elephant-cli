@@ -9,7 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { handleLegacyTransform } from './legacy-agent.js';
 import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
-import { createCountyDataGroup } from './couty-datagroup.js';
+import { createCountyDataGroup } from './county-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
 import {
   checkFactSheetInstalled,
@@ -18,6 +18,8 @@ import {
 } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
+import { SchemaCacheService } from '../../services/schema-cache.service.js';
+import { parseMultiValueQueryString } from './sourceHttpRequest.js';
 
 const INPUT_DIR = 'input';
 const OUTPUT_DIR = 'data';
@@ -183,8 +185,10 @@ async function generateFactSheet(tempRoot: string) {
     }
   }
   const schemaManifestService = new SchemaManifestService();
+  const schemaCacheService = new SchemaCacheService();
   const factSheetRelationshipService = new FactSheetRelationshipService(
-    schemaManifestService
+    schemaManifestService,
+    schemaCacheService
   );
 
   await factSheetRelationshipService.generateFactSheetRelationships(outputPath);
@@ -234,7 +238,9 @@ async function handleSeedTransform(tempRoot: string) {
   const sourceHttpRequest = {
     url: seedRow.url,
     method: seedRow.method,
-    multiValueQueryString: JSON.parse(seedRow.multiValueQueryString),
+    multiValueQueryString: seedRow.multiValueQueryString?.trim()
+      ? parseMultiValueQueryString(seedRow.multiValueQueryString)
+      : {},
   };
   const propSeedJson = JSON.stringify({
     parcel_id: seedRow.parcel_id,

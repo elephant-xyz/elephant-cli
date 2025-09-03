@@ -31,7 +31,7 @@ describe('Validate and Upload - IPLD Array Sorting', () => {
       getAllDataGroupCids: vi.fn().mockResolvedValue(new Set(['QmTestSchema'])),
     },
     schemaCacheService: {
-      getSchema: vi.fn().mockResolvedValue({
+      get: vi.fn().mockResolvedValue({
         type: 'object',
         properties: {
           label: { type: 'string' },

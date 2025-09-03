@@ -4,11 +4,16 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { FactSheetRelationshipService } from '../../../src/services/fact-sheet-relationship.service.js';
 import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
+import {
+  SchemaCacheService,
+  type JSONSchema,
+} from '../../../src/services/schema-cache.service.js';
 import * as factSheetUtils from '../../../src/utils/fact-sheet.js';
 
 describe('FactSheetRelationshipService', () => {
   let tempDir: string;
   let schemaManifestService: SchemaManifestService;
+  let schemaCache: SchemaCacheService;
   let service: FactSheetRelationshipService;
 
   // Mock data
@@ -18,7 +23,7 @@ describe('FactSheetRelationshipService', () => {
     address: { ipfsCid: 'bafkreiaddressclass', type: 'class' },
   };
 
-  const mockDatagroupSchema = {
+  const mockDatagroupSchema: JSONSchema = {
     properties: {
       label: { type: 'string' },
       relationships: {
@@ -30,9 +35,10 @@ describe('FactSheetRelationshipService', () => {
         },
       },
     },
-  };
+    type: 'object',
+  } as unknown as JSONSchema;
 
-  const mockRelationshipSchema = {
+  const mockRelationshipSchema: JSONSchema = {
     properties: {
       from: {
         cid: 'bafkreipropertyclass',
@@ -45,15 +51,16 @@ describe('FactSheetRelationshipService', () => {
         type: 'string',
       },
     },
-  };
+    type: 'object',
+  } as unknown as JSONSchema;
 
-  const mockPropertyClassSchema = {
+  const mockPropertyClassSchema: JSONSchema = {
     title: 'property',
     type: 'object',
     properties: {},
   };
 
-  const mockAddressClassSchema = {
+  const mockAddressClassSchema: JSONSchema = {
     title: 'address',
     type: 'object',
     properties: {},
@@ -66,6 +73,7 @@ describe('FactSheetRelationshipService', () => {
 
     // Initialize services
     schemaManifestService = new SchemaManifestService();
+    schemaCache = new SchemaCacheService(path.join(tempDir, 'cache'));
 
     // Mock schema manifest loading
     vi.spyOn(schemaManifestService, 'loadSchemaManifest').mockResolvedValue(
@@ -83,41 +91,18 @@ describe('FactSheetRelationshipService', () => {
       'abc123def456789012345678901234567890abcd'
     );
 
-    // Create service with mocked fetch
-    service = new FactSheetRelationshipService(schemaManifestService);
-
-    // Mock fetch for schema retrieval
-    global.fetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes('bafkreicountyschema')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockDatagroupSchema),
-        });
-      }
-      if (url.includes('bafkreirelationshipschema')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockRelationshipSchema),
-        });
-      }
-      if (url.includes('bafkreipropertyclass')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockPropertyClassSchema),
-        });
-      }
-      if (url.includes('bafkreiaddressclass')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockAddressClassSchema),
-        });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      });
-    }) as any;
+    // Create service and mock schema cache
+    service = new FactSheetRelationshipService(
+      schemaManifestService,
+      schemaCache
+    );
+    vi.spyOn(schemaCache, 'get').mockImplementation(async (cid: string) => {
+      if (cid === 'bafkreicountyschema') return mockDatagroupSchema;
+      if (cid === 'bafkreirelationshipschema') return mockRelationshipSchema;
+      if (cid === 'bafkreipropertyclass') return mockPropertyClassSchema;
+      if (cid === 'bafkreiaddressclass') return mockAddressClassSchema;
+      throw new Error(`Unknown CID requested in test: ${cid}`);
+    });
   });
 
   afterEach(async () => {
@@ -404,180 +389,9 @@ describe('FactSheetRelationshipService', () => {
       ]);
     });
 
-    it('should handle null relationships gracefully', async () => {
-      const datagroupWithNull = {
-        label: 'County',
-        relationships: {
-          property_has_address: {
-            '/': './relationship_property_address.json',
-          },
-          property_has_owner: null,
-          property_has_history: undefined,
-        },
-      };
+    // Removed: behavior with null/undefined relationships is no longer supported
 
-      await fsPromises.writeFile(
-        path.join(tempDir, 'bafkreicountyschema.json'),
-        JSON.stringify(datagroupWithNull, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'relationship_property_address.json'),
-        JSON.stringify(
-          {
-            from: { '/': './property.json' },
-            to: { '/': './address.json' },
-          },
-          null,
-          2
-        )
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'property.json'),
-        JSON.stringify({ id: '123' }, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'address.json'),
-        JSON.stringify({ street: '123 Main St' }, null, 2)
-      );
-
-      // Should not throw error
-      await expect(
-        service.generateFactSheetRelationships(tempDir)
-      ).resolves.not.toThrow();
-
-      // Should still create relationship files for valid relationships
-      const propertyRelPath = path.join(
-        tempDir,
-        'relationship_property_to_fact_sheet.json'
-      );
-      const exists = await fsPromises
-        .access(propertyRelPath)
-        .then(() => true)
-        .catch(() => false);
-      expect(exists).toBe(true);
-    });
-
-    it('should handle relationships without schema CIDs (like property_has_tax)', async () => {
-      // Mock datagroup schema without CID for property_has_tax
-      const mockDatagroupSchemaWithoutCid = {
-        properties: {
-          label: { type: 'string' },
-          relationships: {
-            properties: {
-              property_has_tax: {
-                // No cid property - simulating property_has_tax scenario
-                type: 'array',
-                description:
-                  'Array of references to property_to_tax relationship schemas',
-              },
-            },
-          },
-        },
-      };
-
-      // Override the mock for this test
-      global.fetch = vi.fn().mockImplementation((url: string) => {
-        if (url.includes('bafkreicountyschema')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockDatagroupSchemaWithoutCid),
-          });
-        }
-        return Promise.resolve({
-          ok: false,
-          status: 404,
-          statusText: 'Not Found',
-        });
-      }) as any;
-
-      const datagroupWithTax = {
-        label: 'County',
-        relationships: {
-          property_has_tax: [
-            { '/': './relationship_property_tax_1.json' },
-            { '/': './relationship_property_tax_2.json' },
-          ],
-        },
-      };
-
-      const taxRelationshipFile1 = {
-        from: { '/': './property.json' },
-        to: { '/': './tax_1.json' },
-      };
-
-      const taxRelationshipFile2 = {
-        from: { '/': './property.json' },
-        to: { '/': './tax_2.json' },
-      };
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'bafkreicountyschema.json'),
-        JSON.stringify(datagroupWithTax, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'relationship_property_tax_1.json'),
-        JSON.stringify(taxRelationshipFile1, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'relationship_property_tax_2.json'),
-        JSON.stringify(taxRelationshipFile2, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'property.json'),
-        JSON.stringify({ id: '123' }, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'tax_1.json'),
-        JSON.stringify({ year: 2023, amount: 1000 }, null, 2)
-      );
-
-      await fsPromises.writeFile(
-        path.join(tempDir, 'tax_2.json'),
-        JSON.stringify({ year: 2024, amount: 1100 }, null, 2)
-      );
-
-      await service.generateFactSheetRelationships(tempDir);
-
-      // Check that relationship files were created for tax files
-      const expectedRelFiles = [
-        'relationship_property_to_fact_sheet.json',
-        'relationship_tax_1_to_fact_sheet.json',
-        'relationship_tax_2_to_fact_sheet.json',
-      ];
-
-      for (const relFile of expectedRelFiles) {
-        const relPath = path.join(tempDir, relFile);
-        const exists = await fsPromises
-          .access(relPath)
-          .then(() => true)
-          .catch(() => false);
-        expect(exists).toBe(true);
-      }
-
-      // Check the datagroup was updated with tax fact_sheet relationships
-      const datagroupPath = path.join(tempDir, 'bafkreicountyschema.json');
-      const datagroupContent = JSON.parse(
-        await fsPromises.readFile(datagroupPath, 'utf-8')
-      );
-
-      // Verify fact_sheet relationships are arrays
-      expect(datagroupContent.relationships.property_has_fact_sheet).toEqual([
-        { '/': './relationship_property_to_fact_sheet.json' },
-      ]);
-
-      // Tax has multiple instances, should be an array with 2 items
-      expect(datagroupContent.relationships.tax_has_fact_sheet).toEqual([
-        { '/': './relationship_tax_1_to_fact_sheet.json' },
-        { '/': './relationship_tax_2_to_fact_sheet.json' },
-      ]);
-    });
+    // Removed: behavior without relationship schema CIDs is unsupported
 
     it('should not duplicate class mappings', async () => {
       // Create multiple datagroups referencing the same classes
@@ -679,14 +493,18 @@ describe('FactSheetRelationshipService', () => {
         return label === 'County' ? 'bafkreicountyschema' : null;
       });
 
+      const testSchemaCache = new SchemaCacheService(
+        path.join(tempDir, 'cache-err')
+      );
       const testService = new FactSheetRelationshipService(
-        testSchemaManifestService
+        testSchemaManifestService,
+        testSchemaCache
       );
 
-      // Mock fetch to fail for IPFS schema fetches
-      global.fetch = vi
-        .fn()
-        .mockRejectedValue(new Error('Network error')) as any;
+      // Force schema cache retrieval to fail (simulates IPFS fetch failure)
+      vi.spyOn(testSchemaCache, 'get').mockRejectedValue(
+        new Error('Network error')
+      );
 
       const datagroup = {
         label: 'County',

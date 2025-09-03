@@ -14,6 +14,7 @@ import { runAIAgent } from '../../utils/ai-agent.js';
 import { ZipExtractorService } from '../../services/zip-extractor.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
+import { SchemaCacheService } from '../../services/schema-cache.service.js';
 
 export interface LegacyTransformOptions {
   outputZip?: string;
@@ -169,7 +170,8 @@ export async function handleLegacyTransform(options: LegacyTransformOptions) {
     try {
       const schemaManifestService = new SchemaManifestService();
       const factSheetRelationshipService = new FactSheetRelationshipService(
-        schemaManifestService
+        schemaManifestService,
+        new SchemaCacheService()
       );
 
       await factSheetRelationshipService.generateFactSheetRelationships(
