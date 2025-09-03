@@ -1,109 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from 'csv-parse/sync';
+import { parseMultiValueQueryString } from '../../../../src/commands/transform/sourceHttpRequest.js';
 
-describe('Seed transform - multiValueQueryString handling', () => {
-  it('should handle empty multiValueQueryString', () => {
-    const csvContent = `parcel_id,address,method,url,multiValueQueryString,source_identifier,county
-12345,123 Main St,GET,https://api.example.com,,source123,TestCounty`;
-
-    const parsed = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-    });
-    const seedRow = parsed[0];
-
-    const sourceHttpRequest = {
-      url: seedRow.url,
-      method: seedRow.method,
-      multiValueQueryString: seedRow.multiValueQueryString?.trim()
-        ? JSON.parse(seedRow.multiValueQueryString)
-        : {},
-    };
-
-    expect(sourceHttpRequest.multiValueQueryString).toEqual({});
+describe('parseMultiValueQueryString', () => {
+  it('should handle valid JSON', () => {
+    const result = parseMultiValueQueryString('{"key":"value"}');
+    expect(result).toEqual({ key: 'value' });
   });
 
-  it('should handle whitespace-only multiValueQueryString', () => {
-    const csvContent = `parcel_id,address,method,url,multiValueQueryString,source_identifier,county
-12345,123 Main St,GET,https://api.example.com,   ,source123,TestCounty`;
-
-    const parsed = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-    });
-    const seedRow = parsed[0];
-
-    const sourceHttpRequest = {
-      url: seedRow.url,
-      method: seedRow.method,
-      multiValueQueryString: seedRow.multiValueQueryString?.trim()
-        ? JSON.parse(seedRow.multiValueQueryString)
-        : {},
-    };
-
-    expect(sourceHttpRequest.multiValueQueryString).toEqual({});
+  it('should handle empty object', () => {
+    const result = parseMultiValueQueryString('{}');
+    expect(result).toEqual({});
   });
 
-  it('should handle valid JSON in multiValueQueryString', () => {
-    const csvContent = `parcel_id,address,method,url,multiValueQueryString,source_identifier,county
-12345,123 Main St,GET,https://api.example.com,"{""key"":""value""}",source123,TestCounty`;
-
-    const parsed = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-    });
-    const seedRow = parsed[0];
-
-    const sourceHttpRequest = {
-      url: seedRow.url,
-      method: seedRow.method,
-      multiValueQueryString: seedRow.multiValueQueryString?.trim()
-        ? JSON.parse(seedRow.multiValueQueryString)
-        : {},
-    };
-
-    expect(sourceHttpRequest.multiValueQueryString).toEqual({ key: 'value' });
+  it('should throw error for invalid JSON', () => {
+    expect(() => parseMultiValueQueryString('{invalid json}')).toThrow();
   });
 
-  it('should handle empty object {} in multiValueQueryString', () => {
-    const csvContent = `parcel_id,address,method,url,multiValueQueryString,source_identifier,county
-12345,123 Main St,GET,https://api.example.com,{},source123,TestCounty`;
-
-    const parsed = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-    });
-    const seedRow = parsed[0];
-
-    const sourceHttpRequest = {
-      url: seedRow.url,
-      method: seedRow.method,
-      multiValueQueryString: seedRow.multiValueQueryString?.trim()
-        ? JSON.parse(seedRow.multiValueQueryString)
-        : {},
-    };
-
-    expect(sourceHttpRequest.multiValueQueryString).toEqual({});
+  it('should handle single-quoted strings', () => {
+    const result = parseMultiValueQueryString(
+      '{"key":"value","key2":"value2","key3":"\'value3\'"}'
+    );
+    expect(result).toEqual({ key: 'value', key2: 'value2', key3: "'value3'" });
   });
 
-  it('should throw error for invalid JSON in multiValueQueryString', () => {
-    const csvContent = `parcel_id,address,method,url,multiValueQueryString,source_identifier,county
-12345,123 Main St,GET,https://api.example.com,{invalid json},source123,TestCounty`;
+  it('should handle double-quoted strings', () => {
+    const result = parseMultiValueQueryString(
+      '{"key":"value","key2":"value2","key3":"\\"value3\\""}'
+    );
+    expect(result).toEqual({ key: 'value', key2: 'value2', key3: '"value3"' });
+  });
 
-    const parsed = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true,
-    });
-    const seedRow = parsed[0];
-
-    expect(() => {
-      const sourceHttpRequest = {
-        url: seedRow.url,
-        method: seedRow.method,
-        multiValueQueryString: seedRow.multiValueQueryString?.trim()
-          ? JSON.parse(seedRow.multiValueQueryString)
-          : {},
-      };
-    }).toThrow();
+  it('should handle escaped single quotes', () => {
+    const result = parseMultiValueQueryString(
+      '{"key":"value","key2":"value2","key3":"\'value3\'"}'
+    );
+    expect(result).toEqual({ key: 'value', key2: 'value2', key3: "'value3'" });
   });
 });
