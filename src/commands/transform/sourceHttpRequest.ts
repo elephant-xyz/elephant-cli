@@ -4,6 +4,7 @@ export type SourceHttpRequest = {
   multiValueQueryString?: Record<string, string[]>;
   json?: Record<string, any> | Record<string, any>[];
   body?: string;
+  headers?: Record<string, string>;
 };
 
 export function parseMultiValueQueryString(

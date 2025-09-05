@@ -45,6 +45,7 @@ interface SeedRow {
   county: string;
   json?: string;
   body?: string;
+  headers?: string;
 }
 
 export function registerTransformCommand(program: Command) {
@@ -247,6 +248,9 @@ async function handleSeedTransform(tempRoot: string) {
       ? parseMultiValueQueryString(seedRow.multiValueQueryString)
       : {},
   } as SourceHttpRequest;
+  if (seedRow.headers) {
+    sourceHttpRequest.headers = JSON.parse(seedRow.headers);
+  }
   if (seedRow.json && seedRow.body) {
     throw new Error(
       'Both json and body fields are present in seed.csv. Only one of these fields can be processed at a time.'
@@ -254,6 +258,11 @@ async function handleSeedTransform(tempRoot: string) {
   }
   if (seedRow.json) {
     sourceHttpRequest.json = JSON.parse(seedRow.json);
+    if (!sourceHttpRequest.headers) {
+      sourceHttpRequest.headers = { 'content-type': 'application/json' };
+    } else {
+      sourceHttpRequest.headers['content-type'] = 'application/json';
+    }
   }
   if (seedRow.body) {
     sourceHttpRequest.body = seedRow.body;
