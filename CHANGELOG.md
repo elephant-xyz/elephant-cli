@@ -1,3 +1,10 @@
+## [1.31.10](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.9...v1.31.10) (2025-09-05)
+
+
+### Bug Fixes
+
+* **prepare:** Fix 500 error for browserless request ([#122](https://github.com/elephant-xyz/elephant-cli/issues/122)) ([4b64cc8](https://github.com/elephant-xyz/elephant-cli/commit/4b64cc8b04dffa1695cdbaff026cff5d515bb5cd))
+
 ## [1.31.9](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.8...v1.31.9) (2025-09-05)
 
 
