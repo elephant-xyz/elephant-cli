@@ -48,6 +48,13 @@ interface SeedRow {
   headers?: string;
 }
 
+function capitalizeWords(str: string) {
+  return str
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export function registerTransformCommand(program: Command) {
   program
     .command('transform')
@@ -276,7 +283,7 @@ async function handleSeedTransform(tempRoot: string) {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     full_address: seedRow.address,
-    county_jurisdiction: seedRow.county,
+    county_jurisdiction: capitalizeWords(seedRow.county),
   });
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
