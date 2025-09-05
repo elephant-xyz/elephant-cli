@@ -1,3 +1,10 @@
+## [1.31.7](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.6...v1.31.7) (2025-09-05)
+
+
+### Bug Fixes
+
+* **tranform:** support json and body during seed transformation ([#118](https://github.com/elephant-xyz/elephant-cli/issues/118)) ([0882926](https://github.com/elephant-xyz/elephant-cli/commit/08829265f5582b633d657b1dde387d662505ab2f))
+
 ## [1.31.6](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.5...v1.31.6) (2025-09-03)
 
 
