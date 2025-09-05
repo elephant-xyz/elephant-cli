@@ -193,12 +193,14 @@ export class TransactionBatcherService {
           `Batch submission attempt ${attempt + 1} failed: ${lastError.message}`
         );
 
-        // If it's a nonce error, reset nonce for next attempt
+        // If it's a nonce error, reset nonce and add extra delay to allow blockchain to catch up
         if (lastError.message.toLowerCase().includes('nonce')) {
           logger.warn(
-            'Nonce error detected, resetting nonce for next attempt.'
+            'Nonce error detected, resetting nonce for next attempt and adding extra delay.'
           );
           this.nonce = undefined; // Force re-fetch
+          // Add extra delay for nonce errors to allow blockchain to catch up
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
 
         if (attempt < this.config.maxRetries) {
