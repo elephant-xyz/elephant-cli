@@ -74,13 +74,13 @@ async function withFetch(req: Request): Promise<Prepared> {
   logger.info('Preparing with fetch...');
   const url = constructUrl(req);
   logger.info(`Making ${req.method} request to: ${url}`);
-  
+
   let res: Response;
   try {
     const body = req.json ? JSON.stringify(req.json) : req.body;
     logger.debug(`Request body: ${body}`);
     logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
-    
+
     res = await fetch(url, {
       method: req.method,
       headers: req.headers,
@@ -96,19 +96,25 @@ async function withFetch(req: Request): Promise<Prepared> {
       );
     }
 
-    logger.error(`Network error: ${e instanceof Error ? e.message : String(e)}`);
+    logger.error(
+      `Network error: ${e instanceof Error ? e.message : String(e)}`
+    );
     throw e;
   }
-  
+
   logger.info(`Response status: ${res.status} ${res.statusText}`);
-  logger.debug(`Response headers: ${JSON.stringify(Object.fromEntries(res.headers.entries()))}`);
-  
+  logger.debug(
+    `Response headers: ${JSON.stringify(Object.fromEntries(res.headers.entries()))}`
+  );
+
   if (!res.ok) {
-    const errorText = await res.text().catch(() => 'Unable to read error response');
+    const errorText = await res
+      .text()
+      .catch(() => 'Unable to read error response');
     logger.error(`HTTP error response body: ${errorText}`);
     throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
   }
-  
+
   const txt = await res.text();
   const type = res.headers.get('content-type')?.includes('html')
     ? 'html'
