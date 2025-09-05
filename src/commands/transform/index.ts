@@ -19,7 +19,10 @@ import {
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
-import { parseMultiValueQueryString } from './sourceHttpRequest.js';
+import {
+  parseMultiValueQueryString,
+  SourceHttpRequest,
+} from './sourceHttpRequest.js';
 
 const INPUT_DIR = 'input';
 const OUTPUT_DIR = 'data';
@@ -40,6 +43,8 @@ interface SeedRow {
   multiValueQueryString: string;
   source_identifier: string;
   county: string;
+  json?: string;
+  body?: string;
 }
 
 export function registerTransformCommand(program: Command) {
@@ -241,7 +246,18 @@ async function handleSeedTransform(tempRoot: string) {
     multiValueQueryString: seedRow.multiValueQueryString?.trim()
       ? parseMultiValueQueryString(seedRow.multiValueQueryString)
       : {},
-  };
+  } as SourceHttpRequest;
+  if (seedRow.json && seedRow.body) {
+    throw new Error(
+      'Both json and body fields are present in seed.csv. Only one of these fields can be processed at a time.'
+    );
+  }
+  if (seedRow.json) {
+    sourceHttpRequest.json = JSON.parse(seedRow.json);
+  }
+  if (seedRow.body) {
+    sourceHttpRequest.body = seedRow.body;
+  }
   const propSeedJson = JSON.stringify({
     parcel_id: seedRow.parcel_id,
     source_http_request: sourceHttpRequest,
