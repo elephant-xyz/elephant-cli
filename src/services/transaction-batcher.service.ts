@@ -89,6 +89,35 @@ export class TransactionBatcherService {
   }
 
   /**
+   * Detects if an error is related to nonce issues
+   */
+  private isNonceError(errorMessage: string): boolean {
+    const lowerMessage = errorMessage.toLowerCase();
+    return (
+      lowerMessage.includes('nonce') ||
+      lowerMessage.includes('nonce too low') ||
+      lowerMessage.includes('nonce too high') ||
+      lowerMessage.includes('nonce has already been used') ||
+      lowerMessage.includes('replacement transaction underpriced')
+    );
+  }
+
+  /**
+   * Synchronizes nonce with current blockchain state
+   */
+  private async synchronizeNonce(): Promise<void> {
+    try {
+      const currentNonce = await this.wallet.getNonce('pending');
+      logger.info(`Synchronized nonce with blockchain: ${currentNonce}`);
+      this.nonce = currentNonce;
+    } catch (error) {
+      logger.error(`Failed to synchronize nonce: ${error}`);
+      // Reset to undefined to force fresh fetch on next attempt
+      this.nonce = undefined;
+    }
+  }
+
+  /**
    * Implements transaction batching logic (Task 11.2).
    * Groups items into batches of configured size.
    */
@@ -193,12 +222,12 @@ export class TransactionBatcherService {
           `Batch submission attempt ${attempt + 1} failed: ${lastError.message}`
         );
 
-        // If it's a nonce error, reset nonce for next attempt
-        if (lastError.message.toLowerCase().includes('nonce')) {
+        // If it's a nonce error, reset nonce and fetch latest from blockchain
+        if (this.isNonceError(lastError.message)) {
           logger.warn(
-            'Nonce error detected, resetting nonce for next attempt.'
+            'Nonce error detected, synchronizing with blockchain state.'
           );
-          this.nonce = undefined; // Force re-fetch
+          await this.synchronizeNonce();
         }
 
         if (attempt < this.config.maxRetries) {
@@ -236,8 +265,8 @@ export class TransactionBatcherService {
       `Starting submission of ${batches.length} batches for ${allItems.length} total items.`
     );
 
-    // Reset nonce at the beginning of a multi-batch submission sequence
-    this.nonce = undefined;
+    // Synchronize nonce with blockchain at the beginning of a multi-batch submission sequence
+    await this.synchronizeNonce();
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];

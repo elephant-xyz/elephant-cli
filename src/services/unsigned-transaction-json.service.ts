@@ -180,14 +180,14 @@ export class UnsignedTransactionJsonService {
     // Create provider - required for gas estimation and nonce fetching
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    // Get starting nonce from provider
+    // Get starting nonce from provider with better error handling
     let currentNonce = this.startingNonce;
     try {
       currentNonce = await provider.getTransactionCount(userAddress, 'pending');
       logger.info(`Starting nonce from provider: ${currentNonce}`);
     } catch (error) {
       logger.warn(
-        `Failed to get nonce from provider, using default: ${currentNonce}`
+        `Failed to get nonce from provider, using default: ${currentNonce}. Error: ${error}`
       );
       // Continue with default nonce but keep provider for gas estimation
     }

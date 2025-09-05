@@ -34,6 +34,20 @@ export class ApiSubmissionService {
   }
 
   /**
+   * Detects if an error is related to nonce issues
+   */
+  private isNonceError(errorText: string): boolean {
+    const lowerText = errorText.toLowerCase();
+    return (
+      lowerText.includes('nonce') ||
+      lowerText.includes('nonce too low') ||
+      lowerText.includes('nonce too high') ||
+      lowerText.includes('nonce has already been used') ||
+      lowerText.includes('replacement transaction underpriced')
+    );
+  }
+
+  /**
    * Submit an unsigned transaction to the centralized API
    */
   async submitTransaction(
@@ -65,10 +79,11 @@ export class ApiSubmissionService {
 
         if (!response.ok) {
           const errorText = await response.text();
+          const isNonceError = this.isNonceError(errorText);
           throw new ApiError(
             `API request failed with status ${response.status}: ${errorText}`,
             response.status,
-            false // API errors are not retryable
+            isNonceError // Nonce errors are retryable
           );
         }
 
@@ -98,8 +113,12 @@ export class ApiSubmissionService {
         }
 
         if (attempt < this.maxRetries - 1) {
-          const delay = this.retryDelay * Math.pow(2, attempt); // Exponential backoff
-          logger.info(`Retrying in ${delay / 1000}s...`);
+          const isNonceError = this.isNonceError(lastError.message);
+          const baseDelay = isNonceError ? 5000 : this.retryDelay; // 5s for nonce errors, 1s for others
+          const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
+          logger.info(
+            `Retrying in ${delay / 1000}s${isNonceError ? ' (nonce error detected)' : ''}...`
+          );
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
