@@ -72,12 +72,19 @@ export async function prepare(
 
 async function withFetch(req: Request): Promise<Prepared> {
   logger.info('Preparing with fetch...');
+  const url = constructUrl(req);
+  logger.info(`Making ${req.method} request to: ${url}`);
+
   let res: Response;
   try {
-    res = await fetch(constructUrl(req), {
+    const body = req.json ? JSON.stringify(req.json) : req.body;
+    logger.debug(`Request body: ${body}`);
+    logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
+
+    res = await fetch(url, {
       method: req.method,
       headers: req.headers,
-      body: req.body,
+      body: body,
     });
   } catch (e) {
     const code = undiciErrorCode(e);
@@ -89,13 +96,30 @@ async function withFetch(req: Request): Promise<Prepared> {
       );
     }
 
+    logger.error(
+      `Network error: ${e instanceof Error ? e.message : String(e)}`
+    );
     throw e;
   }
-  if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+
+  logger.info(`Response status: ${res.status} ${res.statusText}`);
+  logger.debug(
+    `Response headers: ${JSON.stringify(Object.fromEntries(res.headers.entries()))}`
+  );
+
+  if (!res.ok) {
+    const errorText = await res
+      .text()
+      .catch(() => 'Unable to read error response');
+    logger.error(`HTTP error response body: ${errorText}`);
+    throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+  }
+
   const txt = await res.text();
   const type = res.headers.get('content-type')?.includes('html')
     ? 'html'
     : 'json';
+  logger.info(`Response type: ${type}, content length: ${txt.length}`);
   return { content: txt, type };
 }
 
