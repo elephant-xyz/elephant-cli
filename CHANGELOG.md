@@ -1,3 +1,10 @@
+## [1.31.9](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.8...v1.31.9) (2025-09-05)
+
+
+### Bug Fixes
+
+* **tranform:** Capitalize county names in output ([#121](https://github.com/elephant-xyz/elephant-cli/issues/121)) ([b576bc4](https://github.com/elephant-xyz/elephant-cli/commit/b576bc4bcae4c2a038be98232f39c31db9d9594e))
+
 ## [1.31.8](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.7...v1.31.8) (2025-09-05)
 
 
