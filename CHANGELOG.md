@@ -1,3 +1,10 @@
+## [1.31.8](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.7...v1.31.8) (2025-09-05)
+
+
+### Bug Fixes
+
+* **tranform:** add headers support to seed transformation ([#120](https://github.com/elephant-xyz/elephant-cli/issues/120)) ([774a9ae](https://github.com/elephant-xyz/elephant-cli/commit/774a9ae37911633e001c346756adc595bfe9b722))
+
 ## [1.31.7](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.6...v1.31.7) (2025-09-05)
 
 
