@@ -1,3 +1,11 @@
+export type SourceHttpRequest = {
+  url: string;
+  method: string;
+  multiValueQueryString?: Record<string, string[]>;
+  json?: Record<string, any> | Record<string, any>[];
+  body?: string;
+};
+
 export function parseMultiValueQueryString(
   queryString: string
 ): Record<string, string[]> {

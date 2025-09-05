@@ -3,11 +3,13 @@ import { execSync } from 'child_process';
 import { existsSync, promises as fsPromises } from 'fs';
 import AdmZip from 'adm-zip';
 import path from 'path';
-import { tmpdir } from 'os';
+
 import { handleTransform } from '../../../src/commands/transform.js';
 import * as factSheet from '../../../src/utils/fact-sheet.js';
 import * as aiAgent from '../../../src/utils/ai-agent.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
+import * as zipUtils from '../../../src/utils/zip.js';
+import * as schemaFetcher from '../../../src/utils/schema-fetcher.js';
 
 // Mock modules
 vi.mock('child_process');
@@ -17,6 +19,8 @@ vi.mock('adm-zip');
 vi.mock('../../../src/utils/fact-sheet.js');
 vi.mock('../../../src/utils/ai-agent.js');
 vi.mock('../../../src/services/zip-extractor.service.js');
+vi.mock('../../../src/utils/zip.js');
+vi.mock('../../../src/utils/schema-fetcher.js');
 vi.mock('../../../src/utils/logger.js', () => ({
   logger: {
     debug: vi.fn(),
@@ -54,6 +58,11 @@ describe('transform command', () => {
     vi.mocked(fsPromises.copyFile).mockResolvedValue(undefined);
     vi.mocked(fsPromises.rm).mockResolvedValue(undefined);
     vi.mocked(fsPromises.rename).mockResolvedValue(undefined);
+    vi.mocked(fsPromises.readFile).mockResolvedValue('');
+    vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
+    vi.mocked(fsPromises.stat).mockResolvedValue({
+      isDirectory: () => false,
+    } as any);
 
     // Mock ZipExtractorService
     const mockZipExtractor = {
@@ -68,6 +77,7 @@ describe('transform command', () => {
       addLocalFolder: vi.fn(),
       addLocalFile: vi.fn(),
       writeZip: vi.fn(),
+      extractAllTo: vi.fn(),
     };
     vi.mocked(AdmZip).mockImplementation(() => mockZipInstance as any);
 
@@ -78,6 +88,16 @@ describe('transform command', () => {
 
     // Mock AI-Agent function
     vi.mocked(aiAgent.runAIAgent).mockReturnValue(0);
+
+    // Mock zip utilities
+    vi.mocked(zipUtils.extractZipToTemp).mockResolvedValue(
+      '/tmp/extracted-input'
+    );
+
+    // Mock schema fetcher
+    vi.mocked(schemaFetcher.fetchSchemaManifest).mockResolvedValue({
+      Seed: { ipfsCid: 'test-seed-cid', type: 'dataGroup' },
+    });
   });
 
   afterEach(() => {
@@ -426,6 +446,50 @@ describe('transform command', () => {
           'transformed-data.zip',
         ])
       );
+    });
+
+    describe('SeedRow json and body field support (non-legacy mode)', () => {
+      // Tests for the new json and body field support added in the latest commit
+      // These tests validate the changes made to support json and body fields in SeedRow interface
+      it('should throw error when both json and body fields are present', async () => {
+        const options = { inputZip: 'test-input.zip' };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          if (file.includes('seed.csv')) {
+            return 'parcel_id,address,method,url,multiValueQueryString,county,json,body,source_identifier\n473725000000,"EVERGLADES, UNINCORPORATED, FL",POST,https://web.bcpa.net/BcpaClient/search.aspx/getParcelInformation,,Broward,"{""folioNumber"": ""473725000000""}","folioNumber=473725000000",473725000000';
+          }
+          return '';
+        });
+
+        await handleTransform(options);
+
+        expect(mockProcessExit).toHaveBeenCalledWith(1);
+        expect(console.error).toHaveBeenCalledWith(
+          expect.stringContaining('Both json and body fields are present')
+        );
+      });
+
+      it('should handle invalid json in seed row', async () => {
+        const options = { inputZip: 'test-input.zip' };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          if (file.includes('seed.csv')) {
+            return 'parcel_id,address,method,url,multiValueQueryString,county,json,source_identifier\n473725000000,"EVERGLADES, UNINCORPORATED, FL",POST,https://web.bcpa.net/BcpaClient/search.aspx/getParcelInformation,,Broward,"{invalid json}",473725000000';
+          }
+          return '';
+        });
+
+        await handleTransform(options);
+
+        expect(mockProcessExit).toHaveBeenCalledWith(1);
+        expect(console.error).toHaveBeenCalledWith(
+          expect.stringContaining('Error during transform (scripts mode)')
+        );
+      });
     });
   });
 });
