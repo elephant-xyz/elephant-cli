@@ -180,37 +180,32 @@ export class UnsignedTransactionJsonService {
     // Create provider - required for gas estimation and nonce fetching
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
+    // Get starting nonce from provider once to ensure sequential nonces
+    let currentNonce = this.startingNonce;
+    try {
+      currentNonce = await provider.getTransactionCount(userAddress, 'pending');
+      logger.info(`Starting nonce from provider: ${currentNonce}`);
+    } catch (error) {
+      logger.warn(
+        `Failed to get nonce from provider, using default: ${currentNonce}`
+      );
+      // Continue with default nonce but keep provider for gas estimation
+    }
+
     const transactions: EIP1474Transaction[] = [];
 
-    // Process each batch with fresh nonce fetch to avoid stale nonce issues
+    // Process each batch with sequential nonces
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
       logger.info(
         `Generating unsigned transaction for batch ${i + 1} of ${batches.length} (${batch.length} items)`
       );
 
-      // Fetch fresh nonce for each transaction to avoid nonce conflicts
-      let currentNonce = this.startingNonce;
-      try {
-        currentNonce = await provider.getTransactionCount(
-          userAddress,
-          'pending'
-        );
-        // Add the batch index to handle multiple batches in sequence
-        currentNonce += i;
-        logger.technical(`Using nonce ${currentNonce} for batch ${i + 1}`);
-      } catch (error) {
-        logger.warn(
-          `Failed to get nonce from provider, using default: ${currentNonce + i}`
-        );
-        currentNonce = this.startingNonce + i;
-      }
-
       // Create EIP-1474 compliant transaction (gas estimation is now internal)
       const transaction = await this.createEIP1474Transaction(
         batch,
         userAddress,
-        currentNonce,
+        currentNonce + i,
         provider
       );
 

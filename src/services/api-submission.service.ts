@@ -93,13 +93,29 @@ export class ApiSubmissionService {
         );
 
         // Don't retry API errors (4xx, 5xx responses) or validation errors
+        // Exception: nonce errors should be retryable with extended delay
         if (error instanceof ApiError && !error.isRetryable) {
-          throw error;
+          // Check if this is a nonce-related error that should be retryable
+          const errorMessage = lastError.message.toLowerCase();
+          if (!errorMessage.includes('nonce')) {
+            throw error;
+          }
+          // Nonce errors get special treatment - add extra delay
+          logger.warn('Nonce error detected in API response, will retry with extended delay');
         }
 
         if (attempt < this.maxRetries - 1) {
-          const delay = this.retryDelay * Math.pow(2, attempt); // Exponential backoff
-          logger.info(`Retrying in ${delay / 1000}s...`);
+          let delay = this.retryDelay * Math.pow(2, attempt); // Exponential backoff
+          
+          // Add extra delay for nonce errors to allow blockchain to catch up
+          const errorMessage = lastError.message.toLowerCase();
+          if (errorMessage.includes('nonce')) {
+            delay += 3000; // Add 3 seconds extra for nonce errors
+            logger.info(`Adding extra delay for nonce error. Retrying in ${delay / 1000}s...`);
+          } else {
+            logger.info(`Retrying in ${delay / 1000}s...`);
+          }
+          
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
