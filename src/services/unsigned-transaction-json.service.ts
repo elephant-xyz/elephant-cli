@@ -180,7 +180,7 @@ export class UnsignedTransactionJsonService {
     // Create provider - required for gas estimation and nonce fetching
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    // Get starting nonce from provider
+    // Get starting nonce from provider once to ensure sequential nonces
     let currentNonce = this.startingNonce;
     try {
       currentNonce = await provider.getTransactionCount(userAddress, 'pending');
@@ -194,7 +194,7 @@ export class UnsignedTransactionJsonService {
 
     const transactions: EIP1474Transaction[] = [];
 
-    // Process each batch
+    // Process each batch with sequential nonces
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
       logger.info(
