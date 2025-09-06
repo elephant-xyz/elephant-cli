@@ -1,3 +1,10 @@
+## [1.31.11](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.10...v1.31.11) (2025-09-06)
+
+
+### Bug Fixes
+
+* **submit:** fixing nonce issue ([#123](https://github.com/elephant-xyz/elephant-cli/issues/123)) ([b6bcdb7](https://github.com/elephant-xyz/elephant-cli/commit/b6bcdb73cb6992591aeecc8ccb19bf1e8474ab92))
+
 ## [1.31.10](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.9...v1.31.10) (2025-09-05)
 
 
