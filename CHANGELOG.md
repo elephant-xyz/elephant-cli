@@ -1,3 +1,10 @@
+## [1.31.12](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.11...v1.31.12) (2025-09-08)
+
+
+### Bug Fixes
+
+* **ipfs:** verify content hash when fetching schema ([#126](https://github.com/elephant-xyz/elephant-cli/issues/126)) ([960c7c0](https://github.com/elephant-xyz/elephant-cli/commit/960c7c0a2b51737819aee8416d98f70fd9addedd))
+
 ## [1.31.11](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.10...v1.31.11) (2025-09-06)
 
 
