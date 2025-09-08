@@ -19,7 +19,12 @@ export class SchemaCacheService {
   private readonly cacheDir: string;
 
   constructor(
-    cacheDir: string = path.join(os.homedir(), '.elephant-cli', 'schema-cache')
+    cacheDir: string = process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.AIRFLOW_HOME ||
+    process.env.AIRFLOW__CORE__DAGS_FOLDER ||
+    process.env.AIRFLOW__CORE__EXECUTOR
+      ? path.join('/tmp', 'elephant-cli', 'schema-cache')
+      : path.join(os.homedir(), '.elephant-cli', 'schema-cache')
   ) {
     this.cacheDir = cacheDir;
     this.cache = new Map();
