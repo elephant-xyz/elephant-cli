@@ -4,12 +4,19 @@ import { equals as u8eq } from 'uint8arrays/equals';
 import { sha256, sha512 } from 'multiformats/hashes/sha2';
 import { Hasher } from 'multiformats/hashes/hasher';
 import { logger } from '../utils/logger.js';
+import { base32 } from 'multiformats/bases/base32';
 
 type SchemaType = 'class' | 'relationship' | 'dataGroup';
 
 type SchemaMeta = {
   type: SchemaType;
   ipfsCid: string;
+};
+
+type VerificationResult = {
+  valid: boolean;
+  expectedHash: string;
+  actualHash: string;
 };
 
 const HASHERS: Record<number, Hasher<'sha2-256', 18> | Hasher<'sha2-512', 19>> =
@@ -79,6 +86,7 @@ export async function fetchSchemas(
 }
 
 export async function fetchFromIpfs(cid: string): Promise<string> {
+  logger.info(`Fetching ${cid}`);
   const ipfsGateways: string[] = [
     'https://ipfs.io',
     'https://gateway.ipfs.io',
@@ -92,10 +100,14 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
         const buffer = await response.arrayBuffer();
         const content = new Uint8Array(buffer);
         const responseText = new TextDecoder().decode(content);
-        if (!(await verifyFetchedContent(cid, content))) {
-          throw new Error(
-            `CID ${cid} content does not match expected hash. Content: ${responseText.substring(0, 500)}${responseText.length > 500 ? '...' : ''}`
-          );
+        const verificationResult = await verifyFetchedContent(cid, content);
+        logger.debug(
+          `Verification result: ${JSON.stringify(verificationResult)}`
+        );
+        if (!verificationResult.valid) {
+          logger.error(`CID ${cid} content does not match expected hash.`);
+          logger.error(responseText);
+          throw new Error(`CID ${cid} content does not match expected hash.`);
         }
         return responseText;
       }
@@ -112,12 +124,16 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
 async function verifyFetchedContent(
   cidStr: string,
   content: Uint8Array
-): Promise<boolean> {
+): Promise<VerificationResult> {
   const cid = CID.parse(cidStr);
 
   const hasher = HASHERS[cid.multihash.code];
   if (!hasher) throw new Error(`Unsupported hasher code ${cid.multihash.code}`);
 
   const mh = await hasher.digest(content);
-  return u8eq(mh.bytes, cid.multihash.bytes);
+  return {
+    valid: u8eq(mh.bytes, cid.multihash.bytes),
+    expectedHash: base32.encode(cid.multihash.bytes),
+    actualHash: base32.encode(mh.bytes),
+  };
 }
