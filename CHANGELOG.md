@@ -1,3 +1,10 @@
+## [1.31.14](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.13...v1.31.14) (2025-09-08)
+
+
+### Bug Fixes
+
+* **schema-cache:** set tmp dir for cloud envs ([#130](https://github.com/elephant-xyz/elephant-cli/issues/130)) ([e1d00ce](https://github.com/elephant-xyz/elephant-cli/commit/e1d00ce9b71988eebb483bedcdfe63f4df32bf5e))
+
 ## [1.31.13](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.12...v1.31.13) (2025-09-08)
 
 
