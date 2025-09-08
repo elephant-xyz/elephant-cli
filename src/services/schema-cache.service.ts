@@ -53,7 +53,8 @@ export class SchemaCacheService {
   }
 
   private async fetchSchema(cid: string): Promise<JSONSchema> {
-    const schema = JSON.parse(await fetchFromIpfs(cid));
+    const data = await fetchFromIpfs(cid);
+    const schema = JSON.parse(data);
 
     if (typeof schema !== 'object' || schema === null) {
       throw new Error(`Invalid JSON schema: not an object`);
