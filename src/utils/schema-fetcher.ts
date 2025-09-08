@@ -94,7 +94,7 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
         return responseText;
       }
     } catch (e) {
-      logger.error(`Failed to fetch from ${gateway}: ${e}`);
+      logger.error(`Failed to fetch from ${gateway}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
