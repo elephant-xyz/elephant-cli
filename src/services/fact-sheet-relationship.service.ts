@@ -154,6 +154,7 @@ export class FactSheetRelationshipService {
         const schemaCid =
           'items' in schemaEntry ? schemaEntry.items.cid : schemaEntry.cid;
 
+        logger.info(`Fetching schema ${schemaCid} for relationship ${relName}`);
         const relationshipSchema = RelationshipSchema.parse(
           await this.schemaCache.get(schemaCid)
         );

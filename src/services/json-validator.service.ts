@@ -557,7 +557,6 @@ export class JsonValidatorService {
 
     // Recursively resolve CID pointers in arrays
     if (Array.isArray(data)) {
-      logger.debug(`Found an array: ${JSON.stringify(data)}`);
       const itemSchema = schema && schema.items ? schema.items : undefined;
       const arrayResults = await Promise.all(
         data.map((item, _index) => {
@@ -575,7 +574,6 @@ export class JsonValidatorService {
           }
         })
       );
-      logger.debug(`Resolved array: ${JSON.stringify(arrayResults)}`);
       return arrayResults;
     }
 

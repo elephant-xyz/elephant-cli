@@ -216,6 +216,7 @@ export async function handleValidate(
         for (const schemaCid of uniqueSchemaCidsArray) {
           let fetchSuccess = false;
           try {
+            logger.info(`Pre-fetching schema ${schemaCid}`);
             await schemaCacheService.get(schemaCid);
             prefetchedCount++;
             fetchSuccess = true;
