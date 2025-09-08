@@ -12,6 +12,12 @@ type SchemaMeta = {
   ipfsCid: string;
 };
 
+const HASHERS: Record<number, Hasher<'sha2-256', 18> | Hasher<'sha2-512', 19>> =
+  {
+    [sha256.code]: sha256,
+    [sha512.code]: sha512,
+  };
+
 export async function fetchSchemaManifest(): Promise<
   Record<string, SchemaMeta>
 > {
@@ -94,7 +100,9 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
         return responseText;
       }
     } catch (e) {
-      logger.error(`Failed to fetch from ${gateway}: ${e instanceof Error ? e.message : String(e)}`);
+      logger.error(
+        `Failed to fetch from ${gateway}: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -106,15 +114,6 @@ async function verifyFetchedContent(
   content: Uint8Array
 ): Promise<boolean> {
   const cid = CID.parse(cidStr);
-
-  // Choose the right hasher based on cid.multihash.code
-  const HASHERS: Record<
-    number,
-    Hasher<'sha2-256', 18> | Hasher<'sha2-512', 19>
-  > = {
-    [sha256.code]: sha256,
-    [sha512.code]: sha512,
-  };
 
   const hasher = HASHERS[cid.multihash.code];
   if (!hasher) throw new Error(`Unsupported hasher code ${cid.multihash.code}`);
