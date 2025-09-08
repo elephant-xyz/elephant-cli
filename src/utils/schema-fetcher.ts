@@ -88,7 +88,7 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
         const responseText = new TextDecoder().decode(content);
         if (!(await verifyFetchedContent(cid, content))) {
           throw new Error(
-            `CID ${cid} content does not match expected hash. Content: ${responseText}`
+            `CID ${cid} content does not match expected hash. Content: ${responseText.substring(0, 500)}${responseText.length > 500 ? '...' : ''}`
           );
         }
         return responseText;
