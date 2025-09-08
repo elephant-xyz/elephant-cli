@@ -1,3 +1,10 @@
+## [1.31.13](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.12...v1.31.13) (2025-09-08)
+
+
+### Bug Fixes
+
+* **schema:** add logging and improve CID verification ([#129](https://github.com/elephant-xyz/elephant-cli/issues/129)) ([8a0f01c](https://github.com/elephant-xyz/elephant-cli/commit/8a0f01c83907570d019373ff2b7168119d4236ee))
+
 ## [1.31.12](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.11...v1.31.12) (2025-09-08)
 
 
