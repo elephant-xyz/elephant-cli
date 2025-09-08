@@ -23,6 +23,7 @@ export class SchemaCacheService {
   ) {
     this.cacheDir = cacheDir;
     this.cache = new Map();
+    logger.info(`Schema cache directory: ${this.cacheDir}`);
     try {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     } catch (error) {
@@ -34,9 +35,11 @@ export class SchemaCacheService {
     } catch (error) {
       logger.error(`Error reading schema cache directory: ${error}`);
     }
+    logger.info(`Found ${files.length} schema files in cache`);
     files
       .filter((f) => f.endsWith('.json'))
       .forEach((file) => {
+        logger.info(`Loading schema ${file}`);
         const filePath = path.join(this.cacheDir, file);
         const schemaCid = file.replace('.json', '');
         try {
@@ -53,8 +56,7 @@ export class SchemaCacheService {
   }
 
   private async fetchSchema(cid: string): Promise<JSONSchema> {
-    const data = await fetchFromIpfs(cid);
-    const schema = JSON.parse(data);
+    const schema = JSON.parse(await fetchFromIpfs(cid));
 
     if (typeof schema !== 'object' || schema === null) {
       throw new Error(`Invalid JSON schema: not an object`);
