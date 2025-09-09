@@ -1,3 +1,10 @@
+# [1.32.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.14...v1.32.0) (2025-09-09)
+
+
+### Features
+
+* **fact-sheet:** use npm package ([#132](https://github.com/elephant-xyz/elephant-cli/issues/132)) ([705b7e6](https://github.com/elephant-xyz/elephant-cli/commit/705b7e66e59326fcf0cd9e90d484e4054bb954c1))
+
 ## [1.31.14](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.13...v1.31.14) (2025-09-08)
 
 
