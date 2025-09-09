@@ -7,8 +7,8 @@ import {
 } from '../utils/datagroup-analyzer.js';
 import { logger } from '../utils/logger.js';
 import { SchemaCacheService } from './schema-cache.service.js';
-import { getFactSheetCommitHash } from '../utils/fact-sheet.js';
 import * as z from 'zod';
+import { getFactSheetVersion } from '../utils/fact-sheet.js';
 
 interface ClassMapping {
   fileName: string;
@@ -77,13 +77,12 @@ export class FactSheetRelationshipService {
   async generateFactSheetFile(outputDir: string): Promise<void> {
     const factSheetPath = path.join(outputDir, 'fact_sheet.json');
 
-    // Get the commit hash of the fact-sheet tool
-    const commitHash = getFactSheetCommitHash();
+    const factSheetVersion = getFactSheetVersion();
 
     // Build the full generation command
     let fullCommand: string | null = null;
-    if (commitHash) {
-      fullCommand = `npx -y git+https://github.com/elephant-xyz/fact-sheet-template.git#${commitHash} generate --input \${inputDir} --output \${outputDir} --inline-js --inline-css --inline-svg`;
+    if (factSheetVersion) {
+      fullCommand = `npx -y @elephant-xyz/fact-sheet@${factSheetVersion} generate --input \${inputDir} --output \${outputDir} --inline-js --inline-css --inline-svg`;
     }
 
     const factSheetContent: {

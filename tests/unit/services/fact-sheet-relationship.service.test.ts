@@ -87,9 +87,7 @@ describe('FactSheetRelationshipService', () => {
     });
 
     // Mock getFactSheetCommitHash to return a test commit hash
-    vi.spyOn(factSheetUtils, 'getFactSheetCommitHash').mockReturnValue(
-      'abc123def456789012345678901234567890abcd'
-    );
+    vi.spyOn(factSheetUtils, 'getFactSheetVersion').mockReturnValue('1.2.3');
 
     // Create service and mock schema cache
     service = new FactSheetRelationshipService(
@@ -132,13 +130,13 @@ describe('FactSheetRelationshipService', () => {
       expect(content).toEqual({
         ipfs_url: './index.html',
         full_generation_command:
-          'npx -y git+https://github.com/elephant-xyz/fact-sheet-template.git#abc123def456789012345678901234567890abcd generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg',
+          'npx -y @elephant-xyz/fact-sheet@1.2.3 generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg',
       });
     });
 
     it('should handle null commit hash gracefully', async () => {
       // Mock getFactSheetCommitHash to return null
-      vi.spyOn(factSheetUtils, 'getFactSheetCommitHash').mockReturnValue(null);
+      vi.spyOn(factSheetUtils, 'getFactSheetVersion').mockReturnValue(null);
 
       await service.generateFactSheetFile(tempDir);
 
