@@ -11,11 +11,7 @@ import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
 import { createCountyDataGroup } from './county-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
-import {
-  checkFactSheetInstalled,
-  generateHTMLFiles,
-  installOrUpdateFactSheet,
-} from '../../utils/fact-sheet.js';
+import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
@@ -160,21 +156,6 @@ async function handleScriptsMode(options: TransformCommandOptions) {
 
 async function generateFactSheet(tempRoot: string) {
   const outputPath = path.join(tempRoot, OUTPUT_DIR);
-  try {
-    await installOrUpdateFactSheet();
-  } catch (installError) {
-    logger.warn(
-      'Failed to install/update fact-sheet tool, but will attempt to continue with existing version if available'
-    );
-
-    const isInstalled = await checkFactSheetInstalled();
-    if (!isInstalled) {
-      throw new Error(
-        'fact-sheet tool is not installed and installation failed'
-      );
-    }
-    logger.info('Using existing fact-sheet installation');
-  }
   const htmlOutputDir = path.join(tmpdir(), 'generated-htmls');
   await generateHTMLFiles(tempRoot, htmlOutputDir);
   const htmlEntries = await fs.readdir(htmlOutputDir, {

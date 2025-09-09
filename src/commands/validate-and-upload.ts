@@ -5,11 +5,7 @@ import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import { execSync } from 'child_process';
 import * as os from 'os';
-import {
-  checkFactSheetInstalled,
-  installOrUpdateFactSheet,
-  generateHTMLFiles,
-} from '../utils/fact-sheet.js';
+import { generateHTMLFiles } from '../utils/fact-sheet.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
@@ -681,35 +677,6 @@ export async function handleValidateAndUpload(
         if (!options.dryRun) {
           progressTracker.setPhase('Installing/Updating Fact Sheet Tool', 1);
 
-          // Check if curl is available
-          try {
-            execSync('which curl', { stdio: 'pipe' });
-            logger.debug('curl is available');
-          } catch {
-            logger.error(
-              'curl is not available. Please install curl to use HTML generation feature.'
-            );
-            throw new Error(
-              'curl is required for fact-sheet installation but was not found'
-            );
-          }
-
-          try {
-            await installOrUpdateFactSheet();
-          } catch (installError) {
-            logger.warn(
-              'Failed to install/update fact-sheet tool, but will attempt to continue with existing version if available'
-            );
-
-            // Check if fact-sheet is available despite update failure
-            const isInstalled = await checkFactSheetInstalled();
-            if (!isInstalled) {
-              throw new Error(
-                'fact-sheet tool is not installed and installation failed'
-              );
-            }
-            logger.info('Using existing fact-sheet installation');
-          }
           progressTracker.increment('processed');
         }
 

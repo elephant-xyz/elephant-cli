@@ -5,11 +5,7 @@ import { execSync } from 'child_process';
 import { tmpdir } from 'os';
 import AdmZip from 'adm-zip';
 import { logger } from '../../utils/logger.js';
-import {
-  checkFactSheetInstalled,
-  installOrUpdateFactSheet,
-  generateHTMLFiles,
-} from '../../utils/fact-sheet.js';
+import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { runAIAgent } from '../../utils/ai-agent.js';
 import { ZipExtractorService } from '../../services/zip-extractor.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
@@ -60,22 +56,6 @@ export async function handleLegacyTransform(options: LegacyTransformOptions) {
       throw new Error(
         'curl is required for fact-sheet installation but was not found'
       );
-    }
-
-    try {
-      await installOrUpdateFactSheet();
-    } catch (installError) {
-      logger.warn(
-        'Failed to install/update fact-sheet tool, but will attempt to continue with existing version if available'
-      );
-
-      const isInstalled = await checkFactSheetInstalled();
-      if (!isInstalled) {
-        throw new Error(
-          'fact-sheet tool is not installed and installation failed'
-        );
-      }
-      logger.info('Using existing fact-sheet installation');
     }
 
     logger.info('Extracting transformed data...');

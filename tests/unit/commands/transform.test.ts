@@ -81,9 +81,6 @@ describe('transform command', () => {
     };
     vi.mocked(AdmZip).mockImplementation(() => mockZipInstance as any);
 
-    // Mock fact-sheet functions
-    vi.mocked(factSheet.checkFactSheetInstalled).mockResolvedValue(true);
-    vi.mocked(factSheet.installOrUpdateFactSheet).mockResolvedValue(undefined);
     vi.mocked(factSheet.generateHTMLFiles).mockResolvedValue(undefined);
 
     // Mock AI-Agent function
@@ -328,27 +325,6 @@ describe('transform command', () => {
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('Error during transform')
       );
-    });
-
-    it('should continue with existing fact-sheet when update fails', async () => {
-      vi.mocked(execSync).mockReturnValue('');
-      vi.mocked(factSheet.installOrUpdateFactSheet).mockRejectedValue(
-        new Error('Update failed')
-      );
-      vi.mocked(factSheet.checkFactSheetInstalled).mockResolvedValue(true);
-
-      vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
-        if (dir === mockExtractedDir) {
-          return [
-            { name: 'data.json', isFile: () => true, isDirectory: () => false },
-          ] as any;
-        }
-        return [];
-      });
-
-      await handleTransform(options);
-
-      expect(factSheet.generateHTMLFiles).toHaveBeenCalled();
     });
 
     it('should clean up temporary directories on success', async () => {
