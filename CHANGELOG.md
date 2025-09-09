@@ -1,3 +1,10 @@
+## [1.32.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.32.0...v1.32.1) (2025-09-09)
+
+
+### Bug Fixes
+
+* **factsheet:** fixing the command for fact sheet ([#133](https://github.com/elephant-xyz/elephant-cli/issues/133)) ([75dbe6a](https://github.com/elephant-xyz/elephant-cli/commit/75dbe6a595e833a0921984c8ecc1215e98165911))
+
 # [1.32.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.31.14...v1.32.0) (2025-09-09)
 
 
