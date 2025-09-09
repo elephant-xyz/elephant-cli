@@ -4,7 +4,7 @@ import { logger } from './logger.js';
 
 export function getFactSheetVersion(): string | null {
   try {
-    const version = execSync('npx fact-sheet --version', {
+    const version = execSync('npx @elephant-xyz/fact-sheet --version', {
       encoding: 'utf8',
     }).trim();
     logger.debug(`fact-sheet version: ${version}`);
@@ -25,7 +25,7 @@ export async function generateHTMLFiles(
     await fsPromises.mkdir(outputDir, { recursive: true });
     logger.debug(`Created output directory: ${outputDir}`);
 
-    const factSheetCmd = 'npx fact-sheet';
+    const factSheetCmd = 'npx @elephant-xyz/fact-sheet';
 
     try {
       const version = getFactSheetVersion();
