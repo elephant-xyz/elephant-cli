@@ -14,6 +14,7 @@ export interface UploadCommandOptions {
   input: string;
   pinataJwt?: string;
   outputCsv?: string;
+  silent?: boolean;
 }
 
 export function registerUploadCommand(program: Command) {
@@ -67,7 +68,7 @@ export async function handleUpload(
     serviceOverrides.pinataDirectoryUploadService ||
     serviceOverrides.progressTracker;
 
-  if (!isTestMode) {
+  if (!isTestMode && !options.silent) {
     console.log(chalk.bold.blue('🐘 Elephant Network CLI - Upload to IPFS'));
     console.log();
   }
@@ -394,7 +395,7 @@ export async function handleUpload(
     const successful = uploadResults.filter((r) => r.success).length;
     const failed = uploadResults.filter((r) => !r.success).length;
 
-    if (!isTestMode) {
+    if (!isTestMode && !options.silent) {
       if (failed > 0) {
         console.log(chalk.red('\n❌ Upload process failed\n'));
       } else {
@@ -422,8 +423,14 @@ export async function handleUpload(
       if (options.outputCsv) {
         console.log(`\n  Output CSV: ${options.outputCsv}`);
       }
+    }
 
-      if (failed > 0) {
+    if (failed > 0) {
+      if (options.silent) {
+        throw new Error(
+          `Upload failed: ${failed} directories failed to upload`
+        );
+      } else if (!isTestMode) {
         process.exit(1);
       }
     }
@@ -436,7 +443,7 @@ export async function handleUpload(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    if (!isTestMode) {
+    if (!isTestMode && !options.silent) {
       console.error(chalk.red(`\n❌ Error: ${errorMessage}`));
     }
 
@@ -449,8 +456,8 @@ export async function handleUpload(
       await zipExtractorService.cleanup(tempRootDir);
     }
 
-    // In test mode, throw the error; otherwise exit
-    if (isTestMode) {
+    // In test mode or silent mode, throw the error; otherwise exit
+    if (isTestMode || options.silent) {
       throw error;
     } else {
       process.exit(1);

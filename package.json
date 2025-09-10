@@ -7,6 +7,16 @@
   "bin": {
     "elephant-cli": "./dist/index.js"
   },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./lib": {
+      "import": "./dist/lib/index.js",
+      "types": "./dist/lib/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc && npm run copy:prompts",
     "copy:prompts": "mkdir -p dist/commands/generate-transform/prompts && cp -R src/commands/generate-transform/prompts/*.md dist/commands/generate-transform/prompts/",

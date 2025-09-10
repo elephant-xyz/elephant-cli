@@ -39,6 +39,7 @@ export interface SubmitToContractCommandOptions {
   oracleKeyId?: string;
   checkEligibility?: boolean;
   transactionIdsCsv?: string;
+  silent?: boolean;
 }
 
 interface CsvRecord {
@@ -351,8 +352,12 @@ export async function handleSubmitToContract(
   options: SubmitToContractCommandOptions,
   serviceOverrides: SubmitToContractServiceOverrides = {}
 ) {
-  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Submit to Contract'));
-  console.log();
+  if (!options.silent) {
+    console.log(
+      chalk.bold.blue('🐘 Elephant Network CLI - Submit to Contract')
+    );
+    console.log();
+  }
 
   const isApiMode = !!(options.domain && options.apiKey && options.oracleKeyId);
 
@@ -545,25 +550,27 @@ export async function handleSubmitToContract(
       const duration = endTime - startTime;
       const seconds = (duration / 1000).toFixed(1);
 
-      console.log(chalk.green('\n✅ Contract submission process finished\n'));
-      console.log(chalk.bold('📊 Final Report:'));
-      console.log(`  Total records in CSV:   0`);
-      console.log(`  Items eligible:         0`);
-      console.log(`  Items skipped:          0`);
+      if (!options.silent) {
+        console.log(chalk.green('\n✅ Contract submission process finished\n'));
+        console.log(chalk.bold('📊 Final Report:'));
+        console.log(`  Total records in CSV:   0`);
+        console.log(`  Items eligible:         0`);
+        console.log(`  Items skipped:          0`);
 
-      if (!options.dryRun) {
-        console.log(`  Transactions submitted: 0`);
-        console.log(`  Total items submitted:  0`);
-      } else {
-        console.log(
-          `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
-        );
-        console.log(`  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`);
+        if (!options.dryRun) {
+          console.log(`  Transactions submitted: 0`);
+          console.log(`  Total items submitted:  0`);
+        } else {
+          console.log(
+            `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
+          );
+          console.log(`  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`);
+        }
+
+        console.log(`  Duration:               ${seconds}s`);
+        console.log(`\n  Error report:   ${config.errorCsvPath}`);
+        console.log(`  Warning report: ${config.warningCsvPath}`);
       }
-
-      console.log(`  Duration:               ${seconds}s`);
-      console.log(`\n  Error report:   ${config.errorCsvPath}`);
-      console.log(`  Warning report: ${config.warningCsvPath}`);
       return;
     }
 
@@ -915,51 +922,57 @@ export async function handleSubmitToContract(
     }
     const finalMetrics = progressTracker.getMetrics();
 
-    console.log(chalk.green('\n✅ Contract submission process finished\n'));
-    console.log(chalk.bold('📊 Final Report:'));
-    console.log(`  Total records in CSV:   ${records.length}`);
-    console.log(`  Items eligible:         ${dataItemsForTransaction.length}`);
-    console.log(`  Items skipped:          ${skippedItems.length}`);
+    if (!options.silent) {
+      console.log(chalk.green('\n✅ Contract submission process finished\n'));
+      console.log(chalk.bold('📊 Final Report:'));
+      console.log(`  Total records in CSV:   ${records.length}`);
+      console.log(
+        `  Items eligible:         ${dataItemsForTransaction.length}`
+      );
+      console.log(`  Items skipped:          ${skippedItems.length}`);
 
-    if (!options.dryRun) {
-      console.log(`  Transactions submitted: ${submittedTransactionCount}`);
-      console.log(`  Total items submitted:  ${totalItemsSubmitted}`);
-    } else {
-      console.log(
-        `  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`
-      );
-      console.log(
-        `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
-      );
-      if (options.unsignedTransactionsJson) {
+      if (!options.dryRun) {
+        console.log(`  Transactions submitted: ${submittedTransactionCount}`);
+        console.log(`  Total items submitted:  ${totalItemsSubmitted}`);
+      } else {
         console.log(
-          `  Unsigned transactions:  ${options.unsignedTransactionsJson}`
+          `  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`
+        );
+        console.log(
+          `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
+        );
+        if (options.unsignedTransactionsJson) {
+          console.log(
+            `  Unsigned transactions:  ${options.unsignedTransactionsJson}`
+          );
+        }
+      }
+
+      const elapsed = Date.now() - finalMetrics.startTime;
+      const duration = Math.floor(elapsed / 1000);
+      console.log(`  Duration:               ${duration}s`);
+      console.log(`\n  Error report:   ${config.errorCsvPath}`);
+      console.log(`  Warning report: ${config.warningCsvPath}`);
+      if (isApiMode) {
+        console.log(
+          `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
         );
       }
-    }
-
-    const elapsed = Date.now() - finalMetrics.startTime;
-    const seconds = Math.floor(elapsed / 1000);
-    console.log(`  Duration:               ${seconds}s`);
-    console.log(`\n  Error report:   ${config.errorCsvPath}`);
-    console.log(`  Warning report: ${config.warningCsvPath}`);
-    if (isApiMode) {
-      console.log(
-        `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
-      );
-    }
-    if (transactionIdsCsvPath) {
-      console.log(`  Transaction IDs: ${transactionIdsCsvPath}`);
+      if (transactionIdsCsvPath) {
+        console.log(`  Transaction IDs: ${transactionIdsCsvPath}`);
+      }
     }
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
     );
-    console.error(
-      chalk.red(
-        `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
-      )
-    );
+    if (!options.silent) {
+      console.error(
+        chalk.red(
+          `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
+        )
+      );
+    }
     if (progressTracker) {
       progressTracker.stop();
     }
@@ -967,6 +980,10 @@ export async function handleSubmitToContract(
     if (transactionStatusReporter) {
       await transactionStatusReporter.finalize();
     }
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 }

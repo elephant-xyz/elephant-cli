@@ -28,6 +28,7 @@ export interface TransformCommandOptions {
   scriptsZip?: string;
   inputsZip?: string;
   legacyMode?: boolean;
+  silent?: boolean;
   [key: string]: any;
 }
 
@@ -78,8 +79,10 @@ export function registerTransformCommand(program: Command) {
 }
 
 export async function handleTransform(options: TransformCommandOptions) {
-  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Transform'));
-  console.log();
+  if (!options.silent) {
+    console.log(chalk.bold.blue('🐘 Elephant Network CLI - Transform'));
+    console.log();
+  }
 
   if (options.legacyMode) {
     await handleLegacyTransform(options);
@@ -91,12 +94,24 @@ export async function handleTransform(options: TransformCommandOptions) {
 async function handleScriptsMode(options: TransformCommandOptions) {
   const outputZip = options.outputZip || 'transformed-data.zip';
   if (!options.inputZip) {
-    console.error(chalk.red('In scripts mode, --input-zip is required'));
-    process.exit(1);
+    const error = 'In scripts mode, --input-zip is required';
+    if (!options.silent) {
+      console.error(chalk.red(error));
+    }
+    if (options.silent) {
+      throw new Error(error);
+    } else {
+      process.exit(1);
+    }
   }
   if (!existsSync(options.inputZip!)) {
-    logger.error(`input-zip not found: ${options.inputZip}`);
-    process.exit(1);
+    const error = `input-zip not found: ${options.inputZip}`;
+    logger.error(error);
+    if (options.silent) {
+      throw new Error(error);
+    } else {
+      process.exit(1);
+    }
   }
 
   const tempRoot = await fs.mkdtemp(path.join(tmpdir(), 'elephant-transform-'));
@@ -140,15 +155,24 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     zip.writeZip(outputZip);
 
     logger.success(`Scripts execution complete. Output saved to: ${outputZip}`);
-    console.log(chalk.green('✅ Transform (scripts mode) finished'));
-    console.log(chalk.bold('📊 Output:'));
-    console.log(`  JSON bundle for hash: ${chalk.cyan(outputZip)}`);
+    if (!options.silent) {
+      console.log(chalk.green('✅ Transform (scripts mode) finished'));
+      console.log(chalk.bold('📊 Output:'));
+      console.log(`  JSON bundle for hash: ${chalk.cyan(outputZip)}`);
+    }
   } catch (e) {
-    console.error(chalk.red(`Error during transform (scripts mode): ${e}`));
+    const errorMsg = `Error during transform (scripts mode): ${e}`;
+    if (!options.silent) {
+      console.error(chalk.red(errorMsg));
+    }
     if (e instanceof Error) {
       logger.error(e.stack);
     }
-    process.exit(1);
+    if (options.silent) {
+      throw e instanceof Error ? e : new Error(errorMsg);
+    } else {
+      process.exit(1);
+    }
   } finally {
     for (const fn of cleanup) await fn();
   }
@@ -229,13 +253,13 @@ async function handleSeedTransform(tempRoot: string) {
       '/': './unnormalized_address.json',
     },
   });
-  const sourceHttpRequest = {
+  const sourceHttpRequest: SourceHttpRequest = {
     url: seedRow.url,
     method: seedRow.method,
     multiValueQueryString: seedRow.multiValueQueryString?.trim()
       ? parseMultiValueQueryString(seedRow.multiValueQueryString)
       : {},
-  } as SourceHttpRequest;
+  };
   if (seedRow.headers) {
     sourceHttpRequest.headers = JSON.parse(seedRow.headers);
   }

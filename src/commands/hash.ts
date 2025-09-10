@@ -43,6 +43,7 @@ export interface HashCommandOptions {
   outputCsv: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
+  silent?: boolean;
 }
 
 export function registerHashCommand(program: Command) {
@@ -97,10 +98,12 @@ export async function handleHash(
   options: HashCommandOptions,
   serviceOverrides: HashServiceOverrides = {}
 ) {
-  console.log(
-    chalk.bold.blue('🐘 Elephant Network CLI - Hash (Single Property)')
-  );
-  console.log();
+  if (!options.silent) {
+    console.log(
+      chalk.bold.blue('🐘 Elephant Network CLI - Hash (Single Property)')
+    );
+    console.log();
+  }
 
   // Process single property ZIP input
   let processedInput;
@@ -113,7 +116,11 @@ export async function handleHash(
     logger.error(
       `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
     );
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 
   const { actualInputDir, cleanup } = processedInput;
@@ -182,10 +189,16 @@ export async function handleHash(
     // not that it contains property subdirectories
     const dirStats = await fsPromises.stat(actualInputDir);
     if (!dirStats.isDirectory()) {
-      console.log(chalk.red('❌ Extracted path is not a directory'));
+      if (!options.silent) {
+        console.log(chalk.red('❌ Extracted path is not a directory'));
+      }
       await csvReporterService.finalize();
       await cleanup();
-      process.exit(1);
+      if (options.silent) {
+        throw new Error('Extracted path is not a directory');
+      } else {
+        process.exit(1);
+      }
     }
 
     const entries = await fsPromises.readdir(actualInputDir, {
@@ -631,29 +644,31 @@ export async function handleHash(
           total: totalFiles,
         };
 
-    console.log(chalk.green('\n✅ Hash process finished\n'));
-    console.log(chalk.bold('📊 Final Report:'));
-    console.log(
-      `  Total JSON files scanned:    ${finalMetrics.total || totalFiles}`
-    );
-    console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
-    console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
-    console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
+    if (!options.silent) {
+      console.log(chalk.green('\n✅ Hash process finished\n'));
+      console.log(chalk.bold('📊 Final Report:'));
+      console.log(
+        `  Total JSON files scanned:    ${finalMetrics.total || totalFiles}`
+      );
+      console.log(`  Files skipped: ${finalMetrics.skipped || 0}`);
+      console.log(`  Processing errors: ${finalMetrics.errors || 0}`);
+      console.log(`  Successfully processed:  ${finalMetrics.processed || 0}`);
 
-    const totalHandled =
-      (finalMetrics.skipped || 0) +
-      (finalMetrics.errors || 0) +
-      (finalMetrics.processed || 0);
+      const totalHandled =
+        (finalMetrics.skipped || 0) +
+        (finalMetrics.errors || 0) +
+        (finalMetrics.processed || 0);
 
-    console.log(`  Total files handled:    ${totalHandled}`);
+      console.log(`  Total files handled:    ${totalHandled}`);
 
-    const elapsed = Date.now() - finalMetrics.startTime;
-    const seconds = Math.floor(elapsed / 1000);
-    console.log(`  Duration:               ${seconds}s`);
-    console.log(`\n  Error report:   ${config.errorCsvPath}`);
-    console.log(`  Warning report: ${config.warningCsvPath}`);
-    console.log(`  Output ZIP:     ${options.outputZip}`);
-    console.log(`  Output CSV:     ${options.outputCsv}`);
+      const elapsed = Date.now() - finalMetrics.startTime;
+      const seconds = Math.floor(elapsed / 1000);
+      console.log(`  Duration:               ${seconds}s`);
+      console.log(`\n  Error report:   ${config.errorCsvPath}`);
+      console.log(`  Warning report: ${config.warningCsvPath}`);
+      console.log(`  Output ZIP:     ${options.outputZip}`);
+      console.log(`  Output CSV:     ${options.outputCsv}`);
+    }
 
     // Clean up temporary directory if it was created
     await cleanup();
@@ -692,7 +707,11 @@ export async function handleHash(
     // Clean up temporary directory if it was created
     await cleanup();
 
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 }
 
