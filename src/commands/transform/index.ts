@@ -92,6 +92,7 @@ export async function handleTransform(options: TransformCommandOptions) {
 }
 
 async function handleScriptsMode(options: TransformCommandOptions) {
+  console.log(`Options: ${JSON.stringify(options)}`);
   const outputZip = options.outputZip || 'transformed-data.zip';
   if (!options.inputZip) {
     const error = 'In scripts mode, --input-zip is required';
