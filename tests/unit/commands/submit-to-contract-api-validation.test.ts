@@ -41,7 +41,7 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain(
-      'Private key should not be provided when using API mode'
+      'Private key or keystore should not be provided when using API mode'
     );
   });
 
