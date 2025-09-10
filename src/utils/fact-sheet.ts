@@ -1,69 +1,40 @@
-import { execSync } from 'child_process';
+import { Builder } from '@elephant-xyz/fact-sheet';
+import factSheetPkg from '@elephant-xyz/fact-sheet/package.json' with { type: 'json' };
 import { promises as fsPromises } from 'fs';
 import { logger } from './logger.js';
 
 export function getFactSheetVersion(): string | null {
-  try {
-    const version = execSync('npx @elephant-xyz/fact-sheet --version', {
-      encoding: 'utf8',
-    }).trim();
-    logger.debug(`fact-sheet version: ${version}`);
-    return version;
-  } catch (error) {
-    logger.debug(`Could not get fact-sheet version: ${error}`);
-    return null;
-  }
+  return factSheetPkg.version;
 }
 
 export async function generateHTMLFiles(
   inputDir: string,
   outputDir: string
 ): Promise<void> {
-  try {
-    logger.info(`Generating HTML files from ${inputDir} to ${outputDir}...`);
+  logger.info(`Generating HTML files from ${inputDir} to ${outputDir}...`);
 
-    await fsPromises.mkdir(outputDir, { recursive: true });
-    logger.debug(`Created output directory: ${outputDir}`);
+  await fsPromises.mkdir(outputDir, { recursive: true });
+  logger.debug(`Created output directory: ${outputDir}`);
 
-    const factSheetCmd = 'npx @elephant-xyz/fact-sheet';
+  const version = getFactSheetVersion();
+  logger.debug(`Using fact-sheet version: ${version}`);
 
-    try {
-      const version = getFactSheetVersion();
-      logger.debug(`Using fact-sheet version: ${version}`);
-    } catch (versionError) {
-      logger.warn('Could not determine fact-sheet version');
-    }
+  const options = {
+    input: inputDir,
+    output: outputDir,
+    inlineCss: true,
+    inlineJs: true,
+    inlineSvg: true,
+    minify: true,
+    verbose: false,
+    quiet: true,
+    ci: false,
+  };
 
-    const command = `${factSheetCmd} generate --input ${inputDir} --output ${outputDir} --inline-js --inline-css --inline-svg`;
-    logger.debug(`Running command: ${command}`);
+  logger.debug(`Building with options: ${JSON.stringify(options)}`);
 
-    try {
-      const output = execSync(command, {
-        encoding: 'utf8',
-        cwd: process.cwd(),
-        stdio: 'pipe',
-      });
-      logger.debug(`Fact-sheet generate output: ${output}`);
-      logger.success('HTML files generated successfully');
-    } catch (execError) {
-      const stderr =
-        execError instanceof Error && 'stderr' in execError
-          ? (execError as any).stderr
-          : '';
-      const stdout =
-        execError instanceof Error && 'stdout' in execError
-          ? (execError as any).stdout
-          : '';
-      logger.error(
-        `Fact-sheet generate failed. stdout: ${stdout}, stderr: ${stderr}`
-      );
-      throw execError;
-    }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error && error.stack ? error.stack : '';
-    logger.error(`Failed to generate HTML files: ${errorMsg}`);
-    logger.debug(`Error stack trace: ${errorStack}`);
-    throw new Error(`Failed to generate HTML files: ${errorMsg}`);
-  }
+  const builder = new Builder(options);
+  await builder.build();
+
+  logger.success('HTML files generated successfully');
 }

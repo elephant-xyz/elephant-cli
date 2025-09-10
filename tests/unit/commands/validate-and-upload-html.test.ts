@@ -24,6 +24,7 @@ import { CsvReporterService } from '../../../src/services/csv-reporter.service.j
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 import { IPFSService } from '../../../src/services/ipfs.service.js';
 import { FileEntry } from '../../../src/types/submit.types.js';
+import * as factSheet from '../../../src/utils/fact-sheet.js';
 
 // Mock modules
 vi.mock('child_process', async () => {
@@ -53,6 +54,11 @@ vi.mock('../../../src/utils/logger.js', () => ({
     debug: vi.fn(),
     technical: vi.fn(),
   },
+}));
+
+vi.mock('../../../src/utils/fact-sheet.js', () => ({
+  generateHTMLFiles: vi.fn().mockResolvedValue(undefined),
+  getFactSheetVersion: vi.fn().mockReturnValue('1.2.1'),
 }));
 
 describe('validate-and-upload HTML generation', () => {
@@ -365,15 +371,8 @@ describe('validate-and-upload HTML generation', () => {
       expect.any(Object)
     );
 
-    // Check that fact-sheet generate was called (might be the second call after ulimit)
-    const factSheetGenerateCalls = mockExecSync.mock.calls.filter((call) =>
-      call[0].includes('fact-sheet generate')
-    );
-    expect(factSheetGenerateCalls.length).toBeGreaterThan(0);
-    expect(mockExecSync).toHaveBeenCalledWith(
-      expect.stringContaining('--inline-js --inline-css'),
-      expect.any(Object)
-    );
+    // Check that generateHTMLFiles was called
+    expect(factSheet.generateHTMLFiles).toHaveBeenCalled();
 
     // In dry-run mode, uploadBatch should not be called at all
     expect(mockPinataService.uploadBatch).not.toHaveBeenCalled();
