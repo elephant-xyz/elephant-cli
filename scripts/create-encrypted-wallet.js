@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Utility script to create an encrypted JSON keystore wallet
+ * Utility script to encrypt an existing private key into a JSON keystore wallet
  * Usage: node create-encrypted-wallet.js
  */
 
@@ -30,16 +30,19 @@ function askPassword(prompt) {
 
     let password = '';
     
-    stdin.on('data', (char) => {
+    const onData = (char) => {
       const key = char.toString();
       
       if (key === '\n' || key === '\r' || key === '\u0004') {
         stdin.setRawMode(false);
-        stdin.pause();
+        stdin.removeListener('data', onData);
         stdout.write('\n');
+        // Don't pause stdin here - let readline handle it
         resolve(password);
       } else if (key === '\u0003') {
         // Handle Ctrl+C
+        stdin.setRawMode(false);
+        stdin.removeListener('data', onData);
         process.exit();
       } else if (key === '\u007F' || key === '\b') {
         // Handle backspace
@@ -49,47 +52,28 @@ function askPassword(prompt) {
         }
       } else {
         password += key;
-        stdout.write('*');
       }
-    });
+    };
+    
+    stdin.on('data', onData);
   });
 }
 
 async function main() {
   console.log('🔐 Encrypted Wallet Creator for Elephant CLI\n');
+  console.log('This tool will encrypt your existing private key into a secure JSON keystore file.\n');
   
   try {
-    // Ask for input method
-    const method = await question(
-      'Choose an option:\n' +
-      '1. Create a new random wallet\n' +
-      '2. Encrypt an existing private key\n' +
-      'Enter choice (1 or 2): '
-    );
+    // Get existing private key
+    const privateKey = await question('Enter your private key (with or without 0x prefix): ');
     
     let wallet;
-    
-    if (method === '1') {
-      // Create new random wallet
-      wallet = Wallet.createRandom();
-      console.log('\n✅ New wallet created!');
+    try {
+      wallet = new Wallet(privateKey.trim());
+      console.log(`\n✅ Wallet loaded!`);
       console.log(`Address: ${wallet.address}`);
-      console.log(`\n⚠️  IMPORTANT: Save this private key securely!`);
-      console.log(`Private Key: ${wallet.privateKey}\n`);
-    } else if (method === '2') {
-      // Use existing private key
-      const privateKey = await question('\nEnter your private key (with or without 0x prefix): ');
-      
-      try {
-        wallet = new Wallet(privateKey.trim());
-        console.log(`\n✅ Wallet loaded!`);
-        console.log(`Address: ${wallet.address}`);
-      } catch (error) {
-        console.error('❌ Invalid private key:', error.message);
-        process.exit(1);
-      }
-    } else {
-      console.error('❌ Invalid choice. Please enter 1 or 2.');
+    } catch (error) {
+      console.error('❌ Invalid private key:', error.message);
       process.exit(1);
     }
     
@@ -117,13 +101,29 @@ async function main() {
     // Encrypt the wallet
     console.log('\n🔄 Encrypting wallet... (this may take a few seconds)');
     
-    const encryptedJson = await wallet.encrypt(password, {
-      scrypt: {
-        N: 131072,
-        r: 8,
-        p: 1
+    // In ethers v6, the signature is: encrypt(password, progressCallback?)
+    // The options are part of the underlying encryptKeystoreJson function
+    let lastReportedPercent = 0;
+    const progressCallback = (progress) => {
+      // Progress goes from 0 to 1
+      const percent = Math.round(progress * 100);
+      // Only report at 25%, 50%, 75%, and 100%, and only once per milestone
+      if (percent >= 25 && lastReportedPercent < 25) {
+        console.log(`  25% complete...`);
+        lastReportedPercent = 25;
+      } else if (percent >= 50 && lastReportedPercent < 50) {
+        console.log(`  50% complete...`);
+        lastReportedPercent = 50;
+      } else if (percent >= 75 && lastReportedPercent < 75) {
+        console.log(`  75% complete...`);
+        lastReportedPercent = 75;
+      } else if (percent >= 100 && lastReportedPercent < 100) {
+        console.log(`  100% complete...`);
+        lastReportedPercent = 100;
       }
-    });
+    };
+    
+    const encryptedJson = await wallet.encrypt(password, progressCallback);
     
     // Save to file
     writeFileSync(outputFile, encryptedJson);
