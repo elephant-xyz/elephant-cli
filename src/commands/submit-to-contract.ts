@@ -394,9 +394,12 @@ export async function handleSubmitToContract(
   logger.technical(`Transaction batch size: ${options.transactionBatchSize}`);
   logger.technical(`Gas price: ${options.gasPrice}`);
 
-  const config = createSubmitConfig({
-    transactionBatchSize: options.transactionBatchSize,
-  });
+  const config = createSubmitConfig(
+    {
+      transactionBatchSize: options.transactionBatchSize,
+    },
+    options.cwd
+  );
 
   // Create mock services when eligibility checks are disabled, in dry-run mode, or API mode to avoid blockchain calls
   const chainStateService =
