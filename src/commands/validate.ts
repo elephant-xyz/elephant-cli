@@ -23,6 +23,8 @@ export interface ValidateCommandOptions {
   input: string;
   outputCsv?: string;
   maxConcurrentTasks?: number;
+  silent?: boolean;
+  cwd?: string;
 }
 
 export function registerValidateCommand(program: Command) {
@@ -45,9 +47,14 @@ export function registerValidateCommand(program: Command) {
       options.maxConcurrentTasks =
         parseInt(options.maxConcurrentTasks, 10) || undefined;
 
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: ValidateCommandOptions = {
         ...options,
-        input: path.resolve(input),
+        input: path.resolve(workingDir, input),
+        outputCsv: options.outputCsv
+          ? path.resolve(workingDir, options.outputCsv)
+          : undefined,
+        cwd: workingDir,
       };
 
       await handleValidate(commandOptions);
@@ -66,10 +73,12 @@ export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
 ) {
-  console.log(
-    chalk.bold.blue('🐘 Elephant Network CLI - Validate (Single Property)')
-  );
-  console.log();
+  if (!options.silent) {
+    console.log(
+      chalk.bold.blue('🐘 Elephant Network CLI - Validate (Single Property)')
+    );
+    console.log();
+  }
 
   // Process single property ZIP input
   let processedInput;
@@ -82,13 +91,21 @@ export async function handleValidate(
     logger.error(
       `Failed to process input: ${error instanceof Error ? error.message : String(error)}`
     );
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 
   const { actualInputDir, cleanup } = processedInput;
 
   logger.technical(`Processing single property data from: ${actualInputDir}`);
-  logger.technical(`Output CSV: ${options.outputCsv || 'submit_errors.csv'}`);
+  const workingDir = options.cwd || process.cwd();
+  const erorrCsvName = options.outputCsv || 'submit_errors.csv';
+  const errorCsvPath = path.resolve(workingDir, erorrCsvName);
+  const warningCsvPath = path.resolve(workingDir, 'submit_warnings.csv');
+  logger.technical(`Output CSV: ${errorCsvPath}`);
   logger.info('Note: Processing single property data only');
 
   // Calculate effective concurrency
@@ -99,7 +116,8 @@ export async function handleValidate(
   });
 
   const config = createSubmitConfig({
-    errorCsvPath: options.outputCsv || 'submit_errors.csv',
+    errorCsvPath,
+    warningCsvPath,
   });
 
   // Keep a reference to csvReporterService to use in the final catch block
@@ -138,10 +156,16 @@ export async function handleValidate(
     // not that it contains property subdirectories
     const dirStats = await fsPromises.stat(actualInputDir);
     if (!dirStats.isDirectory()) {
-      console.log(chalk.red('❌ Extracted path is not a directory'));
+      if (!options.silent) {
+        console.log(chalk.red('❌ Extracted path is not a directory'));
+      }
       await csvReporterService.finalize();
       await cleanup();
-      process.exit(1);
+      if (options.silent) {
+        throw new Error('Extracted path is not a directory');
+      } else {
+        process.exit(1);
+      }
     }
 
     const entries = await fsPromises.readdir(actualInputDir, {
@@ -155,7 +179,10 @@ export async function handleValidate(
       logger.warn('No JSON files found in the property directory');
       await csvReporterService.finalize();
       await cleanup();
-      throw Error('No data group JSON files found in the property directory');
+      const error = new Error(
+        'No data group JSON files found in the property directory'
+      );
+      throw error;
     }
 
     logger.success(
@@ -342,41 +369,47 @@ export async function handleValidate(
           total: totalFiles,
         };
 
-    console.log(chalk.green('\n✅ Validation process finished\n'));
-    console.log(chalk.bold('📊 Validation Report:'));
-    console.log(
-      `  Total files scanned:    ${finalMetrics.total || totalFiles}`
-    );
-    console.log(`  Files skipped:          ${finalMetrics.skipped || 0}`);
-    console.log(`  Validation errors:      ${finalMetrics.errors || 0}`);
-    console.log(
-      `  Successfully validated: ${finalMetrics.processed - finalMetrics.errors || 0}`
-    );
-
-    const totalHandled =
-      (finalMetrics.skipped || 0) +
-      (finalMetrics.errors || 0) +
-      (finalMetrics.processed || 0);
-
-    console.log(`  Total files handled:    ${totalHandled}`);
-
-    const elapsed = Date.now() - finalMetrics.startTime;
-    const seconds = Math.floor(elapsed / 1000);
-    console.log(`  Duration:               ${seconds}s`);
-
-    if (csvReporterService.getErrorCount() > 0) {
+    if (!options.silent) {
+      console.log(chalk.green('\n✅ Validation process finished\n'));
+      console.log(chalk.bold('📊 Validation Report:'));
       console.log(
-        chalk.yellow(
-          `\n⚠️  Validation errors found. Check ${config.errorCsvPath} for details.`
-        )
+        `  Total files scanned:    ${finalMetrics.total || totalFiles}`
       );
-    } else {
-      console.log(chalk.green('\n✅ All files passed validation!'));
+      console.log(`  Files skipped:          ${finalMetrics.skipped || 0}`);
+      console.log(`  Validation errors:      ${finalMetrics.errors || 0}`);
+      console.log(
+        `  Successfully validated: ${finalMetrics.processed - finalMetrics.errors || 0}`
+      );
+
+      const totalHandled =
+        (finalMetrics.skipped || 0) +
+        (finalMetrics.errors || 0) +
+        (finalMetrics.processed || 0);
+
+      console.log(`  Total files handled:    ${totalHandled}`);
+
+      const elapsed = Date.now() - finalMetrics.startTime;
+      const seconds = Math.floor(elapsed / 1000);
+      console.log(`  Duration:               ${seconds}s`);
+
+      if (csvReporterService.getErrorCount() > 0) {
+        console.log(
+          chalk.yellow(
+            `\n⚠️  Validation errors found. Check ${config.errorCsvPath} for details.`
+          )
+        );
+      } else {
+        console.log(chalk.green('\n✅ All files passed validation!'));
+      }
     }
 
     await cleanup();
     if (finalMetrics.errors > 0) {
-      process.exit(1);
+      if (options.silent) {
+        throw new Error(`Validation failed with ${finalMetrics.errors} errors`);
+      } else {
+        process.exit(1);
+      }
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -417,7 +450,11 @@ export async function handleValidate(
     // Clean up temporary directory if it was created
     await cleanup();
 
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 }
 

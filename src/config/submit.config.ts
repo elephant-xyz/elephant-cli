@@ -1,4 +1,5 @@
 import { cpus } from 'os';
+import path from 'path';
 
 export interface SubmitConfig {
   // Concurrency limits
@@ -77,8 +78,27 @@ export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
 };
 
 export function createSubmitConfig(
-  overrides: Partial<SubmitConfig> = {}
+  overrides: Partial<SubmitConfig> = {},
+  cwd?: string
 ): SubmitConfig {
+  if (cwd) {
+    overrides.errorCsvPath = path.join(
+      cwd,
+      overrides.errorCsvPath || DEFAULT_SUBMIT_CONFIG.errorCsvPath
+    );
+    overrides.warningCsvPath = path.join(
+      cwd,
+      overrides.warningCsvPath || DEFAULT_SUBMIT_CONFIG.warningCsvPath
+    );
+    overrides.checkpointPath = path.join(
+      cwd,
+      overrides.checkpointPath || DEFAULT_SUBMIT_CONFIG.checkpointPath
+    );
+    overrides.schemaCachePath = path.join(
+      cwd,
+      overrides.schemaCachePath || DEFAULT_SUBMIT_CONFIG.schemaCachePath
+    );
+  }
   return {
     ...DEFAULT_SUBMIT_CONFIG,
     ...overrides,
