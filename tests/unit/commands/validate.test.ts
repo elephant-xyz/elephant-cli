@@ -373,7 +373,9 @@ describe('handleValidate', () => {
     );
     expect(mockProgressTracker.increment).toHaveBeenCalledWith('errors');
     expect(logger.technical).toHaveBeenCalledWith(
-      'Validation errors will be saved to: test_errors.csv'
+      expect.stringMatching(
+        /Validation errors will be saved to: .*test_errors\.csv$/
+      )
     );
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
