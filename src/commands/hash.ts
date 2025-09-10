@@ -142,9 +142,12 @@ export async function handleHash(
     windowsFactor: 4,
   });
 
-  const config = createSubmitConfig({
-    maxConcurrentUploads: undefined,
-  });
+  const config = createSubmitConfig(
+    {
+      maxConcurrentUploads: undefined,
+    },
+    options.cwd
+  );
 
   // Keep a reference to csvReporterService to use in the final catch block
   let csvReporterServiceInstance: CsvReporterService | undefined =
