@@ -104,6 +104,7 @@ export async function handleValidate(
   const workingDir = options.cwd || process.cwd();
   const erorrCsvName = options.outputCsv || 'submit_errors.csv';
   const errorCsvPath = path.resolve(workingDir, erorrCsvName);
+  const warningCsvPath = path.resolve(workingDir, 'submit_warnings.csv');
   logger.technical(`Output CSV: ${errorCsvPath}`);
   logger.info('Note: Processing single property data only');
 
@@ -116,6 +117,7 @@ export async function handleValidate(
 
   const config = createSubmitConfig({
     errorCsvPath,
+    warningCsvPath,
   });
 
   // Keep a reference to csvReporterService to use in the final catch block
