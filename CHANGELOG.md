@@ -1,3 +1,10 @@
+# [1.33.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.32.2...v1.33.0) (2025-09-10)
+
+
+### Features
+
+* Refactor fact-sheet usage with importing package directly. ([#136](https://github.com/elephant-xyz/elephant-cli/issues/136)) ([93a5e90](https://github.com/elephant-xyz/elephant-cli/commit/93a5e90e7726ea18a47fe24d07b2c34e35aca896))
+
 ## [1.32.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.32.1...v1.32.2) (2025-09-10)
 
 
