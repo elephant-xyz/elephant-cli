@@ -19,7 +19,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "rimraf dist",
-    "prepare": "husky || true",
+    "prepare": "npm run build",
+    "postinstall": "husky || true",
     "semantic-release": "semantic-release"
   },
   "keywords": [
@@ -104,7 +105,6 @@
   "files": [
     "bin/",
     "dist/",
-    "README.md",
-    "LICENSE"
+    "README.md"
   ]
 }
