@@ -118,7 +118,7 @@ export async function transform(
     const transformOptions: TransformCommandOptions = {
       outputZip: options.outputZip || 'transformed-data.zip',
       scriptsZip: options.scriptsZip,
-      inputsZip: options.inputZip,
+      inputZip: options.inputZip,
       legacyMode: options.legacyMode || false,
       silent: true, // Enable silent mode for library usage
     };
