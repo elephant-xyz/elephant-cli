@@ -276,7 +276,7 @@ export async function submitToContract(
       contractAddress:
         options.contractAddress ||
         process.env.SUBMIT_CONTRACT_ADDRESS ||
-        '0x1234567890123456789012345678901234567890',
+        '0x525E59e4DE2B51f52B9e30745a513E407652AB7c',
       privateKey: options.privateKey || process.env.ELEPHANT_PRIVATE_KEY || '',
       transactionBatchSize: options.transactionBatchSize || 200,
       gasPrice: options.gasPrice || 30,

@@ -93,7 +93,6 @@ export async function handleTransform(options: TransformCommandOptions) {
 }
 
 async function handleScriptsMode(options: TransformCommandOptions) {
-  console.log(`Options: ${JSON.stringify(options)}`);
   const workingDir = options.cwd || process.cwd();
   const outputZip = options.outputZip || 'transformed-data.zip';
   const resolvedOutputZip = path.resolve(workingDir, outputZip);
