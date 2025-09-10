@@ -13,16 +13,12 @@ export interface EncryptedWalletOptions {
 }
 
 export class EncryptedWalletService {
-  static async loadWalletFromEncryptedJson(
-    options: EncryptedWalletOptions
-  ): Promise<Wallet> {
-    logger.technical(
-      `Loading encrypted wallet from: ${options.keystoreJsonPath}`
-    );
+  private static readAndValidateKeystoreFile(keystoreJsonPath: string): string {
+    logger.technical(`Loading encrypted wallet from: ${keystoreJsonPath}`);
 
     let jsonContent: string;
     try {
-      jsonContent = readFileSync(options.keystoreJsonPath, 'utf-8');
+      jsonContent = readFileSync(keystoreJsonPath, 'utf-8');
     } catch (error) {
       const errorMsg = `Failed to read keystore JSON file: ${error instanceof Error ? error.message : String(error)}`;
       logger.error(errorMsg);
@@ -34,6 +30,16 @@ export class EncryptedWalletService {
       logger.error(errorMsg);
       throw new Error(errorMsg);
     }
+
+    return jsonContent;
+  }
+
+  static async loadWalletFromEncryptedJson(
+    options: EncryptedWalletOptions
+  ): Promise<Wallet> {
+    const jsonContent = this.readAndValidateKeystoreFile(
+      options.keystoreJsonPath
+    );
 
     try {
       const account = await decryptKeystoreJson(jsonContent, options.password);
@@ -49,24 +55,9 @@ export class EncryptedWalletService {
   static loadWalletFromEncryptedJsonSync(
     options: EncryptedWalletOptions
   ): Wallet {
-    logger.technical(
-      `Loading encrypted wallet from: ${options.keystoreJsonPath}`
+    const jsonContent = this.readAndValidateKeystoreFile(
+      options.keystoreJsonPath
     );
-
-    let jsonContent: string;
-    try {
-      jsonContent = readFileSync(options.keystoreJsonPath, 'utf-8');
-    } catch (error) {
-      const errorMsg = `Failed to read keystore JSON file: ${error instanceof Error ? error.message : String(error)}`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    if (!isKeystoreJson(jsonContent)) {
-      const errorMsg = 'Invalid keystore JSON format';
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
 
     try {
       const account = decryptKeystoreJsonSync(jsonContent, options.password);
