@@ -20,7 +20,6 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "clean": "rimraf dist",
     "prepare": "npm run build",
-    "postinstall": "husky || true",
     "semantic-release": "semantic-release"
   },
   "keywords": [
@@ -86,9 +85,6 @@
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
-    "hardhat": "^2.24.1",
-    "hardhat-ethers": "^1.0.1",
-    "husky": "^9.0.11",
     "rimraf": "^5.0.5",
     "semantic-release": "^23.0.8",
     "ts-node": "^10.9.2",
@@ -103,7 +99,6 @@
     "access": "public"
   },
   "files": [
-    "bin/",
     "dist/",
     "README.md"
   ]
