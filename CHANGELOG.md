@@ -1,3 +1,10 @@
+## [1.32.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.32.1...v1.32.2) (2025-09-10)
+
+
+### Bug Fixes
+
+* update bin to use dist/index.js ([#134](https://github.com/elephant-xyz/elephant-cli/issues/134)) ([2fa896f](https://github.com/elephant-xyz/elephant-cli/commit/2fa896f44a66a81d69557cfb7b3f370877d11804))
+
 ## [1.32.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.32.0...v1.32.1) (2025-09-09)
 
 
