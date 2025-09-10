@@ -15,6 +15,7 @@ export interface UploadCommandOptions {
   pinataJwt?: string;
   outputCsv?: string;
   silent?: boolean;
+  cwd?: string;
 }
 
 export function registerUploadCommand(program: Command) {
@@ -33,10 +34,15 @@ export function registerUploadCommand(program: Command) {
       'upload-results.csv'
     )
     .action(async (input, options) => {
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: UploadCommandOptions = {
         ...options,
-        input: path.resolve(input),
+        input: path.resolve(workingDir, input),
+        outputCsv: options.outputCsv
+          ? path.resolve(workingDir, options.outputCsv)
+          : path.resolve(workingDir, 'upload-results.csv'),
         pinataJwt: options.pinataJwt || process.env.PINATA_JWT,
+        cwd: workingDir,
       };
 
       if (!commandOptions.pinataJwt) {

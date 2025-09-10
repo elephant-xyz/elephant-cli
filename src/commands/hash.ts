@@ -44,6 +44,7 @@ export interface HashCommandOptions {
   maxConcurrentTasks?: number;
   propertyCid?: string;
   silent?: boolean;
+  cwd?: string;
 }
 
 export function registerHashCommand(program: Command) {
@@ -75,9 +76,13 @@ export function registerHashCommand(program: Command) {
       options.maxConcurrentTasks =
         parseInt(options.maxConcurrentTasks, 10) || undefined;
 
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: HashCommandOptions = {
         ...options,
-        input: path.resolve(input),
+        input: path.resolve(workingDir, input),
+        outputZip: path.resolve(workingDir, options.outputZip),
+        outputCsv: path.resolve(workingDir, options.outputCsv),
+        cwd: workingDir,
       };
 
       await handleHash(commandOptions);

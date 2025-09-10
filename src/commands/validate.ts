@@ -24,6 +24,7 @@ export interface ValidateCommandOptions {
   outputCsv?: string;
   maxConcurrentTasks?: number;
   silent?: boolean;
+  cwd?: string;
 }
 
 export function registerValidateCommand(program: Command) {
@@ -46,9 +47,14 @@ export function registerValidateCommand(program: Command) {
       options.maxConcurrentTasks =
         parseInt(options.maxConcurrentTasks, 10) || undefined;
 
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: ValidateCommandOptions = {
         ...options,
-        input: path.resolve(input),
+        input: path.resolve(workingDir, input),
+        outputCsv: options.outputCsv
+          ? path.resolve(workingDir, options.outputCsv)
+          : undefined,
+        cwd: workingDir,
       };
 
       await handleValidate(commandOptions);
@@ -95,7 +101,10 @@ export async function handleValidate(
   const { actualInputDir, cleanup } = processedInput;
 
   logger.technical(`Processing single property data from: ${actualInputDir}`);
-  logger.technical(`Output CSV: ${options.outputCsv || 'submit_errors.csv'}`);
+  const workingDir = options.cwd || process.cwd();
+  const errorCsvPath =
+    options.outputCsv || path.resolve(workingDir, 'submit_errors.csv');
+  logger.technical(`Output CSV: ${errorCsvPath}`);
   logger.info('Note: Processing single property data only');
 
   // Calculate effective concurrency
@@ -106,7 +115,7 @@ export async function handleValidate(
   });
 
   const config = createSubmitConfig({
-    errorCsvPath: options.outputCsv || 'submit_errors.csv',
+    errorCsvPath,
   });
 
   // Keep a reference to csvReporterService to use in the final catch block

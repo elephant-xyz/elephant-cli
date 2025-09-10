@@ -29,6 +29,7 @@ export interface TransformCommandOptions {
   inputsZip?: string;
   legacyMode?: boolean;
   silent?: boolean;
+  cwd?: string;
   [key: string]: any;
 }
 
@@ -93,8 +94,17 @@ export async function handleTransform(options: TransformCommandOptions) {
 
 async function handleScriptsMode(options: TransformCommandOptions) {
   console.log(`Options: ${JSON.stringify(options)}`);
+  const workingDir = options.cwd || process.cwd();
   const outputZip = options.outputZip || 'transformed-data.zip';
-  if (!options.inputZip) {
+  const resolvedOutputZip = path.resolve(workingDir, outputZip);
+  const resolvedInputZip = options.inputZip
+    ? path.resolve(workingDir, options.inputZip)
+    : undefined;
+  const resolvedScriptsZip = options.scriptsZip
+    ? path.resolve(workingDir, options.scriptsZip)
+    : undefined;
+
+  if (!resolvedInputZip) {
     const error = 'In scripts mode, --input-zip is required';
     if (!options.silent) {
       console.error(chalk.red(error));
@@ -105,8 +115,8 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       process.exit(1);
     }
   }
-  if (!existsSync(options.inputZip!)) {
-    const error = `input-zip not found: ${options.inputZip}`;
+  if (!existsSync(resolvedInputZip)) {
+    const error = `input-zip not found: ${resolvedInputZip}`;
     logger.error(error);
     if (options.silent) {
       throw new Error(error);
@@ -129,16 +139,16 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   try {
     logger.info('Extracting inputs to tempdir...');
     const inputsDir = await extractZipToTemp(
-      options.inputZip!,
+      resolvedInputZip,
       tempRoot,
       INPUT_DIR
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    if (options.scriptsZip) {
+    if (resolvedScriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
-        options.scriptsZip!,
+        resolvedScriptsZip,
         tempRoot,
         'scripts'
       );
@@ -153,13 +163,15 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
       zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
     }
-    zip.writeZip(outputZip);
+    zip.writeZip(resolvedOutputZip);
 
-    logger.success(`Scripts execution complete. Output saved to: ${outputZip}`);
+    logger.success(
+      `Scripts execution complete. Output saved to: ${resolvedOutputZip}`
+    );
     if (!options.silent) {
       console.log(chalk.green('✅ Transform (scripts mode) finished'));
       console.log(chalk.bold('📊 Output:'));
-      console.log(`  JSON bundle for hash: ${chalk.cyan(outputZip)}`);
+      console.log(`  JSON bundle for hash: ${chalk.cyan(resolvedOutputZip)}`);
     }
   } catch (e) {
     const errorMsg = `Error during transform (scripts mode): ${e}`;

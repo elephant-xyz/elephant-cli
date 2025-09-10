@@ -40,6 +40,7 @@ export interface SubmitToContractCommandOptions {
   checkEligibility?: boolean;
   transactionIdsCsv?: string;
   silent?: boolean;
+  cwd?: string;
 }
 
 interface CsvRecord {
@@ -222,12 +223,13 @@ export function registerSubmitToContractCommand(program: Command) {
       options.transactionBatchSize =
         parseInt(options.transactionBatchSize, 10) || 200;
 
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: SubmitToContractCommandOptions = {
         ...options,
-        csvFile: path.resolve(csvFile),
+        csvFile: path.resolve(workingDir, csvFile),
         gasPrice,
         unsignedTransactionsJson: options.unsignedTransactionsJson
-          ? path.resolve(options.unsignedTransactionsJson)
+          ? path.resolve(workingDir, options.unsignedTransactionsJson)
           : undefined,
         fromAddress: options.fromAddress,
         domain: options.domain,
@@ -235,8 +237,9 @@ export function registerSubmitToContractCommand(program: Command) {
         oracleKeyId: options.oracleKeyId,
         checkEligibility: options.checkEligibility || false,
         transactionIdsCsv: options.transactionIdsCsv
-          ? path.resolve(options.transactionIdsCsv)
+          ? path.resolve(workingDir, options.transactionIdsCsv)
           : undefined,
+        cwd: workingDir,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -465,11 +468,12 @@ export async function handleSubmitToContract(
     serviceOverrides.transactionStatusService ??
     (isApiMode ? new TransactionStatusService(options.rpcUrl) : undefined);
 
+  const workingDir = options.cwd || process.cwd();
   const transactionStatusReporter =
     serviceOverrides.transactionStatusReporter ??
     (isApiMode
       ? new TransactionStatusReporterService(
-          path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')
+          path.resolve(workingDir, 'transaction-status.csv')
         )
       : undefined);
   // Use fromAddress if provided and in unsigned transaction mode, otherwise derive from private key
@@ -521,7 +525,7 @@ export async function handleSubmitToContract(
     if (transactionStatusReporter) {
       await transactionStatusReporter.initialize();
       logger.technical(
-        `Transaction status will be saved to: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
+        `Transaction status will be saved to: ${path.resolve(workingDir, 'transaction-status.csv')}`
       );
     }
 
@@ -884,9 +888,8 @@ export async function handleSubmitToContract(
           .toISOString()
           .slice(0, 19)
           .replace(/:/g, '-');
-        const reportsDir = path.dirname(config.errorCsvPath);
-        transactionIdsCsvPath = path.join(
-          reportsDir,
+        transactionIdsCsvPath = path.resolve(
+          workingDir,
           `transaction-ids-${timestamp}.csv`
         );
       } else {
@@ -955,7 +958,7 @@ export async function handleSubmitToContract(
       console.log(`  Warning report: ${config.warningCsvPath}`);
       if (isApiMode) {
         console.log(
-          `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
+          `  Transaction status: ${path.resolve(workingDir, 'transaction-status.csv')}`
         );
       }
       if (transactionIdsCsvPath) {

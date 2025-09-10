@@ -1,3 +1,4 @@
+import path from 'path';
 import {
   handleTransform,
   TransformCommandOptions,
@@ -19,6 +20,7 @@ export interface TransformOptions {
   scriptsZip?: string;
   inputZip: string;
   legacyMode?: boolean;
+  cwd?: string;
 }
 
 export interface TransformResult {
@@ -32,6 +34,7 @@ export interface ValidateOptions {
   input: string;
   outputCsv?: string;
   maxConcurrentTasks?: number;
+  cwd?: string;
 }
 
 export interface ValidateResult {
@@ -51,6 +54,7 @@ export interface HashOptions {
   outputCsv?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
+  cwd?: string;
 }
 
 export interface HashResult {
@@ -68,6 +72,7 @@ export interface UploadOptions {
   input: string;
   pinataJwt: string;
   outputCsv?: string;
+  cwd?: string;
 }
 
 export interface UploadResult {
@@ -97,6 +102,7 @@ export interface SubmitToContractOptions {
   oracleKeyId?: string;
   checkEligibility?: boolean;
   transactionIdsCsv?: string;
+  cwd?: string;
 }
 
 export interface SubmitToContractResult {
@@ -115,24 +121,29 @@ export async function transform(
   options: TransformOptions
 ): Promise<TransformResult> {
   try {
+    const workingDir = options.cwd || process.cwd();
+    const outputZip = options.outputZip || 'transformed-data.zip';
     const transformOptions: TransformCommandOptions = {
-      outputZip: options.outputZip || 'transformed-data.zip',
+      outputZip,
       scriptsZip: options.scriptsZip,
       inputZip: options.inputZip,
       legacyMode: options.legacyMode || false,
       silent: true, // Enable silent mode for library usage
+      cwd: options.cwd,
     };
 
     await handleTransform(transformOptions);
 
     return {
       success: true,
-      outputPath: transformOptions.outputZip!,
+      outputPath: path.resolve(workingDir, outputZip),
     };
   } catch (error) {
+    const workingDir = options.cwd || process.cwd();
+    const outputZip = options.outputZip || 'transformed-data.zip';
     return {
       success: false,
-      outputPath: options.outputZip || 'transformed-data.zip',
+      outputPath: path.resolve(workingDir, outputZip),
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -143,11 +154,14 @@ export async function validate(
   options: ValidateOptions
 ): Promise<ValidateResult> {
   try {
+    const workingDir = options.cwd || process.cwd();
+    const outputCsv = options.outputCsv || 'submit_errors.csv';
     const validateOptions: ValidateCommandOptions = {
       input: options.input,
-      outputCsv: options.outputCsv || 'submit_errors.csv',
+      outputCsv,
       maxConcurrentTasks: options.maxConcurrentTasks,
       silent: true, // Enable silent mode for library usage
+      cwd: options.cwd,
     };
 
     await handleValidate(validateOptions);
@@ -158,16 +172,18 @@ export async function validate(
       errors: 0,
       processed: 0,
       skipped: 0,
-      errorCsvPath: validateOptions.outputCsv!,
+      errorCsvPath: path.resolve(workingDir, outputCsv),
     };
   } catch (error) {
+    const workingDir = options.cwd || process.cwd();
+    const outputCsv = options.outputCsv || 'submit_errors.csv';
     return {
       success: false,
       totalFiles: 0,
       errors: 1,
       processed: 0,
       skipped: 0,
-      errorCsvPath: options.outputCsv ?? 'submit_errors.csv',
+      errorCsvPath: path.resolve(workingDir, outputCsv),
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -176,30 +192,37 @@ export async function validate(
 // Hash function wrapper
 export async function hash(options: HashOptions): Promise<HashResult> {
   try {
+    const workingDir = options.cwd || process.cwd();
+    const outputZip = options.outputZip || 'hashed-data.zip';
+    const outputCsv = options.outputCsv || 'hash-results.csv';
     const hashOptions: HashCommandOptions = {
       input: options.input,
-      outputZip: options.outputZip || 'hashed-data.zip',
-      outputCsv: options.outputCsv || 'hash-results.csv',
+      outputZip,
+      outputCsv,
       maxConcurrentTasks: options.maxConcurrentTasks,
       propertyCid: options.propertyCid,
       silent: true, // Enable silent mode for library usage
+      cwd: options.cwd,
     };
 
     await handleHash(hashOptions);
 
     return {
       success: true,
-      outputZipPath: hashOptions.outputZip,
-      outputCsvPath: hashOptions.outputCsv,
+      outputZipPath: path.resolve(workingDir, outputZip),
+      outputCsvPath: path.resolve(workingDir, outputCsv),
       totalFiles: 0, // This would need to be returned from handleHash
       processed: 0,
       errors: 0,
     };
   } catch (error) {
+    const workingDir = options.cwd || process.cwd();
+    const outputZip = options.outputZip || 'hashed-data.zip';
+    const outputCsv = options.outputCsv || 'hash-results.csv';
     return {
       success: false,
-      outputZipPath: options.outputZip || 'hashed-data.zip',
-      outputCsvPath: options.outputCsv || 'hash-results.csv',
+      outputZipPath: path.resolve(workingDir, outputZip),
+      outputCsvPath: path.resolve(workingDir, outputCsv),
       totalFiles: 0,
       processed: 0,
       errors: 1,
@@ -211,11 +234,14 @@ export async function hash(options: HashOptions): Promise<HashResult> {
 // Upload function wrapper
 export async function upload(options: UploadOptions): Promise<UploadResult> {
   try {
+    const workingDir = options.cwd || process.cwd();
+    const outputCsv = options.outputCsv || 'upload-results.csv';
     const uploadOptions: UploadCommandOptions = {
       input: options.input,
       pinataJwt: options.pinataJwt,
-      outputCsv: options.outputCsv || 'upload-results.csv',
+      outputCsv,
       silent: true, // Enable silent mode for library usage
+      cwd: options.cwd,
     };
 
     await handleUpload(uploadOptions);
@@ -223,13 +249,15 @@ export async function upload(options: UploadOptions): Promise<UploadResult> {
     return {
       success: true,
       uploadedDirectories: [], // This would need to be returned from handleUpload
-      outputCsvPath: uploadOptions.outputCsv,
+      outputCsvPath: path.resolve(workingDir, outputCsv),
     };
   } catch (error) {
+    const workingDir = options.cwd || process.cwd();
+    const outputCsv = options.outputCsv || 'upload-results.csv';
     return {
       success: false,
       uploadedDirectories: [],
-      outputCsvPath: options.outputCsv || 'upload-results.csv',
+      outputCsvPath: path.resolve(workingDir, outputCsv),
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -240,6 +268,7 @@ export async function submitToContract(
   options: SubmitToContractOptions
 ): Promise<SubmitToContractResult> {
   try {
+    const workingDir = options.cwd || process.cwd();
     const submitOptions: SubmitToContractCommandOptions = {
       csvFile: options.csvFile,
       rpcUrl:
@@ -260,6 +289,7 @@ export async function submitToContract(
       checkEligibility: options.checkEligibility || false,
       transactionIdsCsv: options.transactionIdsCsv,
       silent: true, // Enable silent mode for library usage
+      cwd: options.cwd,
     };
 
     await handleSubmitToContract(submitOptions);
@@ -271,7 +301,9 @@ export async function submitToContract(
       skippedItems: 0,
       submittedTransactions: 0,
       totalItemsSubmitted: 0,
-      transactionIdsCsvPath: submitOptions.transactionIdsCsv,
+      transactionIdsCsvPath: submitOptions.transactionIdsCsv
+        ? path.resolve(workingDir, submitOptions.transactionIdsCsv)
+        : undefined,
     };
   } catch (error) {
     return {
