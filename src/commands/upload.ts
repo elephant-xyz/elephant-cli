@@ -390,7 +390,7 @@ export async function handleUpload(
       }
 
       await fsPromises.writeFile(
-        options.outputCsv,
+        path.resolve(options.cwd || process.cwd(), options.outputCsv),
         csvData.join('\n'),
         'utf-8'
       );
