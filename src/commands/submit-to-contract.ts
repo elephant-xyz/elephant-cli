@@ -42,6 +42,8 @@ export interface SubmitToContractCommandOptions {
   transactionIdsCsv?: string;
   keystoreJsonPath?: string;
   keystorePassword?: string;
+  silent?: boolean;
+  cwd?: string;
 }
 
 interface CsvRecord {
@@ -278,12 +280,13 @@ export function registerSubmitToContractCommand(program: Command) {
       options.transactionBatchSize =
         parseInt(options.transactionBatchSize, 10) || 200;
 
+      const workingDir = options.cwd || process.cwd();
       const commandOptions: SubmitToContractCommandOptions = {
         ...options,
-        csvFile: path.resolve(csvFile),
+        csvFile: path.resolve(workingDir, csvFile),
         gasPrice,
         unsignedTransactionsJson: options.unsignedTransactionsJson
-          ? path.resolve(options.unsignedTransactionsJson)
+          ? path.resolve(workingDir, options.unsignedTransactionsJson)
           : undefined,
         fromAddress: options.fromAddress,
         domain: options.domain,
@@ -291,12 +294,13 @@ export function registerSubmitToContractCommand(program: Command) {
         oracleKeyId: options.oracleKeyId,
         checkEligibility: options.checkEligibility || false,
         transactionIdsCsv: options.transactionIdsCsv
-          ? path.resolve(options.transactionIdsCsv)
+          ? path.resolve(workingDir, options.transactionIdsCsv)
           : undefined,
         keystoreJsonPath: options.keystoreJson
-          ? path.resolve(options.keystoreJson)
           : undefined,
+          ? path.resolve(options.keystoreJson)
         keystorePassword: options.keystorePassword,
+        cwd: workingDir,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -412,8 +416,12 @@ export async function handleSubmitToContract(
   options: SubmitToContractCommandOptions,
   serviceOverrides: SubmitToContractServiceOverrides = {}
 ) {
-  console.log(chalk.bold.blue('🐘 Elephant Network CLI - Submit to Contract'));
-  console.log();
+  if (!options.silent) {
+    console.log(
+      chalk.bold.blue('🐘 Elephant Network CLI - Submit to Contract')
+    );
+    console.log();
+  }
 
   const isApiMode = !!(options.domain && options.apiKey && options.oracleKeyId);
 
@@ -490,9 +498,12 @@ export async function handleSubmitToContract(
   logger.technical(`Transaction batch size: ${options.transactionBatchSize}`);
   logger.technical(`Gas price: ${options.gasPrice}`);
 
-  const config = createSubmitConfig({
-    transactionBatchSize: options.transactionBatchSize,
-  });
+  const config = createSubmitConfig(
+    {
+      transactionBatchSize: options.transactionBatchSize,
+    },
+    options.cwd
+  );
 
   // Create mock services when eligibility checks are disabled, in dry-run mode, or API mode to avoid blockchain calls
   const chainStateService =
@@ -564,11 +575,12 @@ export async function handleSubmitToContract(
     serviceOverrides.transactionStatusService ??
     (isApiMode ? new TransactionStatusService(options.rpcUrl) : undefined);
 
+  const workingDir = options.cwd || process.cwd();
   const transactionStatusReporter =
     serviceOverrides.transactionStatusReporter ??
     (isApiMode
       ? new TransactionStatusReporterService(
-          path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')
+          path.resolve(workingDir, 'transaction-status.csv')
         )
       : undefined);
   // Use fromAddress if provided and in unsigned transaction mode, otherwise derive from private key
@@ -620,7 +632,7 @@ export async function handleSubmitToContract(
     if (transactionStatusReporter) {
       await transactionStatusReporter.initialize();
       logger.technical(
-        `Transaction status will be saved to: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
+        `Transaction status will be saved to: ${path.resolve(workingDir, 'transaction-status.csv')}`
       );
     }
 
@@ -649,25 +661,27 @@ export async function handleSubmitToContract(
       const duration = endTime - startTime;
       const seconds = (duration / 1000).toFixed(1);
 
-      console.log(chalk.green('\n✅ Contract submission process finished\n'));
-      console.log(chalk.bold('📊 Final Report:'));
-      console.log(`  Total records in CSV:   0`);
-      console.log(`  Items eligible:         0`);
-      console.log(`  Items skipped:          0`);
+      if (!options.silent) {
+        console.log(chalk.green('\n✅ Contract submission process finished\n'));
+        console.log(chalk.bold('📊 Final Report:'));
+        console.log(`  Total records in CSV:   0`);
+        console.log(`  Items eligible:         0`);
+        console.log(`  Items skipped:          0`);
 
-      if (!options.dryRun) {
-        console.log(`  Transactions submitted: 0`);
-        console.log(`  Total items submitted:  0`);
-      } else {
-        console.log(
-          `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
-        );
-        console.log(`  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`);
+        if (!options.dryRun) {
+          console.log(`  Transactions submitted: 0`);
+          console.log(`  Total items submitted:  0`);
+        } else {
+          console.log(
+            `  ${chalk.yellow('[DRY RUN]')} Would submit: 0 transactions`
+          );
+          console.log(`  ${chalk.yellow('[DRY RUN]')} Would process: 0 items`);
+        }
+
+        console.log(`  Duration:               ${seconds}s`);
+        console.log(`\n  Error report:   ${config.errorCsvPath}`);
+        console.log(`  Warning report: ${config.warningCsvPath}`);
       }
-
-      console.log(`  Duration:               ${seconds}s`);
-      console.log(`\n  Error report:   ${config.errorCsvPath}`);
-      console.log(`  Warning report: ${config.warningCsvPath}`);
       return;
     }
 
@@ -981,9 +995,8 @@ export async function handleSubmitToContract(
           .toISOString()
           .slice(0, 19)
           .replace(/:/g, '-');
-        const reportsDir = path.dirname(config.errorCsvPath);
-        transactionIdsCsvPath = path.join(
-          reportsDir,
+        transactionIdsCsvPath = path.resolve(
+          workingDir,
           `transaction-ids-${timestamp}.csv`
         );
       } else {
@@ -1019,51 +1032,57 @@ export async function handleSubmitToContract(
     }
     const finalMetrics = progressTracker.getMetrics();
 
-    console.log(chalk.green('\n✅ Contract submission process finished\n'));
-    console.log(chalk.bold('📊 Final Report:'));
-    console.log(`  Total records in CSV:   ${records.length}`);
-    console.log(`  Items eligible:         ${dataItemsForTransaction.length}`);
-    console.log(`  Items skipped:          ${skippedItems.length}`);
+    if (!options.silent) {
+      console.log(chalk.green('\n✅ Contract submission process finished\n'));
+      console.log(chalk.bold('📊 Final Report:'));
+      console.log(`  Total records in CSV:   ${records.length}`);
+      console.log(
+        `  Items eligible:         ${dataItemsForTransaction.length}`
+      );
+      console.log(`  Items skipped:          ${skippedItems.length}`);
 
-    if (!options.dryRun) {
-      console.log(`  Transactions submitted: ${submittedTransactionCount}`);
-      console.log(`  Total items submitted:  ${totalItemsSubmitted}`);
-    } else {
-      console.log(
-        `  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`
-      );
-      console.log(
-        `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
-      );
-      if (options.unsignedTransactionsJson) {
+      if (!options.dryRun) {
+        console.log(`  Transactions submitted: ${submittedTransactionCount}`);
+        console.log(`  Total items submitted:  ${totalItemsSubmitted}`);
+      } else {
         console.log(
-          `  Unsigned transactions:  ${options.unsignedTransactionsJson}`
+          `  [DRY RUN] Would submit: ${dataItemsForTransaction.length} items`
+        );
+        console.log(
+          `  [DRY RUN] In batches:   ${Math.ceil(dataItemsForTransaction.length / (options.transactionBatchSize || 200))}`
+        );
+        if (options.unsignedTransactionsJson) {
+          console.log(
+            `  Unsigned transactions:  ${options.unsignedTransactionsJson}`
+          );
+        }
+      }
+
+      const elapsed = Date.now() - finalMetrics.startTime;
+      const duration = Math.floor(elapsed / 1000);
+      console.log(`  Duration:               ${duration}s`);
+      console.log(`\n  Error report:   ${config.errorCsvPath}`);
+      console.log(`  Warning report: ${config.warningCsvPath}`);
+      if (isApiMode) {
+        console.log(
+          `  Transaction status: ${path.resolve(workingDir, 'transaction-status.csv')}`
         );
       }
-    }
-
-    const elapsed = Date.now() - finalMetrics.startTime;
-    const seconds = Math.floor(elapsed / 1000);
-    console.log(`  Duration:               ${seconds}s`);
-    console.log(`\n  Error report:   ${config.errorCsvPath}`);
-    console.log(`  Warning report: ${config.warningCsvPath}`);
-    if (isApiMode) {
-      console.log(
-        `  Transaction status: ${path.join(path.dirname(config.errorCsvPath), 'transaction-status.csv')}`
-      );
-    }
-    if (transactionIdsCsvPath) {
-      console.log(`  Transaction IDs: ${transactionIdsCsvPath}`);
+      if (transactionIdsCsvPath) {
+        console.log(`  Transaction IDs: ${transactionIdsCsvPath}`);
+      }
     }
   } catch (error) {
     logger.error(
       `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
     );
-    console.error(
-      chalk.red(
-        `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
-      )
-    );
+    if (!options.silent) {
+      console.error(
+        chalk.red(
+          `An unhandled error occurred: ${error instanceof Error ? error.message : String(error)}`
+        )
+      );
+    }
     if (progressTracker) {
       progressTracker.stop();
     }
@@ -1071,6 +1090,10 @@ export async function handleSubmitToContract(
     if (transactionStatusReporter) {
       await transactionStatusReporter.finalize();
     }
-    process.exit(1);
+    if (options.silent) {
+      throw error;
+    } else {
+      process.exit(1);
+    }
   }
 }
