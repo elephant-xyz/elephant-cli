@@ -25,6 +25,8 @@ describe('Split Commands Integration Tests', () => {
   const outputDir = path.join(__dirname, 'test-output');
   const csvOutputPath = path.join(outputDir, 'upload-results.csv');
   const cliPath = path.join(__dirname, 'bin/elephant-cli');
+  const testKeystorePath = path.join(__dirname, 'tests/test-keystore.json');
+  const testKeystorePassword = 'testPassword123';
 
   beforeAll(async () => {
     // Create test directories
@@ -150,11 +152,10 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
     });
 
     it('should process CSV and prepare for submission in dry-run mode', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
-
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${path.join(outputDir, 'test-input.csv')} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--dry-run ` +
           `--rpc-url ${RPC_URL}`
       );
@@ -167,13 +168,13 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
     }, 120000);
 
     it('should handle missing CSV file', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
       const missingCsv = path.join(outputDir, 'missing.csv');
 
       try {
         await execAsync(
           `node ${cliPath} submit-to-contract ${missingCsv} ` +
-            `--private-key ${privateKey} ` +
+            `--keystore-json ${testKeystorePath} ` +
+            `--keystore-password "${testKeystorePassword}" ` +
             `--dry-run ` +
             `--rpc-url ${RPC_URL}`
         );
@@ -187,7 +188,6 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
     });
 
     it('should handle empty CSV file', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
       const emptyCsvPath = path.join(outputDir, 'empty.csv');
 
       // Create empty CSV with only headers
@@ -198,7 +198,8 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${emptyCsvPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--dry-run ` +
           `--rpc-url ${RPC_URL}`
       );
@@ -211,7 +212,6 @@ property2,dataGroup2,QmTest2,"/test/property2/dataGroup2.json",2024-01-01T00:01:
     });
 
     it('should generate unsigned transactions JSON in dry-run mode', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
       const testCsvPath = path.join(outputDir, 'test-submit.csv');
       const unsignedTxJsonPath = path.join(
         outputDir,
@@ -235,9 +235,9 @@ ${propertyCid2},${dataGroupCid2},${dataCid2},"/test/property2/data2.json",2024-0
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${testCsvPath} ` +
-          `--private-key ${privateKey} ` +
           `--dry-run ` +
           `--unsigned-transactions-json ${unsignedTxJsonPath} ` +
+          `--from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0 ` +
           `--rpc-url ${RPC_URL}`
       );
 
@@ -280,7 +280,6 @@ ${propertyCid2},${dataGroupCid2},${dataCid2},"/test/property2/data2.json",2024-0
     }, 30000); // 30 second timeout
 
     it('should fail when unsigned transactions JSON option is used without dry-run', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
       const testCsvPath = path.join(outputDir, 'test-submit.csv');
       const unsignedTxJsonPath = path.join(
         outputDir,
@@ -300,7 +299,8 @@ ${propertyCid},${dataGroupCid},${dataCid},"/test/property1/data1.json",2024-01-0
       try {
         await execAsync(
           `node ${cliPath} submit-to-contract ${testCsvPath} ` +
-            `--private-key ${privateKey} ` +
+            `--keystore-json ${testKeystorePath} ` +
+            `--keystore-password "${testKeystorePassword}" ` +
             `--unsigned-transactions-json ${unsignedTxJsonPath} ` +
             `--rpc-url ${RPC_URL}`
           // Note: no --dry-run flag
@@ -319,7 +319,6 @@ ${propertyCid},${dataGroupCid},${dataCid},"/test/property1/data1.json",2024-01-0
 
   describe('End-to-end workflow', () => {
     it('should complete full workflow: validate-and-upload then submit-to-contract', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
       const pinataJwt = 'dummy-jwt';
       const workflowCsvPath = path.join(outputDir, 'workflow-results.csv');
 
@@ -343,7 +342,8 @@ ${propertyCid},${dataGroupCid},${dataCid},"/test/property1/data1.json",2024-01-0
       // Step 2: Run submit-to-contract with the generated CSV
       const { stdout: stdout2 } = await execAsync(
         `node ${cliPath} submit-to-contract ${workflowCsvPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--dry-run ` +
           `--rpc-url ${RPC_URL}`
       );

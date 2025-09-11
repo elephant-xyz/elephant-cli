@@ -85,7 +85,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
@@ -101,7 +100,10 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
         keystoreJsonPath: mockKeystoreJsonPath,
         password: mockPassword,
       });
-      expect(options.privateKey).toBe(mockPrivateKey);
+      // Wallet loading is now internal, we just verify it was called
+      expect(
+        EncryptedWalletService.loadWalletFromEncryptedJson
+      ).toHaveBeenCalled();
     });
 
     it('should use keystore password from environment variable when not provided as option', async () => {
@@ -116,7 +118,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
@@ -155,7 +156,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
@@ -180,7 +180,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
@@ -203,7 +202,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: true,
@@ -229,7 +227,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: true,
@@ -248,20 +245,33 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
     });
   });
 
-  describe('Priority of private key sources', () => {
-    it('should prefer keystore over environment variable when both are available', async () => {
+  describe('Authentication modes', () => {
+    it('should require keystore when not using API mode or unsigned transactions', async () => {
+      const options = {
+        rpcUrl: 'http://localhost:8545',
+        contractAddress: '0x123',
+        csvFile: '/path/to/data.csv',
+        gasPrice: 30,
+        dryRun: false,
+        // No keystore provided
+      };
+
+      await expect(
+        handleSubmitToContract(options, mockServiceOverrides)
+      ).rejects.toThrow(
+        'Authentication is required when not using --from-address with unsigned transactions or API mode'
+      );
+    });
+
+    it('should work with keystore authentication', async () => {
       const mockWallet = new Wallet(mockPrivateKey);
       vi.mocked(
         EncryptedWalletService.loadWalletFromEncryptedJson
       ).mockResolvedValue(mockWallet);
 
-      // Set environment variable (should be ignored)
-      process.env.ELEPHANT_PRIVATE_KEY = '0xdifferentprivatekey';
-
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: '',
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
@@ -274,56 +284,32 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       expect(
         EncryptedWalletService.loadWalletFromEncryptedJson
       ).toHaveBeenCalled();
-      expect(options.privateKey).toBe(mockPrivateKey);
-
-      // Clean up
-      delete process.env.ELEPHANT_PRIVATE_KEY;
     });
 
-    it('should use private key from options when keystore is not provided', async () => {
-      const directPrivateKey =
-        '0xac0974bec39a17e36ba4a6b4d1977b37e8427ff0efc7717320f0a85129670208';
-
+    it('should work with API mode without keystore', async () => {
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
-        privateKey: directPrivateKey,
         csvFile: '/path/to/data.csv',
         gasPrice: 30,
         dryRun: false,
+        domain: 'api.example.com',
+        apiKey: 'test-api-key',
+        oracleKeyId: 'test-oracle-key',
       };
 
-      await handleSubmitToContract(options, mockServiceOverrides);
+      await handleSubmitToContract(options, {
+        ...mockServiceOverrides,
+        apiSubmissionService: {
+          submitTransaction: vi.fn().mockResolvedValue({
+            transaction_hash: '0xabc',
+          }),
+        },
+      });
 
       expect(
         EncryptedWalletService.loadWalletFromEncryptedJson
       ).not.toHaveBeenCalled();
-      expect(options.privateKey).toBe(directPrivateKey);
-    });
-
-    it('should use environment variable when neither keystore nor direct private key is provided', async () => {
-      const envPrivateKey =
-        '0xac0974bec39a17e36ba4a6b4d1977b37e8427ff0efc7717320f0a85129670209';
-      process.env.ELEPHANT_PRIVATE_KEY = envPrivateKey;
-
-      const options = {
-        rpcUrl: 'http://localhost:8545',
-        contractAddress: '0x123',
-        privateKey: envPrivateKey, // This would be set in the command handler
-        csvFile: '/path/to/data.csv',
-        gasPrice: 30,
-        dryRun: false,
-      };
-
-      await handleSubmitToContract(options, mockServiceOverrides);
-
-      expect(
-        EncryptedWalletService.loadWalletFromEncryptedJson
-      ).not.toHaveBeenCalled();
-      expect(options.privateKey).toBe(envPrivateKey);
-
-      // Clean up
-      delete process.env.ELEPHANT_PRIVATE_KEY;
     });
   });
 });

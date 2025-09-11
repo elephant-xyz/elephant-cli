@@ -9,11 +9,13 @@ import { TransactionBatcherService } from '../../../src/services/transaction-bat
 import { CsvReporterService } from '../../../src/services/csv-reporter.service.js';
 import { UnsignedTransactionJsonService } from '../../../src/services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
+import { EncryptedWalletService } from '../../../src/services/encrypted-wallet.service.js';
 
 vi.mock('fs', () => ({
   ...vi.importActual('fs'),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  existsSync: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock('../../../src/services/transaction-batcher.service.js');
@@ -26,16 +28,20 @@ vi.mock('ethers', async () => {
     ...actual,
     Wallet: vi.fn().mockImplementation((privateKey: string) => ({
       address: '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0',
+      privateKey:
+        '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     })),
   };
 });
+
+vi.mock('../../../src/services/encrypted-wallet.service.js');
 
 describe('SubmitToContractCommand', () => {
   const mockOptions: SubmitToContractCommandOptions = {
     rpcUrl: 'https://test-rpc.com',
     contractAddress: '0x1234567890123456789012345678901234567890',
-    privateKey:
-      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    keystoreJsonPath: '/path/to/keystore.json',
+    keystorePassword: 'testPassword123',
     csvFile: 'test-input.csv',
     transactionBatchSize: 2,
     gasPrice: 30,
@@ -61,7 +67,22 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       throw new Error(`process.exit(${code})`);
     });
 
-    vi.mocked(fs.readFileSync).mockReturnValue(mockCsvContent);
+    // Mock EncryptedWalletService
+    vi.mocked(EncryptedWalletService.loadWalletFromEncryptedJson).mockResolvedValue({
+      address: '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0',
+      privateKey: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    } as any);
+
+    vi.mocked(fs.readFileSync).mockImplementation((path: string) => {
+      if (path.includes('.csv')) {
+        return mockCsvContent;
+      }
+      // Return valid keystore JSON for keystore files
+      return JSON.stringify({
+        address: '742d35cc6634c0532925a3b844bc9e7595f89ce0',
+        crypto: {},
+      });
+    });
 
     vi.mocked(TransactionBatcherService).mockImplementation(() => ({
       submitAll: vi.fn().mockImplementation(async function* () {
@@ -127,7 +148,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     expect(TransactionBatcherService).toHaveBeenCalledWith(
       optionsWithGasPrice.rpcUrl,
       optionsWithGasPrice.contractAddress,
-      optionsWithGasPrice.privateKey,
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From the mocked wallet
       expect.any(Object),
       50
     );
@@ -145,7 +166,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     expect(TransactionBatcherService).toHaveBeenCalledWith(
       optionsWithAutoGas.rpcUrl,
       optionsWithAutoGas.contractAddress,
-      optionsWithAutoGas.privateKey,
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From the mocked wallet
       expect.any(Object),
       'auto'
     );
@@ -423,7 +444,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         dryRun: true,
         unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
         fromAddress,
-        privateKey: undefined, // No private key provided
+        keystoreJsonPath: undefined, // No keystore provided
+        keystorePassword: undefined,
       };
 
       const serviceOverrides = {
@@ -464,9 +486,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       await handleSubmitToContract(dryRunOptions, serviceOverrides);
 
-      // Verify that Wallet constructor was called with the private key
-      const { Wallet } = await import('ethers');
-      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+      // Verify that wallet was loaded from keystore
+      expect(EncryptedWalletService.loadWalletFromEncryptedJson).toHaveBeenCalled();
     });
 
     it('should allow missing private key when using from-address in unsigned transaction mode', async () => {
@@ -476,7 +497,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         dryRun: true,
         unsignedTransactionsJson: '/path/to/unsigned-transactions.json',
         fromAddress,
-        privateKey: undefined, // No private key provided
+        keystoreJsonPath: undefined, // No keystore provided
+        keystorePassword: undefined,
       };
 
       const serviceOverrides = {
@@ -509,12 +531,12 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       await handleSubmitToContract(normalOptions, serviceOverrides);
 
-      // Should use address from private key, not from-address
-      // This is verified by the fact that TransactionBatcherService is called with private key
+      // Should use address from wallet, not from-address
+      // This is verified by the fact that TransactionBatcherService is called with wallet's private key
       expect(TransactionBatcherService).toHaveBeenCalledWith(
         normalOptions.rpcUrl,
         normalOptions.contractAddress,
-        normalOptions.privateKey,
+        '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From mocked wallet
         expect.any(Object),
         normalOptions.gasPrice
       );
@@ -537,10 +559,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       await handleSubmitToContract(dryRunOptions, serviceOverrides);
 
-      // Should use address from private key, not from-address
-      // Verified by checking that Wallet constructor was called with private key
-      const { Wallet } = await import('ethers');
-      expect(Wallet).toHaveBeenCalledWith(mockOptions.privateKey);
+      // Should use address from wallet, not from-address
+      // Verified by checking that EncryptedWalletService was called
+      expect(EncryptedWalletService.loadWalletFromEncryptedJson).toHaveBeenCalled();
     });
   });
 

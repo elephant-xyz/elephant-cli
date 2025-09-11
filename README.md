@@ -219,15 +219,14 @@ You'll need:
 - **Private Key**: Your oracle wallet private key (for Polygon network)
 - **Pinata JWT**: Token for IPFS uploads (get from [Pinata](https://pinata.cloud))
 
-Set up environment variables (recommended):
+For Pinata JWT, set up environment variable:
 
 ```bash
 # Create a .env file in your project directory
-echo "ELEPHANT_PRIVATE_KEY=your_private_key_here" >> .env
-# Or use encrypted keystore instead
-echo "ELEPHANT_KEYSTORE_PASSWORD=your_keystore_password" >> .env
 echo "PINATA_JWT=your_pinata_jwt_here" >> .env
 ```
+
+For wallet authentication, use an encrypted keystore file (EIP-2335 standard) for security.
 
 ### Step 4: Validate and Upload (Dry Run First)
 
@@ -362,21 +361,9 @@ Example output:
 
 ### Authentication Methods
 
-The CLI supports multiple methods for providing your private key:
+#### Encrypted JSON Keystore
 
-#### Option 1: Direct Private Key (Simple)
-```bash
-# Via command line option
-elephant-cli submit-to-contract results.csv --private-key "0xYourPrivateKey"
-
-# Via environment variable
-export ELEPHANT_PRIVATE_KEY="0xYourPrivateKey"
-elephant-cli submit-to-contract results.csv
-```
-
-#### Option 2: Encrypted JSON Keystore (Secure)
-
-For enhanced security, you can use an encrypted JSON keystore file. While the format is compatible with Ethereum wallets, these wallets will be used on the Polygon network:
+Use an encrypted JSON keystore file for wallet authentication. This format follows the [EIP-2335](https://eips.ethereum.org/EIPS/eip-2335) standard and works with Polygon network:
 
 ```bash
 # Using keystore file with password
@@ -392,79 +379,33 @@ elephant-cli submit-to-contract results.csv \
 
 **Creating an Encrypted Keystore:**
 
-The CLI includes a utility script to create encrypted wallets:
+Use the built-in CLI command to create an encrypted keystore:
 
 ```bash
-# Run the interactive wallet creation script
-node scripts/create-encrypted-wallet.js
+# Create encrypted keystore from private key
+elephant-cli create-keystore \
+  --private-key "0xYourPrivateKey" \
+  --password "YourStrongPassword" \
+  --output keystore.json
+
+# Force overwrite if file exists
+elephant-cli create-keystore \
+  --private-key "0xYourPrivateKey" \
+  --password "YourStrongPassword" \
+  --output keystore.json \
+  --force
 ```
 
-This script allows you to:
-- Create a new random wallet
-- Encrypt an existing private key
-- Set a strong password for encryption
-- Save the encrypted wallet to a JSON file
+**Alternative Methods:**
+- Most EVM-compatible wallets (MetaMask, etc.) can export accounts as encrypted JSON files
+- These files follow the Web3 Secret Storage Definition and are compatible with this CLI
 
-Alternatively, you can create encrypted keystores programmatically:
-
-1. **Using ethers.js (Node.js):**
-```javascript
-const { Wallet } = require('ethers');
-const fs = require('fs');
-
-const wallet = new Wallet('0xYourPrivateKey');
-const password = 'YourStrongPassword';
-
-// Encrypt the wallet (this may take a few seconds)
-wallet.encrypt(password).then((encryptedJson) => {
-  fs.writeFileSync('keystore.json', encryptedJson);
-  console.log('Keystore saved to keystore.json');
-});
-```
-
-2. **Using MetaMask or other wallets:**
-   - Most EVM-compatible wallets (including those used for Polygon) allow you to export your account as an encrypted JSON file
-   - This file follows the Web3 Secret Storage Definition (Keystore V3 format)
-   - The same wallet format works across all EVM chains including Polygon
-
-**Keystore Format:**
-
-The encrypted keystore uses the following encryption parameters by default:
-- **Key Derivation**: scrypt
-- **N (CPU/memory cost)**: 131072
-- **r (block size)**: 8  
-- **p (parallelization)**: 1
-- **Cipher**: AES-128-CTR
-
-The keystore file is a JSON file that looks like:
-```json
-{
-  "version": 3,
-  "id": "...",
-  "address": "...",
-  "crypto": {
-    "ciphertext": "...",
-    "cipherparams": { "iv": "..." },
-    "cipher": "aes-128-ctr",
-    "kdf": "scrypt",
-    "kdfparams": {
-      "dklen": 32,
-      "salt": "...",
-      "n": 131072,
-      "r": 8,
-      "p": 1
-    },
-    "mac": "..."
-  }
-}
-```
-
-**Security Notes:**
-- The keystore file contains your encrypted private key
-- Never share your keystore file or password
-- Use a strong, unique password for encryption
+**Security Best Practices:**
+- Use a strong, unique password (minimum 8 characters)
+- Keep your keystore file secure and never share it
+- Never share your password
 - Store the keystore file and password separately
-- The CLI will decrypt the keystore in memory only when needed
+- Consider using different keystores for different purposes
 
 #### Option 3: API Mode (Institutional)
 
@@ -659,7 +600,9 @@ elephant-cli hash property-data.zip
 elephant-cli upload hashed-data.zip
 
 # Step 3: Submit to blockchain
-elephant-cli submit-to-contract upload-results.csv --private-key "your-key"
+elephant-cli submit-to-contract upload-results.csv \
+  --keystore-json ./keystore.json \
+  --keystore-password "YourPassword"
 ```
 
 ### Data Fetching
@@ -1072,8 +1015,8 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 ### Submit to Contract Options
 
 **Authentication:**
-- `--private-key <key>` - Wallet private key (or use ELEPHANT_PRIVATE_KEY env var)
-- `--keystore-json <path>` - Path to encrypted JSON keystore file
+- `--private-key <key>` - Wallet private key
+- `--keystore-json <path>` - Path to encrypted JSON keystore file  
 - `--keystore-password <password>` - Password for keystore (or use ELEPHANT_KEYSTORE_PASSWORD env var)
 
 **Network Configuration:**
@@ -1135,6 +1078,7 @@ elephant-cli --help
 elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
+elephant-cli create-keystore --help
 elephant-cli fetch-data --help
 elephant-cli transform --help
 elephant-cli hash --help
