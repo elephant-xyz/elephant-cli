@@ -37,7 +37,7 @@ function askPassword(prompt) {
         stdin.setRawMode(false);
         stdin.removeListener('data', onData);
         stdout.write('\n');
-        // Don't pause stdin here - let readline handle it
+        // Don't pause stdin here; readline will handle stream cleanup when rl.close() is called later
         resolve(password);
       } else if (key === '\u0003') {
         // Handle Ctrl+C
