@@ -1,3 +1,10 @@
+## [1.34.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.0...v1.34.1) (2025-09-11)
+
+
+### Bug Fixes
+
+* export preapare and PreapreOptions ([#139](https://github.com/elephant-xyz/elephant-cli/issues/139)) ([6df68cb](https://github.com/elephant-xyz/elephant-cli/commit/6df68cb9b64cdcffc87d015b655aaf2859a19cf1))
+
 # [1.34.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.33.0...v1.34.0) (2025-09-10)
 
 
