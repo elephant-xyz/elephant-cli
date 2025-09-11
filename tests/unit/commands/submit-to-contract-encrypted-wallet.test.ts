@@ -131,10 +131,20 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       delete process.env.ELEPHANT_KEYSTORE_PASSWORD;
     });
 
-    it('should throw error when keystore decryption fails', async () => {
+    it('should exit with error when keystore decryption fails', async () => {
+      // Mock process.exit to capture the call
+      const exitMock = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('process.exit called');
+      });
+
+      // Mock console.error to capture the error message
+      const consoleErrorMock = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
       vi.mocked(
         EncryptedWalletService.loadWalletFromEncryptedJson
-      ).mockRejectedValue(new Error('Invalid password'));
+      ).mockRejectedValue(new Error('incorrect password'));
 
       const options = {
         rpcUrl: 'http://localhost:8545',
@@ -149,9 +159,15 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
 
       await expect(
         handleSubmitToContract(options, mockServiceOverrides)
-      ).rejects.toThrow(
-        'Failed to load wallet from keystore: Invalid password'
+      ).rejects.toThrow('process.exit called');
+
+      expect(exitMock).toHaveBeenCalledWith(1);
+      expect(consoleErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('Incorrect password')
       );
+
+      exitMock.mockRestore();
+      consoleErrorMock.mockRestore();
     });
 
     it('should not load keystore in API mode', async () => {

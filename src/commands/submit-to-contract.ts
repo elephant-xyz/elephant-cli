@@ -460,10 +460,27 @@ export async function handleSubmitToContract(
       options.privateKey = wallet.privateKey;
       logger.technical(`Loaded wallet from keystore: ${wallet.address}`);
     } catch (error) {
-      const errorMsg = `Failed to load wallet from keystore: ${error instanceof Error ? error.message : String(error)}`;
+      let errorMsg = 'Failed to load wallet from keystore: ';
+
+      // Check for specific error types and provide clearer messages
+      const errorString =
+        error instanceof Error ? error.message : String(error);
+      if (errorString.includes('incorrect password')) {
+        errorMsg +=
+          'Incorrect password. Please check your keystore password and try again.';
+      } else if (errorString.includes('Invalid keystore JSON format')) {
+        errorMsg +=
+          'Invalid keystore file format. Please ensure the file is a valid JSON keystore.';
+      } else if (errorString.includes('Failed to read keystore JSON file')) {
+        errorMsg +=
+          'Could not read the keystore file. Please check the file path and permissions.';
+      } else {
+        errorMsg += errorString;
+      }
+
       logger.error(errorMsg);
-      console.error(errorMsg);
-      throw new Error(errorMsg);
+      console.error(`\n❌ ${errorMsg}\n`);
+      process.exit(1);
     }
   }
 
