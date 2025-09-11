@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handleSubmitToContract } from '../../../src/commands/submit-to-contract.js';
 import { EncryptedWalletService } from '../../../src/services/encrypted-wallet.service.js';
 import { Wallet } from 'ethers';
@@ -27,7 +27,7 @@ describe('Submit to Contract - Encrypted Wallet Support', () => {
 prop1,group1,data1,/path/file1.json,2024-01-01T00:00:00Z
 prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
 
-  const mockServiceOverrides = {
+  const mockServiceOverrides: any = {
     chainStateService: {
       prepopulateConsensusCache: vi.fn(),
       getUserSubmissions: vi.fn().mockResolvedValue(new Set()),
@@ -57,6 +57,12 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       getMetrics: vi.fn().mockReturnValue({
         startTime: Date.now(),
       }),
+    },
+    transactionStatusReporter: {
+      initialize: vi.fn(),
+      recordTransactionSubmitted: vi.fn(),
+      updateTransactionStatus: vi.fn(),
+      finalize: vi.fn(),
     },
   };
 
@@ -171,11 +177,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
     });
 
     it('should not load keystore in API mode', async () => {
-      // Mock process.exit just for this test
-      const exitMock = vi.spyOn(process, 'exit').mockImplementation(() => {
-        return undefined as never;
-      });
-
       const options = {
         rpcUrl: 'http://localhost:8545',
         contractAddress: '0x123',
@@ -188,6 +189,7 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
         oracleKeyId: 'oracle-123',
         keystoreJsonPath: mockKeystoreJsonPath,
         keystorePassword: mockPassword,
+        silent: true, // Add silent mode to avoid process.exit in error handler
       };
 
       await handleSubmitToContract(options, mockServiceOverrides);
@@ -195,9 +197,6 @@ prop2,group2,data2,/path/file2.json,2024-01-01T00:00:00Z`;
       expect(
         EncryptedWalletService.loadWalletFromEncryptedJson
       ).not.toHaveBeenCalled();
-
-      // Restore the mock
-      exitMock.mockRestore();
     });
 
     it('should not load keystore when using unsigned transactions with from-address', async () => {
