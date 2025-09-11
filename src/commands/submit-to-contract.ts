@@ -297,8 +297,8 @@ export function registerSubmitToContractCommand(program: Command) {
           ? path.resolve(workingDir, options.transactionIdsCsv)
           : undefined,
         keystoreJsonPath: options.keystoreJson
-          : undefined,
           ? path.resolve(options.keystoreJson)
+          : undefined,
         keystorePassword: options.keystorePassword,
         cwd: workingDir,
       };
