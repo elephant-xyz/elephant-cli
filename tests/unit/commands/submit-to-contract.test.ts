@@ -68,9 +68,12 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     });
 
     // Mock EncryptedWalletService
-    vi.mocked(EncryptedWalletService.loadWalletFromEncryptedJson).mockResolvedValue({
+    vi.mocked(
+      EncryptedWalletService.loadWalletFromEncryptedJson
+    ).mockResolvedValue({
       address: '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0',
-      privateKey: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+      privateKey:
+        '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     } as any);
 
     vi.mocked(fs.readFileSync).mockImplementation((path: string) => {
@@ -487,7 +490,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       await handleSubmitToContract(dryRunOptions, serviceOverrides);
 
       // Verify that wallet was loaded from keystore
-      expect(EncryptedWalletService.loadWalletFromEncryptedJson).toHaveBeenCalled();
+      expect(
+        EncryptedWalletService.loadWalletFromEncryptedJson
+      ).toHaveBeenCalled();
     });
 
     it('should allow missing private key when using from-address in unsigned transaction mode', async () => {
@@ -561,7 +566,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       // Should use address from wallet, not from-address
       // Verified by checking that EncryptedWalletService was called
-      expect(EncryptedWalletService.loadWalletFromEncryptedJson).toHaveBeenCalled();
+      expect(
+        EncryptedWalletService.loadWalletFromEncryptedJson
+      ).toHaveBeenCalled();
     });
   });
 
