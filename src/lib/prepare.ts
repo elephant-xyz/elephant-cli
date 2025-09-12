@@ -199,17 +199,9 @@ async function withBrowser(
       await page.setRequestInterception(true);
       page.on('request', (req) => {
         const type = req.resourceType();
-        if (
-          type === 'image' ||
-          type === 'stylesheet' ||
-          type === 'font' ||
-          type === 'media' ||
-          type === 'websocket'
-        ) {
-          req.abort();
-        } else {
-          req.continue();
-        }
+        const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+        if (blocked.includes(type)) req.abort();
+        else req.continue();
       });
     }
     const startMs = Date.now();

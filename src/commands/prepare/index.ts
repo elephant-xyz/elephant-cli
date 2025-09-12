@@ -9,6 +9,7 @@ export interface PrepareCommandOptions {
   browser?: boolean;
   /** When false, skip clicking any Continue button in browser mode */
   continue?: boolean;
+  // fast kept for backward-compat (not exposed directly); use --no-fast to disable
   fast?: boolean;
   useBrowser?: boolean;
 }
@@ -22,7 +23,7 @@ export function registerPrepareCommand(program: Command) {
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
     .option('--use-browser', 'Force headless browser functionality')
     .option('--no-continue', 'Do not click any Continue modal in browser mode')
-    .option('--fast', 'Faster browser mode: lighter waits and blocked assets')
+    .option('--no-fast', 'Disable fast browser mode (lighter waits, blocked assets)')
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
     });
