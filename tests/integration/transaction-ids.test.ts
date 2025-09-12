@@ -35,11 +35,13 @@ bafkreiab5j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiab5j3s4xhz2ej
 
   describe('submit-to-contract command with transaction IDs', () => {
     it('should generate transaction IDs CSV in dry-run mode', async () => {
-      const privateKey = '0x' + '1'.repeat(64); // Dummy private key
+      const testKeystorePath = path.join(process.cwd(), 'tests/test-keystore.json');
+      const testKeystorePassword = 'testPassword123'; // Dummy private key
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${csvInputPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--transaction-batch-size 2 ` +
           `--transaction-ids-csv ${transactionIdsCsvPath} ` +
           `--dry-run`
@@ -59,7 +61,8 @@ bafkreiab5j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiab5j3s4xhz2ej
     });
 
     it('should display transaction IDs when less than 5 transactions in dry-run', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
+      const testKeystorePath = path.join(process.cwd(), 'tests/test-keystore.json');
+      const testKeystorePassword = 'testPassword123';
 
       // Create a small CSV with only 3 items (will result in 2 transactions with batch size 2)
       const smallCsvPath = path.join(outputDir, 'small-input.csv');
@@ -72,7 +75,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       const { stdout } = await execAsync(
         `node ${cliPath} submit-to-contract ${smallCsvPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--transaction-batch-size 2 ` +
           `--dry-run`
       );
@@ -83,11 +87,13 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     });
 
     it('should validate transaction IDs CSV path option', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
+      const testKeystorePath = path.join(process.cwd(), 'tests/test-keystore.json');
+      const testKeystorePassword = 'testPassword123';
 
       const { stdout, stderr } = await execAsync(
         `node ${cliPath} submit-to-contract ${csvInputPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--transaction-ids-csv ${transactionIdsCsvPath} ` +
           `--dry-run`
       );
@@ -112,7 +118,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
     });
 
     it('should show correct progress tracking for transactions', async () => {
-      const privateKey = '0x' + '1'.repeat(64);
+      const testKeystorePath = path.join(process.cwd(), 'tests/test-keystore.json');
+      const testKeystorePassword = 'testPassword123';
 
       // Create CSV with 10 items
       const largeCsvPath = path.join(outputDir, 'large-input.csv');
@@ -125,7 +132,8 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
 
       const { stdout } = await execAsync(
         `node ${cliPath} submit-to-contract ${largeCsvPath} ` +
-          `--private-key ${privateKey} ` +
+          `--keystore-json ${testKeystorePath} ` +
+          `--keystore-password "${testKeystorePassword}" ` +
           `--transaction-batch-size 3 ` +
           `--dry-run`
       );

@@ -122,7 +122,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
         cwd: process.cwd(),
         stdio: 'pipe',
         encoding: 'utf8',
-        env: { ...process.env, ELEPHANT_PRIVATE_KEY: '' },
+        env: { ...process.env },
       });
       // If it doesn't throw, the test should fail
       expect(result).toBe('should have thrown an error');
@@ -130,7 +130,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
       // Should throw with private key required error
       expect(error.status).not.toBe(0);
       const output = error.stdout || error.stderr || '';
-      expect(output).toMatch(/Private key is required/);
+      expect(output).toMatch(/Authentication is required/);
     }
   });
 
@@ -142,7 +142,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
         cwd: process.cwd(),
         stdio: 'pipe',
         encoding: 'utf8',
-        env: { ...process.env, ELEPHANT_PRIVATE_KEY: '' },
+        env: { ...process.env },
       });
       // If it doesn't throw, the test should fail
       expect(result).toBe('should have thrown an error');
@@ -150,12 +150,12 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
       // Should throw with private key required error
       expect(error.status).not.toBe(0);
       const output = error.stdout || error.stderr || '';
-      expect(output).toMatch(/Private key is required/);
+      expect(output).toMatch(/Authentication is required/);
     }
   });
 
   it('should validate that unsigned-transactions-json requires dry-run mode', () => {
-    const command = `./bin/elephant-cli submit-to-contract ${testCsvPath} --unsigned-transactions-json ${testJsonPath} --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0 --private-key 0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890`;
+    const command = `./bin/elephant-cli submit-to-contract ${testCsvPath} --unsigned-transactions-json ${testJsonPath} --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0 --keystore-json ./tests/test-keystore.json --keystore-password testPassword123`;
 
     expect(() => {
       execSync(command, {

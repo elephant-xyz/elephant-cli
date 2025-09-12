@@ -23,11 +23,11 @@ import { ApiSubmissionService } from '../services/api-submission.service.js';
 import { TransactionStatusService } from '../services/transaction-status.service.js';
 import { TransactionStatusReporterService } from '../services/transaction-status-reporter.service.js';
 import { ApiSubmissionResult } from '../types/submit.types.js';
+import { EncryptedWalletService } from '../services/encrypted-wallet.service.js';
 
 export interface SubmitToContractCommandOptions {
   rpcUrl: string;
   contractAddress: string;
-  privateKey: string;
   csvFile: string;
   transactionBatchSize?: number;
   gasPrice: string | number;
@@ -39,6 +39,8 @@ export interface SubmitToContractCommandOptions {
   oracleKeyId?: string;
   checkEligibility?: boolean;
   transactionIdsCsv?: string;
+  keystoreJsonPath?: string;
+  keystorePassword?: string;
   silent?: boolean;
   cwd?: string;
 }
@@ -72,8 +74,12 @@ export function registerSubmitToContractCommand(program: Command) {
       'Submit data hashes from CSV file to the Elephant Network smart contract'
     )
     .option(
-      '-k, --private-key <key>',
-      'Private key for the submitting wallet. (Or set ELEPHANT_PRIVATE_KEY env var)'
+      '--keystore-json <path>',
+      'Path to encrypted JSON keystore file containing the private key'
+    )
+    .option(
+      '--keystore-password <password>',
+      'Password for decrypting the JSON keystore file (Or set ELEPHANT_KEYSTORE_PASSWORD env var)'
     )
     .option(
       '--rpc-url <url>',
@@ -162,21 +168,27 @@ export function registerSubmitToContractCommand(program: Command) {
 
       const isApiMode = apiParamsCount === 3;
 
-      // Handle private key from environment
-      if (!isApiMode) {
-        options.privateKey =
-          options.privateKey || process.env.ELEPHANT_PRIVATE_KEY;
-      } else if (process.env.ELEPHANT_PRIVATE_KEY && !options.privateKey) {
-        // In API mode with env var set but no CLI private key
-        console.log(
-          chalk.yellow(
-            'Note: Ignoring ELEPHANT_PRIVATE_KEY environment variable in API mode'
-          )
-        );
-        logger.info(
-          'API mode detected, ignoring ELEPHANT_PRIVATE_KEY environment variable'
-        );
+      // Validate keystore options
+      if (
+        options.keystoreJson &&
+        !options.keystorePassword &&
+        !process.env.ELEPHANT_KEYSTORE_PASSWORD
+      ) {
+        const errorMsg =
+          'Error: Keystore password is required when using --keystore-json. Provide via --keystore-password or ELEPHANT_KEYSTORE_PASSWORD env var.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
       }
+
+      // No need to check for conflicting sources anymore - only keystore is allowed
+
+      // Handle keystore password from environment
+      if (options.keystoreJson && !options.keystorePassword) {
+        options.keystorePassword = process.env.ELEPHANT_KEYSTORE_PASSWORD;
+      }
+
+      // No direct private key option anymore, only keystore or API mode
 
       // Validate from-address format if provided
       if (
@@ -196,28 +208,21 @@ export function registerSubmitToContractCommand(program: Command) {
         options.dryRun &&
         options.fromAddress;
 
-      if (!options.privateKey && !isUnsignedTransactionMode && !isApiMode) {
+      if (!options.keystoreJson && !isUnsignedTransactionMode && !isApiMode) {
         const errorMsg =
-          'Error: Private key is required when not using API mode. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+          'Error: Authentication is required. Provide via --keystore-json with --keystore-password or use API mode with --domain, --api-key, and --oracle-key-id.';
         logger.error(errorMsg);
         console.error(errorMsg);
         process.exit(1);
       }
 
-      // Ensure private key is not used with API mode
-      if (options.privateKey && isApiMode) {
-        // Check if private key was explicitly provided via CLI (not from env)
-        const wasExplicitlyProvided =
-          process.argv.includes('--private-key') || process.argv.includes('-k');
-        if (wasExplicitlyProvided) {
-          const errorMsg =
-            'Error: Private key should not be provided when using API mode (--domain, --api-key, --oracle-key-id).';
-          logger.error(errorMsg);
-          console.error(errorMsg);
-          process.exit(1);
-        }
-        // Clear any private key in API mode
-        options.privateKey = '';
+      // Ensure keystore is not used with API mode
+      if (options.keystoreJson && isApiMode) {
+        const errorMsg =
+          'Error: Keystore should not be provided when using API mode (--domain, --api-key, --oracle-key-id).';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
       }
 
       options.transactionBatchSize =
@@ -239,6 +244,10 @@ export function registerSubmitToContractCommand(program: Command) {
         transactionIdsCsv: options.transactionIdsCsv
           ? path.resolve(workingDir, options.transactionIdsCsv)
           : undefined,
+        keystoreJsonPath: options.keystoreJson
+          ? path.resolve(options.keystoreJson)
+          : undefined,
+        keystorePassword: options.keystorePassword,
         cwd: workingDir,
       };
 
@@ -388,6 +397,49 @@ export async function handleSubmitToContract(
     logger.technical(`Oracle Key ID: ${options.oracleKeyId}`);
   }
 
+  // Load wallet from keystore if needed (do this early)
+  // Skip this if we're using --from-address with unsigned transactions or API mode
+  const isUnsignedWithFromAddress =
+    options.unsignedTransactionsJson && options.dryRun && options.fromAddress;
+
+  let wallet: Wallet | undefined;
+  if (
+    !isApiMode &&
+    !isUnsignedWithFromAddress &&
+    options.keystoreJsonPath &&
+    options.keystorePassword
+  ) {
+    try {
+      wallet = await EncryptedWalletService.loadWalletFromEncryptedJson({
+        keystoreJsonPath: options.keystoreJsonPath,
+        password: options.keystorePassword,
+      });
+      logger.technical(`Loaded wallet from keystore: ${wallet.address}`);
+    } catch (error) {
+      let errorMsg = 'Failed to load wallet from keystore: ';
+
+      // Check for specific error types and provide clearer messages
+      const errorString =
+        error instanceof Error ? error.message : String(error);
+      if (errorString.includes('incorrect password')) {
+        errorMsg +=
+          'Incorrect password. Please check your keystore password and try again.';
+      } else if (errorString.includes('Invalid keystore JSON format')) {
+        errorMsg +=
+          'Invalid keystore file format. Please ensure the file is a valid JSON keystore.';
+      } else if (errorString.includes('Failed to read keystore JSON file')) {
+        errorMsg +=
+          'Could not read the keystore file. Please check the file path and permissions.';
+      } else {
+        errorMsg += errorString;
+      }
+
+      logger.error(errorMsg);
+      console.error(`\n❌ ${errorMsg}\n`);
+      process.exit(1);
+    }
+  }
+
   logger.technical(`CSV file: ${options.csvFile}`);
   logger.technical(`RPC URL: ${options.rpcUrl}`);
   logger.technical(`Contract: ${options.contractAddress}`);
@@ -438,7 +490,7 @@ export async function handleSubmitToContract(
       : new TransactionBatcherService(
           options.rpcUrl,
           options.contractAddress,
-          options.privateKey,
+          wallet?.privateKey || '',
           config,
           options.gasPrice
         ));
@@ -503,14 +555,13 @@ export async function handleSubmitToContract(
       );
     }
   } else {
-    if (!options.privateKey) {
+    if (!wallet) {
       const errorMsg =
-        'Error: Private key is required when not using --from-address with unsigned transactions or API mode. Provide via --private-key or ELEPHANT_PRIVATE_KEY env var.';
+        'Error: Authentication is required when not using --from-address with unsigned transactions or API mode. Provide via --keystore-json with --keystore-password.';
       logger.error(errorMsg);
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    const wallet = new Wallet(options.privateKey);
     userAddress = wallet.address;
     logger.technical(`User wallet address: ${userAddress}`);
   }

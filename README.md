@@ -216,16 +216,17 @@ No Pinata JWT or private key needed for validation!
 
 You'll need:
 
-- **Private Key**: Your oracle wallet private key
+- **Private Key**: Your oracle wallet private key (for Polygon network)
 - **Pinata JWT**: Token for IPFS uploads (get from [Pinata](https://pinata.cloud))
 
-Set up environment variables (recommended):
+For Pinata JWT, set up environment variable:
 
 ```bash
 # Create a .env file in your project directory
-echo "ELEPHANT_PRIVATE_KEY=your_private_key_here" >> .env
 echo "PINATA_JWT=your_pinata_jwt_here" >> .env
 ```
+
+For wallet authentication, use an encrypted keystore file (EIP-2335 standard) for security.
 
 ### Step 4: Validate and Upload (Dry Run First)
 
@@ -357,6 +358,65 @@ Example output:
 ```
 
 ## Workflow 2: Submitting to Blockchain
+
+### Authentication Methods
+
+#### Encrypted JSON Keystore
+
+Use an encrypted JSON keystore file for wallet authentication. This format follows the [EIP-2335](https://eips.ethereum.org/EIPS/eip-2335) standard and works with Polygon network:
+
+```bash
+# Using keystore file with password
+elephant-cli submit-to-contract results.csv \
+  --keystore-json ./path/to/keystore.json \
+  --keystore-password "YourStrongPassword"
+
+# Using keystore with password from environment variable
+export ELEPHANT_KEYSTORE_PASSWORD="YourStrongPassword"
+elephant-cli submit-to-contract results.csv \
+  --keystore-json ./path/to/keystore.json
+```
+
+**Creating an Encrypted Keystore:**
+
+Use the built-in CLI command to create an encrypted keystore:
+
+```bash
+# Create encrypted keystore from private key
+elephant-cli create-keystore \
+  --private-key "0xYourPrivateKey" \
+  --password "YourStrongPassword" \
+  --output keystore.json
+
+# Force overwrite if file exists
+elephant-cli create-keystore \
+  --private-key "0xYourPrivateKey" \
+  --password "YourStrongPassword" \
+  --output keystore.json \
+  --force
+```
+
+**Alternative Methods:**
+- Most EVM-compatible wallets (MetaMask, etc.) can export accounts as encrypted JSON files
+- These files follow the Web3 Secret Storage Definition and are compatible with this CLI
+
+**Security Best Practices:**
+- Use a strong, unique password (minimum 8 characters)
+- Keep your keystore file secure and never share it
+- Never share your password
+- Store the keystore file and password separately
+- Consider using different keystores for different purposes
+
+#### Option 3: API Mode (Institutional)
+
+For institutional oracles, use API credentials instead of a private key:
+
+```bash
+elephant-cli submit-to-contract results.csv \
+  --domain oracles.staircaseapi.com \
+  --api-key YOUR_API_KEY \
+  --oracle-key-id YOUR_ORACLE_KEY_ID
+```
 
 ### Step 1: Review Upload Results
 
@@ -540,7 +600,9 @@ elephant-cli hash property-data.zip
 elephant-cli upload hashed-data.zip
 
 # Step 3: Submit to blockchain
-elephant-cli submit-to-contract upload-results.csv --private-key "your-key"
+elephant-cli submit-to-contract upload-results.csv \
+  --keystore-json ./keystore.json \
+  --keystore-password "YourPassword"
 ```
 
 ### Data Fetching
@@ -952,11 +1014,18 @@ The generated JSON follows the [EIP-1474 standard](https://eips.ethereum.org/EIP
 
 ### Submit to Contract Options
 
-- `--private-key <key>` - Wallet private key (or use ELEPHANT_PRIVATE_KEY env var)
+**Authentication:**
+- `--private-key <key>` - Wallet private key
+- `--keystore-json <path>` - Path to encrypted JSON keystore file  
+- `--keystore-password <password>` - Password for keystore (or use ELEPHANT_KEYSTORE_PASSWORD env var)
+
+**Network Configuration:**
 - `--rpc-url <url>` - Custom RPC endpoint
 - `--contract-address <address>` - Custom smart contract address
 - `--gas-price <value>` - Gas price in Gwei or 'auto' (default: 30)
 - `--transaction-batch-size <num>` - Items per transaction (default: 200)
+
+**Execution Modes:**
 - `--dry-run` - Test without submitting
 - `--unsigned-transactions-json <file>` - Generate unsigned transactions for external signing (dry-run only)
 - `--from-address <address>` - Specify sender address for unsigned transactions (makes private key optional)
@@ -1009,6 +1078,7 @@ elephant-cli --help
 elephant-cli validate --help
 elephant-cli validate-and-upload --help
 elephant-cli submit-to-contract --help
+elephant-cli create-keystore --help
 elephant-cli fetch-data --help
 elephant-cli transform --help
 elephant-cli hash --help
