@@ -26,7 +26,7 @@ vi.mock('ethers', async () => {
   const actual = await vi.importActual('ethers');
   return {
     ...actual,
-    Wallet: vi.fn().mockImplementation((privateKey: string) => ({
+    Wallet: vi.fn().mockImplementation(() => ({
       address: '0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0',
       privateKey:
         '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
@@ -76,36 +76,57 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
     } as any);
 
-    vi.mocked(fs.readFileSync).mockImplementation((path: string) => {
-      if (path.includes('.csv')) {
+    vi.mocked(fs.readFileSync).mockImplementation((path: any) => {
+      if (typeof path === 'string' && path.includes('.csv')) {
         return mockCsvContent;
       }
       // Return valid keystore JSON for keystore files
       return JSON.stringify({
         address: '742d35cc6634c0532925a3b844bc9e7595f89ce0',
-        crypto: {},
+        id: 'test-id',
+        version: 3,
+        crypto: {
+          cipher: 'aes-128-ctr',
+          cipherparams: { iv: 'test-iv' },
+          ciphertext: 'test-ciphertext',
+          kdf: 'scrypt',
+          kdfparams: {
+            dklen: 32,
+            n: 262144,
+            p: 1,
+            r: 8,
+            salt: 'test-salt',
+          },
+          mac: 'test-mac',
+        },
       });
     });
 
-    vi.mocked(TransactionBatcherService).mockImplementation(() => ({
-      submitAll: vi.fn().mockImplementation(async function* () {
-        yield { itemsSubmitted: 3, transactionHash: '0x123' };
-      }),
-      groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
-        const batches = [];
-        for (let i = 0; i < items.length; i += 2) {
-          batches.push(items.slice(i, i + 2));
-        }
-        return batches;
-      }),
-    }));
+    vi.mocked(TransactionBatcherService).mockImplementation(
+      () =>
+        ({
+          submitAll: vi.fn().mockImplementation(async function* () {
+            yield { itemsSubmitted: 3, transactionHash: '0x123' };
+          }),
+          groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
+            const batches = [];
+            for (let i = 0; i < items.length; i += 2) {
+              batches.push(items.slice(i, i + 2));
+            }
+            return batches;
+          }),
+        }) as any
+    );
 
-    vi.mocked(ChainStateService).mockImplementation(() => ({
-      getCurrentDataCid: vi.fn().mockResolvedValue(''),
-      hasUserSubmittedData: vi.fn().mockResolvedValue(false),
-      getUserSubmissions: vi.fn().mockResolvedValue(new Set<string>()),
-      prepopulateConsensusCache: vi.fn().mockResolvedValue(undefined),
-    }));
+    vi.mocked(ChainStateService).mockImplementation(
+      () =>
+        ({
+          getCurrentDataCid: vi.fn().mockResolvedValue(''),
+          hasUserSubmittedData: vi.fn().mockResolvedValue(false),
+          getUserSubmissions: vi.fn().mockResolvedValue(new Set<string>()),
+          prepopulateConsensusCache: vi.fn().mockResolvedValue(undefined),
+        }) as any
+    );
 
     mockChainStateService = new (vi.mocked(ChainStateService))('', '', '', []);
 
@@ -327,9 +348,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
       ).toHaveBeenCalledTimes(1);
 
-      const callArgs =
-        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
-          .calls[0];
+      const callArgs = (
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson as any
+      ).mock.calls[0];
       expect(callArgs[0]).toEqual(expect.any(Array)); // batches
       expect(callArgs[1]).toBe(dryRunOptions.rpcUrl); // rpcUrl
       // callArgs[2] is userAddress which might be undefined in test environment
@@ -465,9 +486,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson
       ).toHaveBeenCalledTimes(1);
 
-      const callArgs =
-        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson.mock
-          .calls[0];
+      const callArgs = (
+        mockUnsignedTransactionJsonService.generateUnsignedTransactionsJson as any
+      ).mock.calls[0];
       expect(callArgs[2]).toBe(fromAddress); // userAddress should be the provided fromAddress
     });
 
@@ -579,7 +600,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
           yield { itemsSubmitted: 2, transactionHash: '0xabc123' };
           yield { itemsSubmitted: 1, transactionHash: '0xdef456' };
         }),
-        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
           const batches = [];
           for (let i = 0; i < items.length; i += 2) {
             batches.push(items.slice(i, i + 2));
@@ -628,7 +649,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
           yield { itemsSubmitted: 2, transactionHash: '0xabc123' };
           yield { itemsSubmitted: 1, transactionHash: '0xdef456' };
         }),
-        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
           const batches = [];
           for (let i = 0; i < items.length; i += 2) {
             batches.push(items.slice(i, i + 2));
@@ -668,7 +689,7 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
             yield { itemsSubmitted: 1, transactionHash: `0x${i}00000` };
           }
         }),
-        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
           return items.map((item) => [item]);
         }),
       };
@@ -723,7 +744,7 @@ item6,group6,data6,/test/6.json,2024-01-01T00:00:00Z`;
         submitAll: vi.fn().mockImplementation(async function* () {
           yield { itemsSubmitted: 1, transactionHash: '0xabc123' };
         }),
-        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
           return [items];
         }),
       };
@@ -784,7 +805,7 @@ item6,group6,data6,/test/6.json,2024-01-01T00:00:00Z`;
 
       // Need to mock TransactionBatcherService for API mode to group items
       const mockTransactionBatcher = {
-        groupItemsIntoBatches: vi.fn().mockImplementation((items: any[]) => {
+        groupItemsIntoBatches: vi.fn().mockImplementation((items: any) => {
           const batches = [];
           for (let i = 0; i < items.length; i += 2) {
             batches.push(items.slice(i, i + 2));
