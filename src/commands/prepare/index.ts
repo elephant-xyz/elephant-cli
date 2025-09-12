@@ -8,7 +8,7 @@ export interface PrepareCommandOptions {
   outputZip: string;
   browser?: boolean;
   /** When false, skip clicking any Continue button in browser mode */
-  'continue'?: boolean;
+  continue?: boolean;
   fast?: boolean;
   useBrowser?: boolean;
 }

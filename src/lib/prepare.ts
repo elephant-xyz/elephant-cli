@@ -8,7 +8,12 @@ import chalk from 'chalk';
 import { Browser as PuppeteerBrowser } from 'puppeteer';
 import { TimeoutError } from 'puppeteer';
 
-export type PrepareOptions = { browser?: boolean; clickContinue?: boolean; fast?: boolean; useBrowser?: boolean };
+export type PrepareOptions = {
+  browser?: boolean;
+  clickContinue?: boolean;
+  fast?: boolean;
+  useBrowser?: boolean;
+};
 
 type Prepared = { content: string; type: 'json' | 'html' };
 
@@ -151,7 +156,11 @@ async function withFetch(req: Request): Promise<Prepared> {
   return { content: txt, type };
 }
 
-async function withBrowser(req: Request, clickContinue = true, fast = false): Promise<Prepared> {
+async function withBrowser(
+  req: Request,
+  clickContinue = true,
+  fast = false
+): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
   if (process.platform === 'linux') {
@@ -190,7 +199,13 @@ async function withBrowser(req: Request, clickContinue = true, fast = false): Pr
       await page.setRequestInterception(true);
       page.on('request', (req) => {
         const type = req.resourceType();
-        if (type === 'image' || type === 'stylesheet' || type === 'font' || type === 'media' || type === 'websocket') {
+        if (
+          type === 'image' ||
+          type === 'stylesheet' ||
+          type === 'font' ||
+          type === 'media' ||
+          type === 'websocket'
+        ) {
           req.abort();
         } else {
           req.continue();
@@ -246,58 +261,58 @@ async function withBrowser(req: Request, clickContinue = true, fast = false): Pr
     ]);
 
     if (clickContinue) {
-    const info = await page.evaluate(() => {
-      const modal = document.getElementById('pnlIssues');
-      if (!modal) return null as null | { buttonSelector: string };
-      const s = window.getComputedStyle(modal);
-      const vis =
-        s.display !== 'none' &&
-        s.visibility !== 'hidden' &&
-        Number(s.zIndex) > 0;
-      if (!vis) return null;
-      const btn =
-        (modal.querySelector('#btnContinue') as
-          | HTMLInputElement
-          | HTMLButtonElement
-          | null) ||
-        (modal.querySelector(
-          'input[name="btnContinue"]'
-        ) as HTMLInputElement | null) ||
-        (modal.querySelector(
-          'input[value="Continue"]'
-        ) as HTMLInputElement | null) ||
-        (modal.querySelector(
-          'button[value="Continue"]'
-        ) as HTMLButtonElement | null);
-      if (!btn) return null;
-      const sel = btn.name
-        ? `input[name="${btn.name}"]`
-        : btn.id === 'btnContinue'
-          ? '#btnContinue'
-          : 'input[value="Continue"]';
-      return { buttonSelector: sel };
-    });
+      const info = await page.evaluate(() => {
+        const modal = document.getElementById('pnlIssues');
+        if (!modal) return null as null | { buttonSelector: string };
+        const s = window.getComputedStyle(modal);
+        const vis =
+          s.display !== 'none' &&
+          s.visibility !== 'hidden' &&
+          Number(s.zIndex) > 0;
+        if (!vis) return null;
+        const btn =
+          (modal.querySelector('#btnContinue') as
+            | HTMLInputElement
+            | HTMLButtonElement
+            | null) ||
+          (modal.querySelector(
+            'input[name="btnContinue"]'
+          ) as HTMLInputElement | null) ||
+          (modal.querySelector(
+            'input[value="Continue"]'
+          ) as HTMLInputElement | null) ||
+          (modal.querySelector(
+            'button[value="Continue"]'
+          ) as HTMLButtonElement | null);
+        if (!btn) return null;
+        const sel = btn.name
+          ? `input[name="${btn.name}"]`
+          : btn.id === 'btnContinue'
+            ? '#btnContinue'
+            : 'input[value="Continue"]';
+        return { buttonSelector: sel };
+      });
 
-    if (info) {
-      try {
-        await page.waitForSelector(info.buttonSelector, {
-          visible: true,
-          timeout: 5000,
-        });
-        await page.click(info.buttonSelector);
-        logger.info(`Clicked continue button: ${info.buttonSelector}`);
+      if (info) {
         try {
-          await page.waitForNavigation({
-            waitUntil: 'networkidle2',
-            timeout: 30000,
+          await page.waitForSelector(info.buttonSelector, {
+            visible: true,
+            timeout: 5000,
           });
+          await page.click(info.buttonSelector);
+          logger.info(`Clicked continue button: ${info.buttonSelector}`);
+          try {
+            await page.waitForNavigation({
+              waitUntil: 'networkidle2',
+              timeout: 30000,
+            });
+          } catch {
+            logger.warn('No navigation after continue; waiting for content');
+          }
         } catch {
-          logger.warn('No navigation after continue; waiting for content');
+          logger.warn('Failed to wait for continue button');
         }
-      } catch {
-        logger.warn('Failed to wait for continue button');
       }
-    }
     } else {
       logger.info('Skipping Continue modal click by flag');
     }
