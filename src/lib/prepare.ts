@@ -9,7 +9,6 @@ import { Browser as PuppeteerBrowser } from 'puppeteer';
 import { TimeoutError } from 'puppeteer';
 
 export type PrepareOptions = {
-  browser?: boolean;
   clickContinue?: boolean;
   fast?: boolean;
   useBrowser?: boolean;
@@ -31,10 +30,9 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
-  // Caller (CLI/service) is responsible for reading env and passing options.
-  // Defaults: browser=false, fast=true, clickContinue defaults to true (handled below)
-  const effectiveBrowser =
-    options.browser === true || options.useBrowser === true;
+  // Caller (CLI/service) passes options.
+  // Defaults: browser=false (via useBrowser flag only), fast=true, clickContinue defaults to true (handled below)
+  const effectiveBrowser = options.useBrowser === true;
   const effectiveClickContinue = options.clickContinue;
   const effectiveFast = options.fast !== false;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));

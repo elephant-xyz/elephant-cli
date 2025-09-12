@@ -6,7 +6,6 @@ import { prepare as prepareCore } from '../../lib/prepare.js';
 
 export interface PrepareCommandOptions {
   outputZip: string;
-  browser?: boolean;
   /** When false, skip clicking any Continue button in browser mode */
   continue?: boolean;
   // fast kept for backward-compat (not exposed directly); use --no-fast to disable
@@ -41,7 +40,6 @@ export async function handlePrepare(
 
   const spinner = createSpinner(`Preparing data from ${inputZip}...`);
   await prepareCore(inputZip, options.outputZip, {
-    browser: options.browser,
     clickContinue: options['continue'],
     fast: options.fast,
     // pass through positive flag separately
