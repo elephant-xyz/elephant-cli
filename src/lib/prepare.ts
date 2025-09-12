@@ -33,7 +33,8 @@ export async function prepare(
 ) {
   // Caller (CLI/service) is responsible for reading env and passing options.
   // Defaults: browser=false, fast=true, clickContinue defaults to true (handled below)
-  const effectiveBrowser = options.browser === true || options.useBrowser === true;
+  const effectiveBrowser =
+    options.browser === true || options.useBrowser === true;
   const effectiveClickContinue = options.clickContinue;
   const effectiveFast = options.fast !== false;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
