@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { Browser as PuppeteerBrowser } from 'puppeteer';
 import { TimeoutError } from 'puppeteer';
 
-export type PrepareOptions = { browser?: boolean };
+export type PrepareOptions = { browser?: boolean; clickContinue?: boolean; fast?: boolean; useBrowser?: boolean };
 
 type Prepared = { content: string; type: 'json' | 'html' };
 
@@ -26,6 +26,27 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
+  const parseBool = (v: string | undefined): boolean | undefined => {
+    if (v == null) return undefined;
+    const s = v.trim().toLowerCase();
+    if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
+    if (s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
+    return undefined;
+  };
+
+  // Defaults: browser=false, fast=true unless overridden
+  let effectiveBrowser = options.browser ?? false;
+  const envBrowser = parseBool(process.env.ELEPHANT_PREPARE_BROWSER);
+  if (envBrowser !== undefined) effectiveBrowser = envBrowser;
+  if (options.useBrowser === true) effectiveBrowser = true;
+
+  let effectiveClickContinue = options.clickContinue;
+  const envClick = parseBool(process.env.ELEPHANT_PREPARE_CLICK_CONTINUE);
+  if (envClick !== undefined) effectiveClickContinue = envClick;
+
+  let effectiveFast = options.fast ?? true;
+  const envFast = parseBool(process.env.ELEPHANT_PREPARE_FAST);
+  if (envFast !== undefined) effectiveFast = envFast;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
@@ -50,8 +71,12 @@ export async function prepare(
     if (!id) throw new Error('property_seed.json missing request_identifier');
 
     const prepared =
-      req.method === 'GET' && options.browser
-        ? await withBrowser(req)
+      req.method === 'GET' && effectiveBrowser
+        ? await withBrowser(
+            req,
+            effectiveClickContinue !== false,
+            effectiveFast === true
+          )
         : await withFetch(req);
 
     const name = `${id}.${prepared.type}`;
@@ -75,6 +100,7 @@ async function withFetch(req: Request): Promise<Prepared> {
   const url = constructUrl(req);
   logger.info(`Making ${req.method} request to: ${url}`);
 
+  const startMs = Date.now();
   let res: Response;
   try {
     const body = req.json ? JSON.stringify(req.json) : req.body;
@@ -119,11 +145,13 @@ async function withFetch(req: Request): Promise<Prepared> {
   const type = res.headers.get('content-type')?.includes('html')
     ? 'html'
     : 'json';
+  const elapsedMs = Date.now() - startMs;
+  logger.info(`Downloaded response body in ${elapsedMs}ms`);
   logger.info(`Response type: ${type}, content length: ${txt.length}`);
   return { content: txt, type };
 }
 
-async function withBrowser(req: Request): Promise<Prepared> {
+async function withBrowser(req: Request, clickContinue = true, fast = false): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
   if (process.platform === 'linux') {
@@ -158,6 +186,18 @@ async function withBrowser(req: Request): Promise<Prepared> {
   try {
     logger.info('Creating page...');
     const page = await browser.newPage();
+    if (fast) {
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const type = req.resourceType();
+        if (type === 'image' || type === 'stylesheet' || type === 'font' || type === 'media' || type === 'websocket') {
+          req.abort();
+        } else {
+          req.continue();
+        }
+      });
+    }
+    const startMs = Date.now();
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
@@ -173,8 +213,8 @@ async function withBrowser(req: Request): Promise<Prepared> {
       const url = constructUrl(req);
       logger.info(`Navigating to URL: ${url}`);
       await page.goto(url, {
-        waitUntil: 'networkidle2',
-        timeout: 60000,
+        waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
+        timeout: fast ? 15000 : 60000,
       });
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
@@ -205,6 +245,7 @@ async function withBrowser(req: Request): Promise<Prepared> {
         .catch(() => {}),
     ]);
 
+    if (clickContinue) {
     const info = await page.evaluate(() => {
       const modal = document.getElementById('pnlIssues');
       if (!modal) return null as null | { buttonSelector: string };
@@ -257,17 +298,36 @@ async function withBrowser(req: Request): Promise<Prepared> {
         logger.warn('Failed to wait for continue button');
       }
     }
+    } else {
+      logger.info('Skipping Continue modal click by flag');
+    }
 
-    await Promise.race([
-      page
-        .waitForFunction(() => document.readyState === 'complete', {
-          timeout: 15000,
-        })
-        .catch(() => null),
-      page
-        .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
-        .catch(() => null),
-      page
+    if (fast) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } else {
+      await Promise.race([
+        page
+          .waitForFunction(() => document.readyState === 'complete', {
+            timeout: 15000,
+          })
+          .catch(() => null),
+        page
+          .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
+          .catch(() => null),
+        page
+          .waitForFunction(
+            () =>
+              document.querySelector('#valueGrid') ||
+              document.querySelector('#PropertyDetails') ||
+              document.querySelector('#PropertyDetailsCurrent') ||
+              document.querySelector('#divDisplayParcelOwner') ||
+              document.querySelector('#divDisplayParcelPhoto'),
+            { timeout: 15000 }
+          )
+          .catch(() => null),
+      ]);
+
+      await page
         .waitForFunction(
           () =>
             document.querySelector('#valueGrid') ||
@@ -275,26 +335,16 @@ async function withBrowser(req: Request): Promise<Prepared> {
             document.querySelector('#PropertyDetailsCurrent') ||
             document.querySelector('#divDisplayParcelOwner') ||
             document.querySelector('#divDisplayParcelPhoto'),
-          { timeout: 15000 }
+          { timeout: 30000 }
         )
-        .catch(() => null),
-    ]);
-
-    await page
-      .waitForFunction(
-        () =>
-          document.querySelector('#valueGrid') ||
-          document.querySelector('#PropertyDetails') ||
-          document.querySelector('#PropertyDetailsCurrent') ||
-          document.querySelector('#divDisplayParcelOwner') ||
-          document.querySelector('#divDisplayParcelPhoto'),
-        { timeout: 30000 }
-      )
-      .catch(() => {
-        logger.warn('Deep content not detected; proceeding with current DOM');
-      });
+        .catch(() => {
+          logger.warn('Deep content not detected; proceeding with current DOM');
+        });
+    }
 
     const html = await page.content();
+    const elapsedMs = Date.now() - startMs;
+    logger.info(`Captured page HTML in ${elapsedMs}ms`);
     return { content: html, type: 'html' } as Prepared;
   } finally {
     await browser.close();
