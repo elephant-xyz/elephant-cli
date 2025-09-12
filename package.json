@@ -41,7 +41,7 @@
   "author": "Elephant XYZ",
   "license": "MIT",
   "dependencies": {
-    "@elephant-xyz/fact-sheet": "^1.2.2",
+    "@elephant-xyz/fact-sheet": "^1.2.3",
     "@ipld/dag-cbor": "^9.2.4",
     "@ipld/dag-json": "^10.2.5",
     "@ipld/dag-pb": "^4.1.5",
