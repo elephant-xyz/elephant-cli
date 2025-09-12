@@ -31,27 +31,11 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
-  const parseBool = (v: string | undefined): boolean | undefined => {
-    if (v == null) return undefined;
-    const s = v.trim().toLowerCase();
-    if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
-    if (s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
-    return undefined;
-  };
-
-  // Defaults: browser=false, fast=true unless overridden
-  let effectiveBrowser = options.browser ?? false;
-  const envBrowser = parseBool(process.env.ELEPHANT_PREPARE_BROWSER);
-  if (envBrowser !== undefined) effectiveBrowser = envBrowser;
-  if (options.useBrowser === true) effectiveBrowser = true;
-
-  let effectiveClickContinue = options.clickContinue;
-  const envClick = parseBool(process.env.ELEPHANT_PREPARE_CLICK_CONTINUE);
-  if (envClick !== undefined) effectiveClickContinue = envClick;
-
-  let effectiveFast = options.fast ?? true;
-  const envFast = parseBool(process.env.ELEPHANT_PREPARE_FAST);
-  if (envFast !== undefined) effectiveFast = envFast;
+  // Caller (CLI/service) is responsible for reading env and passing options.
+  // Defaults: browser=false, fast=true, clickContinue defaults to true (handled below)
+  const effectiveBrowser = options.browser === true || options.useBrowser === true;
+  const effectiveClickContinue = options.clickContinue;
+  const effectiveFast = options.fast !== false;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
