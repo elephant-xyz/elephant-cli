@@ -1,3 +1,10 @@
+## [1.34.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.1...v1.34.2) (2025-09-12)
+
+
+### Bug Fixes
+
+* update @elephant-xyz/fact-sheet to version 1.2.3 ([#141](https://github.com/elephant-xyz/elephant-cli/issues/141)) ([c94df41](https://github.com/elephant-xyz/elephant-cli/commit/c94df410924df7394cc969bd79ccbf130a585b60))
+
 ## [1.34.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.0...v1.34.1) (2025-09-11)
 
 
