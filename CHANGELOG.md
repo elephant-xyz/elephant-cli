@@ -1,3 +1,10 @@
+## [1.34.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.2...v1.34.3) (2025-09-12)
+
+
+### Bug Fixes
+
+* **prepare:** Optimized prepare ([#140](https://github.com/elephant-xyz/elephant-cli/issues/140)) ([ce1d49e](https://github.com/elephant-xyz/elephant-cli/commit/ce1d49e1d1298d065af44f0ced710d6779d964df))
+
 ## [1.34.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.1...v1.34.2) (2025-09-12)
 
 
