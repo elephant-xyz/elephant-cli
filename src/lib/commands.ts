@@ -91,7 +91,6 @@ export interface SubmitToContractOptions {
   csvFile: string;
   rpcUrl?: string;
   contractAddress?: string;
-  privateKey?: string;
   transactionBatchSize?: number;
   gasPrice?: string | number;
   dryRun?: boolean;
@@ -103,6 +102,8 @@ export interface SubmitToContractOptions {
   checkEligibility?: boolean;
   transactionIdsCsv?: string;
   cwd?: string;
+  keystoreJson?: string;
+  keystorePassword?: string;
 }
 
 export interface SubmitToContractResult {
@@ -277,7 +278,6 @@ export async function submitToContract(
         options.contractAddress ||
         process.env.SUBMIT_CONTRACT_ADDRESS ||
         '0x525E59e4DE2B51f52B9e30745a513E407652AB7c',
-      privateKey: options.privateKey || process.env.ELEPHANT_PRIVATE_KEY || '',
       transactionBatchSize: options.transactionBatchSize || 200,
       gasPrice: options.gasPrice || 30,
       dryRun: options.dryRun || false,
@@ -288,6 +288,8 @@ export async function submitToContract(
       oracleKeyId: options.oracleKeyId,
       checkEligibility: options.checkEligibility || false,
       transactionIdsCsv: options.transactionIdsCsv,
+      keystoreJsonPath: options.keystoreJson,
+      keystorePassword: options.keystorePassword,
       silent: true, // Enable silent mode for library usage
       cwd: options.cwd,
     };

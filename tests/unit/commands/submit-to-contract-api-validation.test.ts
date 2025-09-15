@@ -24,25 +24,18 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('should reject private key when API parameters are provided', async () => {
+  it('should reject --private-key option as it no longer exists', async () => {
     const result = await runCommand([
       'submit-to-contract',
       csvPath,
       '--private-key',
       '0x' + '1'.repeat(64),
-      '--domain',
-      'oracles.staircaseapi.com',
-      '--api-key',
-      'test-api-key',
-      '--oracle-key-id',
-      '550e8400-e29b-41d4-a716-446655440000',
       '--dry-run',
     ]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain(
-      'Private key should not be provided when using API mode'
-    );
+    // Commander will show an error for unknown option
+    expect(result.stderr).toContain("error: unknown option '--private-key'");
   });
 
   it('should require all three API parameters together', async () => {
@@ -62,55 +55,23 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
   });
 
   it('should work without private key in API mode', async () => {
-    const result = await runCommand(
-      [
-        'submit-to-contract',
-        csvPath,
-        '--domain',
-        'oracles.staircaseapi.com',
-        '--api-key',
-        'test-api-key',
-        '--oracle-key-id',
-        '550e8400-e29b-41d4-a716-446655440000',
-        '--from-address',
-        '0x1234567890123456789012345678901234567890',
-        '--dry-run',
-      ],
-      { ELEPHANT_PRIVATE_KEY: undefined }
-    ); // Clear env var
+    const result = await runCommand([
+      'submit-to-contract',
+      csvPath,
+      '--domain',
+      'oracles.staircaseapi.com',
+      '--api-key',
+      'test-api-key',
+      '--oracle-key-id',
+      '550e8400-e29b-41d4-a716-446655440000',
+      '--from-address',
+      '0x1234567890123456789012345678901234567890',
+      '--dry-run',
+    ]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('Contract submission process finished');
     expect(result.stdout).toContain('Using centralized API submission mode');
-  });
-
-  it('should ignore ELEPHANT_PRIVATE_KEY env var in API mode', async () => {
-    const result = await runCommand(
-      [
-        'submit-to-contract',
-        csvPath,
-        '--domain',
-        'oracles.staircaseapi.com',
-        '--api-key',
-        'test-api-key',
-        '--oracle-key-id',
-        '550e8400-e29b-41d4-a716-446655440000',
-        '--from-address',
-        '0x1234567890123456789012345678901234567890',
-        '--dry-run',
-      ],
-      {
-        ELEPHANT_PRIVATE_KEY:
-          'c653a42f9b89ef1e39166e97ba00ae1449d3933f7c3b7a02d72d48a9c4da8f46',
-      }
-    ); // Set env var
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain('Contract submission process finished');
-    expect(result.stdout).toContain('Using centralized API submission mode');
-    expect(result.stdout).toContain(
-      'Ignoring ELEPHANT_PRIVATE_KEY environment variable'
-    );
   });
 });
 
