@@ -8,7 +8,11 @@ import chalk from 'chalk';
 import { Browser as PuppeteerBrowser } from 'puppeteer';
 import { TimeoutError } from 'puppeteer';
 
-export type PrepareOptions = { browser?: boolean };
+export type PrepareOptions = {
+  clickContinue?: boolean;
+  fast?: boolean;
+  useBrowser?: boolean;
+};
 
 type Prepared = { content: string; type: 'json' | 'html' };
 
@@ -26,6 +30,11 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
+  // Caller (CLI/service) passes options.
+  // Defaults: browser=false (via useBrowser flag only), fast=true, clickContinue defaults to true (handled below)
+  const effectiveBrowser = options.useBrowser === true;
+  const effectiveClickContinue = options.clickContinue;
+  const effectiveFast = options.fast !== false;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
@@ -50,8 +59,12 @@ export async function prepare(
     if (!id) throw new Error('property_seed.json missing request_identifier');
 
     const prepared =
-      req.method === 'GET' && options.browser
-        ? await withBrowser(req)
+      req.method === 'GET' && effectiveBrowser
+        ? await withBrowser(
+            req,
+            effectiveClickContinue !== false,
+            effectiveFast === true
+          )
         : await withFetch(req);
 
     const name = `${id}.${prepared.type}`;
@@ -75,6 +88,7 @@ async function withFetch(req: Request): Promise<Prepared> {
   const url = constructUrl(req);
   logger.info(`Making ${req.method} request to: ${url}`);
 
+  const startMs = Date.now();
   let res: Response;
   try {
     const body = req.json ? JSON.stringify(req.json) : req.body;
@@ -119,11 +133,17 @@ async function withFetch(req: Request): Promise<Prepared> {
   const type = res.headers.get('content-type')?.includes('html')
     ? 'html'
     : 'json';
+  const elapsedMs = Date.now() - startMs;
+  logger.info(`Downloaded response body in ${elapsedMs}ms`);
   logger.info(`Response type: ${type}, content length: ${txt.length}`);
   return { content: txt, type };
 }
 
-async function withBrowser(req: Request): Promise<Prepared> {
+async function withBrowser(
+  req: Request,
+  clickContinue = true,
+  fast = false
+): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
   if (process.platform === 'linux') {
@@ -158,6 +178,16 @@ async function withBrowser(req: Request): Promise<Prepared> {
   try {
     logger.info('Creating page...');
     const page = await browser.newPage();
+    if (fast) {
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const type = req.resourceType();
+        const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+        if (blocked.includes(type)) req.abort();
+        else req.continue();
+      });
+    }
+    const startMs = Date.now();
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
@@ -173,8 +203,8 @@ async function withBrowser(req: Request): Promise<Prepared> {
       const url = constructUrl(req);
       logger.info(`Navigating to URL: ${url}`);
       await page.goto(url, {
-        waitUntil: 'networkidle2',
-        timeout: 60000,
+        waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
+        timeout: fast ? 15000 : 60000,
       });
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
@@ -205,69 +235,89 @@ async function withBrowser(req: Request): Promise<Prepared> {
         .catch(() => {}),
     ]);
 
-    const info = await page.evaluate(() => {
-      const modal = document.getElementById('pnlIssues');
-      if (!modal) return null as null | { buttonSelector: string };
-      const s = window.getComputedStyle(modal);
-      const vis =
-        s.display !== 'none' &&
-        s.visibility !== 'hidden' &&
-        Number(s.zIndex) > 0;
-      if (!vis) return null;
-      const btn =
-        (modal.querySelector('#btnContinue') as
-          | HTMLInputElement
-          | HTMLButtonElement
-          | null) ||
-        (modal.querySelector(
-          'input[name="btnContinue"]'
-        ) as HTMLInputElement | null) ||
-        (modal.querySelector(
-          'input[value="Continue"]'
-        ) as HTMLInputElement | null) ||
-        (modal.querySelector(
-          'button[value="Continue"]'
-        ) as HTMLButtonElement | null);
-      if (!btn) return null;
-      const sel = btn.name
-        ? `input[name="${btn.name}"]`
-        : btn.id === 'btnContinue'
-          ? '#btnContinue'
-          : 'input[value="Continue"]';
-      return { buttonSelector: sel };
-    });
+    if (clickContinue) {
+      const info = await page.evaluate(() => {
+        const modal = document.getElementById('pnlIssues');
+        if (!modal) return null as null | { buttonSelector: string };
+        const s = window.getComputedStyle(modal);
+        const vis =
+          s.display !== 'none' &&
+          s.visibility !== 'hidden' &&
+          Number(s.zIndex) > 0;
+        if (!vis) return null;
+        const btn =
+          (modal.querySelector('#btnContinue') as
+            | HTMLInputElement
+            | HTMLButtonElement
+            | null) ||
+          (modal.querySelector(
+            'input[name="btnContinue"]'
+          ) as HTMLInputElement | null) ||
+          (modal.querySelector(
+            'input[value="Continue"]'
+          ) as HTMLInputElement | null) ||
+          (modal.querySelector(
+            'button[value="Continue"]'
+          ) as HTMLButtonElement | null);
+        if (!btn) return null;
+        const sel = btn.name
+          ? `input[name="${btn.name}"]`
+          : btn.id === 'btnContinue'
+            ? '#btnContinue'
+            : 'input[value="Continue"]';
+        return { buttonSelector: sel };
+      });
 
-    if (info) {
-      try {
-        await page.waitForSelector(info.buttonSelector, {
-          visible: true,
-          timeout: 5000,
-        });
-        await page.click(info.buttonSelector);
-        logger.info(`Clicked continue button: ${info.buttonSelector}`);
+      if (info) {
         try {
-          await page.waitForNavigation({
-            waitUntil: 'networkidle2',
-            timeout: 30000,
+          await page.waitForSelector(info.buttonSelector, {
+            visible: true,
+            timeout: 5000,
           });
+          await page.click(info.buttonSelector);
+          logger.info(`Clicked continue button: ${info.buttonSelector}`);
+          try {
+            await page.waitForNavigation({
+              waitUntil: 'networkidle2',
+              timeout: 30000,
+            });
+          } catch {
+            logger.warn('No navigation after continue; waiting for content');
+          }
         } catch {
-          logger.warn('No navigation after continue; waiting for content');
+          logger.warn('Failed to wait for continue button');
         }
-      } catch {
-        logger.warn('Failed to wait for continue button');
       }
+    } else {
+      logger.info('Skipping Continue modal click by flag');
     }
 
-    await Promise.race([
-      page
-        .waitForFunction(() => document.readyState === 'complete', {
-          timeout: 15000,
-        })
-        .catch(() => null),
-      page
-        .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
-        .catch(() => null),
-      page
+    if (fast) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } else {
+      await Promise.race([
+        page
+          .waitForFunction(() => document.readyState === 'complete', {
+            timeout: 15000,
+          })
+          .catch(() => null),
+        page
+          .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
+          .catch(() => null),
+        page
+          .waitForFunction(
+            () =>
+              document.querySelector('#valueGrid') ||
+              document.querySelector('#PropertyDetails') ||
+              document.querySelector('#PropertyDetailsCurrent') ||
+              document.querySelector('#divDisplayParcelOwner') ||
+              document.querySelector('#divDisplayParcelPhoto'),
+            { timeout: 15000 }
+          )
+          .catch(() => null),
+      ]);
+
+      await page
         .waitForFunction(
           () =>
             document.querySelector('#valueGrid') ||
@@ -275,26 +325,16 @@ async function withBrowser(req: Request): Promise<Prepared> {
             document.querySelector('#PropertyDetailsCurrent') ||
             document.querySelector('#divDisplayParcelOwner') ||
             document.querySelector('#divDisplayParcelPhoto'),
-          { timeout: 15000 }
+          { timeout: 30000 }
         )
-        .catch(() => null),
-    ]);
-
-    await page
-      .waitForFunction(
-        () =>
-          document.querySelector('#valueGrid') ||
-          document.querySelector('#PropertyDetails') ||
-          document.querySelector('#PropertyDetailsCurrent') ||
-          document.querySelector('#divDisplayParcelOwner') ||
-          document.querySelector('#divDisplayParcelPhoto'),
-        { timeout: 30000 }
-      )
-      .catch(() => {
-        logger.warn('Deep content not detected; proceeding with current DOM');
-      });
+        .catch(() => {
+          logger.warn('Deep content not detected; proceeding with current DOM');
+        });
+    }
 
     const html = await page.content();
+    const elapsedMs = Date.now() - startMs;
+    logger.info(`Captured page HTML in ${elapsedMs}ms`);
     return { content: html, type: 'html' } as Prepared;
   } finally {
     await browser.close();
