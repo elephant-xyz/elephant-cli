@@ -1,3 +1,10 @@
+# [1.35.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.3...v1.35.0) (2025-09-15)
+
+
+### Features
+
+* Encrypted JSON Wallet ([#137](https://github.com/elephant-xyz/elephant-cli/issues/137)) ([e3f9e11](https://github.com/elephant-xyz/elephant-cli/commit/e3f9e115bcd6768e34c0a0b46706fa16f4abe077))
+
 ## [1.34.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.2...v1.34.3) (2025-09-12)
 
 
