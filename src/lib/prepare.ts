@@ -7,6 +7,8 @@ import chalk from 'chalk';
 import { PrepareOptions, Request } from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
+import { withBrowserFlow, Workflow } from './withBrowserFlow.js';
+import workflow from './schema.json';
 
 export async function prepare(
   inputZip: string,
@@ -15,9 +17,10 @@ export async function prepare(
 ) {
   // Caller (CLI/service) passes options.
   // Defaults: browser=false (via useBrowser flag only), fast=true, clickContinue defaults to true (handled below)
-  const effectiveBrowser = options.useBrowser === true;
+  const effectiveBrowser = options.useBrowser;
   const effectiveClickContinue = options.clickContinue;
-  const effectiveFast = options.fast !== false;
+  const effectiveFast = options.fast;
+  const headless = options.headless ?? true;
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
@@ -37,20 +40,26 @@ export async function prepare(
 
     const obj = JSON.parse(seed) as Record<string, unknown>;
     const req = obj.source_http_request as Request | undefined;
-    const id = obj.request_identifier as string | undefined;
+    const requestId = obj.request_identifier as string | undefined;
     if (!req) throw new Error('property_seed.json missing source_http_request');
-    if (!id) throw new Error('property_seed.json missing request_identifier');
+    if (!requestId)
+      throw new Error('property_seed.json missing request_identifier');
+
+    if (process.env.WEIRED_COUNTY)
+      return await withBrowserFlow(workflow, headless, requestId);
 
     const prepared =
       req.method === 'GET' && effectiveBrowser
         ? await withBrowser(
             req,
-            effectiveClickContinue !== false,
-            effectiveFast === true
+            effectiveClickContinue,
+            effectiveFast,
+            requestId,
+            headless
           )
         : await withFetch(req);
 
-    const name = `${id}.${prepared.type}`;
+    const name = `${requestId}.${prepared.type}`;
     await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
 
     const zip = new AdmZip();

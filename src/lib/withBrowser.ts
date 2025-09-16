@@ -2,16 +2,18 @@ import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
 import { Browser as PuppeteerBrowser, Page } from 'puppeteer';
 import { TimeoutError } from 'puppeteer';
-import { constructUrl } from './common.js';
+import { constructUrl, cleanHtml, createBrowser } from './common.js';
 import { Prepared, Request } from './types.js';
 
 export async function withBrowser(
   req: Request,
-  clickContinue = true,
-  fast = false
+  clickContinue: boolean = false,
+  fast: boolean = true,
+  requestId: string,
+  headless: boolean
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
-  const browser: PuppeteerBrowser = await createBrowser();
+  const browser: PuppeteerBrowser = await createBrowser(headless);
 
   try {
     logger.info('Creating page...');
@@ -55,6 +57,8 @@ export async function withBrowser(
       }
       throw e;
     }
+    if (process.env.WEIRED_COUNTY)
+      return await loadWeiredConty(page, requestId);
 
     await Promise.race([
       page
@@ -94,36 +98,25 @@ export async function withBrowser(
   }
 }
 
-async function createBrowser(): Promise<PuppeteerBrowser> {
-  if (process.platform === 'linux') {
-    const puppeteer = await import('puppeteer');
-    const { default: Chromium } = await import('@sparticuz/chromium');
-    logger.info('Launching browser...');
-    return await puppeteer.launch({
-      ignoreDefaultArgs: ['--disable-extensions'],
-      executablePath: await Chromium.executablePath(),
-      headless: 'shell',
-      args: [
-        ...Chromium.args,
-        '--hide-scrollbars',
-        '--disable-web-security',
-        '--no-sandbox',
-      ],
-      timeout: 30000,
-    });
-  } else if (process.platform === 'darwin') {
-    const puppeteer = await import('puppeteer');
-    logger.info('Launching browser...');
-    return await puppeteer.launch({
-      headless: true,
-      timeout: 30000,
-    });
-  } else {
-    const errorMessage =
-      'Unsupported platform. Only Linux and macOS are supported.';
-    console.log(chalk.red(errorMessage));
-    throw new Error(errorMessage);
-  }
+async function loadWeiredConty(
+  page: Page,
+  requestId: string
+): Promise<Prepared> {
+  await page.waitForSelector('.btn.btn-primary.button-1', {
+    visible: true,
+    timeout: 8000,
+  });
+  await page.click('.btn.btn-primary.button-1');
+  await page.type('#ctlBodyPane_ctl03_ctl01_txtParcelID', requestId, {
+    delay: 100,
+  });
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(
+    '#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00_dynamicBuildingDataRightColumn_divSummary',
+    { visible: true }
+  );
+  const rawContent = await page.content();
+  return { content: await cleanHtml(rawContent), type: 'html' };
 }
 
 async function waitForContent(page: Page) {

@@ -2,6 +2,7 @@ export type PrepareOptions = {
   clickContinue?: boolean;
   fast?: boolean;
   useBrowser?: boolean;
+  headless?: boolean;
 };
 
 export type Prepared = { content: string; type: 'json' | 'html' };
