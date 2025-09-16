@@ -855,14 +855,31 @@ export async function handleSubmitToContract(
           for await (const batchResult of transactionBatcherService.submitAll(
             dataItemsForTransaction
           )) {
+            const currentTimestamp = new Date().toISOString();
+
             logger.info(
               `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
             );
+
+            // Log to transaction status CSV
+            if (transactionStatusReporter) {
+              await transactionStatusReporter.logTransaction({
+                batchIndex,
+                transactionHash: batchResult.transactionHash,
+                status: 'pending',
+                blockNumber: batchResult.blockNumber,
+                gasUsed: batchResult.gasUsed,
+                itemCount: batchResult.itemsSubmitted,
+                error: undefined,
+                timestamp: currentTimestamp,
+              });
+            }
+
             submittedTransactions.push({
               transactionHash: batchResult.transactionHash,
               batchIndex,
               itemCount: batchResult.itemsSubmitted,
-              timestamp: new Date().toISOString(),
+              timestamp: currentTimestamp,
               status: 'pending',
             });
             batchIndex++;
