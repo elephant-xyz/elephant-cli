@@ -1,3 +1,10 @@
+## [1.35.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.0...v1.35.1) (2025-09-16)
+
+
+### Bug Fixes
+
+* Update transaction submission to return pending status without waiting for confirmation ([#142](https://github.com/elephant-xyz/elephant-cli/issues/142)) ([6ac6a6d](https://github.com/elephant-xyz/elephant-cli/commit/6ac6a6d0e0b3cddfc18df4af3a1f9d92cadad6a9))
+
 # [1.35.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.3...v1.35.0) (2025-09-15)
 
 
