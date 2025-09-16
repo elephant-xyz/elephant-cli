@@ -524,9 +524,11 @@ export async function handleSubmitToContract(
     (isApiMode ? new TransactionStatusService(options.rpcUrl) : undefined);
 
   const workingDir = options.cwd || process.cwd();
+  // Initialize transaction status reporter for both API mode and direct submission mode
+  // (but not for dry-run mode since no actual transactions are sent)
   const transactionStatusReporter =
     serviceOverrides.transactionStatusReporter ??
-    (isApiMode
+    (!options.dryRun
       ? new TransactionStatusReporterService(
           path.resolve(workingDir, 'transaction-status.csv')
         )
