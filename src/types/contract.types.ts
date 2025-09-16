@@ -32,7 +32,7 @@ export interface GetParticipantsCall {
 
 export interface BatchSubmissionResult {
   transactionHash: string;
-  blockNumber: number;
-  gasUsed: string;
+  blockNumber?: number;
+  gasUsed?: string;
   itemsSubmitted: number;
 }
