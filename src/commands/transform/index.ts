@@ -151,7 +151,8 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         tempRoot,
         'scripts'
       );
-      await handleCountyTransform(scriptsDir, tempRoot);
+      const extractorOnly = await hasOnlyExtractor(scriptsDir);
+      await handleCountyTransform(scriptsDir, tempRoot, extractorOnly);
     } else {
       logger.info('Processing seed data group...');
       await handleSeedTransform(tempRoot);
@@ -319,9 +320,13 @@ async function handleSeedTransform(tempRoot: string) {
   );
 }
 
-async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
+async function handleCountyTransform(
+  scriptsDir: string,
+  tempRoot: string,
+  extractorOnly = false
+) {
   logger.info('Running generated scripts pipeline...');
-  await runScriptsPipeline(scriptsDir, tempRoot);
+  await runScriptsPipeline(scriptsDir, tempRoot, { extractorOnly });
 
   const newJsonRelPaths = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
   if (newJsonRelPaths.length === 0) {
@@ -394,14 +399,39 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
     })
   );
 
-  const countyDataGroup = createCountyDataGroup(relationshipFiles);
-  const schemaManifest = await fetchSchemaManifest();
-  const countySchema = schemaManifest['County']!.ipfsCid;
-  await fs.writeFile(
-    path.join(tempRoot, OUTPUT_DIR, `${countySchema}.json`),
-    JSON.stringify(countyDataGroup),
-    'utf-8'
-  );
+  if (!extractorOnly) {
+    const countyDataGroup = createCountyDataGroup(relationshipFiles);
+    const schemaManifest = await fetchSchemaManifest();
+    const countySchema = schemaManifest['County']!.ipfsCid;
+    await fs.writeFile(
+      path.join(tempRoot, OUTPUT_DIR, `${countySchema}.json`),
+      JSON.stringify(countyDataGroup),
+      'utf-8'
+    );
+  }
+}
+
+async function hasOnlyExtractor(scriptsDir: string): Promise<boolean> {
+  const required = ['ownerMapping.js', 'structureMapping.js', 'layoutMapping.js', 'utilityMapping.js'];
+  for (const name of required) {
+    const found = await findFileRecursiveLocal(scriptsDir, name);
+    if (found) return false;
+  }
+  return true;
+}
+
+async function findFileRecursiveLocal(root: string, fileName: string): Promise<string | null> {
+  const stack: string[] = [root];
+  while (stack.length) {
+    const dir = stack.pop()!;
+    const items = await fs.readdir(dir, { withFileTypes: true });
+    for (const it of items) {
+      const abs = path.join(dir, it.name);
+      if (it.isDirectory()) stack.push(abs);
+      else if (it.isFile() && it.name === fileName) return abs;
+    }
+  }
+  return null;
 }
 
 async function normalizeInputsForScripts(

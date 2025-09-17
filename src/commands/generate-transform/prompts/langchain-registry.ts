@@ -8,7 +8,8 @@ export type PromptKey =
   | 'structure-generator'
   | 'structure-evaluator'
   | 'extraction-generator'
-  | 'extraction-evaluator';
+  | 'extraction-evaluator'
+  | 'data-group-extractor';
 
 /**
  * Registry for managing LangChain prompt templates

@@ -19,6 +19,8 @@ import { registerTransformCommand } from './commands/transform/index.js';
 import { registerGenerateTransformCommand } from './commands/generate-transform/index.js';
 import { registerPrepareCommand } from './commands/prepare/index.js';
 import { createKeystoreCommand } from './commands/create-keystore.js';
+import { registerPreparePermitsCommand } from './commands/prepare-permits.js';
+import { registerPreparePermitPagesCommand } from './commands/prepare-permit-pages.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +49,8 @@ registerTransformCommand(program);
 registerGenerateTransformCommand(program);
 registerPrepareCommand(program);
 createKeystoreCommand(program);
+registerPreparePermitsCommand(program);
+registerPreparePermitPagesCommand(program);
 
 program.parse();
 

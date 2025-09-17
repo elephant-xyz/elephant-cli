@@ -9,6 +9,7 @@ import { logger } from '../../../utils/logger.js';
 import { ownerAnalysisNode } from './nodes/ownerAnalysisNode.js';
 import { structureExtractionNode } from './nodes/structureExtractionNode.js';
 import { extractionNode } from './nodes/extractionNode.js';
+import { dataGroupExtractionNode } from './nodes/dataGroupExtractionNode.js';
 
 export type NodeFunction = (
   state: AgentState,
@@ -36,9 +37,12 @@ export type GraphProgressCallback = (event: GraphProgressEvent) => void;
  * @param retryPolicy - Retry policy for nodes
  * @returns Compiled graph ready for execution
  */
+export type GraphNodesControl = { owner?: boolean; structure?: boolean; dataGroupOnly?: boolean };
+
 export function buildAgentGraph(
   retryPolicy: RetryPolicy,
-  onProgress?: GraphProgressCallback
+  onProgress?: GraphProgressCallback,
+  nodes?: GraphNodesControl
 ) {
   const withCommon =
     <N extends GraphNodeName>(
@@ -49,6 +53,15 @@ export function buildAgentGraph(
       state: AgentState,
       config?: RunnableConfig
     ): Promise<Partial<AgentState>> => {
+      // Conditionally skip owner/structure nodes
+      if (name === 'ownerAnalysis' && nodes?.owner === false) {
+        logger.info('node_skip: ownerAnalysis');
+        return {};
+      }
+      if (name === 'structureExtraction' && nodes?.structure === false) {
+        logger.info('node_skip: structureExtraction');
+        return {};
+      }
       logger.info(`node_start: ${name}`);
       onProgress?.({ type: 'node_start', name });
       const chat = config?.configurable?.chat_model as ChatModel;
@@ -78,12 +91,19 @@ export function buildAgentGraph(
         },
       }
     )
-    .addNode('extraction', withCommon('extraction', extractionNode), {
-      retryPolicy: {
-        maxAttempts: retryPolicy.maxAttempts,
-        retryOn: retryPolicy.retryOn,
-      },
-    })
+    .addNode(
+      'extraction',
+      withCommon(
+        'extraction',
+        nodes?.dataGroupOnly === true ? dataGroupExtractionNode : extractionNode
+      ),
+      {
+        retryPolicy: {
+          maxAttempts: retryPolicy.maxAttempts,
+          retryOn: retryPolicy.retryOn,
+        },
+      }
+    )
     .addEdge(START, 'ownerAnalysis')
     .addEdge(START, 'structureExtraction')
     .addEdge('structureExtraction', 'extraction')
@@ -105,9 +125,10 @@ export async function runThreeNodeGraph(
   initial: AgentState,
   chat: ChatModel,
   retry: RetryPolicy,
-  onProgress?: GraphProgressCallback
+  onProgress?: GraphProgressCallback,
+  nodes?: GraphNodesControl
 ): Promise<AgentState> {
-  const graph = buildAgentGraph(retry, onProgress);
+  const graph = buildAgentGraph(retry, onProgress, nodes);
 
   const config: RunnableConfig = {
     configurable: {

@@ -8,17 +8,28 @@ import { createSpinner } from '../../utils/progress.js';
 export function registerGenerateTransformCommand(program: Command): void {
   program
     .command('generate-transform')
-    .description('Generate JavaScript extraction scripts from an input ZIP')
+    .description('Generate JavaScript extraction scripts from an input ZIP or a single HTML file')
     .argument(
-      '<inputZip>',
-      'Path to input ZIP containing unnormalized_address.json, property_seed.json, and an HTML/JSON file'
+      '<input>',
+      'Path to input ZIP (preferred) or a single HTML file'
     )
     .option(
       '-o, --output-zip <path>',
       'Output ZIP file',
       'generated-scripts.zip'
     )
-    .action(async (inputZip: string, opts: { outputZip: string }) => {
+    .option(
+      '--data-group-cid <cid>',
+      'Optional IPFS CID of a data group whose referenced schemas will be fetched and included'
+    )
+    .option(
+      '--data-group-only',
+      'Use only schemas referenced by the provided data group (no baseline)'
+    )
+    .action(async (
+      input: string,
+      opts: { outputZip: string; dataGroupCid?: string; dataGroupOnly?: boolean }
+    ) => {
       if (!process.env.OPENAI_API_KEY) {
         console.error(
           'OPENAI_API_KEY environment variable is required for generate-transform command'
@@ -52,8 +63,10 @@ export function registerGenerateTransformCommand(program: Command): void {
         const humanizeNode = (name: keyof typeof nodeLabels): string =>
           nodeLabels[name];
 
-        const out = await generateTransform(inputZip, model, {
+        const out = await generateTransform(input, model, {
           outputZip: opts.outputZip,
+          dataGroupCid: opts.dataGroupCid,
+          dataGroupOnly: opts.dataGroupOnly === true,
           config: cfg,
           onProgress: (evt) => {
             if (evt.kind === 'message') {
