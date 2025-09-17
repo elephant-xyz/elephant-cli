@@ -45,11 +45,9 @@ export async function prepare(
     if (!requestId)
       throw new Error('property_seed.json missing request_identifier');
 
-    if (process.env.WEIRED_COUNTY)
-      return await withBrowserFlow(workflow, headless, requestId);
-
-    const prepared =
-      req.method === 'GET' && effectiveBrowser
+    const prepared = process.env.WEIRED_COUNTY
+      ? await withBrowserFlow(workflow, headless, requestId)
+      : req.method === 'GET' && effectiveBrowser
         ? await withBrowser(
             req,
             effectiveClickContinue,

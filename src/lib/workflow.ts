@@ -33,7 +33,7 @@ export const workflow: Workflow = {
       type: 'type',
       input: {
         selector: '#ctlBodyPane_ctl03_ctl01_txtParcelID',
-        value: '{request_identifier}',
+        value: '{{=it.request_identifier}}',
         delay: 100,
       },
       next: 'press_enter',
