@@ -7,8 +7,8 @@ import chalk from 'chalk';
 import { PrepareOptions, Request } from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
-import { withBrowserFlow, Workflow } from './withBrowserFlow.js';
-import workflow from './schema.json';
+import { withBrowserFlow } from './withBrowserFlow.js';
+import { workflow } from './workflow.js';
 
 export async function prepare(
   inputZip: string,

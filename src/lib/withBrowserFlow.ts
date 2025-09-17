@@ -1,3 +1,4 @@
+import dot from 'dot';
 import { logger } from '../utils/logger.js';
 import { createBrowser } from './common.js';
 import { Prepared } from './types.js';
@@ -112,6 +113,11 @@ export async function withBrowserFlow(
   while (!end) {
     const state = workflow.states[currentStep];
     const { type, input, next, result } = state;
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === 'string' && value.includes('=it.')) {
+        input[key] = dot.template(value)(executionState);
+      }
+    }
     logger.info(`Executing state ${currentStep}...`);
     let stepResult: string | number | boolean | undefined;
     switch (type) {
