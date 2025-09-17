@@ -115,7 +115,8 @@ export async function withBrowserFlow(
     const { type, input, next, result } = state;
     for (const [key, value] of Object.entries(input)) {
       if (typeof value === 'string' && value.includes('=it.')) {
-        input[key] = dot.template(value)(executionState);
+        (input as Record<string, any>)[key] =
+          dot.template(value)(executionState);
       }
     }
     logger.info(`Executing state ${currentStep}...`);
