@@ -125,15 +125,15 @@ async function scrapePermits(url: string, start: string, end: string) {
     await setMaskedDate(END_SEL, end);
     await page.waitForSelector(SEARCH_SEL, { visible: true, timeout: 30000 });
     await Promise.all([
-      page.waitForNetworkIdle({ idleTime: 700, timeout: 90000 }),
+      page.waitForNetworkIdle({ idleTime: 1200, timeout: 120000 }),
       page.click(SEARCH_SEL),
     ]);
 
     try {
       await page.waitForSelector(PANEL_SEL, { timeout: 20000 });
-      await page.waitForNetworkIdle({ idleTime: 500, timeout: 30000 });
+      await page.waitForNetworkIdle({ idleTime: 800, timeout: 60000 });
     } catch {}
-    await page.waitForSelector(TABLE_SEL, { timeout: 30000 });
+    await waitForResults(page);
 
     async function scrapePage() {
       return page.$$eval(ROW_LINKS, (links) =>
@@ -185,7 +185,9 @@ async function scrapePermits(url: string, start: string, end: string) {
       }, TABLE_SEL);
       if (!clicked) return false;
       await page.waitForNetworkIdle({ idleTime: 700, timeout: 90000 }).catch(() => {});
-      await page.waitForSelector(TABLE_SEL, { timeout: 30000 }).catch(() => {});
+      try {
+        await page.waitForSelector(TABLE_SEL, { timeout: 30000 });
+      } catch {}
       await page.waitForNetworkIdle({ idleTime: 400, timeout: 30000 }).catch(() => {});
       return true;
     }
@@ -227,6 +229,25 @@ async function scrapePermits(url: string, start: string, end: string) {
     });
     return dedup;
   });
+}
+
+async function waitForResults(page: import('puppeteer').Page) {
+  // Wait for either the results table or a "no records" message
+  const TABLE_SEL = '#ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList';
+  const NORECORDS_SEL = '.ACA_NoRecords, #ctl00_PlaceHolderMain_dgvPermitList_lblNoRecord';
+  const winner = await Promise.race([
+    page.waitForSelector(TABLE_SEL, { timeout: 30000 }).then(() => 'table'),
+    page.waitForSelector(NORECORDS_SEL, { timeout: 30000 }).then(() => 'empty').catch(() => 'pending'),
+  ]).catch(() => 'timeout');
+  if (winner === 'table') return;
+  if (winner === 'empty') throw new Error('No records found for the selected date range');
+  // As a fallback, try once more after small delay
+  await new Promise((r) => setTimeout(r, 1500));
+  try {
+    await page.waitForSelector(TABLE_SEL, { timeout: 15000 });
+  } catch {
+    throw new Error('Results table not found after search');
+  }
 }
 
 export interface PreparePermitsOptions {
