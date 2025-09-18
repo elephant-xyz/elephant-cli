@@ -1,3 +1,10 @@
+## [1.35.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.1...v1.35.2) (2025-09-18)
+
+
+### Bug Fixes
+
+* **prepare:** making prepare fail in case of error ([#144](https://github.com/elephant-xyz/elephant-cli/issues/144)) ([4016a1c](https://github.com/elephant-xyz/elephant-cli/commit/4016a1c734f0c6d37e22f0b818f764ae39a5470e))
+
 ## [1.35.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.0...v1.35.1) (2025-09-16)
 
 
