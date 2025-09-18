@@ -395,9 +395,9 @@ function undiciErrorCode(e: unknown): string | undefined {
 function detectErrorHtml(html: string, extra?: string[]): string | null {
   const lowered = html.toLowerCase();
   const base = PREPARE_DEFAULT_ERROR_HTML_PATTERNS;
-  const add = Array.isArray(extra) ? extra : [];
+  const add = extra || [];
   for (const p of [...base, ...add]) {
-    const q = (p || '').toString().trim().toLowerCase();
+    const q = p.trim().toLowerCase();
     if (!q) continue;
     if (lowered.includes(q)) return q;
   }
