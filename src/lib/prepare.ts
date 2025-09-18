@@ -6,7 +6,11 @@ import { extractZipToTemp } from '../utils/zip.js';
 import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
-import { Browser as PuppeteerBrowser, TimeoutError, HTTPResponse } from 'puppeteer';
+import {
+  Browser as PuppeteerBrowser,
+  TimeoutError,
+  HTTPResponse,
+} from 'puppeteer';
 
 export type PrepareOptions = {
   clickContinue?: boolean;
@@ -26,8 +30,8 @@ type Request = {
   body?: string;
 };
 
-const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map((p) =>
-  p.trim().toLowerCase()
+const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
+  (p) => p.trim().toLowerCase()
 ).filter((p) => p.length > 0);
 
 export async function prepare(
@@ -397,17 +401,17 @@ function undiciErrorCode(e: unknown): string | undefined {
 
 function detectErrorHtml(html: string, extra?: string[]): string | null {
   const lowered = html.toLowerCase();
-  for (const q of DEFAULT_ERROR_PATTERNS_LOWER) if (lowered.includes(q)) return q;
+  for (const q of DEFAULT_ERROR_PATTERNS_LOWER)
+    if (lowered.includes(q)) return q;
   const add = extra || [];
-  const addLower = add.map((p) => p.trim().toLowerCase()).filter((q) => q.length > 0);
+  const addLower = add
+    .map((p) => p.trim().toLowerCase())
+    .filter((q) => q.length > 0);
   for (const q of addLower) if (lowered.includes(q)) return q;
   return null;
 }
 
-function assertNavigationOk(
-  res: HTTPResponse | null,
-  phase: string
-) {
+function assertNavigationOk(res: HTTPResponse | null, phase: string) {
   if (!res) return;
   const status = res.status();
   if (status >= 400) {
