@@ -202,10 +202,16 @@ async function withBrowser(
     try {
       const url = constructUrl(req);
       logger.info(`Navigating to URL: ${url}`);
-      await page.goto(url, {
+      const navRes = await page.goto(url, {
         waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
         timeout: fast ? 15000 : 60000,
       });
+      if (navRes && navRes.status() >= 400) {
+        const status = navRes.status();
+        const statusText = navRes.statusText();
+        logger.error(`HTTP error on initial navigation: ${status} ${statusText}`);
+        throw new Error(`HTTP error ${status}: ${statusText}`);
+      }
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
       if (e instanceof TimeoutError) {
@@ -277,10 +283,16 @@ async function withBrowser(
           await page.click(info.buttonSelector);
           logger.info(`Clicked continue button: ${info.buttonSelector}`);
           try {
-            await page.waitForNavigation({
+            const contRes = await page.waitForNavigation({
               waitUntil: 'networkidle2',
               timeout: 30000,
             });
+            if (contRes && contRes.status() >= 400) {
+              const status = contRes.status();
+              const statusText = contRes.statusText();
+              logger.error(`HTTP error after continue: ${status} ${statusText}`);
+              throw new Error(`HTTP error ${status}: ${statusText}`);
+            }
           } catch {
             logger.warn('No navigation after continue; waiting for content');
           }
@@ -333,6 +345,11 @@ async function withBrowser(
     }
 
     const html = await page.content();
+    const bad = detectErrorHtml(html);
+    if (bad) {
+      logger.error(`Detected error HTML in browser content: ${bad}`);
+      throw new Error(`Browser returned error page: ${bad}`);
+    }
     const elapsedMs = Date.now() - startMs;
     logger.info(`Captured page HTML in ${elapsedMs}ms`);
     return { content: html, type: 'html' } as Prepared;
@@ -379,4 +396,14 @@ function undiciErrorCode(e: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+function detectErrorHtml(html: string): string | null {
+  const lowered = html.toLowerCase();
+  if (lowered.includes('403 - forbidden') || lowered.includes('access is denied')) return '403 Forbidden / Access is denied';
+  if (lowered.includes('server error') && lowered.includes('403')) return 'Server Error 403';
+  if (lowered.includes('404') && lowered.includes('not found')) return '404 Not Found';
+  if (lowered.includes('request blocked') || lowered.includes('access denied')) return 'Request blocked / Access denied';
+  if (lowered.includes('captcha') && lowered.includes('verify you are human')) return 'CAPTCHA challenge page';
+  return null;
 }
