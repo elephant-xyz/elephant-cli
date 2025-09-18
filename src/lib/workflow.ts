@@ -51,7 +51,7 @@ export const workflow: Workflow = {
       input: {
         selector:
           '#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00_dynamicBuildingDataRightColumn_divSummary',
-        timeout: 15000,
+        timeout: 30000,
         visible: true,
       },
     },
