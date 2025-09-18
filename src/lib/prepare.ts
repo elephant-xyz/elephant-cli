@@ -404,7 +404,10 @@ function detectErrorHtml(html: string, extra?: string[]): string | null {
   return null;
 }
 
-function assertNavigationOk(res: import('puppeteer').HTTPResponse | null, phase: string) {
+function assertNavigationOk(
+  res: import('puppeteer').HTTPResponse | null,
+  phase: string
+) {
   if (!res) return;
   const status = res.status();
   if (status >= 400) {
