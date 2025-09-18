@@ -3,15 +3,20 @@ import { tmpdir } from 'os';
 import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
+import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
-import { Browser as PuppeteerBrowser } from 'puppeteer';
-import { TimeoutError } from 'puppeteer';
+import {
+  Browser as PuppeteerBrowser,
+  TimeoutError,
+  HTTPResponse,
+} from 'puppeteer';
 
 export type PrepareOptions = {
   clickContinue?: boolean;
   fast?: boolean;
   useBrowser?: boolean;
+  errorPatterns?: string[];
 };
 
 type Prepared = { content: string; type: 'json' | 'html' };
@@ -24,6 +29,10 @@ type Request = {
   json?: unknown;
   body?: string;
 };
+
+const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
+  (p) => p.trim().toLowerCase()
+).filter((p) => p.length > 0);
 
 export async function prepare(
   inputZip: string,
@@ -63,7 +72,8 @@ export async function prepare(
         ? await withBrowser(
             req,
             effectiveClickContinue !== false,
-            effectiveFast === true
+            effectiveFast === true,
+            options.errorPatterns
           )
         : await withFetch(req);
 
@@ -142,7 +152,8 @@ async function withFetch(req: Request): Promise<Prepared> {
 async function withBrowser(
   req: Request,
   clickContinue = true,
-  fast = false
+  fast = false,
+  errorPatterns?: string[]
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
@@ -202,10 +213,11 @@ async function withBrowser(
     try {
       const url = constructUrl(req);
       logger.info(`Navigating to URL: ${url}`);
-      await page.goto(url, {
+      const navRes = await page.goto(url, {
         waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
         timeout: fast ? 15000 : 60000,
       });
+      assertNavigationOk(navRes, 'initial navigation');
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
       if (e instanceof TimeoutError) {
@@ -277,10 +289,11 @@ async function withBrowser(
           await page.click(info.buttonSelector);
           logger.info(`Clicked continue button: ${info.buttonSelector}`);
           try {
-            await page.waitForNavigation({
+            const contRes = await page.waitForNavigation({
               waitUntil: 'networkidle2',
               timeout: 30000,
             });
+            assertNavigationOk(contRes, 'after continue');
           } catch {
             logger.warn('No navigation after continue; waiting for content');
           }
@@ -333,6 +346,11 @@ async function withBrowser(
     }
 
     const html = await page.content();
+    const bad = detectErrorHtml(html, errorPatterns);
+    if (bad) {
+      logger.error(`Detected error HTML in browser content: ${bad}`);
+      throw new Error(`Browser returned error page: ${bad}`);
+    }
     const elapsedMs = Date.now() - startMs;
     logger.info(`Captured page HTML in ${elapsedMs}ms`);
     return { content: html, type: 'html' } as Prepared;
@@ -379,4 +397,26 @@ function undiciErrorCode(e: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+function detectErrorHtml(html: string, extra?: string[]): string | null {
+  const lowered = html.toLowerCase();
+  for (const q of DEFAULT_ERROR_PATTERNS_LOWER)
+    if (lowered.includes(q)) return q;
+  const add = extra || [];
+  const addLower = add
+    .map((p) => p.trim().toLowerCase())
+    .filter((q) => q.length > 0);
+  for (const q of addLower) if (lowered.includes(q)) return q;
+  return null;
+}
+
+function assertNavigationOk(res: HTTPResponse | null, phase: string) {
+  if (!res) return;
+  const status = res.status();
+  if (status >= 400) {
+    const statusText = res.statusText();
+    logger.error(`HTTP error ${phase}: ${status} ${statusText}`);
+    throw new Error(`HTTP error ${status}: ${statusText}`);
+  }
 }
