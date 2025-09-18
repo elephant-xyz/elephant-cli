@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
+import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
 import { Browser as PuppeteerBrowser } from 'puppeteer';
@@ -12,6 +13,7 @@ export type PrepareOptions = {
   clickContinue?: boolean;
   fast?: boolean;
   useBrowser?: boolean;
+  errorPatterns?: string[];
 };
 
 type Prepared = { content: string; type: 'json' | 'html' };
@@ -63,7 +65,8 @@ export async function prepare(
         ? await withBrowser(
             req,
             effectiveClickContinue !== false,
-            effectiveFast === true
+            effectiveFast === true,
+            options.errorPatterns
           )
         : await withFetch(req);
 
@@ -142,7 +145,8 @@ async function withFetch(req: Request): Promise<Prepared> {
 async function withBrowser(
   req: Request,
   clickContinue = true,
-  fast = false
+  fast = false,
+  errorPatterns?: string[]
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
   let browser: PuppeteerBrowser;
@@ -206,14 +210,7 @@ async function withBrowser(
         waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
         timeout: fast ? 15000 : 60000,
       });
-      if (navRes && navRes.status() >= 400) {
-        const status = navRes.status();
-        const statusText = navRes.statusText();
-        logger.error(
-          `HTTP error on initial navigation: ${status} ${statusText}`
-        );
-        throw new Error(`HTTP error ${status}: ${statusText}`);
-      }
+      assertNavigationOk(navRes, 'initial navigation');
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
       if (e instanceof TimeoutError) {
@@ -289,14 +286,7 @@ async function withBrowser(
               waitUntil: 'networkidle2',
               timeout: 30000,
             });
-            if (contRes && contRes.status() >= 400) {
-              const status = contRes.status();
-              const statusText = contRes.statusText();
-              logger.error(
-                `HTTP error after continue: ${status} ${statusText}`
-              );
-              throw new Error(`HTTP error ${status}: ${statusText}`);
-            }
+            assertNavigationOk(contRes, 'after continue');
           } catch {
             logger.warn('No navigation after continue; waiting for content');
           }
@@ -349,7 +339,7 @@ async function withBrowser(
     }
 
     const html = await page.content();
-    const bad = detectErrorHtml(html);
+    const bad = detectErrorHtml(html, errorPatterns);
     if (bad) {
       logger.error(`Detected error HTML in browser content: ${bad}`);
       throw new Error(`Browser returned error page: ${bad}`);
@@ -402,20 +392,24 @@ function undiciErrorCode(e: unknown): string | undefined {
   return undefined;
 }
 
-function detectErrorHtml(html: string): string | null {
+function detectErrorHtml(html: string, extra?: string[]): string | null {
   const lowered = html.toLowerCase();
-  if (
-    lowered.includes('403 - forbidden') ||
-    lowered.includes('access is denied')
-  )
-    return '403 Forbidden / Access is denied';
-  if (lowered.includes('server error') && lowered.includes('403'))
-    return 'Server Error 403';
-  if (lowered.includes('404') && lowered.includes('not found'))
-    return '404 Not Found';
-  if (lowered.includes('request blocked') || lowered.includes('access denied'))
-    return 'Request blocked / Access denied';
-  if (lowered.includes('captcha') && lowered.includes('verify you are human'))
-    return 'CAPTCHA challenge page';
+  const base = PREPARE_DEFAULT_ERROR_HTML_PATTERNS;
+  const add = Array.isArray(extra) ? extra : [];
+  for (const p of [...base, ...add]) {
+    const q = (p || '').toString().trim().toLowerCase();
+    if (!q) continue;
+    if (lowered.includes(q)) return q;
+  }
   return null;
+}
+
+function assertNavigationOk(res: import('puppeteer').HTTPResponse | null, phase: string) {
+  if (!res) return;
+  const status = res.status();
+  if (status >= 400) {
+    const statusText = res.statusText();
+    logger.error(`HTTP error ${phase}: ${status} ${statusText}`);
+    throw new Error(`HTTP error ${status}: ${statusText}`);
+  }
 }

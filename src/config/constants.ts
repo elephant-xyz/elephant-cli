@@ -151,3 +151,15 @@ export const SUBMIT_CONTRACT_ABI_FRAGMENTS = [
     type: 'event',
   },
 ] as const;
+
+// Prepare: default HTML error detection patterns (lowercase substrings)
+export const PREPARE_DEFAULT_ERROR_HTML_PATTERNS = [
+  '403 - forbidden',
+  'access is denied',
+  'server error 403',
+  '404 not found',
+  'request blocked',
+  'access denied',
+  'captcha',
+  'verify you are human',
+];
