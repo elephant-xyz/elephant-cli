@@ -255,6 +255,12 @@ export interface PreparePermitPagesOptions {
 	limit?: number;
 }
 
+export type PreparePermitPagesResult = {
+  success: boolean;
+  outputZip: string;
+  processed: number;
+};
+
 export function registerPreparePermitPagesCommand(program: Command) {
 	program
 		.command('prepare-permit-pages <inputZip>')
@@ -309,11 +315,54 @@ export async function handlePreparePermitPages(inputZip: string, options: Prepar
 		console.log(chalk.blue(`ZIP: ${outZip}`));
 	} catch (e) {
 		spinner.fail('Failed');
-		logger.error(e instanceof Error ? e.message : String(e));
+		const msg = e instanceof Error ? e.message : String(e);
+		logger.error(msg);
 		if (e instanceof Error && e.stack) logger.debug(e.stack);
+		console.error(chalk.red(`ERROR: ${msg}`));
 		process.exit(1);
 	} finally {
 		await browser.close();
 		await fs.rm(root, { recursive: true, force: true }).catch(() => {});
 	}
+}
+
+// Programmatic API (no process.exit)
+export async function executePreparePermitPages(
+  inputZip: string,
+  options: PreparePermitPagesOptions
+): Promise<PreparePermitPagesResult> {
+  const outZip = normalizeOutputZip(options.output);
+  const rows = await readCsvFromZip(inputZip, options.urlCsv);
+  const take = typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit! > 0 ? Math.min(options.limit!, rows.length) : rows.length;
+  const browser = await launchBrowser();
+  const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-permit-pages-out-'));
+  try {
+    for (let i = 0; i < take; i++) {
+      const row = rows[i];
+      const page = await browser.newPage();
+      page.on('dialog', async (d) => { try { await d.dismiss(); } catch {} });
+      await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36');
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9', Accept: 'text/html,application/xhtml+xml' });
+      await page.goto(row.url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+      await waitForGlobalIdle(page);
+      const dirBase = row.name.replace(/[^\w\-]+/g, '_') || `record_${String(i + 1).padStart(4, '0')}`;
+      const recDir = path.join(root, dirBase);
+      await fs.mkdir(recDir, { recursive: true });
+      await expandAllSectionsOnTab(page);
+      await expandInPageToggles(page);
+      await expandMoreDetailsAndTrees(page);
+      await triggerHiddenPostbacks(page);
+      await expandUntilStable(page);
+      await fs.writeFile(path.join(recDir, `${dirBase}__Expanded.html`), await page.content(), 'utf-8');
+      await page.close();
+    }
+    const zip = new AdmZip();
+    const names = await fs.readdir(root);
+    for (const n of names) zip.addLocalFolder(path.join(root, n), n);
+    zip.writeZip(outZip);
+    return { success: true, outputZip: outZip, processed: take };
+  } finally {
+    await browser.close();
+    await fs.rm(root, { recursive: true, force: true }).catch(() => {});
+  }
 }

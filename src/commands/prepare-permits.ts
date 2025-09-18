@@ -236,6 +236,12 @@ export interface PreparePermitsOptions {
   urlCsv?: string;
 }
 
+export type PreparePermitsResult = {
+  success: boolean;
+  outputZip: string;
+  count: number;
+};
+
 export function registerPreparePermitsCommand(program: Command) {
   program
     .command('prepare-permits <inputZip>')
@@ -256,34 +262,49 @@ export async function handlePreparePermits(inputZip: string, options: PreparePer
       console.error('Usage: --start MM/DD/YYYY --end MM/DD/YYYY');
       process.exit(1);
     }
-    const outZip = normalizeOutputZip(options.output);
-    const url = await readUrlFromZip(inputZip, options.urlCsv);
-    spinner.start('Launching browser and running search...');
-    const results = await scrapePermits(url, options.start, options.end);
-    spinner.text = 'Packaging per-record CSVs...';
-    const zip = new AdmZip();
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      const idx = String(i + 1).padStart(4, '0');
-      const safeBase = (r.name || 'record')
-        .replace(/[\n\r\t]/g, ' ')
-        .replace(/[^a-zA-Z0-9 _.-]/g, '')
-        .trim()
-        .slice(0, 80) || 'record';
-      const file = `${idx}-${safeBase}.csv`;
-      const content = `name,url\n"${r.name.replace(/"/g, '""')}","${r.url}"\n`;
-      zip.addFile(file, Buffer.from(content, 'utf-8'));
-    }
-    zip.writeZip(outZip);
+    const res = await executePreparePermits(inputZip, options);
+    const outZip = res.outputZip;
+    const resultsLen = res.count;
     spinner.succeed('Saved.');
-    console.log(chalk.green(`Saved ${results.length} permits`));
+    console.log(chalk.green(`Saved ${resultsLen} permits`));
     console.log(chalk.blue(`ZIP: ${outZip}`));
   } catch (e) {
     spinner.fail('Failed');
-    logger.error(e instanceof Error ? e.message : String(e));
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.error(msg);
     if (e instanceof Error && e.stack) logger.debug(e.stack);
+    // Echo failure to console for immediate visibility
+    console.error(chalk.red(`ERROR: ${msg}`));
     process.exit(1);
   }
+}
+
+// Programmatic API (no process.exit)
+export async function executePreparePermits(
+  inputZip: string,
+  options: PreparePermitsOptions
+): Promise<PreparePermitsResult> {
+  if (!dateRe.test(options.start) || !dateRe.test(options.end)) {
+    throw new Error('Invalid dates. Use --start MM/DD/YYYY --end MM/DD/YYYY');
+  }
+  const outZip = normalizeOutputZip(options.output);
+  const url = await readUrlFromZip(inputZip, options.urlCsv);
+  const results = await scrapePermits(url, options.start, options.end);
+  const zip = new AdmZip();
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const idx = String(i + 1).padStart(4, '0');
+    const safeBase = (r.name || 'record')
+      .replace(/[\n\r\t]/g, ' ')
+      .replace(/[^a-zA-Z0-9 _.-]/g, '')
+      .trim()
+      .slice(0, 80) || 'record';
+    const file = `${idx}-${safeBase}.csv`;
+    const content = `name,url\n"${r.name.replace(/"/g, '""')}","${r.url}"\n`;
+    zip.addFile(file, Buffer.from(content, 'utf-8'));
+  }
+  zip.writeZip(outZip);
+  return { success: true, outputZip: outZip, count: results.length };
 }
 
 
