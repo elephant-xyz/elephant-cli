@@ -262,7 +262,7 @@ export async function handlePreparePermits(inputZip: string, options: PreparePer
       console.error('Usage: --start MM/DD/YYYY --end MM/DD/YYYY');
       process.exit(1);
     }
-    const res = await executePreparePermits(inputZip, options);
+    const res = await preparePermits(inputZip, options);
     const outZip = res.outputZip;
     const resultsLen = res.count;
     spinner.succeed('Saved.');
@@ -280,7 +280,7 @@ export async function handlePreparePermits(inputZip: string, options: PreparePer
 }
 
 // Programmatic API (no process.exit)
-export async function executePreparePermits(
+export async function preparePermits(
   inputZip: string,
   options: PreparePermitsOptions
 ): Promise<PreparePermitsResult> {

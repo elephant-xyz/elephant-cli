@@ -327,7 +327,7 @@ export async function handlePreparePermitPages(inputZip: string, options: Prepar
 }
 
 // Programmatic API (no process.exit)
-export async function executePreparePermitPages(
+export async function preparePermitPages(
   inputZip: string,
   options: PreparePermitPagesOptions
 ): Promise<PreparePermitPagesResult> {

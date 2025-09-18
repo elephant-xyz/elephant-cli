@@ -5,8 +5,8 @@ export { hash } from './commands.js';
 export { upload } from './commands.js';
 export { submitToContract } from './commands.js';
 export { prepare } from './prepare.js';
-export { executePreparePermits } from '../commands/prepare-permits.js';
-export { executePreparePermitPages } from '../commands/prepare-permit-pages.js';
+export { preparePermits } from '../commands/prepare-permits.js';
+export { preparePermitPages } from '../commands/prepare-permit-pages.js';
 
 // Export types
 export type {
