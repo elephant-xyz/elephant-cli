@@ -209,7 +209,9 @@ async function withBrowser(
       if (navRes && navRes.status() >= 400) {
         const status = navRes.status();
         const statusText = navRes.statusText();
-        logger.error(`HTTP error on initial navigation: ${status} ${statusText}`);
+        logger.error(
+          `HTTP error on initial navigation: ${status} ${statusText}`
+        );
         throw new Error(`HTTP error ${status}: ${statusText}`);
       }
     } catch (e) {
@@ -290,7 +292,9 @@ async function withBrowser(
             if (contRes && contRes.status() >= 400) {
               const status = contRes.status();
               const statusText = contRes.statusText();
-              logger.error(`HTTP error after continue: ${status} ${statusText}`);
+              logger.error(
+                `HTTP error after continue: ${status} ${statusText}`
+              );
               throw new Error(`HTTP error ${status}: ${statusText}`);
             }
           } catch {
@@ -400,10 +404,18 @@ function undiciErrorCode(e: unknown): string | undefined {
 
 function detectErrorHtml(html: string): string | null {
   const lowered = html.toLowerCase();
-  if (lowered.includes('403 - forbidden') || lowered.includes('access is denied')) return '403 Forbidden / Access is denied';
-  if (lowered.includes('server error') && lowered.includes('403')) return 'Server Error 403';
-  if (lowered.includes('404') && lowered.includes('not found')) return '404 Not Found';
-  if (lowered.includes('request blocked') || lowered.includes('access denied')) return 'Request blocked / Access denied';
-  if (lowered.includes('captcha') && lowered.includes('verify you are human')) return 'CAPTCHA challenge page';
+  if (
+    lowered.includes('403 - forbidden') ||
+    lowered.includes('access is denied')
+  )
+    return '403 Forbidden / Access is denied';
+  if (lowered.includes('server error') && lowered.includes('403'))
+    return 'Server Error 403';
+  if (lowered.includes('404') && lowered.includes('not found'))
+    return '404 Not Found';
+  if (lowered.includes('request blocked') || lowered.includes('access denied'))
+    return 'Request blocked / Access denied';
+  if (lowered.includes('captcha') && lowered.includes('verify you are human'))
+    return 'CAPTCHA challenge page';
   return null;
 }
