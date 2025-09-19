@@ -1,3 +1,10 @@
+## [1.35.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.2...v1.35.3) (2025-09-19)
+
+
+### Bug Fixes
+
+* Improve visibility for failures of transformation scripts execution in `transform` ([#146](https://github.com/elephant-xyz/elephant-cli/issues/146)) ([1232604](https://github.com/elephant-xyz/elephant-cli/commit/1232604154cfa8e89774d26e11bf2e2959e644ec))
+
 ## [1.35.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.1...v1.35.2) (2025-09-18)
 
 
