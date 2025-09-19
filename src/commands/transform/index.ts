@@ -192,7 +192,10 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   }
 }
 
-async function generateFactSheet(tempRoot: string, isSeedMode: boolean = false) {
+async function generateFactSheet(
+  tempRoot: string,
+  isSeedMode: boolean = false
+) {
   const outputPath = path.join(tempRoot, OUTPUT_DIR);
   const htmlOutputDir = path.join(tmpdir(), 'generated-htmls');
   await generateHTMLFiles(tempRoot, htmlOutputDir);
