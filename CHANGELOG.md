@@ -1,3 +1,24 @@
+## [1.35.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.2...v1.35.3) (2025-09-19)
+
+
+### Bug Fixes
+
+* Improve visibility for failures of transformation scripts execution in `transform` ([#146](https://github.com/elephant-xyz/elephant-cli/issues/146)) ([1232604](https://github.com/elephant-xyz/elephant-cli/commit/1232604154cfa8e89774d26e11bf2e2959e644ec))
+
+## [1.35.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.1...v1.35.2) (2025-09-18)
+
+
+### Bug Fixes
+
+* **prepare:** making prepare fail in case of error ([#144](https://github.com/elephant-xyz/elephant-cli/issues/144)) ([4016a1c](https://github.com/elephant-xyz/elephant-cli/commit/4016a1c734f0c6d37e22f0b818f764ae39a5470e))
+
+## [1.35.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.0...v1.35.1) (2025-09-16)
+
+
+### Bug Fixes
+
+* Update transaction submission to return pending status without waiting for confirmation ([#142](https://github.com/elephant-xyz/elephant-cli/issues/142)) ([6ac6a6d](https://github.com/elephant-xyz/elephant-cli/commit/6ac6a6d0e0b3cddfc18df4af3a1f9d92cadad6a9))
+
 # [1.35.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.34.3...v1.35.0) (2025-09-15)
 
 

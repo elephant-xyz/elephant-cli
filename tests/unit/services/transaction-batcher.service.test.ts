@@ -194,11 +194,12 @@ describe('TransactionBatcherService', () => {
       expect(
         mockContractInstance[SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA]
       ).toHaveBeenCalled();
-      expect(mockTxResponse.wait).toHaveBeenCalled();
+      // No longer waiting for confirmation
+      expect(mockTxResponse.wait).not.toHaveBeenCalled();
       expect(result).toEqual({
-        transactionHash: mockTxReceipt.hash,
-        blockNumber: mockTxReceipt.blockNumber,
-        gasUsed: mockTxReceipt.gasUsed.toString(),
+        transactionHash: mockTxResponse.hash,
+        blockNumber: undefined,
+        gasUsed: undefined,
         itemsSubmitted: batchItems.length,
       });
       // @ts-ignore

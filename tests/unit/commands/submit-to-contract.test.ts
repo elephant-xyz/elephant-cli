@@ -10,6 +10,7 @@ import { CsvReporterService } from '../../../src/services/csv-reporter.service.j
 import { UnsignedTransactionJsonService } from '../../../src/services/unsigned-transaction-json.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 import { EncryptedWalletService } from '../../../src/services/encrypted-wallet.service.js';
+import { TransactionStatusReporterService } from '../../../src/services/transaction-status-reporter.service.js';
 
 vi.mock('fs', () => ({
   ...vi.importActual('fs'),
@@ -21,6 +22,7 @@ vi.mock('fs', () => ({
 vi.mock('../../../src/services/transaction-batcher.service.js');
 vi.mock('../../../src/services/chain-state.service.js');
 vi.mock('../../../src/services/unsigned-transaction-json.service.js');
+vi.mock('../../../src/services/transaction-status-reporter.service.js');
 
 vi.mock('ethers', async () => {
   const actual = await vi.importActual('ethers');
@@ -125,6 +127,15 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
           hasUserSubmittedData: vi.fn().mockResolvedValue(false),
           getUserSubmissions: vi.fn().mockResolvedValue(new Set<string>()),
           prepopulateConsensusCache: vi.fn().mockResolvedValue(undefined),
+        }) as any
+    );
+
+    vi.mocked(TransactionStatusReporterService).mockImplementation(
+      () =>
+        ({
+          initialize: vi.fn().mockResolvedValue(undefined),
+          logTransaction: vi.fn().mockResolvedValue(undefined),
+          finalize: vi.fn().mockResolvedValue(undefined),
         }) as any
     );
 

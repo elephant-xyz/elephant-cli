@@ -524,9 +524,11 @@ export async function handleSubmitToContract(
     (isApiMode ? new TransactionStatusService(options.rpcUrl) : undefined);
 
   const workingDir = options.cwd || process.cwd();
+  // Initialize transaction status reporter for both API mode and direct submission mode
+  // (but not for dry-run mode since no actual transactions are sent)
   const transactionStatusReporter =
     serviceOverrides.transactionStatusReporter ??
-    (isApiMode
+    (!options.dryRun
       ? new TransactionStatusReporterService(
           path.resolve(workingDir, 'transaction-status.csv')
         )
@@ -855,14 +857,31 @@ export async function handleSubmitToContract(
           for await (const batchResult of transactionBatcherService.submitAll(
             dataItemsForTransaction
           )) {
+            const currentTimestamp = new Date().toISOString();
+
             logger.info(
               `Batch submitted: TxHash ${batchResult.transactionHash}, Items: ${batchResult.itemsSubmitted}`
             );
+
+            // Log to transaction status CSV
+            if (transactionStatusReporter) {
+              await transactionStatusReporter.logTransaction({
+                batchIndex,
+                transactionHash: batchResult.transactionHash,
+                status: 'pending',
+                blockNumber: batchResult.blockNumber,
+                gasUsed: batchResult.gasUsed,
+                itemCount: batchResult.itemsSubmitted,
+                error: undefined,
+                timestamp: currentTimestamp,
+              });
+            }
+
             submittedTransactions.push({
               transactionHash: batchResult.transactionHash,
               batchIndex,
               itemCount: batchResult.itemsSubmitted,
-              timestamp: new Date().toISOString(),
+              timestamp: currentTimestamp,
               status: 'pending',
             });
             batchIndex++;

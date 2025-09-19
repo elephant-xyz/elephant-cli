@@ -3,7 +3,6 @@ import {
   Wallet,
   Contract,
   TransactionResponse,
-  TransactionReceipt,
   Overrides,
 } from 'ethers';
 import { DataItem, BatchSubmissionResult } from '../types/contract.types.js';
@@ -187,33 +186,14 @@ export class TransactionBatcherService {
         const txResponse: TransactionResponse = await this.contract[
           SUBMIT_CONTRACT_METHODS.SUBMIT_BATCH_DATA
         ](preparedBatch, txOptions);
-        logger.info(
-          `Transaction sent: ${txResponse.hash}, waiting for confirmation...`
-        );
+        logger.info(`Transaction submitted: ${txResponse.hash} (pending)`);
 
-        const receipt: TransactionReceipt | null = await txResponse.wait(1);
-
-        if (!receipt) {
-          throw new Error(
-            `Transaction ${txResponse.hash} timed out or failed to confirm.`
-          );
-        }
-
-        if (receipt.status === 0) {
-          // 0 means transaction failed
-          logger.error(
-            `Transaction ${receipt.hash} failed. Status: ${receipt.status}`
-          );
-          throw new Error(`Transaction ${receipt.hash} reverted by EVM.`);
-        }
-
-        logger.info(
-          `Transaction confirmed: ${receipt.hash}, Block: ${receipt.blockNumber}`
-        );
+        // Don't wait for confirmation - return immediately with pending status
+        // This matches the API mode behavior
         return {
-          transactionHash: receipt.hash,
-          blockNumber: receipt.blockNumber,
-          gasUsed: receipt.gasUsed.toString(),
+          transactionHash: txResponse.hash,
+          blockNumber: undefined,
+          gasUsed: undefined,
           itemsSubmitted: batchItems.length,
         };
       } catch (error) {
