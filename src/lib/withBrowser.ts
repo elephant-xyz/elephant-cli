@@ -1,16 +1,26 @@
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
-import { Browser as PuppeteerBrowser, Page } from 'puppeteer';
-import { TimeoutError } from 'puppeteer';
+import {
+  Browser as PuppeteerBrowser,
+  TimeoutError,
+  Page,
+  HTTPResponse,
+} from 'puppeteer';
 import { constructUrl, cleanHtml, createBrowser } from './common.js';
 import { Prepared, Request } from './types.js';
+import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
+
+const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
+  (p) => p.trim().toLowerCase()
+).filter((p) => p.length > 0);
 
 export async function withBrowser(
   req: Request,
   clickContinue: boolean = false,
   fast: boolean = true,
   requestId: string,
-  headless: boolean
+  headless: boolean,
+  errorPatterns?: string[]
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
   const browser: PuppeteerBrowser = await createBrowser(headless);
@@ -42,10 +52,11 @@ export async function withBrowser(
     try {
       const url = constructUrl(req);
       logger.info(`Navigating to URL: ${url}`);
-      await page.goto(url, {
+      const navRes = await page.goto(url, {
         waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
         timeout: fast ? 15000 : 60000,
       });
+      assertNavigationOk(navRes, 'initial navigation');
     } catch (e) {
       logger.error(`Error navigating to URL: ${e}`);
       if (e instanceof TimeoutError) {
@@ -90,6 +101,11 @@ export async function withBrowser(
     }
 
     const html = await page.content();
+    const bad = detectErrorHtml(html, errorPatterns);
+    if (bad) {
+      logger.error(`Detected error HTML in browser content: ${bad}`);
+      throw new Error(`Browser returned error page: ${bad}`);
+    }
     const elapsedMs = Date.now() - startMs;
     logger.info(`Captured page HTML in ${elapsedMs}ms`);
     return { content: html, type: 'html' } as Prepared;
@@ -197,15 +213,38 @@ async function clickContinueButton(page: Page) {
       await page.click(info.buttonSelector);
       logger.info(`Clicked continue button: ${info.buttonSelector}`);
       try {
-        await page.waitForNavigation({
+        const contRes = await page.waitForNavigation({
           waitUntil: 'networkidle2',
           timeout: 30000,
         });
+        assertNavigationOk(contRes, 'after continue');
       } catch {
         logger.warn('No navigation after continue; waiting for content');
       }
     } catch {
       logger.warn('Failed to wait for continue button');
     }
+  }
+}
+
+function detectErrorHtml(html: string, extra?: string[]): string | null {
+  const lowered = html.toLowerCase();
+  for (const q of DEFAULT_ERROR_PATTERNS_LOWER)
+    if (lowered.includes(q)) return q;
+  const add = extra || [];
+  const addLower = add
+    .map((p) => p.trim().toLowerCase())
+    .filter((q) => q.length > 0);
+  for (const q of addLower) if (lowered.includes(q)) return q;
+  return null;
+}
+
+function assertNavigationOk(res: HTTPResponse | null, phase: string) {
+  if (!res) return;
+  const status = res.status();
+  if (status >= 400) {
+    const statusText = res.statusText();
+    logger.error(`HTTP error ${phase}: ${status} ${statusText}`);
+    throw new Error(`HTTP error ${status}: ${statusText}`);
   }
 }

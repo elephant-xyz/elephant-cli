@@ -3,6 +3,7 @@ export type PrepareOptions = {
   fast?: boolean;
   useBrowser?: boolean;
   headless?: boolean;
+  errorPatterns?: string[];
 };
 
 export type Prepared = { content: string; type: 'json' | 'html' };
