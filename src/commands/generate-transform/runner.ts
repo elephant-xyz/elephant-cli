@@ -194,9 +194,9 @@ export async function generateTransform(
   }
   const filenames = buildFilename(input);
 
-  let dataDicttionaryContent;
+  let dataDictionaryContent;
   if (dataDictionary) {
-    dataDicttionaryContent = await fs.readFile(
+    dataDictionaryContent = await fs.readFile(
       path.resolve(dataDictionary),
       'utf-8'
     );
@@ -216,7 +216,7 @@ export async function generateTransform(
     attempts: 0,
     logs: [],
     schemas: await fetchSchemas(),
-    dataDictionaryContent: dataDicttionaryContent,
+    dataDictionaryContent: dataDictionaryContent,
   };
 
   report({ kind: 'phase', phase: 'running_graph' });

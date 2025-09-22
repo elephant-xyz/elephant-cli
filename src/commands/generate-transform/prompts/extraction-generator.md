@@ -117,7 +117,7 @@ You must systematically adhere to these principles:
     - Never extract owner, utilities, or layout data from HTML: always use the defined JSON sources (provided as `owner_data`, `utilities_data`, `layout_data` in user message).
     - Use all other fields/data from the HTML content (provided as `input_file` in user message).
 
-    Additional data dictionary of the enum values and other info about sorce data:
+    Additional data dictionary of the enum values and other info about source data:
 
     <data_dictionary>
     {data_dictionary}
