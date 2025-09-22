@@ -172,13 +172,13 @@ Run `prepare` to reproduce the county response referenced by the seed.
 elephant-cli prepare prepare-input.zip --output-zip prepared-site.zip
 ```
 
-For complex county sites requiring multi-step navigation (e.g., accepting terms, searching by parcel ID), use browser flow templates:
+For complex county sites requiring multi-step navigation, use browser flow templates:
 
 ```bash
 elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
-  --browser-flow-template SEARCH_BY_PARCEL_ID \
-  --browser-flow-parameters '{"continue_button_selector":".btn-accept","search_form_selector":"#parcel-input","search_result_selector":"#results"}'
+  --browser-flow-template <TEMPLATE_NAME> \
+  --browser-flow-parameters '<JSON_PARAMETERS>'
 ```
 
 **What it does**
@@ -211,44 +211,21 @@ prepared-site.zip
 
 ### Browser Flow Templates
 
-Browser flow templates provide reusable automation patterns for complex county websites that require multi-step navigation. The URL is automatically extracted from `property_seed.json`'s `source_http_request` field.
+Browser flow templates provide reusable automation patterns for complex county websites that require multi-step navigation. Instead of hardcoding browser interactions, templates allow you to configure automation using CSS selectors as parameters. The URL is automatically extracted from `property_seed.json`'s `source_http_request` field.
 
-**Available Templates:**
+**Key Benefits:**
+- Handles modal dialogs and terms acceptance screens
+- Automates form filling and navigation
+- Configurable for different county website structures
+- No code changes required for new counties
 
-- **SEARCH_BY_PARCEL_ID**: Automates property searches by parcel ID with optional modal handling.
+For available templates, parameters, and detailed usage examples, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
 
-**Template Parameters for SEARCH_BY_PARCEL_ID:**
+**Need a New Template?**
 
-| Parameter | Required | Description |
-| --- | --- | --- |
-| `search_form_selector` | ✅ | CSS selector for the parcel ID search input field |
-| `search_result_selector` | ✅ | CSS selector to wait for when search results load |
-| `continue_button_selector` | ➖ | CSS selector for accept/continue button (if present) |
-
-**Example Usage:**
-
-```bash
-# Simple search form
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --browser-flow-template SEARCH_BY_PARCEL_ID \
-  --browser-flow-parameters '{
-    "search_form_selector": "#parcelSearch",
-    "search_result_selector": ".property-details"
-  }'
-
-# With modal/terms acceptance
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --browser-flow-template SEARCH_BY_PARCEL_ID \
-  --browser-flow-parameters '{
-    "continue_button_selector": ".btn.btn-primary.button-1",
-    "search_form_selector": "#ctlBodyPane_ctl03_ctl01_txtParcelID",
-    "search_result_selector": "#ctlBodyPane_ctl10_ctl01_lstBuildings"
-  }'
-```
-
-For detailed browser flow documentation and custom template creation, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
+If existing templates don't cover your county's website pattern, please:
+1. Create a [GitHub issue](https://github.com/anthropics/claude-code/issues) with details about the site structure
+2. Contact the development team for assistance in creating a new template
 
 ## Generate Transformation Scripts
 
