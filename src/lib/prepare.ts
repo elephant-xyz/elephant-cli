@@ -9,6 +9,9 @@ import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
 import { workflow } from './workflow.js';
+import { createWorkflowFromTemplate } from './browser-flow/index.js';
+import { logger } from '../utils/logger.js';
+import { constructUrl } from './common.js';
 
 export async function prepare(
   inputZip: string,
@@ -45,18 +48,38 @@ export async function prepare(
     if (!requestId)
       throw new Error('property_seed.json missing request_identifier');
 
-    const prepared = process.env.WEIRED_COUNTY
-      ? await withBrowserFlow(workflow, headless, requestId)
-      : req.method === 'GET' && effectiveBrowser
-        ? await withBrowser(
-            req,
-            effectiveClickContinue,
-            effectiveFast,
-            requestId,
-            headless,
-            options.errorPatterns
-          )
-        : await withFetch(req);
+    let prepared;
+
+    // Check if browser flow template is specified
+    if (options.browserFlowTemplate && options.browserFlowParameters) {
+      const url = constructUrl(req);
+      const templateWorkflow = createWorkflowFromTemplate(
+        options.browserFlowTemplate,
+        options.browserFlowParameters,
+        { requestId, url }
+      );
+      if (!templateWorkflow) {
+        throw new Error('Failed to create workflow from template');
+      }
+      prepared = await withBrowserFlow(templateWorkflow, headless, requestId);
+    } else if (process.env.WEIRED_COUNTY) {
+      // Legacy support for WEIRED_COUNTY env variable
+      logger.warn(
+        'WEIRED_COUNTY env variable is deprecated. Use --browser-flow-template instead.'
+      );
+      prepared = await withBrowserFlow(workflow, headless, requestId);
+    } else if (req.method === 'GET' && effectiveBrowser) {
+      prepared = await withBrowser(
+        req,
+        effectiveClickContinue,
+        effectiveFast,
+        requestId,
+        headless,
+        options.errorPatterns
+      );
+    } else {
+      prepared = await withFetch(req);
+    }
 
     const name = `${requestId}.${prepared.type}`;
     await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');

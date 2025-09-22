@@ -882,6 +882,11 @@ elephant-cli prepare input.zip --output-zip prepared-data.zip
 
 # Force direct HTTP fetch (disable headless browser)
 elephant-cli prepare input.zip --output-zip prepared-data.zip --no-browser
+
+# Use browser flow template for custom county sites
+elephant-cli prepare input.zip --output-zip prepared-data.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{"url":"https://example.com","search_form_selector":"#search","search_result_selector":"#results"}'
 ```
 
 **What it does:**
@@ -899,6 +904,12 @@ elephant-cli prepare input.zip --output-zip prepared-data.zip --no-browser
 
 - `--output-zip <path>`: Output ZIP file path (required)
 - `--no-browser`: Disable headless browser; use direct HTTP fetch only
+- `--browser-flow-template <template>`: Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`)
+- `--browser-flow-parameters <json>`: JSON parameters for the browser flow template
+
+**Browser Flow Templates:**
+
+For complex county appraiser websites that require multi-step navigation (e.g., accepting terms, searching by parcel ID), you can use browser flow templates. See [Browser Flow Templates Documentation](./docs/browser-flow-templates.md) for detailed usage and available templates.
 
 **Output structure:**
 

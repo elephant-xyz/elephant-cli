@@ -4,6 +4,8 @@ export type PrepareOptions = {
   useBrowser?: boolean;
   headless?: boolean;
   errorPatterns?: string[];
+  browserFlowTemplate?: string;
+  browserFlowParameters?: string;
 };
 
 export type Prepared = { content: string; type: 'json' | 'html' };
