@@ -11,7 +11,7 @@ import { withBrowserFlow } from './withBrowserFlow.js';
 import { workflow } from './workflow.js';
 import { createWorkflowFromTemplate } from './browser-flow/index.js';
 import { logger } from '../utils/logger.js';
-import { constructUrl } from './common.js';
+import { constructUrl, parseUrlToRequest } from './common.js';
 
 export async function prepare(
   inputZip: string,
@@ -83,6 +83,47 @@ export async function prepare(
 
     const name = `${requestId}.${prepared.type}`;
     await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
+
+    // If browser flow was used and we have a final URL, update the seed files
+    if (
+      prepared.finalUrl &&
+      (options.browserFlowTemplate || process.env.WEIRED_COUNTY)
+    ) {
+      logger.info(
+        'Updating seed files with entry_http_request and new source_http_request'
+      );
+
+      // Parse the final URL into a request object
+      const finalRequest = parseUrlToRequest(prepared.finalUrl);
+
+      // Update property_seed.json
+      const seedPath = path.join(root, 'property_seed.json');
+      const seedContent = await fs.readFile(seedPath, 'utf-8');
+      const seedData = JSON.parse(seedContent);
+
+      // Rename source_http_request to entry_http_request and add new source_http_request
+      seedData.entry_http_request = seedData.source_http_request;
+      seedData.source_http_request = finalRequest;
+
+      await fs.writeFile(seedPath, JSON.stringify(seedData, null, 2), 'utf-8');
+
+      // Also update unnormalized_address.json to include the entry_http_request info
+      const addressPath = path.join(root, 'unnormalized_address.json');
+      const addressContent = await fs.readFile(addressPath, 'utf-8');
+      const addressData = JSON.parse(addressContent);
+
+      // If address file has source_http_request, rename it to entry_http_request
+      if (addressData.source_http_request) {
+        addressData.entry_http_request = addressData.source_http_request;
+        addressData.source_http_request = finalRequest;
+      }
+
+      await fs.writeFile(
+        addressPath,
+        JSON.stringify(addressData, null, 2),
+        'utf-8'
+      );
+    }
 
     const zip = new AdmZip();
     for (const rel of await fs.readdir(root))

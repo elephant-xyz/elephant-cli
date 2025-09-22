@@ -15,6 +15,25 @@ export function constructUrl(req: Request) {
   return url.toString();
 }
 
+export function parseUrlToRequest(urlString: string): Request {
+  const url = new URL(urlString);
+  const multiValueQueryString: Record<string, string[]> = {};
+
+  // Group query parameters by key (support multiple values per key)
+  url.searchParams.forEach((value, key) => {
+    if (!multiValueQueryString[key]) {
+      multiValueQueryString[key] = [];
+    }
+    multiValueQueryString[key].push(value);
+  });
+
+  return {
+    url: `${url.protocol}//${url.host}${url.pathname}`,
+    method: 'GET',
+    multiValueQueryString,
+  };
+}
+
 /**
  * Strips embedded JS & CSS from raw HTML while preserving structure and classes.
  * - Removes: <script>, <style>, <noscript>, <link rel="stylesheet">

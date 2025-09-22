@@ -171,9 +171,15 @@ export async function withBrowserFlow(
     }
     const elapsedMs = Date.now() - startMs;
     logger.info(`Captured page HTML in ${elapsedMs}ms`);
+
+    // Capture the final URL after navigation
+    const finalUrl = page.url();
+    logger.info(`Final URL after browser flow: ${finalUrl}`);
+
     const result = {
       content: await cleanHtml(await page.content()),
       type: 'html' as const,
+      finalUrl,
     };
     return result;
   } finally {

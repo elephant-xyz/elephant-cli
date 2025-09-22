@@ -8,7 +8,11 @@ export type PrepareOptions = {
   browserFlowParameters?: string;
 };
 
-export type Prepared = { content: string; type: 'json' | 'html' };
+export type Prepared = {
+  content: string;
+  type: 'json' | 'html';
+  finalUrl?: string; // The final URL after browser navigation
+};
 
 export type Request = {
   url: string;
