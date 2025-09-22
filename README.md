@@ -224,7 +224,7 @@ For available templates, parameters, and detailed usage examples, see [Browser F
 **Need a New Template?**
 
 If existing templates don't cover your county's website pattern, please:
-1. Create a [GitHub issue](https://github.com/anthropics/claude-code/issues) with details about the site structure
+1. Create a [GitHub issue](https://github.com/elephant-xyz/elephant-cli/issues) with details about the site structure
 2. Contact the development team for assistance in creating a new template
 
 ## Generate Transformation Scripts
