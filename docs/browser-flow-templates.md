@@ -11,7 +11,6 @@ Browser Flow Templates provide a flexible and reusable way to automate browser i
 - [Using Browser Flow Templates](#using-browser-flow-templates)
 - [Template Parameters](#template-parameters)
 - [Creating Custom Templates](#creating-custom-templates)
-- [Migration from Legacy Approach](#migration-from-legacy-approach)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
 
@@ -130,29 +129,6 @@ Templates support dynamic values using dot template syntax:
 
 - `{{=it.request_identifier}}`: The parcel ID from the input data
 - `{{=it.continue_button}}`: Stored result from a previous step
-
-## Migration from Legacy Approach
-
-### From WEIRED_COUNTY Environment Variable
-
-The `WEIRED_COUNTY` environment variable is now deprecated. Replace:
-
-```bash
-# Old approach (deprecated)
-WEIRED_COUNTY=1 npx elephant-cli prepare input.zip --output-zip output.zip
-
-# New approach
-npx elephant-cli prepare input.zip \
-  --output-zip output.zip \
-  --browser-flow-template SEARCH_BY_PARCEL_ID \
-  --browser-flow-parameters '{
-    "continue_button_selector": ".btn.btn-primary.button-1",
-    "search_form_selector": "#ctlBodyPane_ctl03_ctl01_txtParcelID",
-    "search_result_selector": "#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00_dynamicBuildingDataRightColumn_divSummary"
-  }'
-```
-
-The URL is now automatically extracted from the input data, eliminating the need to hardcode it in the workflow.
 
 ## Examples
 
