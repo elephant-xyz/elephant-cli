@@ -6,7 +6,7 @@ import {
   Page,
   HTTPResponse,
 } from 'puppeteer';
-import { constructUrl, cleanHtml, createBrowser } from './common.js';
+import { constructUrl, createBrowser } from './common.js';
 import { Prepared, Request } from './types.js';
 import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
 
@@ -68,8 +68,6 @@ export async function withBrowser(
       }
       throw e;
     }
-    if (process.env.WEIRED_COUNTY)
-      return await loadWeiredConty(page, requestId);
 
     await Promise.race([
       page
@@ -112,27 +110,6 @@ export async function withBrowser(
   } finally {
     await browser.close();
   }
-}
-
-async function loadWeiredConty(
-  page: Page,
-  requestId: string
-): Promise<Prepared> {
-  await page.waitForSelector('.btn.btn-primary.button-1', {
-    visible: true,
-    timeout: 8000,
-  });
-  await page.click('.btn.btn-primary.button-1');
-  await page.type('#ctlBodyPane_ctl03_ctl01_txtParcelID', requestId, {
-    delay: 100,
-  });
-  await page.keyboard.press('Enter');
-  await page.waitForSelector(
-    '#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00_dynamicBuildingDataRightColumn_divSummary',
-    { visible: true }
-  );
-  const rawContent = await page.content();
-  return { content: await cleanHtml(rawContent), type: 'html' };
 }
 
 async function waitForContent(page: Page) {
