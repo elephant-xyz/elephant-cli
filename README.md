@@ -172,6 +172,15 @@ Run `prepare` to reproduce the county response referenced by the seed.
 elephant-cli prepare prepare-input.zip --output-zip prepared-site.zip
 ```
 
+For complex county sites requiring multi-step navigation (e.g., accepting terms, searching by parcel ID), use browser flow templates:
+
+```bash
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{"continue_button_selector":".btn-accept","search_form_selector":"#parcel-input","search_result_selector":"#results"}'
+```
+
 **What it does**
 - Reads `source_http_request` from `property_seed.json`.
 - Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints).
@@ -197,6 +206,49 @@ prepared-site.zip
 | `--use-browser` | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false` |
 | `--no-continue` | Skip auto-clicking "Continue" modals when browser mode is active. | `false` |
 | `--no-fast` | Disable the fast browser profile (enables full asset loading). | `false` |
+| `--browser-flow-template <name>` | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`). | None |
+| `--browser-flow-parameters <json>` | JSON parameters for the browser flow template. | None |
+
+### Browser Flow Templates
+
+Browser flow templates provide reusable automation patterns for complex county websites that require multi-step navigation. The URL is automatically extracted from `property_seed.json`'s `source_http_request` field.
+
+**Available Templates:**
+
+- **SEARCH_BY_PARCEL_ID**: Automates property searches by parcel ID with optional modal handling.
+
+**Template Parameters for SEARCH_BY_PARCEL_ID:**
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `search_form_selector` | ✅ | CSS selector for the parcel ID search input field |
+| `search_result_selector` | ✅ | CSS selector to wait for when search results load |
+| `continue_button_selector` | ➖ | CSS selector for accept/continue button (if present) |
+
+**Example Usage:**
+
+```bash
+# Simple search form
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "search_form_selector": "#parcelSearch",
+    "search_result_selector": ".property-details"
+  }'
+
+# With modal/terms acceptance
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "continue_button_selector": ".btn.btn-primary.button-1",
+    "search_form_selector": "#ctlBodyPane_ctl03_ctl01_txtParcelID",
+    "search_result_selector": "#ctlBodyPane_ctl10_ctl01_lstBuildings"
+  }'
+```
+
+For detailed browser flow documentation and custom template creation, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
 
 ## Generate Transformation Scripts
 
