@@ -252,7 +252,7 @@ Check for existence of necessary data before file creation; never generate empty
 - Chain-of-thought reasoning should always precede extraction or output creation.
 - Persist until the evaluator agent confirms all requirements are fully met.
 - Use only the `cheerio` library for HTML extraction if needed.
-- Never hardcode enum values, excpet for the county name.
+- Never hardcode enum values, except for the county name.
 - Use vanilla JavaScript for JSON processing.
 - Owners, utility, and layout data must NEVER be extracted from HTML—ALWAYS their respective JSON files.
   Remember:  

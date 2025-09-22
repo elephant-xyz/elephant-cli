@@ -216,7 +216,7 @@ export async function generateTransform(
     attempts: 0,
     logs: [],
     schemas: await fetchSchemas(),
-    dataDicttionaryContent,
+    dataDictionaryContent: dataDicttionaryContent,
   };
 
   report({ kind: 'phase', phase: 'running_graph' });

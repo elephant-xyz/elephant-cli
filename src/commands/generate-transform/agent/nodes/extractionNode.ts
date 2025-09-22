@@ -54,7 +54,7 @@ export async function extractionNode(
     data_dir: state.filenames.DATA_DIR,
     owner_data_file: state.filenames.OWNER_DATA,
     deed_data_file: state.filenames.OUTPUT_DEED_PREFIX,
-    data_dictionary: state.dataDicttionaryContent || '',
+    data_dictionary: state.dataDictionaryContent || '',
   };
 
   logger.info(
