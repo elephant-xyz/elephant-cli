@@ -146,6 +146,7 @@ export type GenerateTransformOptionsWithProgress = GenerateTransformOptions & {
 export async function generateTransform(
   inputZip: string,
   chat: ChatModel,
+  dataDictionary: string,
   options: GenerateTransformOptionsWithProgress
 ): Promise<string> {
   const report = (e: TransformProgressEvent): void => {
@@ -193,6 +194,14 @@ export async function generateTransform(
   }
   const filenames = buildFilename(input);
 
+  let dataDicttionaryContent;
+  if (dataDictionary) {
+    dataDicttionaryContent = await fs.readFile(
+      path.resolve(dataDictionary),
+      'utf-8'
+    );
+  }
+
   const state: AgentState = {
     tempDir: tempRoot,
     inputPaths: {
@@ -207,6 +216,7 @@ export async function generateTransform(
     attempts: 0,
     logs: [],
     schemas: await fetchSchemas(),
+    dataDicttionaryContent,
   };
 
   report({ kind: 'phase', phase: 'running_graph' });

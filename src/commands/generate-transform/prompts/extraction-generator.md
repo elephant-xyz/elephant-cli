@@ -117,12 +117,30 @@ You must systematically adhere to these principles:
     - Never extract owner, utilities, or layout data from HTML: always use the defined JSON sources (provided as `owner_data`, `utilities_data`, `layout_data` in user message).
     - Use all other fields/data from the HTML content (provided as `input_file` in user message).
 
+    Additional data dictionary of the enum values and other info about sorce data:
+
+    <data_dictionary>
+    {data_dictionary}
+    </data_dictionary>
+
 2.  **Script Development or Update**
     - Modify or create `{data_extractor_script}` only if it does not exist or per evaluator agent feedback.
     - Scripts should read input file from `{input_file}`, `{unnormalized_address_file}`, `{property_seed_file}` and write output files to `{data_dir}/`.
     - DO NOT create any input files. They are already created and the content is provided in the user message.
     - Make sure, that the scripts extracts all the required data from the designated sources above for each data area.
     - Before any coding, map how each schema field will be extracted from the appropriate source via step-by-step reasoning.
+    - To produce the value, that has an enum in the schema, try to map it from the source. In case if source has value, that is not known to the script, raise an error, that message will be in a format of
+
+    ```json
+    {
+      "type": "error",
+      "message": "Unknown enum value <value_that_caused_error>.",
+      "path": "<class_name>.<property_name>"
+    }
+    ```
+
+    - NEVER set default value for non-nullable enums.
+
     - Ensure the script:
       - Extracts only from the designated sources above for each data area.
       - Produces JSON outputs for each data type in `{data_dir}` directory.
@@ -234,11 +252,11 @@ Check for existence of necessary data before file creation; never generate empty
 - Chain-of-thought reasoning should always precede extraction or output creation.
 - Persist until the evaluator agent confirms all requirements are fully met.
 - Use only the `cheerio` library for HTML extraction if needed.
+- Never hardcode enum values, excpet for the county name.
 - Use vanilla JavaScript for JSON processing.
 - Owners, utility, and layout data must NEVER be extracted from HTML—ALWAYS their respective JSON files.
-
-Remember:  
-Begin with schema review and reasoning. For each data type, extract using ONLY the designated source. Do not attempt programmatic JSON Schema validation. Refine iteratively by evaluator feedback until every objective is achieved.
+  Remember:  
+  Begin with schema review and reasoning. For each data type, extract using ONLY the designated source. Do not attempt programmatic JSON Schema validation. Refine iteratively by evaluator feedback until every objective is achieved.
 
 # Output Format
 

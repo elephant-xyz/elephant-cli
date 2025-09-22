@@ -39,6 +39,7 @@ export const AgentStateAnnotation = Annotation.Root({
     default: () => [],
   }),
   schemas: Annotation<Record<string, string>>,
+  dataDicttionaryContent: Annotation<string | undefined>,
 });
 
 // Export the state type for use in nodes
