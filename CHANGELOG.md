@@ -1,3 +1,10 @@
+# [1.37.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.36.0...v1.37.0) (2025-09-23)
+
+
+### Features
+
+* **generate-transform:** add script repair option ([#149](https://github.com/elephant-xyz/elephant-cli/issues/149)) ([e0dd1af](https://github.com/elephant-xyz/elephant-cli/commit/e0dd1af00ffd4074b8d900eb7c0ba0bf300ac537))
+
 # [1.36.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.35.3...v1.36.0) (2025-09-22)
 
 

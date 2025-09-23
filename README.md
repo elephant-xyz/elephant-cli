@@ -260,8 +260,16 @@ generated-scripts.zip
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `-o, --output-zip <path>` | Destination ZIP for generated scripts. | `generated-scripts.zip` |
+| `-o, --output-zip <path>` | Destination ZIP for generated scripts or repaired scripts. | `generated-scripts.zip` |
 | `-d, --data-dictionary <path>` | Optional reference file fed to the generator. | None |
+| `--scripts-zip <path>` | Existing scripts bundle (must contain `data_extractor.js`) for automatic repair. | None |
+| `-e, --error <string>` | JSON error payload captured from a failed transform run. | None |
+
+**Error repair flow**
+- Supply both `--scripts-zip` and `--error` to trigger remediation instead of a fresh generation.
+- The CLI extracts `data_extractor.js`, parses the error payload (`{"type":"error","message":"Unknown enum value X.","path":"Class.property"}`), and fetches the schema for the failing property.
+- GPT-5 receives the current script, the error, and the schema fragment, rewrites `data_extractor.js`, and saves the updated archive to `--output-zip`.
+- Only the extraction script is modified; other files remain untouched. The repaired ZIP can be reused with the `transform` command.
 
 _Approximate duration: up to one hour per county. The process consumes OpenAI API credits._
 
