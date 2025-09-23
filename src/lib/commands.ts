@@ -13,6 +13,22 @@ import {
   handleSubmitToContract,
   SubmitToContractCommandOptions,
 } from '../commands/submit-to-contract.js';
+import {
+  handleGenerateTransform,
+  type GenerateTransformCommandOptions,
+} from '../commands/generate-transform/index.js';
+
+// Generate-transform function interface
+export type GenerateTransformOptions = Omit<
+  GenerateTransformCommandOptions,
+  'silent'
+>;
+
+export interface GenerateTransformResult {
+  success: boolean;
+  outputZipPath: string;
+  error?: string;
+}
 
 // Transform function interface
 export interface TransformOptions {
@@ -23,10 +39,17 @@ export interface TransformOptions {
   cwd?: string;
 }
 
+export interface TransformFailureDetail {
+  message: string;
+  stdout?: string;
+  stderr?: string;
+}
+
 export interface TransformResult {
   success: boolean;
   outputPath: string;
   error?: string;
+  scriptFailure?: TransformFailureDetail;
 }
 
 // Validate function interface
@@ -121,18 +144,18 @@ export interface SubmitToContractResult {
 export async function transform(
   options: TransformOptions
 ): Promise<TransformResult> {
-  try {
-    const workingDir = options.cwd || process.cwd();
-    const outputZip = options.outputZip || 'transformed-data.zip';
-    const transformOptions: TransformCommandOptions = {
-      outputZip,
-      scriptsZip: options.scriptsZip,
-      inputZip: options.inputZip,
-      legacyMode: options.legacyMode || false,
-      silent: true, // Enable silent mode for library usage
-      cwd: options.cwd,
-    };
+  const workingDir = options.cwd || process.cwd();
+  const outputZip = options.outputZip || 'transformed-data.zip';
+  const transformOptions: TransformCommandOptions = {
+    outputZip,
+    scriptsZip: options.scriptsZip,
+    inputZip: options.inputZip,
+    legacyMode: options.legacyMode || false,
+    silent: true, // Enable silent mode for library usage
+    cwd: options.cwd,
+  };
 
+  try {
     await handleTransform(transformOptions);
 
     return {
@@ -140,11 +163,57 @@ export async function transform(
       outputPath: path.resolve(workingDir, outputZip),
     };
   } catch (error) {
-    const workingDir = options.cwd || process.cwd();
-    const outputZip = options.outputZip || 'transformed-data.zip';
+    const msg = error instanceof Error ? error.message : String(error);
+    const stderrMarker = '\n--- stderr (tail) ---\n';
+    const stdoutMarker = '\n--- stdout (tail) ---\n';
+    const split = (marker: string) =>
+      msg.includes(marker) ? msg.split(marker) : undefined;
+    const tail = (parts: string[] | undefined) =>
+      parts?.[parts.length - 1]?.trim();
+    const stderrTail = tail(split(stderrMarker));
+    const stdoutTail = tail(split(stdoutMarker));
+    const summary = msg.split('\n---')[0]?.trim() || msg;
+    const failure =
+      stderrTail || stdoutTail
+        ? {
+            message: summary,
+            stdout: stdoutTail,
+            stderr: stderrTail,
+          }
+        : undefined;
+
     return {
       success: false,
       outputPath: path.resolve(workingDir, outputZip),
+      error: summary,
+      scriptFailure: failure,
+    };
+  }
+}
+
+// Generate-transform function wrapper
+export async function generateTransform(
+  options: GenerateTransformOptions
+): Promise<GenerateTransformResult> {
+  const workingDir = options.cwd || process.cwd();
+  const outputZip = options.outputZip || 'generated-scripts.zip';
+  const handlerOptions: GenerateTransformCommandOptions = {
+    ...options,
+    outputZip,
+    silent: true,
+  };
+
+  try {
+    const outPath = await handleGenerateTransform(handlerOptions);
+    const resolvedOutput = outPath || path.resolve(workingDir, outputZip);
+    return {
+      success: true,
+      outputZipPath: resolvedOutput,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      outputZipPath: path.resolve(workingDir, outputZip),
       error: error instanceof Error ? error.message : String(error),
     };
   }
