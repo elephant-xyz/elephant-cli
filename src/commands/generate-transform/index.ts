@@ -13,6 +13,13 @@ import {
 } from '../../utils/schema-fetcher.js';
 import { promptRegistry } from './prompts/langchain-registry.js';
 import type { Ora } from 'ora';
+import { z } from 'zod';
+
+const ErrorSchema = z.object({
+  type: z.string(),
+  message: z.string(),
+  path: z.string(),
+});
 
 export type GenerateTransformCommandOptions = {
   inputZip: string;
@@ -117,7 +124,6 @@ export async function handleGenerateTransform(
       verbose: false,
       temperature: cfg.temperature,
       maxRetries: 4,
-      reasoningEffort: 'medium',
     });
     spinner?.succeed('Model initialized.');
 
@@ -222,11 +228,7 @@ async function repairExtractionScript(
   spinner?.succeed('Existing script extracted.');
 
   spinner?.start('Parsing error details...');
-  const errJson = JSON.parse(error) as {
-    type?: string;
-    message?: string;
-    path?: string;
-  };
+  const errJson = ErrorSchema.parse(JSON.parse(error));
   const parts = String(errJson.path || '').split('.');
   if (parts.length !== 2) {
     throw new Error('Error path must follow <class>.<property> format');
@@ -266,29 +268,13 @@ async function repairExtractionScript(
     error,
     schema: specText,
   });
-  const toText = (value: unknown): string => {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) {
-      const joined = value.map((part) => toText(part)).filter(Boolean);
-      return joined.join('\n');
-    }
-    if (
-      value &&
-      typeof value === 'object' &&
-      'text' in (value as Record<string, unknown>) &&
-      typeof (value as { text?: unknown }).text === 'string'
-    ) {
-      return String((value as { text?: unknown }).text);
-    }
-    return `${value ?? ''}`;
-  };
   const pickScript = (body: string): string => {
     const match = body.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
     if (match) return match[1].trim();
     return body.trim();
   };
   const message = await model.invoke(prompt);
-  const body = toText((message as { content?: unknown }).content ?? message);
+  const body = message.text;
   const fixed = pickScript(body);
   if (!fixed) {
     throw new Error('Model response did not include an updated script');
