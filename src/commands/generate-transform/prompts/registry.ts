@@ -6,7 +6,8 @@ export type PromptKey =
   | 'owner-analysis'
   | 'structure-generator'
   | 'structure-evaluator'
-  | 'script-assembly';
+  | 'script-assembly'
+  | 'error-fix';
 
 export async function loadPrompt(
   key: PromptKey,

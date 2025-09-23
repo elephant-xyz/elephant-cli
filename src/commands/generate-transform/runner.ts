@@ -146,7 +146,7 @@ export type GenerateTransformOptionsWithProgress = GenerateTransformOptions & {
 export async function generateTransform(
   inputZip: string,
   chat: ChatModel,
-  dataDictionary: string,
+  dataDictionary: string = '',
   options: GenerateTransformOptionsWithProgress
 ): Promise<string> {
   const report = (e: TransformProgressEvent): void => {
