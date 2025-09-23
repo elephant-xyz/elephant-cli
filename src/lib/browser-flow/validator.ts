@@ -19,7 +19,10 @@ function createDynamicSchema(template: BrowserFlowTemplate): z.ZodSchema {
   const shape: Record<string, z.ZodTypeAny> = {};
   const { properties, required } = template.parametersSchema;
 
-  for (const [key, def] of Object.entries(properties)) {
+  for (const key in properties) {
+    if (!Object.prototype.hasOwnProperty.call(properties, key)) continue;
+
+    const def = properties[key];
     let fieldSchema: z.ZodTypeAny;
 
     switch (def.type) {

@@ -2,6 +2,7 @@ import { Workflow } from '../withBrowserFlow.js';
 import { getTemplate, listTemplates } from './templates/index.js';
 import { validateParameters, parseParameters } from './validator.js';
 import { logger } from '../../utils/logger.js';
+import { BrowserFlowParameters } from './types.js';
 
 export interface BrowserFlowOptions {
   template?: string;
@@ -37,7 +38,7 @@ export function createWorkflowFromTemplate(
   logger.debug(`Template parameters: ${JSON.stringify(params)}`);
   logger.debug(`Context URL: ${context.url}`);
 
-  return template.createWorkflow(params, context);
+  return template.createWorkflow(params as BrowserFlowParameters, context);
 }
 
 export { getTemplate, listTemplates } from './templates/index.js';
@@ -45,6 +46,7 @@ export { validateParameters, parseParameters } from './validator.js';
 export type {
   BrowserFlowTemplate,
   BrowserFlowParameters,
+  BrowserFlowContext,
   ValidationResult,
   ParametersSchema,
   ParameterDefinition,

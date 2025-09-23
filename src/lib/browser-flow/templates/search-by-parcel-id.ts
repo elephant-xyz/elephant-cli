@@ -1,4 +1,8 @@
-import { BrowserFlowTemplate } from '../types.js';
+import {
+  BrowserFlowTemplate,
+  BrowserFlowParameters,
+  BrowserFlowContext,
+} from '../types.js';
 import { Workflow } from '../../withBrowserFlow.js';
 
 export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
@@ -28,8 +32,8 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
     required: ['search_form_selector', 'search_result_selector'],
   },
   createWorkflow: (
-    params: Record<string, any>,
-    context?: Record<string, any>
+    params: BrowserFlowParameters,
+    context?: BrowserFlowContext
   ): Workflow => {
     if (!context?.url) {
       throw new Error('URL must be provided in context');
@@ -51,7 +55,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         enter_parcel_id: {
           type: 'type',
           input: {
-            selector: params.search_form_selector,
+            selector: params.search_form_selector as string,
             value: '{{=it.request_identifier}}',
             delay: 100,
           },
@@ -68,7 +72,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           type: 'wait_for_selector',
           end: true,
           input: {
-            selector: params.search_result_selector,
+            selector: params.search_result_selector as string,
             timeout: 60000,
             visible: true,
           },
@@ -80,7 +84,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
       workflow.states.wait_for_button = {
         type: 'wait_for_selector',
         input: {
-          selector: params.continue_button_selector,
+          selector: params.continue_button_selector as string,
           timeout: 15000,
           visible: true,
         },
