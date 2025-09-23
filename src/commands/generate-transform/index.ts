@@ -30,8 +30,7 @@ export function registerGenerateTransformCommand(program: Command): void {
     .option('-d, --data-dictionary <path>', 'Path to data dictionary')
     .option('--scripts-zip <path>', 'Path to scripts ZIP file')
     .option(
-      '-e',
-      '--error <string>',
+      '-e --error <string>',
       'Error message that was produced during the transform process'
     )
     .action(
@@ -81,6 +80,7 @@ export function registerGenerateTransformCommand(program: Command): void {
             verbose: false,
             temperature: cfg.temperature,
             maxRetries: 4,
+            reasoningEffort: 'medium',
           });
           spinner.succeed('Model initialized.');
 
@@ -185,16 +185,17 @@ async function repairExtractionScript(
   const archive = new AdmZip(zipPath);
   const entry = archive
     .getEntries()
-    .find((item) => item.entryName.endsWith('data_extraction.js'));
+    .find((item) => item.entryName.endsWith('data_extractor.js'));
   if (!entry) {
     throw new Error(
-      'data_extraction.js was not found in the provided scripts ZIP'
+      'data_extractor.js was not found in the provided scripts ZIP'
     );
   }
   const script = entry.getData().toString('utf8');
   spinner.succeed('Existing script extracted.');
 
   spinner.start('Parsing error details...');
+  console.log(error);
   const errJson = JSON.parse(error) as {
     type?: string;
     message?: string;
