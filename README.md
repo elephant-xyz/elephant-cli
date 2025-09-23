@@ -10,7 +10,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Transform Input Requirements](#transform-input-requirements)
 - [Build the Seed Bundle](#build-the-seed-bundle)
 - [Fetch Current Source Content](#fetch-current-source-content)
-  - [Browser Flow Templates](#browser-flow-templates)
+- [Browser Flow Templates](#browser-flow-templates)
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
