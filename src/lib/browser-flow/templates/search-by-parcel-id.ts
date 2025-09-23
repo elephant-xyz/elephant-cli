@@ -44,7 +44,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
             : 'enter_parcel_id',
           input: {
             url: context.url,
-            timeout: 30000,
+            timeout: 60000,
             wait_until: 'networkidle2',
           },
         },
