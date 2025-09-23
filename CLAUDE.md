@@ -13,3 +13,11 @@
 - PREFER single word variable names where possible
 - When working with a CLI commands, create separate module in `src/commands` directory
 - When shared code is needed, create it outside of `src/commands` directory
+- Use `npm run format` for code styling; do not hand-edit formatting. Lint and format checks run independently.
+
+### Documentation
+
+- Target end-user workflows first; organize sections in execution order.
+- Always provide a table of contents for long guides.
+- For each command, cover purpose, required inputs, outputs, options, and an example invocation.
+- Prefer precise language, consistent terminology, and GitHub-friendly markdown anchors.
