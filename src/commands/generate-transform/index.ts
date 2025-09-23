@@ -14,6 +14,16 @@ import {
 import { promptRegistry } from './prompts/langchain-registry.js';
 import type { Ora } from 'ora';
 
+export type GenerateTransformCommandOptions = {
+  inputZip: string;
+  outputZip?: string;
+  dataDictionary?: string;
+  scriptsZip?: string;
+  error?: string;
+  silent?: boolean;
+  cwd?: string;
+};
+
 export function registerGenerateTransformCommand(program: Command): void {
   program
     .command('generate-transform')
@@ -30,141 +40,158 @@ export function registerGenerateTransformCommand(program: Command): void {
     .option('-d, --data-dictionary <path>', 'Path to data dictionary')
     .option('--scripts-zip <path>', 'Path to scripts ZIP file')
     .option(
-      '-e --error <string>',
+      '-e, --error <string>',
       'Error message that was produced during the transform process'
     )
     .action(
       async (
         inputZip: string,
-        opts: {
-          outputZip: string;
-          dataDictionary?: string;
-          scriptsZip?: string;
-          error?: string;
-        }
+        opts: Omit<GenerateTransformCommandOptions, 'inputZip' | 'silent'>
       ) => {
-        if (!process.env.OPENAI_API_KEY) {
-          console.error(
-            chalk.red(
-              'OPENAI_API_KEY environment variable is required for generate-transform command'
-            )
-          );
-          console.info(
-            chalk.red(
-              'Please set your OpenAI API key: export OPENAI_API_KEY=your_key_here'
-            )
-          );
-          process.exitCode = 1;
-          return;
-        }
-        if (
-          (opts.scriptsZip || opts.error) &&
-          !(opts.scriptsZip && opts.error)
-        ) {
-          console.error(
-            chalk.red(
-              'Both --scripts-zip and --error options must be provided together'
-            )
-          );
-          process.exitCode = 1;
-          return;
-        }
-
-        const cfg = defaultGenerateTransformConfig;
-        const spinner = createSpinner('Initializing...');
-        try {
-          spinner.start('Initializing OpenAI model...');
-          const model = new ChatOpenAI({
-            model: cfg.modelName,
-            streaming: false,
-            verbose: false,
-            temperature: cfg.temperature,
-            maxRetries: 4,
-            reasoningEffort: 'medium',
-          });
-          spinner.succeed('Model initialized.');
-
-          if (opts.scriptsZip && opts.error) {
-            const outPath = await repairExtractionScript({
-              error: opts.error,
-              model,
-              outputZip: opts.outputZip,
-              scriptsZip: opts.scriptsZip,
-              spinner,
-            });
-            logger.success(`Generated ${outPath}`);
-            return;
-          }
-
-          spinner.start('Preparing workspace...');
-          const nodeLabels = {
-            ownerAnalysis: 'Owner analysis',
-            structureExtraction: 'Structure extraction',
-            extraction: 'Data extraction',
-          } as const;
-          const humanizeNode = (name: keyof typeof nodeLabels): string =>
-            nodeLabels[name];
-
-          const out = await generateTransform(
-            inputZip,
-            model,
-            opts.dataDictionary,
-            {
-              outputZip: opts.outputZip,
-              config: cfg,
-              onProgress: (evt) => {
-                if (evt.kind === 'message') {
-                  spinner.text = evt.message;
-                  return;
-                }
-                if (evt.kind === 'phase') {
-                  switch (evt.phase) {
-                    case 'initializing':
-                      spinner.start('Preparing workspace...');
-                      break;
-                    case 'unzipping':
-                      spinner.start('Unzipping input...');
-                      break;
-                    case 'discovering':
-                      spinner.start('Discovering required files...');
-                      break;
-                    case 'preparing':
-                      spinner.start(evt.message || 'Preparing inputs...');
-                      break;
-                    case 'running_graph':
-                      spinner.start('Running generation pipeline...');
-                      break;
-                    case 'bundling':
-                      spinner.start('Bundling output...');
-                      break;
-                    case 'completed':
-                      spinner.succeed('Generation pipeline completed.');
-                      break;
-                    default:
-                      break;
-                  }
-                  return;
-                }
-                if (evt.kind === 'node') {
-                  const label = humanizeNode(evt.name);
-                  if (evt.stage === 'start') {
-                    spinner.start(`Running ${label}...`);
-                    return;
-                  }
-                  spinner.succeed(`${label} completed.`);
-                }
-              },
-            }
-          );
-          spinner.succeed('Generation complete.');
-          logger.success(`Generated ${out}`);
-        } catch (e) {
-          spinner.fail('generate-transform failed');
-          logger.error(`generate-transform failed: ${String(e)}`);
-          process.exitCode = 1;
-        }
+        await handleGenerateTransform({
+          inputZip,
+          outputZip: opts.outputZip,
+          dataDictionary: opts.dataDictionary,
+          scriptsZip: opts.scriptsZip,
+          error: opts.error,
+          silent: false,
+        });
       }
     );
+}
+
+export async function handleGenerateTransform(
+  options: GenerateTransformCommandOptions
+): Promise<string> {
+  const workingDir = options.cwd || process.cwd();
+  const resolvedInputZip = path.resolve(workingDir, options.inputZip);
+  const resolvedOutputZip = path.resolve(
+    workingDir,
+    options.outputZip || 'generated-scripts.zip'
+  );
+  const resolvedDataDictionary = options.dataDictionary
+    ? path.resolve(workingDir, options.dataDictionary)
+    : undefined;
+  const resolvedScriptsZip = options.scriptsZip
+    ? path.resolve(workingDir, options.scriptsZip)
+    : undefined;
+  const spinner = options.silent ? undefined : createSpinner('Initializing...');
+  const missingKeyMessage =
+    'OPENAI_API_KEY environment variable is required for generate-transform command';
+
+  if (!process.env.OPENAI_API_KEY) {
+    if (options.silent) {
+      throw new Error(missingKeyMessage);
+    }
+    console.error(chalk.red(missingKeyMessage));
+    console.info(
+      chalk.red(
+        'Please set your OpenAI API key: export OPENAI_API_KEY=your_key_here'
+      )
+    );
+    process.exitCode = 1;
+    return '';
+  }
+
+  const repairArgsIncomplete =
+    Boolean(resolvedScriptsZip || options.error) &&
+    !(resolvedScriptsZip && options.error);
+  if (repairArgsIncomplete) {
+    const repairMessage =
+      'Both --scripts-zip and --error options must be provided together';
+    if (options.silent) {
+      throw new Error(repairMessage);
+    }
+    console.error(chalk.red(repairMessage));
+    process.exitCode = 1;
+    return '';
+  }
+
+  const cfg = defaultGenerateTransformConfig;
+
+  try {
+    spinner?.start('Initializing OpenAI model...');
+    const model = new ChatOpenAI({
+      model: cfg.modelName,
+      streaming: false,
+      verbose: false,
+      temperature: cfg.temperature,
+      maxRetries: 4,
+      reasoningEffort: 'medium',
+    });
+    spinner?.succeed('Model initialized.');
+
+    if (resolvedScriptsZip && options.error) {
+      const outPath = await repairExtractionScript({
+        error: options.error,
+        model,
+        outputZip: resolvedOutputZip,
+        scriptsZip: resolvedScriptsZip,
+        spinner,
+      });
+      logger.success(`Generated ${outPath}`);
+      return outPath;
+    }
+
+    spinner?.start('Preparing workspace...');
+    const nodeLabels = {
+      ownerAnalysis: 'Owner analysis',
+      structureExtraction: 'Structure extraction',
+      extraction: 'Data extraction',
+    } as const;
+    const humanizeNode = (name: keyof typeof nodeLabels): string =>
+      nodeLabels[name];
+
+    const out = await generateTransform(
+      resolvedInputZip,
+      model,
+      resolvedDataDictionary || '',
+      {
+        outputZip: resolvedOutputZip,
+        config: cfg,
+        onProgress: (evt) => {
+          if (evt.kind === 'message') {
+            if (spinner) spinner.text = evt.message;
+            return;
+          }
+          if (evt.kind === 'phase') {
+            if (evt.phase === 'initializing')
+              spinner?.start('Preparing workspace...');
+            if (evt.phase === 'unzipping') spinner?.start('Unzipping input...');
+            if (evt.phase === 'discovering')
+              spinner?.start('Discovering required files...');
+            if (evt.phase === 'preparing')
+              spinner?.start(evt.message || 'Preparing inputs...');
+            if (evt.phase === 'running_graph')
+              spinner?.start('Running generation pipeline...');
+            if (evt.phase === 'bundling') spinner?.start('Bundling output...');
+            if (evt.phase === 'completed')
+              spinner?.succeed('Generation pipeline completed.');
+            return;
+          }
+          if (evt.kind === 'node') {
+            const label = humanizeNode(evt.name);
+            if (evt.stage === 'start') {
+              spinner?.start(`Running ${label}...`);
+              return;
+            }
+            spinner?.succeed(`${label} completed.`);
+          }
+        },
+      }
+    );
+    spinner?.succeed('Generation complete.');
+    logger.success(`Generated ${out}`);
+    return out;
+  } catch (e) {
+    spinner?.fail('generate-transform failed');
+    logger.error(`generate-transform failed: ${String(e)}`);
+    if (options.silent) {
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+    process.exitCode = 1;
+    return '';
+  }
 }
 
 type RepairExtractionScriptArgs = {
@@ -172,7 +199,7 @@ type RepairExtractionScriptArgs = {
   model: ChatOpenAI;
   outputZip: string;
   scriptsZip: string;
-  spinner: Ora;
+  spinner?: Ora;
 };
 
 async function repairExtractionScript(
@@ -180,7 +207,7 @@ async function repairExtractionScript(
 ): Promise<string> {
   const { error, model, outputZip, scriptsZip, spinner } = args;
 
-  spinner.start('Loading scripts archive...');
+  spinner?.start('Loading scripts archive...');
   const zipPath = path.resolve(scriptsZip);
   const archive = new AdmZip(zipPath);
   const entry = archive
@@ -192,10 +219,9 @@ async function repairExtractionScript(
     );
   }
   const script = entry.getData().toString('utf8');
-  spinner.succeed('Existing script extracted.');
+  spinner?.succeed('Existing script extracted.');
 
-  spinner.start('Parsing error details...');
-  console.log(error);
+  spinner?.start('Parsing error details...');
   const errJson = JSON.parse(error) as {
     type?: string;
     message?: string;
@@ -207,17 +233,17 @@ async function repairExtractionScript(
   }
   const cls = parts[0];
   const prop = parts[1];
-  spinner.succeed('Error details parsed.');
+  spinner?.succeed('Error details parsed.');
 
-  spinner.start('Fetching schema manifest...');
+  spinner?.start('Fetching schema manifest...');
   const manifest = await fetchSchemaManifest();
   const meta = manifest[cls];
   if (!meta) {
     throw new Error(`Schema manifest is missing class entry for ${cls}`);
   }
-  spinner.succeed('Schema manifest fetched.');
+  spinner?.succeed('Schema manifest fetched.');
 
-  spinner.start('Fetching schema definition...');
+  spinner?.start('Fetching schema definition...');
   const schemaJson = await fetchFromIpfs(meta.ipfsCid);
   const schema = JSON.parse(schemaJson) as {
     properties?: Record<string, unknown>;
@@ -231,9 +257,9 @@ async function repairExtractionScript(
     throw new Error(`Schema for ${cls} does not include property ${prop}`);
   }
   const specText = JSON.stringify(spec, null, 2);
-  spinner.succeed('Schema details prepared.');
+  spinner?.succeed('Schema details prepared.');
 
-  spinner.start('Requesting GPT fix...');
+  spinner?.start('Requesting GPT fix...');
   const template = await promptRegistry.getPromptTemplate('error-fix');
   const prompt = await template.format({
     script,
@@ -267,12 +293,12 @@ async function repairExtractionScript(
   if (!fixed) {
     throw new Error('Model response did not include an updated script');
   }
-  spinner.succeed('GPT fix generated.');
+  spinner?.succeed('GPT fix generated.');
 
-  spinner.start('Writing updated scripts archive...');
+  spinner?.start('Writing updated scripts archive...');
   entry.setData(Buffer.from(`${fixed}\n`, 'utf8'));
   const outPath = path.resolve(outputZip);
   archive.writeZip(outPath);
-  spinner.succeed('Updated archive written.');
+  spinner?.succeed('Updated archive written.');
   return outPath;
 }

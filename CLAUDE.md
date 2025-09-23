@@ -13,6 +13,7 @@
 - PREFER single word variable names where possible
 - When working with a CLI commands, create separate module in `src/commands` directory
 - When shared code is needed, create it outside of `src/commands` directory
+- Use `npm run format` for code styling; do not hand-edit formatting. Lint and format checks run independently.
 
 ### Documentation
 
