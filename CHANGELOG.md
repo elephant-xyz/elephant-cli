@@ -1,3 +1,10 @@
+## [1.38.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.38.0...v1.38.1) (2025-09-24)
+
+
+### Bug Fixes
+
+* **prepare:** adding simple continue button ([#150](https://github.com/elephant-xyz/elephant-cli/issues/150)) ([a72525e](https://github.com/elephant-xyz/elephant-cli/commit/a72525e64853108b0972d363025239d5732654b6))
+
 # [1.38.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.37.0...v1.38.0) (2025-09-24)
 
 
