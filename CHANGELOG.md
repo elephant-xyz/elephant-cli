@@ -1,3 +1,10 @@
+# [1.38.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.37.0...v1.38.0) (2025-09-24)
+
+
+### Features
+
+* Dynamic browser flows for "prepare" ([#145](https://github.com/elephant-xyz/elephant-cli/issues/145)) ([1fc38ff](https://github.com/elephant-xyz/elephant-cli/commit/1fc38ffb6e7d5e492a8de219aedb4226ab6c8bce))
+
 # [1.37.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.36.0...v1.37.0) (2025-09-23)
 
 
