@@ -1,5 +1,6 @@
 export type PrepareOptions = {
   clickContinue?: boolean;
+  continueButtonSelector?: string;
   fast?: boolean;
   useBrowser?: boolean;
   headless?: boolean;
