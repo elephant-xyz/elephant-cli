@@ -27,7 +27,10 @@ export function registerPrepareCommand(program: Command) {
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
     .option('--use-browser', 'Force headless browser functionality')
     .option('--no-continue', 'Do not click any Continue modal in browser mode')
-    .option('--continue-button <selector>', 'CSS selector for continue button (simple option)')
+    .option(
+      '--continue-button <selector>',
+      'CSS selector for continue button (simple option)'
+    )
     .option(
       '--no-fast',
       'Disable fast browser mode (lighter waits, blocked assets)'

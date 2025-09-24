@@ -14,6 +14,8 @@ const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
   (p) => p.trim().toLowerCase()
 ).filter((p) => p.length > 0);
 
+const BUTTON_CLICK_DELAY_MS = 1000;
+
 export async function withBrowser(
   req: Request,
   clickContinue: boolean = false,
@@ -160,10 +162,11 @@ async function clickCustomContinueButton(page: Page, selector: string) {
     await page.click(selector);
     logger.info(`Successfully clicked continue button: ${selector}`);
     // Wait a bit for any page changes after clicking
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, BUTTON_CLICK_DELAY_MS));
   } catch (error) {
-    logger.warn(`Failed to click continue button ${selector}: ${error instanceof Error ? error.message : String(error)}`);
-    throw error;
+    logger.warn(
+      `Failed to click continue button ${selector}: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
