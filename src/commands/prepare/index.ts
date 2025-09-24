@@ -8,7 +8,7 @@ export interface PrepareCommandOptions {
   outputZip: string;
   /** When false, skip clicking any Continue button in browser mode */
   continue?: boolean;
-  /** CSS selector for continue button (simple option without full browser flow) */
+  /** CSS selector for a continue/agree button to click automatically */
   continueButton?: string;
   // fast kept for backward-compat (not exposed directly); use --no-fast to disable
   fast?: boolean;
@@ -29,7 +29,7 @@ export function registerPrepareCommand(program: Command) {
     .option('--no-continue', 'Do not click any Continue modal in browser mode')
     .option(
       '--continue-button <selector>',
-      'CSS selector for continue button (simple option)'
+      'CSS selector for a continue/agree button to click automatically'
     )
     .option(
       '--no-fast',

@@ -24,6 +24,11 @@ export async function prepare(
   const effectiveFast = options.fast ?? true;
   const headless = options.headless ?? true;
 
+  // Validate that continueButtonSelector requires browser mode
+  if (options.continueButtonSelector && !effectiveBrowser) {
+    throw new Error('--continue-button requires --use-browser to be enabled');
+  }
+
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
@@ -62,10 +67,7 @@ export async function prepare(
         throw new Error('Failed to create workflow from template');
       }
       prepared = await withBrowserFlow(templateWorkflow, headless, requestId);
-    } else if (
-      req.method === 'GET' &&
-      (effectiveBrowser || options.continueButtonSelector)
-    ) {
+    } else if (req.method === 'GET' && effectiveBrowser) {
       prepared = await withBrowser(
         req,
         effectiveClickContinue,
