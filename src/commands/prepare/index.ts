@@ -8,6 +8,8 @@ export interface PrepareCommandOptions {
   outputZip: string;
   /** When false, skip clicking any Continue button in browser mode */
   continue?: boolean;
+  /** CSS selector for continue button (simple option without full browser flow) */
+  continueButton?: string;
   // fast kept for backward-compat (not exposed directly); use --no-fast to disable
   fast?: boolean;
   useBrowser?: boolean;
@@ -25,6 +27,7 @@ export function registerPrepareCommand(program: Command) {
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
     .option('--use-browser', 'Force headless browser functionality')
     .option('--no-continue', 'Do not click any Continue modal in browser mode')
+    .option('--continue-button <selector>', 'CSS selector for continue button (simple option)')
     .option(
       '--no-fast',
       'Disable fast browser mode (lighter waits, blocked assets)'
@@ -53,6 +56,7 @@ export async function handlePrepare(
   const spinner = createSpinner(`Preparing data from ${inputZip}...`);
   await prepareCore(inputZip, options.outputZip, {
     clickContinue: options['continue'],
+    continueButtonSelector: options.continueButton,
     fast: options.fast,
     useBrowser: options.useBrowser,
     headless: options.headless,

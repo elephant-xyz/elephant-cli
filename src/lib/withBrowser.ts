@@ -20,7 +20,8 @@ export async function withBrowser(
   fast: boolean = true,
   requestId: string,
   headless: boolean,
-  errorPatterns?: string[]
+  errorPatterns?: string[],
+  continueButtonSelector?: string
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
   const browser: PuppeteerBrowser = await createBrowser(headless);
@@ -86,7 +87,9 @@ export async function withBrowser(
         .catch(() => {}),
     ]);
 
-    if (clickContinue) {
+    if (continueButtonSelector) {
+      await clickCustomContinueButton(page, continueButtonSelector);
+    } else if (clickContinue) {
       await clickContinueButton(page);
     } else {
       logger.info('Skipping Continue modal click by flag');
@@ -148,6 +151,20 @@ async function waitForContent(page: Page) {
     .catch(() => {
       logger.warn('Deep content not detected; proceeding with current DOM');
     });
+}
+
+async function clickCustomContinueButton(page: Page, selector: string) {
+  try {
+    logger.info(`Looking for continue button with selector: ${selector}`);
+    await page.waitForSelector(selector, { timeout: 15000, visible: true });
+    await page.click(selector);
+    logger.info(`Successfully clicked continue button: ${selector}`);
+    // Wait a bit for any page changes after clicking
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (error) {
+    logger.warn(`Failed to click continue button ${selector}: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
 }
 
 async function clickContinueButton(page: Page) {

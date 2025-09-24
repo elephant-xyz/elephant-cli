@@ -173,9 +173,16 @@ Run `prepare` to reproduce the county response referenced by the seed.
 elephant-cli prepare prepare-input.zip --output-zip prepared-site.zip
 ```
 
-For complex county sites requiring multi-step navigation, use browser flow templates:
+For sites requiring browser interaction, choose the appropriate approach:
 
 ```bash
+# Simple disclaimer/agree button only
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --continue-button "#acceptDataDisclaimer" \
+  --use-browser
+
+# Complex counties requiring multi-step navigation
 elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
   --browser-flow-template <TEMPLATE_NAME> \
@@ -206,6 +213,7 @@ prepared-site.zip
 | `--output-zip <path>` | Destination ZIP containing the fetched response. | Required |
 | `--use-browser` | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false` |
 | `--no-continue` | Skip auto-clicking "Continue" modals when browser mode is active. | `false` |
+| `--continue-button <selector>` | CSS selector for a simple continue/agree button to click. | None |
 | `--no-fast` | Disable the fast browser profile (enables full asset loading). | `false` |
 | `--browser-flow-template <name>` | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`). | None |
 | `--browser-flow-parameters <json>` | JSON parameters for the browser flow template. | None |
@@ -227,6 +235,7 @@ For available templates, parameters, and detailed usage examples, see [Browser F
 If existing templates don't cover your county's website pattern, please:
 1. Create a [GitHub issue](https://github.com/elephant-xyz/elephant-cli/issues) with details about the site structure
 2. Contact the development team for assistance in creating a new template
+
 
 ## Generate Transformation Scripts
 

@@ -23,6 +23,7 @@ export async function prepare(
   const effectiveClickContinue = options.clickContinue ?? false;
   const effectiveFast = options.fast ?? true;
   const headless = options.headless ?? true;
+  
   const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-'));
   try {
     const dir = await extractZipToTemp(inputZip, root);
@@ -61,14 +62,15 @@ export async function prepare(
         throw new Error('Failed to create workflow from template');
       }
       prepared = await withBrowserFlow(templateWorkflow, headless, requestId);
-    } else if (req.method === 'GET' && effectiveBrowser) {
+    } else if (req.method === 'GET' && (effectiveBrowser || options.continueButtonSelector)) {
       prepared = await withBrowser(
         req,
         effectiveClickContinue,
         effectiveFast,
         requestId,
         headless,
-        options.errorPatterns
+        options.errorPatterns,
+        options.continueButtonSelector
       );
     } else {
       prepared = await withFetch(req);
