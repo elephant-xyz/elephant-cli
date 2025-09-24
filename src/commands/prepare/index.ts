@@ -11,6 +11,9 @@ export interface PrepareCommandOptions {
   // fast kept for backward-compat (not exposed directly); use --no-fast to disable
   fast?: boolean;
   useBrowser?: boolean;
+  headless?: boolean;
+  browserFlowTemplate?: string;
+  browserFlowParameters?: string;
 }
 
 export function registerPrepareCommand(program: Command) {
@@ -25,6 +28,15 @@ export function registerPrepareCommand(program: Command) {
     .option(
       '--no-fast',
       'Disable fast browser mode (lighter waits, blocked assets)'
+    )
+    .option('--no-headless', 'Disable headless browser mode')
+    .option(
+      '--browser-flow-template <template>',
+      'Browser flow template name (e.g., SEARCH_BY_PARCEL_ID)'
+    )
+    .option(
+      '--browser-flow-parameters <json>',
+      'JSON parameters for the browser flow template'
     )
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
@@ -42,9 +54,10 @@ export async function handlePrepare(
   await prepareCore(inputZip, options.outputZip, {
     clickContinue: options['continue'],
     fast: options.fast,
-    // pass through positive flag separately
-    // (core will decide precedence & defaults)
     useBrowser: options.useBrowser,
+    headless: options.headless,
+    browserFlowTemplate: options.browserFlowTemplate,
+    browserFlowParameters: options.browserFlowParameters,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);

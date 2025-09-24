@@ -24,4 +24,4 @@ export type {
   SubmitToContractResult,
 } from './commands.js';
 
-export type { PrepareOptions } from './prepare.js';
+export type { PrepareOptions } from './types.js';

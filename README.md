@@ -10,6 +10,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Transform Input Requirements](#transform-input-requirements)
 - [Build the Seed Bundle](#build-the-seed-bundle)
 - [Fetch Current Source Content](#fetch-current-source-content)
+- [Browser Flow Templates](#browser-flow-templates)
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
@@ -172,6 +173,15 @@ Run `prepare` to reproduce the county response referenced by the seed.
 elephant-cli prepare prepare-input.zip --output-zip prepared-site.zip
 ```
 
+For complex county sites requiring multi-step navigation, use browser flow templates:
+
+```bash
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-template <TEMPLATE_NAME> \
+  --browser-flow-parameters '<JSON_PARAMETERS>'
+```
+
 **What it does**
 - Reads `source_http_request` from `property_seed.json`.
 - Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints).
@@ -197,6 +207,26 @@ prepared-site.zip
 | `--use-browser` | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false` |
 | `--no-continue` | Skip auto-clicking "Continue" modals when browser mode is active. | `false` |
 | `--no-fast` | Disable the fast browser profile (enables full asset loading). | `false` |
+| `--browser-flow-template <name>` | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`). | None |
+| `--browser-flow-parameters <json>` | JSON parameters for the browser flow template. | None |
+
+### Browser Flow Templates
+
+Browser flow templates provide reusable automation patterns for complex county websites that require multi-step navigation. Instead of hardcoding browser interactions, templates allow you to configure automation using CSS selectors as parameters. The URL is automatically extracted from `property_seed.json`'s `source_http_request` field.
+
+**Key Benefits:**
+- Handles modal dialogs and terms acceptance screens
+- Automates form filling and navigation
+- Configurable for different county website structures
+- No code changes required for new counties
+
+For available templates, parameters, and detailed usage examples, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
+
+**Need a New Template?**
+
+If existing templates don't cover your county's website pattern, please:
+1. Create a [GitHub issue](https://github.com/elephant-xyz/elephant-cli/issues) with details about the site structure
+2. Contact the development team for assistance in creating a new template
 
 ## Generate Transformation Scripts
 
