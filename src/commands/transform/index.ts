@@ -41,6 +41,8 @@ interface SeedRow {
   multiValueQueryString: string;
   source_identifier: string;
   county: string;
+  longitude?: string;
+  latitude?: string;
   json?: string;
   body?: string;
   headers?: string;
@@ -308,12 +310,19 @@ async function handleSeedTransform(tempRoot: string) {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
   });
-  const addressJson = JSON.stringify({
+  const addressData: any = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     full_address: seedRow.address,
     county_jurisdiction: capitalizeWords(seedRow.county),
-  });
+  };
+
+  if (seedRow.longitude && seedRow.latitude) {
+    addressData.longitude = parseFloat(seedRow.longitude);
+    addressData.latitude = parseFloat(seedRow.latitude);
+  }
+
+  const addressJson = JSON.stringify(addressData);
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
   const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
