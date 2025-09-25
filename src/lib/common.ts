@@ -68,7 +68,7 @@ async function prettierFormat(content: string): Promise<string> {
 }
 
 export async function createBrowser(headless: boolean): Promise<Browser> {
-  if (process.env.AWS_EXECUTION_ENV || process.platform === 'linux') {
+  if (process.env.AWS_EXECUTION_ENV) {
     const puppeteer = await import('puppeteer');
     const { default: Chromium } = await import('@sparticuz/chromium');
     logger.info('Launching browser...');
@@ -81,6 +81,21 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
         '--hide-scrollbars',
         '--disable-web-security',
         '--no-sandbox',
+      ],
+      timeout: 30000,
+    });
+  } else if (process.platform === 'linux') {
+    const puppeteer = await import('puppeteer');
+    logger.info('Launching browser (Linux/Colab)...');
+    return await puppeteer.launch({
+      headless: true, // Colab must be headless
+      executablePath: process.env.CHROME_PATH || undefined, // if you apt-get chromium
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--hide-scrollbars',
       ],
       timeout: 30000,
     });
