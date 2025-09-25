@@ -23,9 +23,14 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         description: 'CSS selector for the parcel ID search input field',
         minLength: 1,
       },
+      search_result_click_xpath: {
+        type: 'string',
+        description: 'XPath selector to click on search result item (optional)',
+        minLength: 1,
+      },
       search_result_selector: {
         type: 'string',
-        description: 'CSS selector to wait for when search results load',
+        description: 'CSS selector to wait for when final results load',
         minLength: 1,
       },
     },
@@ -66,7 +71,9 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           input: {
             key: 'Enter',
           },
-          next: 'wait_for_search_results',
+          next: params.search_result_click_xpath
+            ? 'wait_for_search_result_click'
+            : 'wait_for_search_results',
         },
         wait_for_search_results: {
           type: 'wait_for_selector',
@@ -97,6 +104,26 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: '{{=it.continue_button}}',
         },
         next: 'enter_parcel_id',
+      };
+    }
+
+    if (params.search_result_click_xpath) {
+      workflow.states.wait_for_search_result_click = {
+        type: 'wait_for_selector',
+        input: {
+          selector: `::-p-xpath(${params.search_result_click_xpath})`,
+          timeout: 30000,
+          visible: true,
+        },
+        next: 'click_search_result',
+        result: 'search_result_element',
+      };
+      workflow.states.click_search_result = {
+        type: 'click',
+        input: {
+          selector: '{{=it.search_result_element}}',
+        },
+        next: 'wait_for_search_results',
       };
     }
 
