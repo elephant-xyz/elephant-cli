@@ -1,3 +1,10 @@
+## [1.39.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.0...v1.39.1) (2025-09-25)
+
+
+### Bug Fixes
+
+* **transform:** Removing fact sheet relashionship creation from seed transformation ([#147](https://github.com/elephant-xyz/elephant-cli/issues/147)) ([cf647a4](https://github.com/elephant-xyz/elephant-cli/commit/cf647a40f114b7b56fa38b70d5b6da9fb3bd5f60))
+
 # [1.39.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.38.1...v1.39.0) (2025-09-25)
 
 
