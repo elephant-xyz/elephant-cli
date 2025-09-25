@@ -161,7 +161,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       isSeedMode = true;
     }
 
-    await generateFactSheet(tempRoot, isSeedMode);
+    if (!isSeedMode) {
+      await generateFactSheet(tempRoot);
+    }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
       zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
@@ -194,10 +196,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   }
 }
 
-async function generateFactSheet(
-  tempRoot: string,
-  isSeedMode: boolean = false
-) {
+async function generateFactSheet(tempRoot: string) {
   const outputPath = path.join(tempRoot, OUTPUT_DIR);
   const htmlOutputDir = path.join(tmpdir(), 'generated-htmls');
   await generateHTMLFiles(tempRoot, htmlOutputDir);
@@ -220,12 +219,6 @@ async function generateFactSheet(
       await moveDirectory(srcPath, destPath);
       logger.debug(`Copied directory ${entry.name} to property directory`);
     }
-  }
-
-  // Skip fact sheet relationship generation for seed mode
-  if (isSeedMode) {
-    logger.info('Skipping fact_sheet relationship generation for seed mode');
-    return;
   }
 
   const schemaManifestService = new SchemaManifestService();
