@@ -84,7 +84,44 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
       ],
       timeout: 30000,
     });
-  } else if (process.platform === 'darwin' || process.platform === 'linux') {
+  } else if (process.platform === 'linux') {
+    const puppeteer = await import('puppeteer');
+
+    const bundledExec =
+      typeof (puppeteer as any).executablePath === 'function'
+        ? (puppeteer as any).executablePath()
+        : undefined;
+
+    const execPath = process.env.CHROME_PATH || bundledExec;
+
+    logger.info(
+      `Launching browser (Linux/Colab) with execPath=${execPath || '<bundled>'} ...`
+    );
+
+    // Optional light diagnostics (kept minimal to avoid noisy output)
+    logger.info(`Node.js: ${process.versions.node}`);
+
+    return await puppeteer.launch({
+      headless: true, // headless required in Colab
+      executablePath: execPath,
+      // CRITICAL: avoid spamming Colab output
+      dumpio: false,
+      // Prefer a pipe over a TCP port in notebook containers
+      pipe: true,
+      args: [
+        '--remote-debugging-pipe',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--no-zygote',
+        '--no-first-run',
+        '--hide-scrollbars',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+      ],
+      timeout: 60_000, // give Chrome a bit more time on first run
+    });
+  } else if (process.platform === 'darwin') {
     const puppeteer = await import('puppeteer');
     logger.info('Launching browser...');
     return await puppeteer.launch({
