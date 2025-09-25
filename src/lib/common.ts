@@ -86,18 +86,53 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
     });
   } else if (process.platform === 'linux') {
     const puppeteer = await import('puppeteer');
-    logger.info('Launching browser (Linux/Colab)...');
+
+    // Prefer a known system Chromium if CHROME_PATH is set (recommended in Colab),
+    // otherwise use Puppeteer’s bundled Chromium (if puppeteer, not puppeteer-core).
+    const bundledExec =
+      typeof (puppeteer as any).executablePath === 'function'
+        ? (puppeteer as any).executablePath()
+        : undefined;
+
+    const execPath = process.env.CHROME_PATH || bundledExec;
+
+    logger.info(
+      `Launching browser (Linux/Colab) with execPath=${
+        execPath || '<bundled-or-undefined>'
+      } ...`
+    );
+
+    // Optional diagnostics: helpful if the launch appears to "hang".
+    try {
+      logger.info(`Node.js: ${process.versions.node}`);
+      if (process.env.CHROME_PATH) {
+        const { execSync } = await import('node:child_process');
+        const v = execSync(`${process.env.CHROME_PATH} --version`, {
+          stdio: 'pipe',
+        })
+          .toString()
+          .trim();
+        logger.info(`Chromium version: ${v}`);
+      }
+    } catch {
+      logger.warn('Could not determine Chromium version (non-fatal).');
+    }
+
     return await puppeteer.launch({
       headless: true, // Colab must be headless
-      executablePath: process.env.CHROME_PATH || undefined, // if you apt-get chromium
+      executablePath: execPath,
+      dumpio: true, // stream Chrome stderr/stdout to help diagnose any startup issues
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
+        '--disable-dev-shm-usage', // /dev/shm is tiny on Colab VMs
         '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--no-zygote',
+        '--no-first-run',
         '--hide-scrollbars',
       ],
-      timeout: 30000,
+      timeout: 30_000,
     });
   } else if (process.platform === 'darwin') {
     const puppeteer = await import('puppeteer');
