@@ -87,8 +87,6 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
   } else if (process.platform === 'linux') {
     const puppeteer = await import('puppeteer');
 
-    // Prefer a known system Chromium if CHROME_PATH is set (recommended in Colab),
-    // otherwise use Puppeteer’s bundled Chromium (if puppeteer, not puppeteer-core).
     const bundledExec =
       typeof (puppeteer as any).executablePath === 'function'
         ? (puppeteer as any).executablePath()
@@ -97,42 +95,31 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
     const execPath = process.env.CHROME_PATH || bundledExec;
 
     logger.info(
-      `Launching browser (Linux/Colab) with execPath=${
-        execPath || '<bundled-or-undefined>'
-      } ...`
+      `Launching browser (Linux/Colab) with execPath=${execPath || '<bundled>'} ...`
     );
 
-    // Optional diagnostics: helpful if the launch appears to "hang".
-    try {
-      logger.info(`Node.js: ${process.versions.node}`);
-      if (process.env.CHROME_PATH) {
-        const { execSync } = await import('node:child_process');
-        const v = execSync(`${process.env.CHROME_PATH} --version`, {
-          stdio: 'pipe',
-        })
-          .toString()
-          .trim();
-        logger.info(`Chromium version: ${v}`);
-      }
-    } catch {
-      logger.warn('Could not determine Chromium version (non-fatal).');
-    }
+    // Optional light diagnostics (kept minimal to avoid noisy output)
+    logger.info(`Node.js: ${process.versions.node}`);
 
     return await puppeteer.launch({
-      headless: true, // Colab must be headless
+      headless: true, // headless required in Colab
       executablePath: execPath,
-      dumpio: true, // stream Chrome stderr/stdout to help diagnose any startup issues
+      // CRITICAL: avoid spamming Colab output
+      dumpio: false,
+      // Prefer a pipe over a TCP port in notebook containers
+      pipe: true,
       args: [
+        '--remote-debugging-pipe',
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', // /dev/shm is tiny on Colab VMs
-        '--disable-gpu',
-        '--disable-software-rasterizer',
+        '--disable-dev-shm-usage',
         '--no-zygote',
         '--no-first-run',
         '--hide-scrollbars',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
       ],
-      timeout: 30_000,
+      timeout: 60_000, // give Chrome a bit more time on first run
     });
   } else if (process.platform === 'darwin') {
     const puppeteer = await import('puppeteer');
