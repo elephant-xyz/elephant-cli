@@ -8,9 +8,14 @@ export interface PrepareCommandOptions {
   outputZip: string;
   /** When false, skip clicking any Continue button in browser mode */
   continue?: boolean;
+  /** CSS selector for a continue/agree button to click automatically */
+  continueButton?: string;
   // fast kept for backward-compat (not exposed directly); use --no-fast to disable
   fast?: boolean;
   useBrowser?: boolean;
+  headless?: boolean;
+  browserFlowTemplate?: string;
+  browserFlowParameters?: string;
 }
 
 export function registerPrepareCommand(program: Command) {
@@ -23,8 +28,21 @@ export function registerPrepareCommand(program: Command) {
     .option('--use-browser', 'Force headless browser functionality')
     .option('--no-continue', 'Do not click any Continue modal in browser mode')
     .option(
+      '--continue-button <selector>',
+      'CSS selector for a continue/agree button to click automatically'
+    )
+    .option(
       '--no-fast',
       'Disable fast browser mode (lighter waits, blocked assets)'
+    )
+    .option('--no-headless', 'Disable headless browser mode')
+    .option(
+      '--browser-flow-template <template>',
+      'Browser flow template name (e.g., SEARCH_BY_PARCEL_ID)'
+    )
+    .option(
+      '--browser-flow-parameters <json>',
+      'JSON parameters for the browser flow template'
     )
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
@@ -41,10 +59,12 @@ export async function handlePrepare(
   const spinner = createSpinner(`Preparing data from ${inputZip}...`);
   await prepareCore(inputZip, options.outputZip, {
     clickContinue: options['continue'],
+    continueButtonSelector: options.continueButton,
     fast: options.fast,
-    // pass through positive flag separately
-    // (core will decide precedence & defaults)
     useBrowser: options.useBrowser,
+    headless: options.headless,
+    browserFlowTemplate: options.browserFlowTemplate,
+    browserFlowParameters: options.browserFlowParameters,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);
