@@ -1,3 +1,10 @@
+# [1.39.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.38.1...v1.39.0) (2025-09-25)
+
+
+### Features
+
+* Add coordinates to seed ([#153](https://github.com/elephant-xyz/elephant-cli/issues/153)) ([1e3e56e](https://github.com/elephant-xyz/elephant-cli/commit/1e3e56e62df9c38195588e6f68df322bd499df1f))
+
 ## [1.38.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.38.0...v1.38.1) (2025-09-24)
 
 
