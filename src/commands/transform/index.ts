@@ -303,8 +303,8 @@ async function handleSeedTransform(tempRoot: string) {
     request_identifier: seedRow.source_identifier,
     full_address: seedRow.address,
     county_jurisdiction: capitalizeWords(seedRow.county),
-    longitude: seedRow.longitude,
-    latitude: seedRow.latitude,
+    longitude: parseFloat(seedRow.longitude),
+    latitude: parseFloat(seedRow.latitude)
 
   });
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
