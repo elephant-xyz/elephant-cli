@@ -304,8 +304,7 @@ async function handleSeedTransform(tempRoot: string) {
     full_address: seedRow.address,
     county_jurisdiction: capitalizeWords(seedRow.county),
     longitude: parseFloat(seedRow.longitude),
-    latitude: parseFloat(seedRow.latitude)
-
+    latitude: parseFloat(seedRow.latitude),
   });
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
