@@ -41,6 +41,8 @@ interface SeedRow {
   multiValueQueryString: string;
   source_identifier: string;
   county: string;
+  longitude: string;
+  latitude: string;
   json?: string;
   body?: string;
   headers?: string;
@@ -301,6 +303,9 @@ async function handleSeedTransform(tempRoot: string) {
     request_identifier: seedRow.source_identifier,
     full_address: seedRow.address,
     county_jurisdiction: capitalizeWords(seedRow.county),
+    longitude: seedRow.longitude,
+    latitude: seedRow.latitude,
+
   });
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
