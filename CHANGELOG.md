@@ -1,3 +1,10 @@
+## [1.39.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.3...v1.39.4) (2025-09-26)
+
+
+### Bug Fixes
+
+* **common:** update browser launch logic ([#157](https://github.com/elephant-xyz/elephant-cli/issues/157)) ([24cebc8](https://github.com/elephant-xyz/elephant-cli/commit/24cebc8fcf87573235cf3319473a16198d8654f5))
+
 ## [1.39.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.2...v1.39.3) (2025-09-26)
 
 
