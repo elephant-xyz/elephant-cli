@@ -1,3 +1,10 @@
+## [1.39.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.1...v1.39.2) (2025-09-26)
+
+
+### Bug Fixes
+
+* Add wait node functionality to browser flow ([#155](https://github.com/elephant-xyz/elephant-cli/issues/155)) ([3fd64b0](https://github.com/elephant-xyz/elephant-cli/commit/3fd64b05eece7d57a70c6433aefb17450a4438d8))
+
 ## [1.39.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.0...v1.39.1) (2025-09-25)
 
 
