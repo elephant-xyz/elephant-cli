@@ -1,3 +1,10 @@
+# [1.40.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.4...v1.40.0) (2025-09-26)
+
+
+### Features
+
+* Add support for a second continue/accept button in `SEARCH_BY_PARCEL_ID` workflow ([#158](https://github.com/elephant-xyz/elephant-cli/issues/158)) ([2cc7e88](https://github.com/elephant-xyz/elephant-cli/commit/2cc7e889305a10a98356df37635251b99c49ec70))
+
 ## [1.39.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.3...v1.39.4) (2025-09-26)
 
 
