@@ -35,7 +35,7 @@ This template automates the process of searching for property information by par
 
 **Use Case:** When you need to:
 1. Navigate to a property search page
-2. Optionally handle a continue/accept button
+2. Optionally handle up to two continue/accept buttons in sequence
 3. Enter a parcel ID into a search form
 4. Submit the search
 5. Wait for results to load
@@ -61,12 +61,23 @@ npx elephant-cli prepare input.zip \
     "search_result_selector": "#results"
   }'
 
-# With continue button
+# With one continue button
 npx elephant-cli prepare input.zip \
   --output-zip output.zip \
   --browser-flow-template SEARCH_BY_PARCEL_ID \
   --browser-flow-parameters '{
     "continue_button_selector": ".btn.btn-primary.button-1",
+    "search_form_selector": "#ctlBodyPane_ctl03_ctl01_txtParcelID",
+    "search_result_selector": "#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00"
+  }'
+
+# With two continue buttons
+npx elephant-cli prepare input.zip \
+  --output-zip output.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "continue_button_selector": ".btn-accept-terms",
+    "continue2_button_selector": ".btn-disclaimer-agree",
     "search_form_selector": "#ctlBodyPane_ctl03_ctl01_txtParcelID",
     "search_result_selector": "#ctlBodyPane_ctl10_ctl01_lstBuildings_ctl00"
   }'
@@ -82,7 +93,8 @@ npx elephant-cli prepare input.zip \
 |-----------|------|----------|-------------|
 | `search_form_selector` | string | Yes | CSS selector for the parcel ID search input field |
 | `search_result_selector` | string | Yes | CSS selector to wait for when search results load |
-| `continue_button_selector` | string | No | CSS selector for the continue/accept button (if present) |
+| `continue_button_selector` | string | No | CSS selector for the first continue/accept button (if present) |
+| `continue2_button_selector` | string | No | CSS selector for the second continue/accept button (if present) |
 
 **Note:** The URL is automatically extracted from your input data's `property_seed.json` file and does not need to be specified as a parameter.
 
@@ -161,7 +173,23 @@ npx elephant-cli prepare property_data.zip \
   }'
 ```
 
-### Example 3: Using with Shell Scripts
+### Example 3: Multiple Continue Buttons
+
+For websites with multiple disclaimer/agreement screens:
+
+```bash
+npx elephant-cli prepare property_data.zip \
+  --output-zip prepared_data.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "continue_button_selector": "#terms-accept-btn",
+    "continue2_button_selector": "#disclaimer-continue",
+    "search_form_selector": "input.parcel-search",
+    "search_result_selector": "div.property-info"
+  }'
+```
+
+### Example 4: Using with Shell Scripts
 
 Create a reusable configuration:
 
