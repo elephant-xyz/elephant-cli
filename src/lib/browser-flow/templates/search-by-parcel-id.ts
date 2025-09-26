@@ -96,13 +96,6 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         input: {
           selector: '{{=it.continue_button}}',
         },
-        next: 'wait_after_continue',
-      };
-      workflow.states.wait_after_continue = {
-        type: 'wait',
-        input: {
-          duration: 3000,
-        },
         next: 'wait_for_search_form',
       };
       workflow.states.wait_for_search_form = {
