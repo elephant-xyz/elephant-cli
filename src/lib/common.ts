@@ -68,7 +68,7 @@ async function prettierFormat(content: string): Promise<string> {
 }
 
 export async function createBrowser(headless: boolean): Promise<Browser> {
-  if (process.env.AWS_EXECUTION_ENV) {
+  if (process.platform === 'linux') {
     const puppeteer = await import('puppeteer');
     const { default: Chromium } = await import('@sparticuz/chromium');
     logger.info('Launching browser...');
@@ -84,7 +84,7 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
       ],
       timeout: 30000,
     });
-  } else if (process.platform === 'darwin' || process.platform === 'linux') {
+  } else if (process.platform === 'darwin') {
     const puppeteer = await import('puppeteer');
     logger.info('Launching browser...');
     return await puppeteer.launch({
