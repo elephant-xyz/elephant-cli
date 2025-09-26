@@ -94,7 +94,7 @@ export async function withBrowserFlow(
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const type = req.resourceType();
-      const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+      const blocked = ['image', 'font', 'media', 'websocket'];
       if (blocked.includes(type)) req.abort();
       else req.continue();
     });
