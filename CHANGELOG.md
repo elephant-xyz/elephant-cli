@@ -1,3 +1,10 @@
+## [1.39.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.2...v1.39.3) (2025-09-26)
+
+
+### Bug Fixes
+
+* Remove redundant wait node functionality from browser flow ([9a76dfc](https://github.com/elephant-xyz/elephant-cli/commit/9a76dfc9cc1bde0100ee6a18dd2b4b748ca7a995))
+
 ## [1.39.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.1...v1.39.2) (2025-09-26)
 
 
