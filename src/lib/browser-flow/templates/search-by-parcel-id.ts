@@ -18,6 +18,12 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         description: 'CSS selector for the continue/accept button (if present)',
         minLength: 1,
       },
+      continue2_button_selector: {
+        type: 'string',
+        description:
+          'CSS selector for the second continue/accept button (if present)',
+        minLength: 1,
+      },
       search_form_selector: {
         type: 'string',
         description: 'CSS selector for the parcel ID search input field',
@@ -45,7 +51,9 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           type: 'open_page',
           next: params.continue_button_selector
             ? 'wait_for_button'
-            : 'enter_parcel_id',
+            : params.continue2_button_selector
+              ? 'wait_for_button2'
+              : 'enter_parcel_id',
           input: {
             url: context.url,
             timeout: 30000,
@@ -96,7 +104,9 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         input: {
           selector: '{{=it.continue_button}}',
         },
-        next: 'wait_for_search_form',
+        next: params.continue2_button_selector
+          ? 'wait_for_button2'
+          : 'wait_for_search_form',
       };
       workflow.states.wait_for_search_form = {
         type: 'wait_for_selector',
@@ -107,6 +117,38 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         },
         next: 'enter_parcel_id',
       };
+    }
+
+    if (params.continue2_button_selector) {
+      workflow.states.wait_for_button2 = {
+        type: 'wait_for_selector',
+        input: {
+          selector: params.continue2_button_selector as string,
+          timeout: 15000,
+          visible: true,
+        },
+        next: 'click_continue_button2',
+        result: 'continue_button2',
+      };
+      workflow.states.click_continue_button2 = {
+        type: 'click',
+        input: {
+          selector: '{{=it.continue_button2}}',
+        },
+        next: 'wait_for_search_form',
+      };
+
+      if (!params.continue_button_selector) {
+        workflow.states.wait_for_search_form = {
+          type: 'wait_for_selector',
+          input: {
+            selector: params.search_form_selector as string,
+            timeout: 30000,
+            visible: true,
+          },
+          next: 'enter_parcel_id',
+        };
+      }
     }
 
     return workflow;
