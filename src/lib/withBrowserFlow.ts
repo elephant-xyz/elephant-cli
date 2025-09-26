@@ -63,22 +63,12 @@ type KeyboardPressNode = {
   input: KeyboardPressInput;
 } & Node;
 
-interface WaitInput {
-  duration: number;
-}
-
-type WaitNode = {
-  type: 'wait';
-  input: WaitInput;
-} & Node;
-
 type StepNode =
   | OpenPageNode
   | WaitForSelectorNode
   | ClickNode
   | TypeNode
-  | KeyboardPressNode
-  | WaitNode;
+  | KeyboardPressNode;
 
 type States = Record<string, StepNode>;
 
@@ -86,9 +76,6 @@ export type Workflow = {
   starts_at: keyof States;
   states: States;
 };
-
-// Export the wait node type for use in templates
-export type { WaitNode };
 
 type ExecutionState = {
   request_identifier: string;
@@ -166,11 +153,6 @@ export async function withBrowserFlow(
         case 'keyboard_press': {
           const { key } = input;
           await page.keyboard.press(key);
-          break;
-        }
-        case 'wait': {
-          const { duration } = input;
-          await new Promise((resolve) => setTimeout(resolve, duration));
           break;
         }
         default:
