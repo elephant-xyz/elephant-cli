@@ -59,7 +59,7 @@ describe('CsvReporterService', () => {
       const warningContent = await readFile(warningCsvPath, 'utf-8');
 
       expect(errorContent).toBe(
-        'property_cid,data_group_cid,file_path,error_path,error_message,timestamp\n'
+        'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n'
       );
       expect(warningContent).toBe(
         'property_cid,data_group_cid,file_path,reason,timestamp\n'
@@ -83,8 +83,8 @@ describe('CsvReporterService', () => {
       await nestedCsvReporter.finalize();
 
       // Cleanup
-      await unlink(nestedErrorPath).catch(() => {});
-      await unlink(nestedWarningPath).catch(() => {});
+      await unlink(nestedErrorPath).catch(() => { });
+      await unlink(nestedWarningPath).catch(() => { });
     });
 
     it('should have zero counts initially', () => {
@@ -105,6 +105,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file.json',
         errorPath: 'root',
         errorMessage: 'JSON validation failed',
+        currentValue: 'invalid_value',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -115,7 +116,7 @@ describe('CsvReporterService', () => {
 
       expect(lines).toHaveLength(2); // Header + 1 data line
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,root,JSON validation failed,2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,root,JSON validation failed,invalid_value,2023-01-01T00:00:00.000Z'
       );
       expect(csvReporter.getErrorCount()).toBe(1);
     });
@@ -127,6 +128,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file,with,commas.json',
         errorPath: 'property.name',
         errorMessage: 'Error message, with commas',
+        currentValue: 'test,value',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -136,7 +138,7 @@ describe('CsvReporterService', () => {
       const lines = content.trim().split('\n');
 
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json",property.name,"Error message, with commas",2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,"/path/to/file,with,commas.json",property.name,"Error message, with commas","test,value",2023-01-01T00:00:00.000Z'
       );
     });
 
@@ -147,6 +149,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file.json',
         errorPath: 'data.value',
         errorMessage: 'Error with "quotes" in message',
+        currentValue: '"quoted_value"',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -156,7 +159,7 @@ describe('CsvReporterService', () => {
       const lines = content.trim().split('\n');
 
       expect(lines[1]).toBe(
-        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,data.value,"Error with ""quotes"" in message",2023-01-01T00:00:00.000Z'
+        'QmPropertyCid123,QmDataGroupCid456,/path/to/file.json,data.value,"Error with ""quotes"" in message","""quoted_value""",2023-01-01T00:00:00.000Z'
       );
     });
 
@@ -167,6 +170,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file1.json',
         errorPath: 'root',
         errorMessage: 'First error',
+        currentValue: 'value1',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -176,6 +180,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file2.json',
         errorPath: 'property.name',
         errorMessage: 'Second error',
+        currentValue: 'value2',
         timestamp: '2023-01-01T00:01:00.000Z',
       };
 
@@ -200,6 +205,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file.json',
         errorPath: 'root',
         errorMessage: 'Test error',
+        currentValue: 'test_value',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -285,6 +291,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file1.json',
         errorPath: 'root',
         errorMessage: 'Test error',
+        currentValue: 'error_value',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 
@@ -326,6 +333,7 @@ describe('CsvReporterService', () => {
         filePath: '/path/to/file.json',
         errorPath: 'root',
         errorMessage: 'Test error',
+        currentValue: 'final_test_value',
         timestamp: '2023-01-01T00:00:00.000Z',
       };
 

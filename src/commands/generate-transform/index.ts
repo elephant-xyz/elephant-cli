@@ -54,7 +54,10 @@ export function registerGenerateTransformCommand(program: Command): void {
       '-e, --error <string>',
       'Error message that was produced during the transform process'
     )
-    .option('--error-csv <path>', 'Path to validation errors CSV produced by validate command')
+    .option(
+      '--error-csv <path>',
+      'Path to validation errors CSV produced by validate command'
+    )
     .action(
       async (
         inputZip: string,
@@ -114,7 +117,9 @@ export async function handleGenerateTransform(
   const hasErrorCsv = Boolean(resolvedErrorCsv);
   const hasAnyError = hasErrorJson || hasErrorCsv;
   const invalidRepairArgs =
-    (hasScripts && !hasAnyError) || (!hasScripts && hasAnyError) || (hasErrorJson && hasErrorCsv);
+    (hasScripts && !hasAnyError) ||
+    (!hasScripts && hasAnyError) ||
+    (hasErrorJson && hasErrorCsv);
   if (invalidRepairArgs) {
     const repairMessage =
       'Repair mode requires --scripts-zip and exactly one of --error or --error-csv';
@@ -301,7 +306,9 @@ async function repairExtractionScript(
         }
         const spec = (props as Record<string, unknown>)[prop];
         if (!spec) {
-          throw new Error(`Schema for ${cls} does not include property ${prop}`);
+          throw new Error(
+            `Schema for ${cls} does not include property ${prop}`
+          );
         }
         const body = JSON.stringify(spec, null, 2);
         return `// ${cls}.${prop}\n${body}`;
@@ -382,7 +389,10 @@ async function buildErrorsFromCsv(csvPath: string): Promise<string> {
     throw new Error('CSV file is empty');
   }
 
-  const byKey = new Map<string, { type: string; message: string; path: string }>();
+  const byKey = new Map<
+    string,
+    { type: string; message: string; path: string; currentValue: string }
+  >();
 
   for (const r of records) {
     const pathStr = String(r.error_path || '').trim();
@@ -398,6 +408,7 @@ async function buildErrorsFromCsv(csvPath: string): Promise<string> {
         type: 'validation_error',
         message: msg,
         path: key,
+        currentValue: r.data || '',
       });
     }
   }

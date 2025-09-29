@@ -583,6 +583,7 @@ async function validateFile(
           filePath: fileEntry.filePath,
           errorPath: errorInfo.path,
           errorMessage: errorInfo.message,
+          currentValue: errorInfo.data || '',
           timestamp: new Date().toISOString(),
         });
       }

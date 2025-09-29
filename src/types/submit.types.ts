@@ -46,6 +46,7 @@ export interface ErrorEntry {
   filePath: string;
   errorPath: string;
   errorMessage: string;
+  currentValue: string;
   timestamp: string;
 }
 
