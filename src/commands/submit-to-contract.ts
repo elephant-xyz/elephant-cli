@@ -847,6 +847,7 @@ export async function handleSubmitToContract(
             filePath: options.csvFile,
             errorMessage: errorMsg,
             errorPath: 'N/A',
+            currentValue: '',
             timestamp: new Date().toISOString(),
           });
         }
@@ -900,6 +901,7 @@ export async function handleSubmitToContract(
             filePath: options.csvFile,
             errorMessage: errorMsg,
             errorPath: 'N/A',
+            currentValue: '',
             timestamp: new Date().toISOString(),
           });
         }
@@ -944,6 +946,7 @@ export async function handleSubmitToContract(
             filePath: options.csvFile,
             errorMessage: errorMsg,
             errorPath: 'N/A',
+            currentValue: '',
             timestamp: new Date().toISOString(),
           });
         }

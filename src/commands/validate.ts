@@ -522,6 +522,7 @@ async function validateFile(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `File read/parse error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');
@@ -539,6 +540,7 @@ async function validateFile(
         filePath: fileEntry.filePath,
         errorPath: 'root',
         errorMessage: error,
+        currentValue: '',
         timestamp: new Date().toISOString(),
       });
       services.progressTracker.increment('errors');
@@ -556,6 +558,7 @@ async function validateFile(
         filePath: fileEntry.filePath,
         errorPath: 'root',
         errorMessage: error,
+        currentValue: '',
         timestamp: new Date().toISOString(),
       });
       services.progressTracker.increment('errors');
@@ -583,7 +586,7 @@ async function validateFile(
           filePath: fileEntry.filePath,
           errorPath: errorInfo.path,
           errorMessage: errorInfo.message,
-          currentValue: errorInfo.data || '',
+          currentValue: '',
           timestamp: new Date().toISOString(),
         });
       }
@@ -605,6 +608,7 @@ async function validateFile(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `Processing error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');

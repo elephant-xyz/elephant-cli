@@ -1047,6 +1047,7 @@ async function processFileAndGetUploadPromise(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `File read/parse error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');
@@ -1064,6 +1065,7 @@ async function processFileAndGetUploadPromise(
         filePath: fileEntry.filePath,
         errorPath: 'root',
         errorMessage: error,
+        currentValue: '',
         timestamp: new Date().toISOString(),
       });
       services.progressTracker.increment('errors');
@@ -1080,6 +1082,7 @@ async function processFileAndGetUploadPromise(
         filePath: fileEntry.filePath,
         errorPath: 'root',
         errorMessage: error,
+        currentValue: '',
         timestamp: new Date().toISOString(),
       });
       services.progressTracker.increment('errors');
@@ -1110,6 +1113,7 @@ async function processFileAndGetUploadPromise(
           filePath: fileEntry.filePath,
           errorPath: errorInfo.path,
           errorMessage: errorInfo.message,
+          currentValue: '',
           timestamp: new Date().toISOString(),
         });
       }
@@ -1236,6 +1240,7 @@ async function processFileAndGetUploadPromise(
               filePath: processedFile.filePath,
               errorPath: 'root',
               errorMessage: `Upload failed: ${errorDetail}`,
+              currentValue: '',
               timestamp: new Date().toISOString(),
             });
             services.progressTracker.increment('errors');
@@ -1255,6 +1260,7 @@ async function processFileAndGetUploadPromise(
             filePath: processedFile.filePath,
             errorPath: 'root',
             errorMessage: `Upload exception: ${errorMsg}`,
+            currentValue: '',
             timestamp: new Date().toISOString(),
           });
           services.progressTracker.increment('errors');
@@ -1271,6 +1277,7 @@ async function processFileAndGetUploadPromise(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `Processing error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');

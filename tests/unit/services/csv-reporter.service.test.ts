@@ -83,8 +83,8 @@ describe('CsvReporterService', () => {
       await nestedCsvReporter.finalize();
 
       // Cleanup
-      await unlink(nestedErrorPath).catch(() => { });
-      await unlink(nestedWarningPath).catch(() => { });
+      await unlink(nestedErrorPath).catch(() => {});
+      await unlink(nestedWarningPath).catch(() => {});
     });
 
     it('should have zero counts initially', () => {
