@@ -27,8 +27,14 @@ export function parseUrlToRequest(urlString: string): Request {
     multiValueQueryString[key].push(value);
   });
 
+  const pathname =
+    url.pathname === '/'
+      ? ''
+      : url.pathname.endsWith('/')
+        ? url.pathname.slice(0, -1)
+        : url.pathname;
   return {
-    url: `${url.protocol}//${url.host}${url.pathname}`,
+    url: `${url.protocol}//${url.host}${pathname}`,
     method: 'GET',
     multiValueQueryString,
   };
