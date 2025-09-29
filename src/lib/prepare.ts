@@ -90,8 +90,13 @@ export async function prepare(
         'Updating seed files with entry_http_request and new source_http_request'
       );
 
+      // Remove trailing slash from final URL if present
+      const finalUrl = prepared.finalUrl.endsWith('/')
+        ? prepared.finalUrl.slice(0, -1)
+        : prepared.finalUrl;
+
       // Parse the final URL into a request object
-      const finalRequest = parseUrlToRequest(prepared.finalUrl);
+      const finalRequest = parseUrlToRequest(finalUrl);
 
       // Update property_seed.json
       const seedPath = path.join(root, 'property_seed.json');

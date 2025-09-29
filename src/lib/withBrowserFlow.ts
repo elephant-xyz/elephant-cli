@@ -172,8 +172,9 @@ export async function withBrowserFlow(
     const elapsedMs = Date.now() - startMs;
     logger.info(`Captured page HTML in ${elapsedMs}ms`);
 
-    // Capture the final URL after navigation
-    const finalUrl = page.url();
+    // Capture the final URL after navigation and remove trailing slash
+    const rawUrl = page.url();
+    const finalUrl = rawUrl.endsWith('/') ? rawUrl.slice(0, -1) : rawUrl;
     logger.info(`Final URL after browser flow: ${finalUrl}`);
 
     const result = {
