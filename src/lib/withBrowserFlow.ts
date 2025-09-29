@@ -120,7 +120,9 @@ export async function withBrowserFlow(
             dot.template(value)(executionState);
         }
       }
-      logger.info(`Executing state ${currentStep}...`);
+      logger.info(
+        `Executing state ${currentStep} with input: ${JSON.stringify(input)}`
+      );
       let stepResult: string | number | boolean | undefined;
       switch (type) {
         case 'open_page': {
