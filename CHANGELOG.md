@@ -1,3 +1,10 @@
+# [1.41.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.40.0...v1.41.0) (2025-09-29)
+
+
+### Features
+
+* **generate-transform:** support --error-csv for repair ([#159](https://github.com/elephant-xyz/elephant-cli/issues/159)) ([6922964](https://github.com/elephant-xyz/elephant-cli/commit/69229640484ec9383330bd7f5221d877049b0e67))
+
 # [1.40.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.39.4...v1.40.0) (2025-09-26)
 
 
