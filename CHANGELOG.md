@@ -1,3 +1,10 @@
+## [1.41.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.0...v1.41.1) (2025-09-29)
+
+
+### Bug Fixes
+
+* **deps:** update @langchain/openai and add openai ([#160](https://github.com/elephant-xyz/elephant-cli/issues/160)) ([aab6078](https://github.com/elephant-xyz/elephant-cli/commit/aab6078d3a9de626d727185339b4b9a0c0d5133a))
+
 # [1.41.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.40.0...v1.41.0) (2025-09-29)
 
 
