@@ -738,13 +738,14 @@ export class JsonValidatorService {
 
     return errors.map((error) => {
       const path = error.path || 'root';
+      const data = error.data;
       let message = error.message || 'Validation failed';
 
       const isStringError = message.includes('must be string');
-      const hasDataSlash = error.data && Object.hasOwn(error.data, '/');
+      const hasDataSlash = data && Object.hasOwn(data, '/');
 
       if (isStringError && hasDataSlash) {
-        const dataValue = String(error.data['/']);
+        const dataValue = String(data['/']);
         const isFilePath = dataValue.startsWith('./');
 
         message = isFilePath
@@ -752,7 +753,7 @@ export class JsonValidatorService {
           : `Value ${dataValue} is not a valid CID or file path.`;
       }
 
-      return { path, message };
+      return { path, message, data };
     });
   }
 

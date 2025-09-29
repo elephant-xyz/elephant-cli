@@ -755,6 +755,7 @@ async function processFileForHashing(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `File read/parse error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');
@@ -776,6 +777,7 @@ async function processFileForHashing(
           filePath: fileEntry.filePath,
           errorPath: 'root',
           errorMessage: error,
+          currentValue: '',
           timestamp: new Date().toISOString(),
         });
         services.progressTracker.increment('errors');
@@ -904,6 +906,7 @@ async function processFileForHashing(
       filePath: fileEntry.filePath,
       errorPath: 'root',
       errorMessage: `Processing error: ${errorMsg}`,
+      currentValue: '',
       timestamp: new Date().toISOString(),
     });
     services.progressTracker.increment('errors');

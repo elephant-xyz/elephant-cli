@@ -14,12 +14,15 @@ import {
 import { promptRegistry } from './prompts/langchain-registry.js';
 import type { Ora } from 'ora';
 import { z } from 'zod';
+import { readFileSync } from 'fs';
+import { parse as parseCsv } from 'csv-parse/sync';
 
-const ErrorSchema = z.object({
+const ErrorSchemaSingle = z.object({
   type: z.string(),
   message: z.string(),
   path: z.string(),
 });
+const ErrorSchemaMultiple = z.array(ErrorSchemaSingle);
 
 export type GenerateTransformCommandOptions = {
   inputZip: string;
@@ -27,6 +30,7 @@ export type GenerateTransformCommandOptions = {
   dataDictionary?: string;
   scriptsZip?: string;
   error?: string;
+  errorCsv?: string;
   silent?: boolean;
   cwd?: string;
 };
@@ -50,6 +54,10 @@ export function registerGenerateTransformCommand(program: Command): void {
       '-e, --error <string>',
       'Error message that was produced during the transform process'
     )
+    .option(
+      '--error-csv <path>',
+      'Path to validation errors CSV produced by validate command'
+    )
     .action(
       async (
         inputZip: string,
@@ -61,6 +69,7 @@ export function registerGenerateTransformCommand(program: Command): void {
           dataDictionary: opts.dataDictionary,
           scriptsZip: opts.scriptsZip,
           error: opts.error,
+          errorCsv: opts.errorCsv,
           silent: false,
         });
       }
@@ -82,6 +91,9 @@ export async function handleGenerateTransform(
   const resolvedScriptsZip = options.scriptsZip
     ? path.resolve(workingDir, options.scriptsZip)
     : undefined;
+  const resolvedErrorCsv = options.errorCsv
+    ? path.resolve(workingDir, options.errorCsv)
+    : undefined;
   const spinner = options.silent ? undefined : createSpinner('Initializing...');
   const missingKeyMessage =
     'OPENAI_API_KEY environment variable is required for generate-transform command';
@@ -100,12 +112,15 @@ export async function handleGenerateTransform(
     return '';
   }
 
-  const repairArgsIncomplete =
-    Boolean(resolvedScriptsZip || options.error) &&
-    !(resolvedScriptsZip && options.error);
-  if (repairArgsIncomplete) {
+  const hasScripts = Boolean(resolvedScriptsZip);
+  const hasErrorJson = Boolean(options.error);
+  const hasErrorCsv = Boolean(resolvedErrorCsv);
+  const hasAnyError = hasErrorJson || hasErrorCsv;
+  const invalidRepairArgs =
+    hasScripts !== hasAnyError || (hasErrorJson && hasErrorCsv);
+  if (invalidRepairArgs) {
     const repairMessage =
-      'Both --scripts-zip and --error options must be provided together';
+      'Repair mode requires --scripts-zip and exactly one of --error or --error-csv';
     if (options.silent) {
       throw new Error(repairMessage);
     }
@@ -130,6 +145,21 @@ export async function handleGenerateTransform(
     if (resolvedScriptsZip && options.error) {
       const outPath = await repairExtractionScript({
         error: options.error,
+        model,
+        outputZip: resolvedOutputZip,
+        scriptsZip: resolvedScriptsZip,
+        spinner,
+      });
+      logger.success(`Generated ${outPath}`);
+      return outPath;
+    }
+
+    if (resolvedScriptsZip && resolvedErrorCsv) {
+      spinner?.start('Parsing validation errors CSV...');
+      const errorJson = await buildErrorsFromCsv(resolvedErrorCsv);
+      spinner?.succeed('Validation errors CSV parsed.');
+      const outPath = await repairExtractionScript({
+        error: errorJson,
         model,
         outputZip: resolvedOutputZip,
         scriptsZip: resolvedScriptsZip,
@@ -228,44 +258,102 @@ async function repairExtractionScript(
   spinner?.succeed('Existing script extracted.');
 
   spinner?.start('Parsing error details...');
-  const errJson = ErrorSchema.parse(JSON.parse(error));
-  const parts = String(errJson.path || '').split('.');
-  if (parts.length !== 2) {
-    throw new Error('Error path must follow <class>.<property> format');
-  }
-  const cls = parts[0];
-  const prop = parts[1];
-  spinner?.succeed('Error details parsed.');
+  const parsed = JSON.parse(error);
+  const multi = ErrorSchemaMultiple.safeParse(parsed);
+  const isMulti = multi.success;
+  const errorPayload = error;
+  let specText = '';
 
-  spinner?.start('Fetching schema manifest...');
-  const manifest = await fetchSchemaManifest();
-  const meta = manifest[cls];
-  if (!meta) {
-    throw new Error(`Schema manifest is missing class entry for ${cls}`);
-  }
-  spinner?.succeed('Schema manifest fetched.');
+  if (isMulti) {
+    const uniquePaths = Array.from(
+      new Set(
+        multi.data
+          .map((e) => String(e.path || ''))
+          .filter((p) => p.includes('.'))
+      )
+    );
+    if (uniquePaths.length === 0) {
+      throw new Error('No valid error paths found');
+    }
 
-  spinner?.start('Fetching schema definition...');
-  const schemaJson = await fetchFromIpfs(meta.ipfsCid);
-  const schema = JSON.parse(schemaJson) as {
-    properties?: Record<string, unknown>;
-  };
-  const props = schema.properties;
-  if (!props || typeof props !== 'object') {
-    throw new Error(`Schema for ${cls} does not contain properties`);
+    spinner?.succeed('Error details parsed.');
+    spinner?.start('Fetching schema manifest...');
+    const manifest = await fetchSchemaManifest();
+    spinner?.succeed('Schema manifest fetched.');
+
+    spinner?.start('Fetching schema definitions...');
+    const snippets = await Promise.all(
+      uniquePaths.map(async (p) => {
+        const parts = p.split('.');
+        if (parts.length !== 2) {
+          throw new Error('Error path must follow <class>.<property> format');
+        }
+        const cls = parts[0];
+        const prop = parts[1];
+        const meta = manifest[cls];
+        if (!meta) {
+          throw new Error(`Schema manifest is missing class entry for ${cls}`);
+        }
+        const schemaJson = await fetchFromIpfs(meta.ipfsCid);
+        const schema = JSON.parse(schemaJson) as {
+          properties?: Record<string, unknown>;
+        };
+        const props = schema.properties;
+        if (!props || typeof props !== 'object') {
+          throw new Error(`Schema for ${cls} does not contain properties`);
+        }
+        const spec = (props as Record<string, unknown>)[prop];
+        if (!spec) {
+          throw new Error(
+            `Schema for ${cls} does not include property ${prop}`
+          );
+        }
+        const body = JSON.stringify(spec, null, 2);
+        return `// ${cls}.${prop}\n${body}`;
+      })
+    );
+    specText = snippets.join('\n\n');
+    spinner?.succeed('Schema details prepared.');
+  } else {
+    const single = ErrorSchemaSingle.parse(parsed);
+    const parts = String(single.path || '').split('.');
+    if (parts.length !== 2) {
+      throw new Error('Error path must follow <class>.<property> format');
+    }
+    const cls = parts[0];
+    const prop = parts[1];
+    spinner?.succeed('Error details parsed.');
+
+    spinner?.start('Fetching schema manifest...');
+    const manifest = await fetchSchemaManifest();
+    const meta = manifest[cls];
+    if (!meta) {
+      throw new Error(`Schema manifest is missing class entry for ${cls}`);
+    }
+    spinner?.succeed('Schema manifest fetched.');
+
+    spinner?.start('Fetching schema definition...');
+    const schemaJson = await fetchFromIpfs(meta.ipfsCid);
+    const schema = JSON.parse(schemaJson) as {
+      properties?: Record<string, unknown>;
+    };
+    const props = schema.properties;
+    if (!props || typeof props !== 'object') {
+      throw new Error(`Schema for ${cls} does not contain properties`);
+    }
+    const spec = (props as Record<string, unknown>)[prop];
+    if (!spec) {
+      throw new Error(`Schema for ${cls} does not include property ${prop}`);
+    }
+    specText = JSON.stringify(spec, null, 2);
+    spinner?.succeed('Schema details prepared.');
   }
-  const spec = props[prop];
-  if (!spec) {
-    throw new Error(`Schema for ${cls} does not include property ${prop}`);
-  }
-  const specText = JSON.stringify(spec, null, 2);
-  spinner?.succeed('Schema details prepared.');
 
   spinner?.start('Requesting GPT fix...');
   const template = await promptRegistry.getPromptTemplate('error-fix');
   const prompt = await template.format({
     script,
-    error,
+    error: errorPayload,
     schema: specText,
   });
   const pickScript = (body: string): string => {
@@ -287,4 +375,87 @@ async function repairExtractionScript(
   archive.writeZip(outPath);
   spinner?.succeed('Updated archive written.');
   return outPath;
+}
+
+async function buildErrorsFromCsv(csvPath: string): Promise<string> {
+  const content = readFileSync(path.resolve(csvPath), 'utf-8');
+  const records: Array<Record<string, string>> = parseCsv(content, {
+    columns: true,
+    skip_empty_lines: true,
+  });
+  if (!records.length) {
+    throw new Error('CSV file is empty');
+  }
+
+  const byKey = new Map<
+    string,
+    { type: string; message: string; path: string; currentValue: string }
+  >();
+
+  for (const r of records) {
+    const pathStr = String(r.error_path || '').trim();
+    const msg = String(r.error_message || '').trim();
+    const dgCid = String(r.data_group_cid || '').trim();
+    if (!pathStr || !msg || !dgCid) continue;
+
+    const mapped = await mapCsvErrorPathToClassProperty(dgCid, pathStr);
+    if (!mapped) continue;
+    const key = `${mapped.className}.${mapped.property}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        type: 'validation_error',
+        message: msg,
+        path: key,
+        currentValue: r.currentValue || '',
+      });
+    }
+  }
+
+  const arr = Array.from(byKey.values());
+  if (!arr.length) {
+    throw new Error('No mappable errors found in CSV');
+  }
+  return JSON.stringify(arr);
+}
+
+async function mapCsvErrorPathToClassProperty(
+  dataGroupCid: string,
+  errorPath: string
+): Promise<{ className: string; property: string } | null> {
+  const segments = errorPath.split('/').filter(Boolean);
+  if (segments.length < 4 || segments[0] !== 'relationships') return null;
+
+  const relName = segments[1];
+  const sideIndex = segments.findIndex((s) => s === 'from' || s === 'to');
+  if (sideIndex < 0) return null;
+  const side = segments[sideIndex];
+  const prop = segments[sideIndex + 1];
+  if (!prop) return null;
+
+  const dataGroupSchemaJson = await fetchFromIpfs(dataGroupCid);
+  const dataGroupSchema = JSON.parse(dataGroupSchemaJson) as {
+    properties?: { relationships?: { properties?: Record<string, unknown> } };
+  };
+  const relProps = dataGroupSchema.properties?.relationships?.properties;
+  if (!relProps || typeof relProps !== 'object') return null;
+  const relEntry = relProps[relName] as
+    | { cid: string }
+    | { items: { cid: string } }
+    | undefined;
+  if (!relEntry) return null;
+  const relSchemaCid = 'items' in relEntry ? relEntry.items.cid : relEntry.cid;
+
+  const relSchemaJson = await fetchFromIpfs(relSchemaCid);
+  const relSchema = JSON.parse(relSchemaJson) as {
+    properties?: { from?: { cid: string }; to?: { cid: string } };
+  };
+  const sideObj = relSchema.properties?.[side as 'from' | 'to'];
+  if (!sideObj || typeof sideObj.cid !== 'string') return null;
+
+  const classSchemaJson = await fetchFromIpfs(sideObj.cid);
+  const classSchema = JSON.parse(classSchemaJson) as { title?: string };
+  const className = classSchema.title;
+  if (!className) return null;
+
+  return { className, property: prop };
 }

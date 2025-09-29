@@ -27,7 +27,7 @@ export class CsvReporterService {
     this.errorStream = createWriteStream(this.errorCsvPath, { flags: 'w' });
     await new Promise<void>((resolve, reject) => {
       this.errorStream!.write(
-        'property_cid,data_group_cid,file_path,error_path,error_message,timestamp\n',
+        'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n',
         (err?: Error | null) => (err ? reject(err) : resolve())
       );
     });
@@ -58,8 +58,9 @@ export class CsvReporterService {
     const escapedErrorPath = this.escapeCsvValue(entry.errorPath);
     const escapedErrorMessage = this.escapeCsvValue(entry.errorMessage);
     const escapedFilePath = this.escapeCsvValue(entry.filePath);
+    const escapedCurrentValue = this.escapeCsvValue(entry.currentValue);
 
-    const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedErrorPath},${escapedErrorMessage},${entry.timestamp}\n`;
+    const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedErrorPath},${escapedErrorMessage},${escapedCurrentValue},${entry.timestamp}\n`;
 
     return new Promise((resolve, reject) => {
       this.errorStream!.write(csvLine, (error) => {
