@@ -8,14 +8,14 @@ Return an updated `data_extraction.js` script that resolves the reported validat
 ## Available Context
 - Current script contents:
 {{script}}
-- Validation error payload:
+- Validation error payload (may contain one or multiple errors as JSON string):
 {{error}}
-- Relevant schema definition snippet:
+- Relevant schema definition snippet(s). When multiple, they are separated with headings and comments:
 {{schema}}
 
 ## Workflow
 1. Analyze the validation error and map it to the schema expectations.
-2. Adjust the script so emitted data matches the schema fragment exactly.
+2. Adjust the script so emitted data matches the provided schema fragments exactly.
 3. Preserve compatible functionality, logging, and helper semantics already present in the script.
 4. Ensure any enumerations or field values adhere to the schema.
 
