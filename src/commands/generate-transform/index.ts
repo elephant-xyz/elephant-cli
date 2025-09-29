@@ -116,10 +116,7 @@ export async function handleGenerateTransform(
   const hasErrorJson = Boolean(options.error);
   const hasErrorCsv = Boolean(resolvedErrorCsv);
   const hasAnyError = hasErrorJson || hasErrorCsv;
-  const invalidRepairArgs =
-    (hasScripts && !hasAnyError) ||
-    (!hasScripts && hasAnyError) ||
-    (hasErrorJson && hasErrorCsv);
+  const invalidRepairArgs = hasScripts !== hasAnyError || (hasErrorJson && hasErrorCsv);
   if (invalidRepairArgs) {
     const repairMessage =
       'Repair mode requires --scripts-zip and exactly one of --error or --error-csv';
@@ -408,7 +405,7 @@ async function buildErrorsFromCsv(csvPath: string): Promise<string> {
         type: 'validation_error',
         message: msg,
         path: key,
-        currentValue: r.data || '',
+        currentValue: r.currentValue || '',
       });
     }
   }
