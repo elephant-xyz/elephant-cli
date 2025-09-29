@@ -1,3 +1,10 @@
+## [1.41.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.1...v1.41.2) (2025-09-29)
+
+
+### Bug Fixes
+
+* Remove trailing slashes from final URLs in common and browser flow ([#161](https://github.com/elephant-xyz/elephant-cli/issues/161)) ([60fdc1a](https://github.com/elephant-xyz/elephant-cli/commit/60fdc1ac7ef4040665b97180ae735292fa5863ae))
+
 ## [1.41.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.0...v1.41.1) (2025-09-29)
 
 
