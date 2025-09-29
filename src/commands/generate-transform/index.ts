@@ -263,7 +263,7 @@ async function repairExtractionScript(
   const parsed = JSON.parse(error);
   const multi = ErrorSchemaMultiple.safeParse(parsed);
   const isMulti = multi.success;
-  let errorPayload = error;
+  const errorPayload = error;
   let specText = '';
 
   if (isMulti) {
