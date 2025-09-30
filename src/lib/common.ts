@@ -84,9 +84,9 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
       headless: 'shell',
       args: [
         ...Chromium.args,
-        '--hide-scrollbars',
-        '--disable-web-security',
-        '--no-sandbox',
+        // '--hide-scrollbars',
+        // '--disable-web-security',
+        // '--no-sandbox',
         '--disable-features=site-per-process',
       ],
       timeout: 30000,
