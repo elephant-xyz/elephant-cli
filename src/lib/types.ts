@@ -7,6 +7,7 @@ export type PrepareOptions = {
   errorPatterns?: string[];
   browserFlowTemplate?: string;
   browserFlowParameters?: string;
+  ignoreCaptcha?: boolean;
 };
 
 export type Prepared = {
