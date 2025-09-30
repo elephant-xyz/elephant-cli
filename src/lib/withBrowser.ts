@@ -73,35 +73,10 @@ export async function withBrowser(
     }
 
     // Check if we landed on a reCAPTCHA page and wait for redirect
-    const hasRecaptcha = await page.evaluate(() => {
-      const url = window.location.href;
-      const html = document.documentElement.innerHTML.toLowerCase();
-      return (
-        url.includes('recaptchatoken=') ||
-        html.includes('recaptcha') ||
-        html.includes('g-recaptcha')
-      );
-    });
+    const hasRecaptcha = await checkForRecaptcha(page);
 
     if (hasRecaptcha) {
-      logger.info('Detected reCAPTCHA page, waiting for redirect...');
-      const originalUrl = await page.url();
-      await page
-        .waitForFunction(
-          (startUrl) => {
-            const currentUrl = window.location.href;
-            return (
-              currentUrl !== startUrl && !currentUrl.includes('recaptchatoken=')
-            );
-          },
-          { timeout: 60000 },
-          originalUrl
-        )
-        .catch((e) => {
-          logger.warn(`reCAPTCHA redirect timeout: ${e}`);
-        });
-      logger.info('reCAPTCHA redirect completed');
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await handleRecaptchaRedirect(page);
     }
 
     await Promise.race([
@@ -139,7 +114,7 @@ export async function withBrowser(
 
     // Don't treat reCAPTCHA success pages as errors
     const url = await page.url();
-    const isRecaptchaSuccess = url.includes('recaptchaToken=');
+    const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
 
     const bad = detectErrorHtml(html, errorPatterns, isRecaptchaSuccess);
     if (bad) {
@@ -151,6 +126,46 @@ export async function withBrowser(
     return { content: html, type: 'html' } as Prepared;
   } finally {
     await browser.close();
+  }
+}
+
+async function checkForRecaptcha(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const url = window.location.href;
+    const hasRecaptchaElement =
+      !!document.querySelector('.g-recaptcha') ||
+      !!document.querySelector('[id*="recaptcha"]') ||
+      !!document.querySelector('[class*="recaptcha"]');
+    return url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement;
+  });
+}
+
+async function handleRecaptchaRedirect(page: Page): Promise<void> {
+  logger.info('Detected reCAPTCHA page, waiting for redirect...');
+  const startUrl = await page.url();
+  const redirectCompleted = await page
+    .waitForFunction(
+      (startUrl) => {
+        const currentUrl = window.location.href;
+        return (
+          currentUrl !== startUrl &&
+          !currentUrl.toLowerCase().includes('recaptchatoken=')
+        );
+      },
+      { timeout: 60000 },
+      startUrl
+    )
+    .then(() => {
+      logger.info('reCAPTCHA redirect completed');
+      return true;
+    })
+    .catch((e) => {
+      logger.warn(`reCAPTCHA redirect timeout: ${e}`);
+      return false;
+    });
+
+  if (redirectCompleted) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
 
