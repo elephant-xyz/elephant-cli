@@ -81,7 +81,7 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
     return await puppeteer.launch({
       ignoreDefaultArgs: ['--disable-extensions'],
       executablePath: await Chromium.executablePath(),
-      headless: 'shell',
+      headless: true,
       args: [
         ...Chromium.args,
         '--hide-scrollbars',
