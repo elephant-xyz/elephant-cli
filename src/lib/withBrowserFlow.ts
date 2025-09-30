@@ -2,7 +2,7 @@ import dot from 'dot';
 import { logger } from '../utils/logger.js';
 import { createBrowser } from './common.js';
 import { Prepared } from './types.js';
-import { KeyInput } from 'puppeteer';
+import { Frame, KeyInput, Page } from 'puppeteer';
 import { cleanHtml } from './common.js';
 
 type WaitUntil = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
@@ -82,6 +82,26 @@ type ExecutionState = {
   [key: string]: string | number | boolean;
 };
 
+async function getFrameBySelector(
+  page: Page,
+  selector: string,
+  timeout: number = 5000
+): Promise<Frame> {
+  await page.waitForSelector(selector, { timeout });
+
+  const frameElement = await page.$(selector);
+  if (!frameElement) {
+    throw new Error(`Frame element not found: ${selector}`);
+  }
+
+  const frame = await frameElement.contentFrame();
+  if (!frame) {
+    throw new Error(`Could not access frame content: ${selector}`);
+  }
+
+  return frame;
+}
+
 export async function withBrowserFlow(
   workflow: Workflow,
   headless: boolean,
@@ -91,13 +111,13 @@ export async function withBrowserFlow(
   const browser = await createBrowser(headless);
   try {
     const page = await browser.newPage();
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const type = req.resourceType();
-      const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
-      if (blocked.includes(type)) req.abort();
-      else req.continue();
-    });
+    // await page.setRequestInterception(true);
+    // page.on('request', (req) => {
+    //   const type = req.resourceType();
+    //   const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+    //   if (blocked.includes(type)) req.abort();
+    //   else req.continue();
+    // });
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
@@ -106,7 +126,7 @@ export async function withBrowserFlow(
     );
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
-      Accept: 'text/html,application/xhtml+xml',
+      // Accept: 'text/html,application/xhtml+xml',
     });
     const executionState: ExecutionState = { request_identifier: requestId };
     let currentStep = workflow.starts_at;
@@ -133,7 +153,11 @@ export async function withBrowserFlow(
         }
         case 'wait_for_selector': {
           const { selector, timeout, visible } = input;
-          await page.waitForSelector(selector, {
+          const frame = await getFrameBySelector(
+            page,
+            'iframe#recordSearchContent_1_iframe'
+          );
+          await frame.waitForSelector(selector, {
             visible,
             timeout,
           });
@@ -142,12 +166,20 @@ export async function withBrowserFlow(
         }
         case 'click': {
           const { selector } = input;
-          await page.click(selector);
+          const frame = await getFrameBySelector(
+            page,
+            'iframe#recordSearchContent_1_iframe'
+          );
+          await frame.click(selector);
           break;
         }
         case 'type': {
           const { selector, value, delay } = input;
-          await page.type(selector, value, { delay });
+          const frame = await getFrameBySelector(
+            page,
+            'iframe#recordSearchContent_1_iframe'
+          );
+          await frame.type(selector, value, { delay });
           break;
         }
         case 'keyboard_press': {
@@ -176,8 +208,12 @@ export async function withBrowserFlow(
     const finalUrl = page.url();
     logger.info(`Final URL after browser flow: ${finalUrl}`);
 
+    const frame = await getFrameBySelector(
+      page,
+      'iframe#recordSearchContent_1_iframe'
+    );
     const result = {
-      content: await cleanHtml(await page.content()),
+      content: await cleanHtml(await frame.content()),
       type: 'html' as const,
       finalUrl,
     };
