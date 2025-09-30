@@ -266,6 +266,15 @@ export class FactSheetRelationshipService {
         await fsPromises.readFile(datagroupFile.filePath, 'utf-8')
       );
 
+      // Ensure relationships object exists to avoid runtime errors on legacy files
+      if (
+        !content.relationships ||
+        typeof content.relationships !== 'object' ||
+        Array.isArray(content.relationships)
+      ) {
+        content.relationships = {};
+      }
+
       let hasUpdates = false;
 
       // Add fact_sheet relationships for ALL classes found in classMappings
