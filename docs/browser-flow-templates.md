@@ -39,6 +39,8 @@ This template automates the process of searching for property information by par
 3. Enter a parcel ID into a search form
 4. Submit the search
 5. Wait for results to load
+6. Optionally click on a property details button
+7. Work with content inside iframes
 
 ## Using Browser Flow Templates
 
@@ -95,6 +97,10 @@ npx elephant-cli prepare input.zip \
 | `search_result_selector` | string | Yes | CSS selector to wait for when search results load |
 | `continue_button_selector` | string | No | CSS selector for the first continue/accept button (if present) |
 | `continue2_button_selector` | string | No | CSS selector for the second continue/accept button (if present) |
+| `property_details_button` | string | No | CSS selector for property details button to click after search results |
+| `property_details_selector` | string | No | CSS selector to wait for after clicking property details button |
+| `iframe_selector` | string | No | CSS selector for iframe containing the search form and results |
+| `capture_iframe_selector` | string | No | CSS selector for iframe to capture final content from |
 
 **Note:** The URL is automatically extracted from your input data's `property_seed.json` file and does not need to be specified as a parameter.
 
@@ -130,10 +136,12 @@ interface BrowserFlowTemplate {
 Templates can use the following workflow actions:
 
 - **open_page**: Navigate to a URL
-- **wait_for_selector**: Wait for an element to appear
-- **click**: Click an element
-- **type**: Type text into an input field
+- **wait_for_selector**: Wait for an element to appear (supports `iframe_selector`)
+- **click**: Click an element (supports `iframe_selector`)
+- **type**: Type text into an input field (supports `iframe_selector`)
 - **keyboard_press**: Press a keyboard key (e.g., Enter)
+
+**Note:** Actions marked with `iframe_selector` support can operate on elements inside an iframe by specifying the `iframe_selector` parameter.
 
 ### Dynamic Values
 
@@ -189,7 +197,72 @@ npx elephant-cli prepare property_data.zip \
   }'
 ```
 
-### Example 4: Using with Shell Scripts
+### Example 4: Working with IFrames
+
+For websites where the search form is inside an iframe:
+
+```bash
+npx elephant-cli prepare property_data.zip \
+  --output-zip prepared_data.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "search_form_selector": "input#parcel-search",
+    "search_result_selector": ".resultstable",
+    "iframe_selector": "iframe#recordSearchContent_1_iframe",
+    "capture_iframe_selector": "iframe#recordSearchContent_1_iframe"
+  }'
+```
+
+**Note:** 
+- `iframe_selector` tells the workflow where to find elements (form, buttons, etc.)
+- `capture_iframe_selector` specifies which iframe's content to capture at the end
+
+### Example 5: Clicking Property Details
+
+For websites that show search results as a list and require clicking for details:
+
+```bash
+npx elephant-cli prepare property_data.zip \
+  --output-zip prepared_data.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "search_form_selector": "#searchInput",
+    "search_result_selector": ".property-list-item",
+    "property_details_button": ".property-list-item:first-child a",
+    "property_details_selector": "#ownerDiv",
+    "iframe_selector": "iframe#mainContent",
+    "capture_iframe_selector": "iframe#mainContent"
+  }'
+```
+
+### Example 6: Complete Workflow with All Features
+
+For complex websites with disclaimers, iframes, and property details pages:
+
+```bash
+npx elephant-cli prepare property_data.zip \
+  --output-zip prepared_data.zip \
+  --browser-flow-template SEARCH_BY_PARCEL_ID \
+  --browser-flow-parameters '{
+    "continue_button_selector": "button.accept-terms",
+    "search_form_selector": "input[name=\"parcelId\"]",
+    "search_result_selector": "table.resultstable > tbody > tr.hv",
+    "property_details_button": "table.resultstable > tbody > tr.hv > td:nth-child(2)",
+    "property_details_selector": "#ownerDiv",
+    "iframe_selector": "iframe#recordSearchContent_1_iframe",
+    "capture_iframe_selector": "iframe#recordSearchContent_1_iframe"
+  }'
+```
+
+This example:
+1. Clicks a disclaimer/accept button
+2. Works inside an iframe for the search form
+3. Waits for search results in the iframe
+4. Clicks on the first property in the results
+5. Waits for property details to load
+6. Captures the final content from the iframe
+
+### Example 7: Using with Shell Scripts
 
 Create a reusable configuration:
 
@@ -232,6 +305,16 @@ npx elephant-cli prepare "$1" \
    - Ensure the page has loaded before the selector is searched
    - Consider increasing timeout values in custom templates
 
+5. **IFrame Not Found Error**
+   - Verify the iframe selector is correct
+   - Ensure the iframe has loaded before trying to access it
+   - Check if the iframe has a `name` or `id` attribute you can target
+
+6. **Elements Not Found Inside IFrame**
+   - Make sure you're using `iframe_selector` parameter for operations inside iframes
+   - Use `capture_iframe_selector` to specify which iframe content to capture
+   - Elements inside iframes require the iframe to be specified explicitly
+
 ### Debugging Tips
 
 1. **Test Selectors**: Use browser developer tools to verify CSS selectors:
@@ -239,7 +322,15 @@ npx elephant-cli prepare "$1" \
    document.querySelector('#your-selector')
    ```
 
-2. **Run Without Headless Mode**: Debug browser interactions visually:
+2. **Test IFrame Selectors**: To test selectors inside an iframe:
+   ```javascript
+   // First, get the iframe
+   const iframe = document.querySelector('iframe#your-iframe-selector');
+   // Then test selectors within it
+   iframe.contentDocument.querySelector('#element-inside-iframe');
+   ```
+
+3. **Run Without Headless Mode**: Debug browser interactions visually:
    ```bash
    npx elephant-cli prepare input.zip \
      --output-zip output.zip \
@@ -248,7 +339,7 @@ npx elephant-cli prepare "$1" \
      --browser-flow-parameters '{"...":"..."}'
    ```
 
-3. **Check Logs**: Enable debug logging for detailed execution information:
+4. **Check Logs**: Enable debug logging for detailed execution information:
    ```bash
    LOG_LEVEL=debug npx elephant-cli prepare ...
    ```

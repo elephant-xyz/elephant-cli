@@ -66,7 +66,6 @@ export async function prepare(
       if (!templateWorkflow) {
         throw new Error('Failed to create workflow from template');
       }
-      console.log(`/n ${JSON.stringify(templateWorkflow, null, 2)}`);
       prepared = await withBrowserFlow(templateWorkflow, headless, requestId);
     } else if (req.method === 'GET' && effectiveBrowser) {
       prepared = await withBrowser(

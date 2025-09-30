@@ -34,6 +34,29 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         description: 'CSS selector to wait for when search results load',
         minLength: 1,
       },
+      property_details_button: {
+        type: 'string',
+        description:
+          'CSS selector for property details button to click after search results',
+        minLength: 1,
+      },
+      property_details_selector: {
+        type: 'string',
+        description:
+          'CSS selector to wait for after clicking property details button',
+        minLength: 1,
+      },
+      iframe_selector: {
+        type: 'string',
+        description:
+          'CSS selector for iframe containing the search form and results',
+        minLength: 1,
+      },
+      capture_iframe_selector: {
+        type: 'string',
+        description: 'CSS selector for iframe to capture content from',
+        minLength: 1,
+      },
     },
     required: ['search_form_selector', 'search_result_selector'],
   },
@@ -46,6 +69,9 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
     }
     const workflow: Workflow = {
       starts_at: 'open_search_page',
+      capture: params.capture_iframe_selector
+        ? { type: 'iframe', selector: params.capture_iframe_selector as string }
+        : undefined,
       states: {
         open_search_page: {
           type: 'open_page',
@@ -66,6 +92,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
             selector: params.search_form_selector as string,
             value: '{{=it.request_identifier}}',
             delay: 100,
+            iframe_selector: params.iframe_selector as string | undefined,
           },
           next: 'press_enter',
         },
@@ -78,12 +105,16 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         },
         wait_for_search_results: {
           type: 'wait_for_selector',
-          end: true,
+          end: !params.property_details_button,
           input: {
             selector: params.search_result_selector as string,
             timeout: 60000,
             visible: true,
+            iframe_selector: params.iframe_selector as string | undefined,
           },
+          next: params.property_details_button
+            ? 'click_property_details'
+            : undefined,
         },
       },
     };
@@ -95,6 +126,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: params.continue_button_selector as string,
           timeout: 15000,
           visible: true,
+          iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'click_continue_button',
         result: 'continue_button',
@@ -114,6 +146,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: params.search_form_selector as string,
           timeout: 30000,
           visible: true,
+          iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'enter_parcel_id',
       };
@@ -126,6 +159,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: params.continue2_button_selector as string,
           timeout: 15000,
           visible: true,
+          iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'click_continue_button2',
         result: 'continue_button2',
@@ -145,8 +179,36 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
             selector: params.search_form_selector as string,
             timeout: 30000,
             visible: true,
+            iframe_selector: params.iframe_selector as string | undefined,
           },
           next: 'enter_parcel_id',
+        };
+      }
+    }
+
+    if (params.property_details_button) {
+      workflow.states.click_property_details = {
+        type: 'click',
+        input: {
+          selector: params.property_details_button as string,
+          iframe_selector: params.iframe_selector as string | undefined,
+        },
+        next: params.property_details_selector
+          ? 'wait_for_property_details'
+          : undefined,
+        end: !params.property_details_selector,
+      };
+
+      if (params.property_details_selector) {
+        workflow.states.wait_for_property_details = {
+          type: 'wait_for_selector',
+          input: {
+            selector: params.property_details_selector as string,
+            timeout: 60000,
+            visible: true,
+            iframe_selector: params.iframe_selector as string | undefined,
+          },
+          end: true,
         };
       }
     }

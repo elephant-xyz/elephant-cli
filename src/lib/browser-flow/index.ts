@@ -38,43 +38,7 @@ export function createWorkflowFromTemplate(
   logger.debug(`Template parameters: ${JSON.stringify(params)}`);
   logger.debug(`Context URL: ${context.url}`);
 
-  const compiledWorkflow = template.createWorkflow(
-    params as BrowserFlowParameters,
-    context
-  );
-  const propertSelector =
-    '#wrapper > table > tbody > tr > td > div > table > tbody > tr:nth-child(2) > td > table > tbody > tr:nth-child(1) > td > table.resultstable > tbody > tr.hv > td:nth-child(2)';
-  compiledWorkflow.states.wait_for_search_results.end = false;
-  compiledWorkflow.states.wait_for_search_results.input = {
-    selector: propertSelector,
-  };
-  compiledWorkflow.states.wait_for_search_results.next = 'wait_for_property';
-  compiledWorkflow.states.wait_for_property = {
-    type: 'wait_for_selector',
-    input: {
-      selector: propertSelector,
-      timeout: 60000,
-      visible: true,
-    },
-    next: 'click_property_button',
-  };
-  compiledWorkflow.states.click_property_button = {
-    type: 'click',
-    input: {
-      selector: propertSelector,
-    },
-    next: 'wait_for_property_details_mykyta',
-  };
-  compiledWorkflow.states.wait_for_property_details_mykyta = {
-    type: 'wait_for_selector',
-    input: {
-      selector: '#ownerDiv',
-      timeout: 60000,
-      visible: true,
-    },
-    end: true,
-  };
-  return compiledWorkflow;
+  return template.createWorkflow(params as BrowserFlowParameters, context);
 }
 
 export { getTemplate, listTemplates } from './templates/index.js';

@@ -3,7 +3,7 @@ import { Browser } from 'puppeteer';
 import * as prettier from 'prettier';
 import * as cheerio from 'cheerio';
 import { logger } from '../utils/logger.js';
-// import chalk from 'chalk';
+import chalk from 'chalk';
 
 export function constructUrl(req: Request) {
   const url = new URL(req.url);
@@ -74,35 +74,34 @@ async function prettierFormat(content: string): Promise<string> {
 }
 
 export async function createBrowser(headless: boolean): Promise<Browser> {
-  // if (process.platform === 'linux') {
-  //   const puppeteer = await import('puppeteer');
-  //   const { default: Chromium } = await import('@sparticuz/chromium');
-  //   logger.info('Launching browser...');
-  //   return await puppeteer.launch({
-  //     ignoreDefaultArgs: ['--disable-extensions'],
-  //     executablePath: await Chromium.executablePath(),
-  //     headless: 'shell',
-  //     args: [
-  //       ...Chromium.args,
-  //       '--hide-scrollbars',
-  //       '--disable-web-security',
-  //       '--no-sandbox',
-  //     ],
-  //     timeout: 30000,
-  //   });
-  // } else if (process.platform === 'darwin') {
-  const puppeteer = await import('puppeteer');
-  logger.info('Launching browser...');
-  return await puppeteer.launch({
-    headless: headless,
-    timeout: 30000,
-    args: ['--no-sandbox', '--disable-web-security'],
-  });
-  // }
-  // } else {
-  //   const errorMessage =
-  //     'Unsupported platform. Only Linux and macOS are supported.';
-  //   console.log(chalk.red(errorMessage));
-  //   throw new Error(errorMessage);
-  // }
+  if (process.platform === 'linux') {
+    const puppeteer = await import('puppeteer');
+    const { default: Chromium } = await import('@sparticuz/chromium');
+    logger.info('Launching browser...');
+    return await puppeteer.launch({
+      ignoreDefaultArgs: ['--disable-extensions'],
+      executablePath: await Chromium.executablePath(),
+      headless: 'shell',
+      args: [
+        ...Chromium.args,
+        '--hide-scrollbars',
+        '--disable-web-security',
+        '--no-sandbox',
+      ],
+      timeout: 30000,
+    });
+  } else if (process.platform === 'darwin') {
+    const puppeteer = await import('puppeteer');
+    logger.info('Launching browser...');
+    return await puppeteer.launch({
+      headless: headless,
+      timeout: 30000,
+      args: ['--no-sandbox', '--disable-web-security'],
+    });
+  } else {
+    const errorMessage =
+      'Unsupported platform. Only Linux and macOS are supported.';
+    console.log(chalk.red(errorMessage));
+    throw new Error(errorMessage);
+  }
 }

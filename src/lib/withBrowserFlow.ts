@@ -19,16 +19,19 @@ interface WaitForSelectorInput {
   selector: Selector;
   timeout?: number;
   visible?: boolean;
+  iframe_selector?: Selector;
 }
 
 interface ClickInput {
   selector: Selector;
+  iframe_selector?: Selector;
 }
 
 interface TypeInput {
   selector: Selector;
   value: string;
   delay?: number;
+  iframe_selector?: Selector;
 }
 
 interface KeyboardPressInput {
@@ -72,9 +75,12 @@ type StepNode =
 
 type States = Record<string, StepNode>;
 
+type CaptureConfig = { type: 'page' } | { type: 'iframe'; selector: Selector };
+
 export type Workflow = {
   starts_at: keyof States;
   states: States;
+  capture?: CaptureConfig;
 };
 
 type ExecutionState = {
@@ -111,13 +117,13 @@ export async function withBrowserFlow(
   const browser = await createBrowser(headless);
   try {
     const page = await browser.newPage();
-    // await page.setRequestInterception(true);
-    // page.on('request', (req) => {
-    //   const type = req.resourceType();
-    //   const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
-    //   if (blocked.includes(type)) req.abort();
-    //   else req.continue();
-    // });
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const type = req.resourceType();
+      const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+      if (blocked.includes(type)) req.abort();
+      else req.continue();
+    });
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
@@ -152,34 +158,43 @@ export async function withBrowserFlow(
           break;
         }
         case 'wait_for_selector': {
-          const { selector, timeout, visible } = input;
-          const frame = await getFrameBySelector(
-            page,
-            'iframe#recordSearchContent_1_iframe'
-          );
-          await frame.waitForSelector(selector, {
-            visible,
-            timeout,
-          });
+          const { selector, timeout, visible, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.waitForSelector(selector, {
+              visible,
+              timeout,
+            });
+          }
+          if (!iframe_selector) {
+            await page.waitForSelector(selector, {
+              visible,
+              timeout,
+            });
+          }
           stepResult = selector;
           break;
         }
         case 'click': {
-          const { selector } = input;
-          const frame = await getFrameBySelector(
-            page,
-            'iframe#recordSearchContent_1_iframe'
-          );
-          await frame.click(selector);
+          const { selector, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.click(selector);
+          }
+          if (!iframe_selector) {
+            await page.click(selector);
+          }
           break;
         }
         case 'type': {
-          const { selector, value, delay } = input;
-          const frame = await getFrameBySelector(
-            page,
-            'iframe#recordSearchContent_1_iframe'
-          );
-          await frame.type(selector, value, { delay });
+          const { selector, value, delay, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.type(selector, value, { delay });
+          }
+          if (!iframe_selector) {
+            await page.type(selector, value, { delay });
+          }
           break;
         }
         case 'keyboard_press': {
@@ -208,12 +223,16 @@ export async function withBrowserFlow(
     const finalUrl = page.url();
     logger.info(`Final URL after browser flow: ${finalUrl}`);
 
-    const frame = await getFrameBySelector(
-      page,
-      'iframe#recordSearchContent_1_iframe'
-    );
+    const capture = workflow.capture ?? { type: 'page' };
+    const content =
+      capture.type === 'iframe'
+        ? await cleanHtml(
+            await (await getFrameBySelector(page, capture.selector)).content()
+          )
+        : await cleanHtml(await page.content());
+
     const result = {
-      content: await cleanHtml(await frame.content()),
+      content,
       type: 'html' as const,
       finalUrl,
     };
