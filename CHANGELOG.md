@@ -1,3 +1,10 @@
+# [1.44.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.43.0...v1.44.0) (2025-09-30)
+
+
+### Features
+
+* **browser-flow:** add iframe & details support ([#165](https://github.com/elephant-xyz/elephant-cli/issues/165)) ([25de5e0](https://github.com/elephant-xyz/elephant-cli/commit/25de5e018b9c80bcfa1c96487b43cac8c01d4953))
+
 # [1.43.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.42.0...v1.43.0) (2025-09-30)
 
 
