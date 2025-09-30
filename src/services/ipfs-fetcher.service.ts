@@ -66,6 +66,7 @@ export class IPFSFetcherService {
 
   private async fetchContent(cid: string, attempt: number = 0): Promise<any> {
     const url = `${this.baseUrl}/${cid}`;
+    let timeoutId: NodeJS.Timeout | undefined;
 
     try {
       logger.debug(
@@ -74,7 +75,7 @@ export class IPFSFetcherService {
 
       // Create AbortController for timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
       const response = await fetch(url, {
         signal: controller.signal,
@@ -84,6 +85,7 @@ export class IPFSFetcherService {
       });
 
       clearTimeout(timeoutId);
+      timeoutId = undefined;
 
       if (!response.ok) {
         if (response.status === 429 && attempt < this.maxRetries - 1) {
@@ -101,6 +103,9 @@ export class IPFSFetcherService {
       const content = await response.json();
       return content;
     } catch (error) {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
       logger.error(`Error fetching CID ${cid}: ${error}`);
       throw error;
     }
