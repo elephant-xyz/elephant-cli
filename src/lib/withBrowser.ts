@@ -72,6 +72,13 @@ export async function withBrowser(
       throw e;
     }
 
+    // Check if we landed on a reCAPTCHA page and wait for redirect
+    const hasRecaptcha = await checkForRecaptcha(page);
+
+    if (hasRecaptcha) {
+      await handleRecaptchaRedirect(page);
+    }
+
     await Promise.race([
       page
         .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
@@ -104,7 +111,9 @@ export async function withBrowser(
     }
 
     const html = await page.content();
-    const bad = detectErrorHtml(html, errorPatterns);
+    const url = await page.url();
+    const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
+    const bad = detectErrorHtml(html, errorPatterns, isRecaptchaSuccess);
     if (bad) {
       logger.error(`Detected error HTML in browser content: ${bad}`);
       throw new Error(`Browser returned error page: ${bad}`);
@@ -114,6 +123,46 @@ export async function withBrowser(
     return { content: html, type: 'html' } as Prepared;
   } finally {
     await browser.close();
+  }
+}
+
+async function checkForRecaptcha(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const url = window.location.href;
+    const hasRecaptchaElement =
+      !!document.querySelector('.g-recaptcha') ||
+      !!document.querySelector('[id*="recaptcha"]') ||
+      !!document.querySelector('[class*="recaptcha"]');
+    return url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement;
+  });
+}
+
+async function handleRecaptchaRedirect(page: Page): Promise<void> {
+  logger.info('Detected reCAPTCHA page, waiting for redirect...');
+  const startUrl = await page.url();
+  const redirectCompleted = await page
+    .waitForFunction(
+      (startUrl) => {
+        const currentUrl = window.location.href;
+        return (
+          currentUrl !== startUrl &&
+          !currentUrl.toLowerCase().includes('recaptchatoken=')
+        );
+      },
+      { timeout: 60000 },
+      startUrl
+    )
+    .then(() => {
+      logger.info('reCAPTCHA redirect completed');
+      return true;
+    })
+    .catch((e) => {
+      logger.warn(`reCAPTCHA redirect timeout: ${e}`);
+      return false;
+    });
+
+  if (redirectCompleted) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
 
@@ -224,10 +273,16 @@ async function clickContinueButton(page: Page) {
   }
 }
 
-function detectErrorHtml(html: string, extra?: string[]): string | null {
+function detectErrorHtml(
+  html: string,
+  extra?: string[],
+  skipCaptchaCheck?: boolean
+): string | null {
   const lowered = html.toLowerCase();
-  for (const q of DEFAULT_ERROR_PATTERNS_LOWER)
+  for (const q of DEFAULT_ERROR_PATTERNS_LOWER) {
+    if (skipCaptchaCheck && q === 'captcha') continue;
     if (lowered.includes(q)) return q;
+  }
   const add = extra || [];
   const addLower = add
     .map((p) => p.trim().toLowerCase())
