@@ -45,7 +45,7 @@ export function registerPrepareCommand(program: Command) {
       '--browser-flow-parameters <json>',
       'JSON parameters for the browser flow template'
     )
-    .option('--ignore-captcha', 'Ignore CAPTCHA pages and continue processing')
+    .option('--ignore-captcha', 'Proceed even if a CAPTCHA is detected and not affecting page content, capturing the current page content.')
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
     });

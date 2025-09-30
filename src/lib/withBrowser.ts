@@ -76,10 +76,12 @@ export async function withBrowser(
     // Check if we landed on a reCAPTCHA page and wait for redirect
     const hasRecaptcha = await checkForRecaptcha(page);
 
-    if (hasRecaptcha && !ignoreCaptcha) {
-      await handleRecaptchaRedirect(page);
-    } else if (hasRecaptcha && ignoreCaptcha) {
-      logger.info('CAPTCHA detected but ignoring due to ignoreCaptcha flag');
+    if (hasRecaptcha) {
+      if (ignoreCaptcha) {
+        logger.info('CAPTCHA detected but ignoring due to ignoreCaptcha flag');
+      } else {
+        await handleRecaptchaRedirect(page);
+      }
     }
 
     await Promise.race([
