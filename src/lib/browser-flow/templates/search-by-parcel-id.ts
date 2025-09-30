@@ -135,6 +135,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'click',
         input: {
           selector: '{{=it.continue_button}}',
+          iframe_selector: params.iframe_selector as string | undefined,
         },
         next: params.continue2_button_selector
           ? 'wait_for_button2'
@@ -168,6 +169,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'click',
         input: {
           selector: '{{=it.continue_button2}}',
+          iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'wait_for_search_form',
       };

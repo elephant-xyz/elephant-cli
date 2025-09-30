@@ -132,7 +132,6 @@ export async function withBrowserFlow(
     );
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
-      // Accept: 'text/html,application/xhtml+xml',
     });
     const executionState: ExecutionState = { request_identifier: requestId };
     let currentStep = workflow.starts_at;
@@ -224,13 +223,14 @@ export async function withBrowserFlow(
     logger.info(`Final URL after browser flow: ${finalUrl}`);
 
     const capture = workflow.capture ?? { type: 'page' };
-    const content =
-      capture.type === 'iframe'
-        ? await cleanHtml(
-            await (await getFrameBySelector(page, capture.selector)).content()
-          )
-        : await cleanHtml(await page.content());
-
+    let rawContent: string;
+    if (capture.type === 'iframe') {
+      const frame = await getFrameBySelector(page, capture.selector);
+      rawContent = await frame.content();
+    } else {
+      rawContent = await page.content();
+    }
+    const content = await cleanHtml(rawContent);
     const result = {
       content,
       type: 'html' as const,
