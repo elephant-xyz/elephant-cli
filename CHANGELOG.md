@@ -1,3 +1,10 @@
+# [1.43.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.42.0...v1.43.0) (2025-09-30)
+
+
+### Features
+
+* enable ignore captcha  ([#168](https://github.com/elephant-xyz/elephant-cli/issues/168)) ([d1101ff](https://github.com/elephant-xyz/elephant-cli/commit/d1101ffe935d4fa5d9affc40bbf37ea91753a5c1))
+
 # [1.42.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.2...v1.42.0) (2025-09-30)
 
 
