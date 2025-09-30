@@ -72,6 +72,38 @@ export async function withBrowser(
       throw e;
     }
 
+    // Check if we landed on a reCAPTCHA page and wait for redirect
+    const hasRecaptcha = await page.evaluate(() => {
+      const url = window.location.href;
+      const html = document.documentElement.innerHTML.toLowerCase();
+      return (
+        url.includes('recaptchatoken=') ||
+        html.includes('recaptcha') ||
+        html.includes('g-recaptcha')
+      );
+    });
+
+    if (hasRecaptcha) {
+      logger.info('Detected reCAPTCHA page, waiting for redirect...');
+      const originalUrl = await page.url();
+      await page
+        .waitForFunction(
+          (startUrl) => {
+            const currentUrl = window.location.href;
+            return (
+              currentUrl !== startUrl && !currentUrl.includes('recaptchatoken=')
+            );
+          },
+          { timeout: 60000 },
+          originalUrl
+        )
+        .catch((e) => {
+          logger.warn(`reCAPTCHA redirect timeout: ${e}`);
+        });
+      logger.info('reCAPTCHA redirect completed');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
     await Promise.race([
       page
         .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
@@ -104,7 +136,12 @@ export async function withBrowser(
     }
 
     const html = await page.content();
-    const bad = detectErrorHtml(html, errorPatterns);
+
+    // Don't treat reCAPTCHA success pages as errors
+    const url = await page.url();
+    const isRecaptchaSuccess = url.includes('recaptchaToken=');
+
+    const bad = detectErrorHtml(html, errorPatterns, isRecaptchaSuccess);
     if (bad) {
       logger.error(`Detected error HTML in browser content: ${bad}`);
       throw new Error(`Browser returned error page: ${bad}`);
@@ -224,10 +261,16 @@ async function clickContinueButton(page: Page) {
   }
 }
 
-function detectErrorHtml(html: string, extra?: string[]): string | null {
+function detectErrorHtml(
+  html: string,
+  extra?: string[],
+  skipCaptchaCheck?: boolean
+): string | null {
   const lowered = html.toLowerCase();
-  for (const q of DEFAULT_ERROR_PATTERNS_LOWER)
+  for (const q of DEFAULT_ERROR_PATTERNS_LOWER) {
+    if (skipCaptchaCheck && q === 'captcha') continue;
     if (lowered.includes(q)) return q;
+  }
   const add = extra || [];
   const addLower = add
     .map((p) => p.trim().toLowerCase())
