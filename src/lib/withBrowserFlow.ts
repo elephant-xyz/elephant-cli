@@ -93,19 +93,45 @@ async function getFrameBySelector(
   selector: string,
   timeout: number = 5000
 ): Promise<Frame> {
-  await page.waitForSelector(selector, { timeout });
+  const maxRetries = 3;
+  const retryDelay = 500;
 
-  const frameElement = await page.$(selector);
-  if (!frameElement) {
-    throw new Error(`Frame element not found: ${selector}`);
+  for (const attempt of Array(maxRetries).keys()) {
+    const attemptNumber = attempt + 1;
+
+    if (attempt > 0) {
+      logger.info(`Retry attempt ${attemptNumber} to get frame: ${selector}`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelay * attempt));
+    }
+
+    await page.waitForSelector(selector, { timeout });
+
+    const frameElement = await page.$(selector);
+    if (!frameElement) {
+      if (attemptNumber === maxRetries) {
+        throw new Error(
+          `Frame element not found after ${maxRetries} attempts: ${selector}`
+        );
+      }
+      continue;
+    }
+
+    const frame = await frameElement.contentFrame();
+    if (!frame) {
+      if (attemptNumber === maxRetries) {
+        throw new Error(
+          `Could not access frame content after ${maxRetries} attempts: ${selector}`
+        );
+      }
+      continue;
+    }
+
+    return frame;
   }
 
-  const frame = await frameElement.contentFrame();
-  if (!frame) {
-    throw new Error(`Could not access frame content: ${selector}`);
-  }
-
-  return frame;
+  throw new Error(
+    `Failed to get frame after ${maxRetries} attempts: ${selector}`
+  );
 }
 
 export async function withBrowserFlow(
@@ -150,10 +176,56 @@ export async function withBrowserFlow(
       switch (type) {
         case 'open_page': {
           const { url, timeout, wait_until } = input;
-          await page.goto(url, {
-            waitUntil: wait_until ?? 'networkidle2',
-            timeout: timeout ?? 30000,
-          });
+          const maxRetries = 3;
+          const retryDelay = 1000;
+
+          for (const attempt of Array(maxRetries).keys()) {
+            const isLastAttempt = attempt === maxRetries - 1;
+            const attemptNumber = attempt + 1;
+
+            if (attempt > 0) {
+              logger.info(
+                `Retry attempt ${attemptNumber} for navigation to ${url}`
+              );
+              await new Promise((resolve) =>
+                setTimeout(resolve, retryDelay * attempt)
+              );
+            }
+
+            const navigationPromise = page
+              .goto(url, {
+                waitUntil: wait_until ?? 'domcontentloaded',
+                timeout: timeout ?? 30000,
+              })
+              .catch((error) => {
+                const isFrameDetached =
+                  error.message.includes('frame') &&
+                  (error.message.includes('detached') ||
+                    error.message.includes('disposed'));
+
+                if (isFrameDetached && !isLastAttempt) {
+                  logger.info(
+                    `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
+                  );
+                  return null;
+                }
+
+                throw error;
+              });
+
+            const response = await navigationPromise;
+
+            if (response !== null) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              break;
+            }
+
+            if (isLastAttempt) {
+              throw new Error(
+                `Failed to navigate after ${maxRetries} attempts`
+              );
+            }
+          }
           break;
         }
         case 'wait_for_selector': {
