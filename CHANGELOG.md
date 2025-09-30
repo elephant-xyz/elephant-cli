@@ -1,3 +1,10 @@
+# [1.42.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.2...v1.42.0) (2025-09-30)
+
+
+### Features
+
+* add reCAPTCHA handling and improve error detection logic ([#166](https://github.com/elephant-xyz/elephant-cli/issues/166)) ([1724014](https://github.com/elephant-xyz/elephant-cli/commit/17240146fe5cecd5af681561e58648d921568f35))
+
 ## [1.41.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.41.1...v1.41.2) (2025-09-29)
 
 
