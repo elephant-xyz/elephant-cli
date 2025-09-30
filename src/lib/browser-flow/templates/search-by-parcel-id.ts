@@ -56,7 +56,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
               : 'enter_parcel_id',
           input: {
             url: context.url,
-            timeout: 30000,
+            timeout: 90000,
             wait_until: 'networkidle2',
           },
         },
@@ -93,7 +93,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'wait_for_selector',
         input: {
           selector: params.continue_button_selector as string,
-          timeout: 15000,
+          timeout: 60000,
           visible: true,
         },
         next: 'click_continue_button',
@@ -112,7 +112,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'wait_for_selector',
         input: {
           selector: params.search_form_selector as string,
-          timeout: 30000,
+          timeout: 60000,
           visible: true,
         },
         next: 'enter_parcel_id',
@@ -124,7 +124,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'wait_for_selector',
         input: {
           selector: params.continue2_button_selector as string,
-          timeout: 15000,
+          timeout: 60000,
           visible: true,
         },
         next: 'click_continue_button2',
@@ -143,7 +143,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           type: 'wait_for_selector',
           input: {
             selector: params.search_form_selector as string,
-            timeout: 30000,
+            timeout: 60000,
             visible: true,
           },
           next: 'enter_parcel_id',
