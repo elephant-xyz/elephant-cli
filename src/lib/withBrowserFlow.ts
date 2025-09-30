@@ -2,7 +2,7 @@ import dot from 'dot';
 import { logger } from '../utils/logger.js';
 import { createBrowser } from './common.js';
 import { Prepared } from './types.js';
-import { KeyInput } from 'puppeteer';
+import { Frame, KeyInput, Page } from 'puppeteer';
 import { cleanHtml } from './common.js';
 
 type WaitUntil = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
@@ -19,16 +19,19 @@ interface WaitForSelectorInput {
   selector: Selector;
   timeout?: number;
   visible?: boolean;
+  iframe_selector?: Selector;
 }
 
 interface ClickInput {
   selector: Selector;
+  iframe_selector?: Selector;
 }
 
 interface TypeInput {
   selector: Selector;
   value: string;
   delay?: number;
+  iframe_selector?: Selector;
 }
 
 interface KeyboardPressInput {
@@ -72,15 +75,64 @@ type StepNode =
 
 type States = Record<string, StepNode>;
 
+type CaptureConfig = { type: 'page' } | { type: 'iframe'; selector: Selector };
+
 export type Workflow = {
   starts_at: keyof States;
   states: States;
+  capture?: CaptureConfig;
 };
 
 type ExecutionState = {
   request_identifier: string;
   [key: string]: string | number | boolean;
 };
+
+async function getFrameBySelector(
+  page: Page,
+  selector: string,
+  timeout: number = 5000
+): Promise<Frame> {
+  const maxRetries = 3;
+  const retryDelay = 500;
+
+  for (const attempt of Array(maxRetries).keys()) {
+    const attemptNumber = attempt + 1;
+
+    if (attempt > 0) {
+      logger.info(`Retry attempt ${attemptNumber} to get frame: ${selector}`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelay * attempt));
+    }
+
+    await page.waitForSelector(selector, { timeout });
+
+    const frameElement = await page.$(selector);
+    if (!frameElement) {
+      if (attemptNumber === maxRetries) {
+        throw new Error(
+          `Frame element not found after ${maxRetries} attempts: ${selector}`
+        );
+      }
+      continue;
+    }
+
+    const frame = await frameElement.contentFrame();
+    if (!frame) {
+      if (attemptNumber === maxRetries) {
+        throw new Error(
+          `Could not access frame content after ${maxRetries} attempts: ${selector}`
+        );
+      }
+      continue;
+    }
+
+    return frame;
+  }
+
+  throw new Error(
+    `Failed to get frame after ${maxRetries} attempts: ${selector}`
+  );
+}
 
 export async function withBrowserFlow(
   workflow: Workflow,
@@ -106,7 +158,6 @@ export async function withBrowserFlow(
     );
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
-      Accept: 'text/html,application/xhtml+xml',
     });
     const executionState: ExecutionState = { request_identifier: requestId };
     let currentStep = workflow.starts_at;
@@ -125,29 +176,96 @@ export async function withBrowserFlow(
       switch (type) {
         case 'open_page': {
           const { url, timeout, wait_until } = input;
-          await page.goto(url, {
-            waitUntil: wait_until ?? 'networkidle2',
-            timeout: timeout ?? 30000,
-          });
+          const maxRetries = 3;
+          const retryDelay = 1000;
+
+          for (const attempt of Array(maxRetries).keys()) {
+            const isLastAttempt = attempt === maxRetries - 1;
+            const attemptNumber = attempt + 1;
+
+            if (attempt > 0) {
+              logger.info(
+                `Retry attempt ${attemptNumber} for navigation to ${url}`
+              );
+              await new Promise((resolve) =>
+                setTimeout(resolve, retryDelay * attempt)
+              );
+            }
+
+            const navigationPromise = page
+              .goto(url, {
+                waitUntil: wait_until ?? 'domcontentloaded',
+                timeout: timeout ?? 30000,
+              })
+              .catch((error) => {
+                const isFrameDetached =
+                  error.message.includes('frame') &&
+                  (error.message.includes('detached') ||
+                    error.message.includes('disposed'));
+
+                if (isFrameDetached && !isLastAttempt) {
+                  logger.info(
+                    `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
+                  );
+                  return null;
+                }
+
+                throw error;
+              });
+
+            const response = await navigationPromise;
+
+            if (response !== null) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              break;
+            }
+
+            if (isLastAttempt) {
+              throw new Error(
+                `Failed to navigate after ${maxRetries} attempts`
+              );
+            }
+          }
           break;
         }
         case 'wait_for_selector': {
-          const { selector, timeout, visible } = input;
-          await page.waitForSelector(selector, {
-            visible,
-            timeout,
-          });
+          const { selector, timeout, visible, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.waitForSelector(selector, {
+              visible,
+              timeout,
+            });
+          }
+          if (!iframe_selector) {
+            await page.waitForSelector(selector, {
+              visible,
+              timeout,
+            });
+          }
           stepResult = selector;
           break;
         }
         case 'click': {
-          const { selector } = input;
-          await page.click(selector);
+          const { selector, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.click(selector);
+          }
+          if (!iframe_selector) {
+            await page.click(selector);
+          }
           break;
         }
         case 'type': {
-          const { selector, value, delay } = input;
-          await page.type(selector, value, { delay });
+          const { selector, value, delay, iframe_selector } = input;
+          if (iframe_selector) {
+            const frame = await getFrameBySelector(page, iframe_selector);
+            await frame.type(selector, value, { delay });
+          }
+          if (!iframe_selector) {
+            await page.type(selector, value, { delay });
+          }
           break;
         }
         case 'keyboard_press': {
@@ -176,8 +294,17 @@ export async function withBrowserFlow(
     const finalUrl = page.url();
     logger.info(`Final URL after browser flow: ${finalUrl}`);
 
+    const capture = workflow.capture ?? { type: 'page' };
+    let rawContent: string;
+    if (capture.type === 'iframe') {
+      const frame = await getFrameBySelector(page, capture.selector);
+      rawContent = await frame.content();
+    } else {
+      rawContent = await page.content();
+    }
+    const content = await cleanHtml(rawContent);
     const result = {
-      content: await cleanHtml(await page.content()),
+      content,
       type: 'html' as const,
       finalUrl,
     };

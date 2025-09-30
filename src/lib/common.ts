@@ -87,6 +87,7 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
         '--hide-scrollbars',
         '--disable-web-security',
         '--no-sandbox',
+        '--disable-features=site-per-process',
       ],
       timeout: 30000,
     });
@@ -96,6 +97,7 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
     return await puppeteer.launch({
       headless: headless,
       timeout: 30000,
+      args: ['--no-sandbox', '--disable-web-security'],
     });
   } else {
     const errorMessage =
