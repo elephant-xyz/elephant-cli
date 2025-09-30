@@ -187,6 +187,12 @@ elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
   --browser-flow-template <TEMPLATE_NAME> \
   --browser-flow-parameters '<JSON_PARAMETERS>'
+
+# Sites with CAPTCHA that should be ignored
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --use-browser \
+  --ignore-captcha
 ```
 
 **What it does**
@@ -215,6 +221,7 @@ prepared-site.zip
 | `--no-continue` | Skip auto-clicking "Continue" modals when browser mode is active. | `false` |
 | `--continue-button <selector>` | CSS selector for a simple continue/agree button to click. | None |
 | `--no-fast` | Disable the fast browser profile (enables full asset loading). | `false` |
+| `--ignore-captcha` | Ignore CAPTCHA pages and continue processing. | `false` |
 | `--browser-flow-template <name>` | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`). | None |
 | `--browser-flow-parameters <json>` | JSON parameters for the browser flow template. | None |
 

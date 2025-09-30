@@ -23,7 +23,8 @@ export async function withBrowser(
   requestId: string,
   headless: boolean,
   errorPatterns?: string[],
-  continueButtonSelector?: string
+  continueButtonSelector?: string,
+  ignoreCaptcha: boolean = false
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
   const browser: PuppeteerBrowser = await createBrowser(headless);
@@ -76,7 +77,11 @@ export async function withBrowser(
     const hasRecaptcha = await checkForRecaptcha(page);
 
     if (hasRecaptcha) {
-      await handleRecaptchaRedirect(page);
+      if (ignoreCaptcha) {
+        logger.info('CAPTCHA detected but ignoring due to ignoreCaptcha flag');
+      } else {
+        await handleRecaptchaRedirect(page);
+      }
     }
 
     await Promise.race([
@@ -116,7 +121,11 @@ export async function withBrowser(
     const url = await page.url();
     const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
 
-    const bad = detectErrorHtml(html, errorPatterns, isRecaptchaSuccess);
+    const bad = detectErrorHtml(
+      html,
+      errorPatterns,
+      isRecaptchaSuccess || ignoreCaptcha
+    );
     if (bad) {
       logger.error(`Detected error HTML in browser content: ${bad}`);
       throw new Error(`Browser returned error page: ${bad}`);

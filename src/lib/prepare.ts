@@ -75,7 +75,8 @@ export async function prepare(
         requestId,
         headless,
         options.errorPatterns,
-        options.continueButtonSelector
+        options.continueButtonSelector,
+        options.ignoreCaptcha
       );
     } else {
       prepared = await withFetch(req);
