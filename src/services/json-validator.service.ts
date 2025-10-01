@@ -181,6 +181,21 @@ export class JsonValidatorService {
     currentFilePath?: string,
     skipCIDResolution?: boolean
   ): Promise<ValidationResult> {
+    // Log schema details for debugging
+    console.log(`[DEBUG] Validating against schema:`, {
+      title: schema.title || 'Unknown',
+      type: schema.type || 'Unknown',
+      hasRelationships: !!(schema.properties && schema.properties.relationships),
+      currentFilePath: currentFilePath || 'Unknown',
+      schemaKeys: Object.keys(schema.properties || {}),
+      schemaString: JSON.stringify(schema, null, 2).substring(0, 500) + '...'
+    });
+    
+    if (schema.properties && schema.properties.relationships) {
+      const relationshipKeys = Object.keys(schema.properties.relationships.properties || {});
+      console.log(`[DEBUG] Schema relationships: ${relationshipKeys.join(', ')}`);
+    }
+
     let resolvedData;
     try {
       // Root schema should not be a CID link itself
@@ -201,11 +216,13 @@ export class JsonValidatorService {
       }
 
       // Resolve any CID references in the schema first and create a map of which schema parts allow CID resolution
+      console.log(`[DEBUG] About to resolve CID references in schema...`);
       const cidAllowedMap = new Map<string, boolean>();
       const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
         schema,
         cidAllowedMap
       );
+      console.log(`[DEBUG] CID resolution completed. Resolved schema keys:`, Object.keys(resolvedSchema.properties || {}));
 
       // Resolve CID pointers in data if present, but only where schema allows it
       if (skipCIDResolution) {
@@ -222,20 +239,36 @@ export class JsonValidatorService {
       logger.debug(`resolved data type: ${typeof resolvedData}`);
 
       // Get or compile validator
+      console.log(`[DEBUG] About to compile validator for schema...`);
       const validator = await this.getValidator(resolvedSchema);
+      console.log(`[DEBUG] Validator compiled successfully`);
 
       // Validate the data (handle both sync and async validators)
+      console.log(`[DEBUG] About to validate data:`, {
+        dataType: typeof resolvedData,
+        hasRelationships: !!(resolvedData && resolvedData.relationships),
+        relationshipKeys: resolvedData && resolvedData.relationships ? Object.keys(resolvedData.relationships) : []
+      });
+      
       const result = validator(resolvedData);
       const valid =
         typeof result === 'object' && result !== null && 'then' in result
           ? await result
           : result;
 
+      console.log(`[DEBUG] Validation result: ${valid ? 'VALID' : 'INVALID'}`);
+
       if (valid) {
         return { valid: true };
       } else {
         // Transform AJV errors to our format
         const errors = this.transformErrors(validator.errors || []);
+        console.log(`[DEBUG] Validation errors:`, errors.map(err => ({
+          message: err.message,
+          keyword: err.keyword,
+          path: err.path,
+          data: err.data
+        })));
         return { valid: false, errors };
       }
     } catch (error) {
@@ -269,12 +302,19 @@ export class JsonValidatorService {
 
     // Check if this schema node has a 'cid' property (along with type)
     if (this.isCIDLinkSchema(schema)) {
+      console.log(`[DEBUG] Resolving CID reference: ${schema.cid} at path: ${currentPath}`);
       try {
         // Mark this path as allowing CID pointers
         cidAllowedMap.set(currentPath, true);
 
         // Load the schema from the CID
         const loadedSchema = await this.loadSchemaFromCID(schema.cid);
+        console.log(`[DEBUG] Loaded schema for CID ${schema.cid}:`, {
+          title: loadedSchema.title || 'Unknown',
+          type: loadedSchema.type || 'Unknown',
+          hasProperties: !!(loadedSchema.properties),
+          schemaString: JSON.stringify(loadedSchema, null, 2).substring(0, 200) + '...'
+        });
 
         // If the original schema allows multiple types (e.g., ['string', 'null']),
         // we need to create a schema that combines the loaded schema with the null option
@@ -627,13 +667,23 @@ export class JsonValidatorService {
     let validator = this.validators.get(cacheKey);
 
     if (!validator) {
-      // Schema has already been resolved by resolveCIDSchemas, compile directly
-      validator = this.ajv.compile(schema);
-      this.validators.set(cacheKey, validator);
+      console.log(`[DEBUG] Compiling new validator for schema...`);
+      console.log(`[DEBUG] Schema being compiled:`, JSON.stringify(schema, null, 2));
+      try {
+        // Schema has already been resolved by resolveCIDSchemas, compile directly
+        validator = this.ajv.compile(schema);
+        console.log(`[DEBUG] Validator compiled successfully`);
+        this.validators.set(cacheKey, validator);
 
-      if (!validator) {
-        throw new Error('Failed to compile schema validator');
+        if (!validator) {
+          throw new Error('Failed to compile schema validator');
+        }
+      } catch (error) {
+        console.log(`[DEBUG] Error compiling validator:`, error);
+        throw error;
       }
+    } else {
+      console.log(`[DEBUG] Using cached validator`);
     }
 
     if (!validator) {
@@ -727,6 +777,32 @@ export class JsonValidatorService {
   }
 
   /**
+   * Analyze schema to find problematic type definitions
+   */
+  private analyzeSchemaForTypeErrors(schema: any, path: string = ''): string[] {
+    const issues: string[] = [];
+    
+    if (!schema || typeof schema !== 'object') {
+      return issues;
+    }
+    
+    // Check for invalid type definitions in items objects
+    if (schema.items && typeof schema.items === 'object' && schema.items.type === 'string') {
+      issues.push(`Invalid type definition in items at path: ${path}.items - should not have "type": "string"`);
+    }
+    
+    // Recursively check nested objects
+    for (const [key, value] of Object.entries(schema)) {
+      if (typeof value === 'object' && value !== null) {
+        const nestedPath = path ? `${path}.${key}` : key;
+        issues.push(...this.analyzeSchemaForTypeErrors(value, nestedPath));
+      }
+    }
+    
+    return issues;
+  }
+
+  /**
    * Get a human-readable error message from validation errors
    */
   getErrorMessages(
@@ -740,6 +816,42 @@ export class JsonValidatorService {
       const path = error.path || 'root';
       const data = error.data;
       let message = error.message || 'Validation failed';
+
+      // Enhanced error reporting for type errors
+      if (message.includes('type must be JSONType or JSONType[]')) {
+        const fieldPath = path === 'root' ? 'root level' : `field "${path}"`;
+        const dataType = typeof data;
+        const dataValue = data ? JSON.stringify(data).substring(0, 200) : 'undefined';
+        
+        // Try to identify which schema field is causing the issue
+        let schemaFieldHint = '';
+        if (data && typeof data === 'object' && data.relationships) {
+          const relationshipKeys = Object.keys(data.relationships);
+          schemaFieldHint = ` (Data group has relationships: ${relationshipKeys.join(', ')})`;
+        }
+        
+        // Add more detailed schema analysis
+        let schemaAnalysis = '';
+        if (error.keyword) {
+          schemaAnalysis += ` Keyword: ${error.keyword}`;
+        }
+        
+        // Try to identify the specific problematic field based on the error message
+        let fieldAnalysis = '';
+        if (message.includes('type must be JSONType or JSONType[]: string')) {
+          // Add more detailed analysis
+          const errorDetails = {
+            message: error.message,
+            keyword: error.keyword,
+            params: error.params,
+            data: error.data
+          };
+          
+          fieldAnalysis = ` [DETAILED ERROR ANALYSIS: ${JSON.stringify(errorDetails, null, 2)}]`;
+        }
+        
+        message = `Schema validation error in ${fieldPath}: ${message}. Current value type: ${dataType}, value: ${dataValue}${schemaFieldHint}${schemaAnalysis}${fieldAnalysis}`;
+      }
 
       const isStringError = message.includes('must be string');
       const hasDataSlash = data && Object.hasOwn(data, '/');

@@ -56,7 +56,10 @@ export class SchemaManifestService {
       );
     }
 
-    const item = this.schemaManifest[label];
+    // Handle the mismatch between validation enum and schema manifest
+    const manifestKey = label === 'Property Improvement' ? 'Property_Improvement' : label;
+    
+    const item = this.schemaManifest[manifestKey];
     if (!item) {
       return null;
     }

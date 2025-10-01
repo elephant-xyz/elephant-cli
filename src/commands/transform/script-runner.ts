@@ -114,6 +114,7 @@ function execNode(
 }
 
 function tailLines(s: string, maxLines: number): string {
+  if (!s) return '';
   const lines = s.split(/\r?\n/);
   return lines.slice(-maxLines).join('\n');
 }
@@ -150,6 +151,29 @@ export async function runScriptsPipeline(
 
   linkNodeModulesIntoTemp(workDir);
 
+  // Check if this is a property improvement extraction
+  console.log(`Looking for property improvement scripts in: ${scriptsDir}`);
+  const propertyImprovementScriptJs = await findFileRecursive(scriptsDir, 'property_improvement_extractor.js');
+  const propertyImprovementScriptCjs = await findFileRecursive(scriptsDir, 'property_improvement_extractor.cjs');
+  console.log(`Found .js script: ${propertyImprovementScriptJs}`);
+  console.log(`Found .cjs script: ${propertyImprovementScriptCjs}`);
+  const propertyImprovementScript = propertyImprovementScriptJs || propertyImprovementScriptCjs;
+  const isPropertyImprovement = propertyImprovementScript !== null;
+  console.log(`Property improvement script found: ${propertyImprovementScript}, isPropertyImprovement: ${isPropertyImprovement}`);
+
+  if (isPropertyImprovement) {
+    // For property improvement, just run the single script
+    const timeoutMs = 120000; // 2 minutes default per script
+    const res = await execNode(propertyImprovementScript, [], workDir, timeoutMs);
+    if (res.code !== 0) {
+      const msg = summarizeFailure('property_improvement_extractor.js', res);
+      logger.error(msg);
+      throw new Error(msg);
+    }
+    return;
+  }
+
+  // Standard county extraction pipeline
   const names = [
     'ownerMapping.js',
     'structureMapping.js',
