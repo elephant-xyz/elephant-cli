@@ -39,7 +39,7 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
-  // Defaults: browser=false (via useBrowser flag only), clickContinue defaults to true (handled below)kContinue defaults to true (handled below)
+  // Defaults: browser=false (via useBrowser flag only), clickContinue defaults to false (handled below)
   const effectiveBrowser = options.useBrowser ?? false;
   const effectiveClickContinue = options.clickContinue ?? false;
   const headless = options.headless ?? true;
