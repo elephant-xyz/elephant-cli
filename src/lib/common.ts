@@ -1,9 +1,14 @@
 import { Request } from './types.js';
-import { Browser } from 'puppeteer';
+import { Browser, Page } from 'puppeteer';
 import * as prettier from 'prettier';
 import * as cheerio from 'cheerio';
 import { logger } from '../utils/logger.js';
+import { ProxyOptions } from './types.js';
 import chalk from 'chalk';
+
+interface AsyncDisposablePage extends Page {
+  [Symbol.asyncDispose](): Promise<void>;
+}
 
 export function constructUrl(req: Request) {
   const url = new URL(req.url);
@@ -73,12 +78,19 @@ async function prettierFormat(content: string): Promise<string> {
   return prettier.format(content, { parser: 'html' });
 }
 
-export async function createBrowser(headless: boolean): Promise<Browser> {
+export async function createBrowserPage(
+  headless: boolean,
+  proxy?: ProxyOptions
+): Promise<AsyncDisposablePage> {
+  const additionalArgs = proxy
+    ? ['--proxy-server=' + proxy.ip + ':' + proxy.port]
+    : [];
+  let browser: Browser;
   if (process.platform === 'linux') {
     const puppeteer = await import('puppeteer');
     const { default: Chromium } = await import('@sparticuz/chromium');
     logger.info('Launching browser...');
-    return await puppeteer.launch({
+    browser = await puppeteer.launch({
       ignoreDefaultArgs: ['--disable-extensions'],
       executablePath: await Chromium.executablePath(),
       headless: 'shell',
@@ -88,16 +100,17 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
         '--disable-web-security',
         '--no-sandbox',
         '--disable-features=site-per-process',
+        ...additionalArgs,
       ],
       timeout: 30000,
     });
   } else if (process.platform === 'darwin') {
     const puppeteer = await import('puppeteer');
     logger.info('Launching browser...');
-    return await puppeteer.launch({
+    browser = await puppeteer.launch({
       headless: headless,
       timeout: 30000,
-      args: ['--no-sandbox', '--disable-web-security'],
+      args: ['--no-sandbox', '--disable-web-security', ...additionalArgs],
     });
   } else {
     const errorMessage =
@@ -105,4 +118,31 @@ export async function createBrowser(headless: boolean): Promise<Browser> {
     console.log(chalk.red(errorMessage));
     throw new Error(errorMessage);
   }
+  const page = await browser.newPage();
+  (page as AsyncDisposablePage)[Symbol.asyncDispose] = async () => {
+    await browser.close();
+  };
+  if (proxy) {
+    await page.authenticate({
+      username: proxy.username,
+      password: proxy.password,
+    });
+  }
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    const type = req.resourceType();
+    const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+    if (blocked.includes(type)) req.abort();
+    else req.continue();
+  });
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  });
+  await page.setUserAgent(
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
+  );
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+  });
+  return page as AsyncDisposablePage;
 }

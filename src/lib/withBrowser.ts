@@ -1,13 +1,8 @@
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
-import {
-  Browser as PuppeteerBrowser,
-  TimeoutError,
-  Page,
-  HTTPResponse,
-} from 'puppeteer';
-import { constructUrl, createBrowser } from './common.js';
-import { Prepared, Request } from './types.js';
+import { TimeoutError, Page, HTTPResponse } from 'puppeteer';
+import { constructUrl, createBrowserPage } from './common.js';
+import { Prepared, Request, ProxyOptions } from './types.js';
 import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
 
 const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
@@ -19,123 +14,95 @@ const BUTTON_CLICK_DELAY_MS = 1000;
 export async function withBrowser(
   req: Request,
   clickContinue: boolean = false,
-  fast: boolean = true,
-  requestId: string,
   headless: boolean,
   errorPatterns?: string[],
   continueButtonSelector?: string,
-  ignoreCaptcha: boolean = false
+  ignoreCaptcha: boolean = false,
+  proxy?: ProxyOptions
 ): Promise<Prepared> {
   logger.info('Preparing with browser...');
-  const browser: PuppeteerBrowser = await createBrowser(headless);
+  await using browserPage: Page = await createBrowserPage(headless, proxy);
 
+  logger.info('Creating page...');
+  const page = browserPage;
+  const startMs = Date.now();
+  logger.info('Navigating to URL...');
   try {
-    logger.info('Creating page...');
-    const page = await browser.newPage();
-    if (fast) {
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        const type = req.resourceType();
-        const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
-        if (blocked.includes(type)) req.abort();
-        else req.continue();
-      });
-    }
-    const startMs = Date.now();
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    const url = constructUrl(req);
+    logger.info(`Navigating to URL: ${url}`);
+    const navRes = await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
     });
-    await page.setUserAgent(
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
-    );
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-      Accept: 'text/html,application/xhtml+xml',
-    });
-    logger.info('Navigating to URL...');
-    try {
-      const url = constructUrl(req);
-      logger.info(`Navigating to URL: ${url}`);
-      const navRes = await page.goto(url, {
-        waitUntil: fast ? 'domcontentloaded' : 'networkidle2',
-        timeout: fast ? 15000 : 60000,
-      });
-      assertNavigationOk(navRes, 'initial navigation');
-    } catch (e) {
-      logger.error(`Error navigating to URL: ${e}`);
-      if (e instanceof TimeoutError) {
-        console.error(
-          chalk.red(
-            'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
-          )
-        );
-      }
-      throw e;
-    }
-
-    // Check if we landed on a reCAPTCHA page and wait for redirect
-    const hasRecaptcha = await checkForRecaptcha(page);
-
-    if (hasRecaptcha) {
-      if (ignoreCaptcha) {
-        logger.info('CAPTCHA detected but ignoring due to ignoreCaptcha flag');
-      } else {
-        await handleRecaptchaRedirect(page);
-      }
-    }
-
-    await Promise.race([
-      page
-        .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
-        .catch(() => {}),
-      page
-        .waitForFunction(
-          () =>
-            document.querySelector('#parcelLabel') ||
-            document.querySelector('.sectionTitle') ||
-            document.querySelector('table.detailsTable') ||
-            document.querySelector('.textPanel') ||
-            document.querySelector('[id*="Property"]'),
-          { timeout: 15000 }
+    assertNavigationOk(navRes, 'initial navigation');
+  } catch (e) {
+    logger.error(`Error navigating to URL: ${e}`);
+    if (e instanceof TimeoutError) {
+      console.error(
+        chalk.red(
+          'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
         )
-        .catch(() => {}),
-    ]);
-
-    if (continueButtonSelector) {
-      await clickCustomContinueButton(page, continueButtonSelector);
-    } else if (clickContinue) {
-      await clickContinueButton(page);
-    } else {
-      logger.info('Skipping Continue modal click by flag');
+      );
     }
-
-    if (fast) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    } else {
-      await waitForContent(page);
-    }
-
-    const html = await page.content();
-
-    // Don't treat reCAPTCHA success pages as errors
-    const url = await page.url();
-    const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
-
-    const bad = detectErrorHtml(
-      html,
-      errorPatterns,
-      isRecaptchaSuccess || ignoreCaptcha
-    );
-    if (bad) {
-      logger.error(`Detected error HTML in browser content: ${bad}`);
-      throw new Error(`Browser returned error page: ${bad}`);
-    }
-    const elapsedMs = Date.now() - startMs;
-    logger.info(`Captured page HTML in ${elapsedMs}ms`);
-    return { content: html, type: 'html' } as Prepared;
-  } finally {
-    await browser.close();
+    throw e;
   }
+
+  // Check if we landed on a reCAPTCHA page and wait for redirect
+  const hasRecaptcha = await checkForRecaptcha(page);
+
+  if (hasRecaptcha) {
+    if (ignoreCaptcha) {
+      logger.info('CAPTCHA detected but ignoring due to ignoreCaptcha flag');
+    } else {
+      await handleRecaptchaRedirect(page);
+    }
+  }
+
+  await Promise.race([
+    page
+      .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
+      .catch(() => {}),
+    page
+      .waitForFunction(
+        () =>
+          document.querySelector('#parcelLabel') ||
+          document.querySelector('.sectionTitle') ||
+          document.querySelector('table.detailsTable') ||
+          document.querySelector('.textPanel') ||
+          document.querySelector('[id*="Property"]'),
+        { timeout: 15000 }
+      )
+      .catch(() => {}),
+  ]);
+
+  if (continueButtonSelector) {
+    await clickCustomContinueButton(page, continueButtonSelector);
+  } else if (clickContinue) {
+    await clickContinueButton(page);
+  } else {
+    logger.info('Skipping Continue modal click by flag');
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  const html = await page.content();
+
+  // Don't treat reCAPTCHA success pages as errors
+  const url = page.url();
+  const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
+
+  const bad = detectErrorHtml(
+    html,
+    errorPatterns,
+    isRecaptchaSuccess || ignoreCaptcha
+  );
+  if (bad) {
+    logger.error(`Detected error HTML in browser content: ${bad}`);
+    throw new Error(`Browser returned error page: ${bad}`);
+  }
+  const elapsedMs = Date.now() - startMs;
+  logger.info(`Captured page HTML in ${elapsedMs}ms`);
+  return { content: html, type: 'html' } as Prepared;
 }
 
 async function checkForRecaptcha(page: Page): Promise<boolean> {
@@ -151,7 +118,7 @@ async function checkForRecaptcha(page: Page): Promise<boolean> {
 
 async function handleRecaptchaRedirect(page: Page): Promise<void> {
   logger.info('Detected reCAPTCHA page, waiting for redirect...');
-  const startUrl = await page.url();
+  const startUrl = page.url();
   const redirectCompleted = await page
     .waitForFunction(
       (startUrl) => {
@@ -176,44 +143,6 @@ async function handleRecaptchaRedirect(page: Page): Promise<void> {
   if (redirectCompleted) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-}
-
-async function waitForContent(page: Page) {
-  await Promise.race([
-    page
-      .waitForFunction(() => document.readyState === 'complete', {
-        timeout: 15000,
-      })
-      .catch(() => null),
-    page
-      .waitForSelector('#parcelLabel', { visible: true, timeout: 15000 })
-      .catch(() => null),
-    page
-      .waitForFunction(
-        () =>
-          document.querySelector('#valueGrid') ||
-          document.querySelector('#PropertyDetails') ||
-          document.querySelector('#PropertyDetailsCurrent') ||
-          document.querySelector('#divDisplayParcelOwner') ||
-          document.querySelector('#divDisplayParcelPhoto'),
-        { timeout: 15000 }
-      )
-      .catch(() => null),
-  ]);
-
-  await page
-    .waitForFunction(
-      () =>
-        document.querySelector('#valueGrid') ||
-        document.querySelector('#PropertyDetails') ||
-        document.querySelector('#PropertyDetailsCurrent') ||
-        document.querySelector('#divDisplayParcelOwner') ||
-        document.querySelector('#divDisplayParcelPhoto'),
-      { timeout: 30000 }
-    )
-    .catch(() => {
-      logger.warn('Deep content not detected; proceeding with current DOM');
-    });
 }
 
 async function clickCustomContinueButton(page: Page, selector: string) {

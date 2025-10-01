@@ -4,7 +4,7 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import chalk from 'chalk';
-import { PrepareOptions, Request } from './types.js';
+import { PrepareOptions, Request, ProxyUrl, ProxyOptions } from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
@@ -12,17 +12,38 @@ import { createWorkflowFromTemplate } from './browser-flow/index.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
 
+function parseProxy(proxy: ProxyUrl): ProxyOptions {
+  const [, username, password, ip, port] =
+    proxy.match(/^(.*?):(.*?)@(.*?):(\d+)$/) || [];
+  if (!username || !password || !ip || !port) {
+    throw new Error(
+      'Invalid proxy format. Expected format: username:password@ip:port'
+    );
+  }
+  logger.info(`Proxy parsed: ${username}:hidden-password@${ip}:${port}`);
+  const proxyOptions: ProxyOptions = {
+    username,
+    password,
+    ip,
+    port: Number(port),
+  };
+
+  logger.info(
+    `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
+  );
+  return proxyOptions;
+}
+
 export async function prepare(
   inputZip: string,
   outputZip: string,
   options: PrepareOptions = {}
 ) {
-  // Caller (CLI/service) passes options.
-  // Defaults: browser=false (via useBrowser flag only), fast=true, clickContinue defaults to true (handled below)
+  // Defaults: browser=false (via useBrowser flag only), clickContinue defaults to false (handled below)
   const effectiveBrowser = options.useBrowser ?? false;
   const effectiveClickContinue = options.clickContinue ?? false;
-  const effectiveFast = options.fast ?? true;
   const headless = options.headless ?? true;
+  const proxy = options.proxy ? parseProxy(options.proxy) : undefined;
 
   // Validate that continueButtonSelector requires browser mode
   if (options.continueButtonSelector && !effectiveBrowser) {
@@ -66,17 +87,21 @@ export async function prepare(
       if (!templateWorkflow) {
         throw new Error('Failed to create workflow from template');
       }
-      prepared = await withBrowserFlow(templateWorkflow, headless, requestId);
+      prepared = await withBrowserFlow(
+        templateWorkflow,
+        headless,
+        requestId,
+        proxy
+      );
     } else if (req.method === 'GET' && effectiveBrowser) {
       prepared = await withBrowser(
         req,
         effectiveClickContinue,
-        effectiveFast,
-        requestId,
         headless,
         options.errorPatterns,
         options.continueButtonSelector,
-        options.ignoreCaptcha
+        options.ignoreCaptcha,
+        proxy
       );
     } else {
       prepared = await withFetch(req);
