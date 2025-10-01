@@ -1,13 +1,25 @@
+type Ipv4Address = `${number}.${number}.${number}.${number}`;
+type Username = string;
+type Password = string;
+export type ProxyUrl = `${Username}:${Password}@${Ipv4Address}:${number}`;
+
+export type ProxyOptions = {
+  username: string;
+  password: string;
+  ip: string;
+  port: number;
+};
+
 export type PrepareOptions = {
   clickContinue?: boolean;
   continueButtonSelector?: string;
-  fast?: boolean;
   useBrowser?: boolean;
   headless?: boolean;
   errorPatterns?: string[];
   browserFlowTemplate?: string;
   browserFlowParameters?: string;
   ignoreCaptcha?: boolean;
+  proxy?: ProxyUrl;
 };
 
 export type Prepared = {

@@ -1,9 +1,8 @@
 import dot from 'dot';
 import { logger } from '../utils/logger.js';
-import { createBrowser } from './common.js';
-import { Prepared } from './types.js';
+import { Prepared, ProxyOptions } from './types.js';
 import { Frame, KeyInput, Page } from 'puppeteer';
-import { cleanHtml } from './common.js';
+import { cleanHtml, createBrowserPage } from './common.js';
 
 type WaitUntil = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
 
@@ -137,179 +136,157 @@ async function getFrameBySelector(
 export async function withBrowserFlow(
   workflow: Workflow,
   headless: boolean,
-  requestId: string
+  requestId: string,
+  proxy?: ProxyOptions
 ): Promise<Prepared> {
   const startMs = Date.now();
-  const browser = await createBrowser(headless);
-  try {
-    const page = await browser.newPage();
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const type = req.resourceType();
-      const blocked = ['image', 'stylesheet', 'font', 'media', 'websocket'];
-      if (blocked.includes(type)) req.abort();
-      else req.continue();
-    });
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    });
-    await page.setUserAgent(
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
-    );
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-    });
-    const executionState: ExecutionState = { request_identifier: requestId };
-    let currentStep = workflow.starts_at;
-    let end = false;
-    while (!end) {
-      const state = workflow.states[currentStep];
-      const { type, input, next, result } = state;
-      for (const [key, value] of Object.entries(input)) {
-        if (typeof value === 'string' && value.includes('=it.')) {
-          (input as Record<string, any>)[key] =
-            dot.template(value)(executionState);
-        }
+  await using page = await createBrowserPage(headless, proxy);
+  const executionState: ExecutionState = { request_identifier: requestId };
+  let currentStep = workflow.starts_at;
+  let end = false;
+  while (!end) {
+    const state = workflow.states[currentStep];
+    const { type, input, next, result } = state;
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === 'string' && value.includes('=it.')) {
+        (input as Record<string, any>)[key] =
+          dot.template(value)(executionState);
       }
-      logger.info(`Executing state ${currentStep}...`);
-      let stepResult: string | number | boolean | undefined;
-      switch (type) {
-        case 'open_page': {
-          const { url, timeout, wait_until } = input;
-          const maxRetries = 3;
-          const retryDelay = 1000;
-
-          for (const attempt of Array(maxRetries).keys()) {
-            const isLastAttempt = attempt === maxRetries - 1;
-            const attemptNumber = attempt + 1;
-
-            if (attempt > 0) {
-              logger.info(
-                `Retry attempt ${attemptNumber} for navigation to ${url}`
-              );
-              await new Promise((resolve) =>
-                setTimeout(resolve, retryDelay * attempt)
-              );
-            }
-
-            const navigationPromise = page
-              .goto(url, {
-                waitUntil: wait_until ?? 'domcontentloaded',
-                timeout: timeout ?? 30000,
-              })
-              .catch((error) => {
-                const isFrameDetached =
-                  error.message.includes('frame') &&
-                  (error.message.includes('detached') ||
-                    error.message.includes('disposed'));
-
-                if (isFrameDetached && !isLastAttempt) {
-                  logger.info(
-                    `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
-                  );
-                  return null;
-                }
-
-                throw error;
-              });
-
-            const response = await navigationPromise;
-
-            if (response !== null) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              break;
-            }
-
-            if (isLastAttempt) {
-              throw new Error(
-                `Failed to navigate after ${maxRetries} attempts`
-              );
-            }
-          }
-          break;
-        }
-        case 'wait_for_selector': {
-          const { selector, timeout, visible, iframe_selector } = input;
-          if (iframe_selector) {
-            const frame = await getFrameBySelector(page, iframe_selector);
-            await frame.waitForSelector(selector, {
-              visible,
-              timeout,
-            });
-          }
-          if (!iframe_selector) {
-            await page.waitForSelector(selector, {
-              visible,
-              timeout,
-            });
-          }
-          stepResult = selector;
-          break;
-        }
-        case 'click': {
-          const { selector, iframe_selector } = input;
-          if (iframe_selector) {
-            const frame = await getFrameBySelector(page, iframe_selector);
-            await frame.click(selector);
-          }
-          if (!iframe_selector) {
-            await page.click(selector);
-          }
-          break;
-        }
-        case 'type': {
-          const { selector, value, delay, iframe_selector } = input;
-          if (iframe_selector) {
-            const frame = await getFrameBySelector(page, iframe_selector);
-            await frame.type(selector, value, { delay });
-          }
-          if (!iframe_selector) {
-            await page.type(selector, value, { delay });
-          }
-          break;
-        }
-        case 'keyboard_press': {
-          const { key } = input;
-          await page.keyboard.press(key);
-          break;
-        }
-        default:
-          throw new Error(`Unknown type: ${type}`);
-      }
-      if (result && stepResult) {
-        executionState[result] = stepResult;
-      }
-      if (result && !stepResult) {
-        throw new Error(`Missing result at step ${currentStep}`);
-      }
-      if (next) {
-        currentStep = next;
-      }
-      end = state.end ?? false;
     }
-    const elapsedMs = Date.now() - startMs;
-    logger.info(`Captured page HTML in ${elapsedMs}ms`);
+    logger.info(`Executing state ${currentStep}...`);
+    let stepResult: string | number | boolean | undefined;
+    switch (type) {
+      case 'open_page': {
+        const { url, timeout, wait_until } = input;
+        const maxRetries = 3;
+        const retryDelay = 1000;
 
-    // Capture the final URL after navigation
-    const finalUrl = page.url();
-    logger.info(`Final URL after browser flow: ${finalUrl}`);
+        for (const attempt of Array(maxRetries).keys()) {
+          const isLastAttempt = attempt === maxRetries - 1;
+          const attemptNumber = attempt + 1;
 
-    const capture = workflow.capture ?? { type: 'page' };
-    let rawContent: string;
-    if (capture.type === 'iframe') {
-      const frame = await getFrameBySelector(page, capture.selector);
-      rawContent = await frame.content();
-    } else {
-      rawContent = await page.content();
+          if (attempt > 0) {
+            logger.info(
+              `Retry attempt ${attemptNumber} for navigation to ${url}`
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryDelay * attempt)
+            );
+          }
+
+          const navigationPromise = page
+            .goto(url, {
+              waitUntil: wait_until ?? 'domcontentloaded',
+              timeout: timeout ?? 30000,
+            })
+            .catch((error) => {
+              const isFrameDetached =
+                error.message.includes('frame') &&
+                (error.message.includes('detached') ||
+                  error.message.includes('disposed'));
+
+              if (isFrameDetached && !isLastAttempt) {
+                logger.info(
+                  `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
+                );
+                return null;
+              }
+
+              throw error;
+            });
+
+          const response = await navigationPromise;
+
+          if (response !== null) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            break;
+          }
+
+          if (isLastAttempt) {
+            throw new Error(`Failed to navigate after ${maxRetries} attempts`);
+          }
+        }
+        break;
+      }
+      case 'wait_for_selector': {
+        const { selector, timeout, visible, iframe_selector } = input;
+        if (iframe_selector) {
+          const frame = await getFrameBySelector(page, iframe_selector);
+          await frame.waitForSelector(selector, {
+            visible,
+            timeout,
+          });
+        }
+        if (!iframe_selector) {
+          await page.waitForSelector(selector, {
+            visible,
+            timeout,
+          });
+        }
+        stepResult = selector;
+        break;
+      }
+      case 'click': {
+        const { selector, iframe_selector } = input;
+        if (iframe_selector) {
+          const frame = await getFrameBySelector(page, iframe_selector);
+          await frame.click(selector);
+        }
+        if (!iframe_selector) {
+          await page.click(selector);
+        }
+        break;
+      }
+      case 'type': {
+        const { selector, value, delay, iframe_selector } = input;
+        if (iframe_selector) {
+          const frame = await getFrameBySelector(page, iframe_selector);
+          await frame.type(selector, value, { delay });
+        }
+        if (!iframe_selector) {
+          await page.type(selector, value, { delay });
+        }
+        break;
+      }
+      case 'keyboard_press': {
+        const { key } = input;
+        await page.keyboard.press(key);
+        break;
+      }
+      default:
+        throw new Error(`Unknown type: ${type}`);
     }
-    const content = await cleanHtml(rawContent);
-    const result = {
-      content,
-      type: 'html' as const,
-      finalUrl,
-    };
-    return result;
-  } finally {
-    await browser.close();
+    if (result && stepResult) {
+      executionState[result] = stepResult;
+    }
+    if (result && !stepResult) {
+      throw new Error(`Missing result at step ${currentStep}`);
+    }
+    if (next) {
+      currentStep = next;
+    }
+    end = state.end ?? false;
   }
+  const elapsedMs = Date.now() - startMs;
+  logger.info(`Captured page HTML in ${elapsedMs}ms`);
+
+  // Capture the final URL after navigation
+  const finalUrl = page.url();
+  logger.info(`Final URL after browser flow: ${finalUrl}`);
+
+  const capture = workflow.capture ?? { type: 'page' };
+  let rawContent: string;
+  if (capture.type === 'iframe') {
+    const frame = await getFrameBySelector(page, capture.selector);
+    rawContent = await frame.content();
+  } else {
+    rawContent = await page.content();
+  }
+  const content = await cleanHtml(rawContent);
+  const result = {
+    content,
+    type: 'html' as const,
+    finalUrl,
+  };
+  return result;
 }
