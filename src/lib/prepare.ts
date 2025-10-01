@@ -4,7 +4,13 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import chalk from 'chalk';
-import { PrepareOptions, Request, ProxyUrl, ProxyOptions } from './types.js';
+import {
+  PrepareOptions,
+  Request,
+  ProxyUrl,
+  ProxyOptions,
+  Prepared,
+} from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
@@ -32,6 +38,64 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
     `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
   );
   return proxyOptions;
+}
+
+async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
+  logger.info('Orange County detected - using hardcoded API flow');
+
+  const cleanRequestId = requestId.replace(/-/g, '');
+
+  const endpoints = [
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`,
+      key: 'parcelQuickSearchSummary',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCStats?PID=${cleanRequestId}`,
+      key: 'parcelValuationStats',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCGeneralInfo?pid=${cleanRequestId}`,
+      key: 'parcelGeneralProfile',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCPropertyValues?PID=${cleanRequestId}&TaxYear=0&ShowAllFlag=1`,
+      key: 'parcelPropertyValuesByYear',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCCertifiedTaxes?PID=${cleanRequestId}&TaxYear=0`,
+      key: 'parcelCertifiedTaxesByAuthority',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCNonAdValorem?PID=${cleanRequestId}&TaxYear=0`,
+      key: 'parcelNonAdValoremAssessments',
+    },
+    {
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCTotalTaxes?PID=${cleanRequestId}&TaxYear=0`,
+      key: 'parcelTotalTaxesSummary',
+    },
+  ];
+
+  const responses = await Promise.all(
+    endpoints.map(async ({ url, key }) => {
+      const response = await fetch(url);
+      const data = await response.json();
+      return { key, data };
+    })
+  );
+
+  const combinedData = responses.reduce(
+    (acc, { key, data }) => {
+      acc[key] = data;
+      return acc;
+    },
+    {} as Record<string, unknown>
+  );
+
+  return {
+    type: 'json',
+    content: JSON.stringify(combinedData, null, 2),
+  };
 }
 
 export async function prepare(
@@ -74,10 +138,17 @@ export async function prepare(
     if (!requestId)
       throw new Error('property_seed.json missing request_identifier');
 
+    // Check for Orange County hardcoded flow
+    const addressPath = path.join(dir, 'unnormalized_address.json');
+    const addressContent = await fs.readFile(addressPath, 'utf-8');
+    const addressData = JSON.parse(addressContent);
+    const isOrangeCounty = addressData.county_jurisdiction === 'Orange';
+
     let prepared;
 
-    // Check if browser flow template is specified
-    if (options.browserFlowTemplate && options.browserFlowParameters) {
+    if (isOrangeCounty) {
+      prepared = await fetchOrangeCountyData(requestId);
+    } else if (options.browserFlowTemplate && options.browserFlowParameters) {
       const url = constructUrl(req);
       const templateWorkflow = createWorkflowFromTemplate(
         options.browserFlowTemplate,
@@ -131,10 +202,6 @@ export async function prepare(
       await fs.writeFile(seedPath, JSON.stringify(seedData, null, 2), 'utf-8');
 
       // Also update unnormalized_address.json to include the entry_http_request info
-      const addressPath = path.join(root, 'unnormalized_address.json');
-      const addressContent = await fs.readFile(addressPath, 'utf-8');
-      const addressData = JSON.parse(addressContent);
-
       // If address file has source_http_request, rename it to entry_http_request
       if (addressData.source_http_request) {
         addressData.entry_http_request = addressData.source_http_request;
