@@ -20,7 +20,7 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
       'Invalid proxy format. Expected format: username:password@ip:port'
     );
   }
-  logger.info(`Proxy parsed: ${username}:${password}@${ip}:${port}`);
+  logger.info(`Proxy parsed: ${username}:hidden-password@${ip}:${port}`);
   const proxyOptions: ProxyOptions = {
     username,
     password,
@@ -28,7 +28,9 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
     port: Number(port),
   };
 
-  logger.info(`Proxy parsed: ${JSON.stringify(proxyOptions)}`);
+  logger.info(
+    `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
+  );
   return proxyOptions;
 }
 

@@ -200,6 +200,12 @@ elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
   --use-browser \
   --ignore-captcha
+
+# Using a proxy for browser mode (helpful for bypassing rate limits)
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --use-browser \
+  --proxy "username:password@192.168.1.1:8080"
 ```
 
 **What it does**
@@ -229,10 +235,10 @@ prepared-site.zip
 | `--use-browser`                    | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
 | `--no-continue`                    | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
 | `--continue-button <selector>`     | CSS selector for a simple continue/agree button to click.                       | None     |
-| `--no-fast`                        | Disable the fast browser profile (enables full asset loading).                  | `false`  |
 | `--ignore-captcha`                 | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
 | `--browser-flow-template <name>`   | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
 | `--browser-flow-parameters <json>` | JSON parameters for the browser flow template.                                  | None     |
+| `--proxy <url>`                    | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
 
 ### Browser Flow Templates
 
