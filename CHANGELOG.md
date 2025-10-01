@@ -1,3 +1,10 @@
+# [1.45.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.44.0...v1.45.0) (2025-10-01)
+
+
+### Features
+
+* **cli:** add proxy support to browser mode ([#170](https://github.com/elephant-xyz/elephant-cli/issues/170)) ([b41928a](https://github.com/elephant-xyz/elephant-cli/commit/b41928ab266c5b5a9e091b4b703fc1a5c834544e))
+
 # [1.44.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.43.0...v1.44.0) (2025-09-30)
 
 
