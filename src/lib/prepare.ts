@@ -4,19 +4,14 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import chalk from 'chalk';
-import {
-  PrepareOptions,
-  Request,
-  ProxyUrl,
-  ProxyOptions,
-  Prepared,
-} from './types.js';
+import { PrepareOptions, Request, ProxyUrl, ProxyOptions } from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
 import { createWorkflowFromTemplate } from './browser-flow/index.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
+import { fetchOrangeCountyData } from './county-specific-prepare/orange.js';
 
 function parseProxy(proxy: ProxyUrl): ProxyOptions {
   const [, username, password, ip, port] =
@@ -38,86 +33,6 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
     `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
   );
   return proxyOptions;
-}
-
-async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
-  logger.info('Orange County detected - using hardcoded API flow');
-
-  const cleanRequestId = requestId.replace(/-/g, '');
-
-  // First, fetch the quick search to get the parcelId
-  const quickSearchUrl = `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`;
-  const quickSearchResponse = await fetch(quickSearchUrl);
-  if (!quickSearchResponse.ok) {
-    throw new Error(
-      `API request to ${quickSearchUrl} failed with status ${quickSearchResponse.status}`
-    );
-  }
-  const quickSearchData = await quickSearchResponse.json();
-  if (!Array.isArray(quickSearchData) || quickSearchData.length === 0) {
-    throw new Error('Quick search response is not a valid array or is empty');
-  }
-  const parcelId = quickSearchData[0]?.parcelId;
-  if (!parcelId) {
-    throw new Error('Failed to retrieve parcelId from quick search response');
-  }
-
-  // Use the parcelId for subsequent requests
-  const endpoints = [
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCStats?PID=${parcelId}`,
-      key: 'parcelValuationStats',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCGeneralInfo?pid=${parcelId}`,
-      key: 'parcelGeneralProfile',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCPropertyValues?PID=${parcelId}&TaxYear=0&ShowAllFlag=1`,
-      key: 'parcelPropertyValuesByYear',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCCertifiedTaxes?PID=${parcelId}&TaxYear=0`,
-      key: 'parcelCertifiedTaxesByAuthority',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCNonAdValorem?PID=${parcelId}&TaxYear=0`,
-      key: 'parcelNonAdValoremAssessments',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCTotalTaxes?PID=${parcelId}&TaxYear=0`,
-      key: 'parcelTotalTaxesSummary',
-    },
-  ];
-
-  const responses = await Promise.all(
-    endpoints.map(async ({ url, key }) => {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(
-          `API request to ${url} failed with status ${response.status}`
-        );
-      }
-      const data = await response.json();
-      return { key, data };
-    })
-  );
-
-  const combinedData = {
-    parcelQuickSearchSummary: quickSearchData,
-    ...responses.reduce(
-      (acc, { key, data }) => {
-        acc[key] = data;
-        return acc;
-      },
-      {} as Record<string, unknown>
-    ),
-  };
-
-  return {
-    type: 'json',
-    content: JSON.stringify(combinedData, null, 2),
-  };
 }
 
 export async function prepare(
