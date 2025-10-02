@@ -54,6 +54,9 @@ async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
     );
   }
   const quickSearchData = await quickSearchResponse.json();
+  if (!Array.isArray(quickSearchData) || quickSearchData.length === 0) {
+    throw new Error('Quick search response is not a valid array or is empty');
+  }
   const parcelId = quickSearchData[0]?.parcelId;
   if (!parcelId) {
     throw new Error('Failed to retrieve parcelId from quick search response');
