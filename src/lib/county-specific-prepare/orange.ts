@@ -12,9 +12,6 @@ async function fetchAllYearsNonAdValorem(parcelId: string): Promise<unknown[]> {
 
     if (!response.ok) {
       if (response.status === 404) {
-        logger.warn(
-          `No NonAdValorem data for parcel ${parcelId} at year ${taxYear}`
-        );
         shouldContinue = false;
         break;
       }
@@ -62,6 +59,11 @@ async function fetchAllYearsTotalTaxes(parcelId: string): Promise<unknown[]> {
     }
 
     const data = await response.json();
+    if (data.taxYear === 0) {
+      shouldContinue = false;
+      break;
+    }
+
     results.push(data);
     taxYear = data.taxYear - 1;
   }
