@@ -214,7 +214,7 @@ export async function prepare(
       }
 
       await fs.writeFile(
-        addressPath,
+        path.join(root, 'unnormalized_address.json'),
         JSON.stringify(addressData, null, 2),
         'utf-8'
       );
