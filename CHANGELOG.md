@@ -1,3 +1,10 @@
+## [1.46.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.0...v1.46.1) (2025-10-02)
+
+
+### Bug Fixes
+
+* **common:** handle prettierFormat errors gracefully ([#174](https://github.com/elephant-xyz/elephant-cli/issues/174)) ([f8b5413](https://github.com/elephant-xyz/elephant-cli/commit/f8b5413accee3eb8b0476a7f0e7ebc9e91602139))
+
 # [1.46.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.45.0...v1.46.0) (2025-10-02)
 
 
