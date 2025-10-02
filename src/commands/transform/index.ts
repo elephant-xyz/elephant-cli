@@ -118,6 +118,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   }
   if (!existsSync(resolvedInputZip)) {
     const error = `input-zip not found: ${resolvedInputZip}`;
+    console.error(chalk.red(error));
     logger.error(error);
     if (options.silent) {
       throw new Error(error);

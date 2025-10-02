@@ -94,18 +94,12 @@ export interface HashResult {
 export interface UploadOptions {
   input: string;
   pinataJwt: string;
-  outputCsv?: string;
   cwd?: string;
 }
 
 export interface UploadResult {
   success: boolean;
-  uploadedDirectories: Array<{
-    name: string;
-    cid: string;
-    mediaCid?: string;
-  }>;
-  outputCsvPath?: string;
+  cid?: string;
   error?: string;
 }
 
@@ -304,30 +298,22 @@ export async function hash(options: HashOptions): Promise<HashResult> {
 // Upload function wrapper
 export async function upload(options: UploadOptions): Promise<UploadResult> {
   try {
-    const workingDir = options.cwd || process.cwd();
-    const outputCsv = options.outputCsv || 'upload-results.csv';
     const uploadOptions: UploadCommandOptions = {
       input: options.input,
       pinataJwt: options.pinataJwt,
-      outputCsv,
       silent: true, // Enable silent mode for library usage
       cwd: options.cwd,
     };
 
-    await handleUpload(uploadOptions);
-
-    return {
-      success: true,
-      uploadedDirectories: [], // This would need to be returned from handleUpload
-      outputCsvPath: path.resolve(workingDir, outputCsv),
-    };
+    return (
+      (await handleUpload(uploadOptions)) ?? {
+        success: false,
+        error: 'Unknown error',
+      }
+    );
   } catch (error) {
-    const workingDir = options.cwd || process.cwd();
-    const outputCsv = options.outputCsv || 'upload-results.csv';
     return {
       success: false,
-      uploadedDirectories: [],
-      outputCsvPath: path.resolve(workingDir, outputCsv),
       error: error instanceof Error ? error.message : String(error),
     };
   }
