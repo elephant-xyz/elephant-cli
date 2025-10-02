@@ -137,11 +137,15 @@ export async function withBrowserFlow(
   workflow: Workflow,
   headless: boolean,
   requestId: string,
-  proxy?: ProxyOptions
+  proxy?: ProxyOptions,
+  url?: string
 ): Promise<Prepared> {
   const startMs = Date.now();
   await using page = await createBrowserPage(headless, proxy);
-  const executionState: ExecutionState = { request_identifier: requestId };
+  const executionState: ExecutionState = {
+    request_identifier: requestId,
+    ...(url && { url }),
+  };
   let currentStep = workflow.starts_at;
   let end = false;
   while (!end) {
@@ -241,7 +245,19 @@ export async function withBrowserFlow(
         const { selector, value, delay, iframe_selector } = input;
         if (iframe_selector) {
           const frame = await getFrameBySelector(page, iframe_selector);
-          await frame.type(selector, value, { delay });
+          // Use JavaScript to set the value directly in frames
+          await frame.evaluate(
+            (sel, val) => {
+              const element = document.querySelector(sel) as HTMLInputElement;
+              if (element) {
+                element.value = val;
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            },
+            selector,
+            value
+          );
         }
         if (!iframe_selector) {
           await page.type(selector, value, { delay });

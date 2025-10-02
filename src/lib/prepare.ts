@@ -87,12 +87,14 @@ export async function prepare(
     if (isOrangeCounty) {
       prepared = await fetchOrangeCountyData(requestId);
     } else if (options.browserFlowFile) {
+      const url = constructUrl(req);
       const customWorkflow = await loadCustomFlow(options.browserFlowFile);
       prepared = await withBrowserFlow(
         customWorkflow,
         headless,
         requestId,
-        proxy
+        proxy,
+        url
       );
     } else if (options.browserFlowTemplate && options.browserFlowParameters) {
       const url = constructUrl(req);
