@@ -1,3 +1,10 @@
+# [1.46.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.45.0...v1.46.0) (2025-10-02)
+
+
+### Features
+
+* implement hardcoded API flow for Orange County data retrieval ([#172](https://github.com/elephant-xyz/elephant-cli/issues/172)) ([940aced](https://github.com/elephant-xyz/elephant-cli/commit/940acedfb78d1ac8bdc2e5e5d783304582fe634a))
+
 # [1.45.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.44.0...v1.45.0) (2025-10-01)
 
 
