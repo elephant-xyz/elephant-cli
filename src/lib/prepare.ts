@@ -45,33 +45,47 @@ async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
 
   const cleanRequestId = requestId.replace(/-/g, '');
 
+  // First, fetch the quick search to get the parcelId
+  const quickSearchUrl = `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`;
+  const quickSearchResponse = await fetch(quickSearchUrl);
+  if (!quickSearchResponse.ok) {
+    throw new Error(
+      `API request to ${quickSearchUrl} failed with status ${quickSearchResponse.status}`
+    );
+  }
+  const quickSearchData = await quickSearchResponse.json();
+  if (!Array.isArray(quickSearchData) || quickSearchData.length === 0) {
+    throw new Error('Quick search response is not a valid array or is empty');
+  }
+  const parcelId = quickSearchData[0]?.parcelId;
+  if (!parcelId) {
+    throw new Error('Failed to retrieve parcelId from quick search response');
+  }
+
+  // Use the parcelId for subsequent requests
   const endpoints = [
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`,
-      key: 'parcelQuickSearchSummary',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCStats?PID=${cleanRequestId}`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCStats?PID=${parcelId}`,
       key: 'parcelValuationStats',
     },
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCGeneralInfo?pid=${cleanRequestId}`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCGeneralInfo?pid=${parcelId}`,
       key: 'parcelGeneralProfile',
     },
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCPropertyValues?PID=${cleanRequestId}&TaxYear=0&ShowAllFlag=1`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCPropertyValues?PID=${parcelId}&TaxYear=0&ShowAllFlag=1`,
       key: 'parcelPropertyValuesByYear',
     },
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCCertifiedTaxes?PID=${cleanRequestId}&TaxYear=0`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCCertifiedTaxes?PID=${parcelId}&TaxYear=0`,
       key: 'parcelCertifiedTaxesByAuthority',
     },
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCNonAdValorem?PID=${cleanRequestId}&TaxYear=0`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCNonAdValorem?PID=${parcelId}&TaxYear=0`,
       key: 'parcelNonAdValoremAssessments',
     },
     {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCTotalTaxes?PID=${cleanRequestId}&TaxYear=0`,
+      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCTotalTaxes?PID=${parcelId}&TaxYear=0`,
       key: 'parcelTotalTaxesSummary',
     },
   ];
@@ -89,13 +103,16 @@ async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
     })
   );
 
-  const combinedData = responses.reduce(
-    (acc, { key, data }) => {
-      acc[key] = data;
-      return acc;
-    },
-    {} as Record<string, unknown>
-  );
+  const combinedData = {
+    parcelQuickSearchSummary: quickSearchData,
+    ...responses.reduce(
+      (acc, { key, data }) => {
+        acc[key] = data;
+        return acc;
+      },
+      {} as Record<string, unknown>
+    ),
+  };
 
   return {
     type: 'json',
