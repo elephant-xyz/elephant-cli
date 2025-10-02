@@ -18,6 +18,7 @@ export type PrepareOptions = {
   errorPatterns?: string[];
   browserFlowTemplate?: string;
   browserFlowParameters?: string;
+  browserFlowFile?: string;
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
 };

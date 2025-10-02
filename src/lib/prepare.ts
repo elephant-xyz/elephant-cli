@@ -15,6 +15,7 @@ import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
 import { createWorkflowFromTemplate } from './browser-flow/index.js';
+import { loadCustomFlow } from './browser-flow/customFlow.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
 
@@ -153,6 +154,14 @@ export async function prepare(
 
     if (isOrangeCounty) {
       prepared = await fetchOrangeCountyData(requestId);
+    } else if (options.browserFlowFile) {
+      const customWorkflow = await loadCustomFlow(options.browserFlowFile);
+      prepared = await withBrowserFlow(
+        customWorkflow,
+        headless,
+        requestId,
+        proxy
+      );
     } else if (options.browserFlowTemplate && options.browserFlowParameters) {
       const url = constructUrl(req);
       const templateWorkflow = createWorkflowFromTemplate(
@@ -187,7 +196,10 @@ export async function prepare(
     await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
 
     // If browser flow was used and we have a final URL, update the seed files
-    if (prepared.finalUrl && options.browserFlowTemplate) {
+    if (
+      prepared.finalUrl &&
+      (options.browserFlowTemplate || options.browserFlowFile)
+    ) {
       logger.info(
         'Updating seed files with entry_http_request and new source_http_request'
       );

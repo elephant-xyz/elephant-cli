@@ -238,6 +238,7 @@ prepared-site.zip
 | `--ignore-captcha`                 | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
 | `--browser-flow-template <name>`   | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
 | `--browser-flow-parameters <json>` | JSON parameters for the browser flow template.                                  | None     |
+| `--browser-flow-file <path>`       | Path to custom browser flow JSON file (takes precedence over template).         | None     |
 | `--proxy <url>`                    | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
 
 ### Browser Flow Templates
@@ -253,12 +254,17 @@ Browser flow templates provide reusable automation patterns for complex county w
 
 For available templates, parameters, and detailed usage examples, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
 
-**Need a New Template?**
+**Need Maximum Flexibility?**
 
-If existing templates don't cover your county's website pattern, please:
+For complex, site-specific workflows that don't fit standard templates, you can define custom browser flows using JSON files. This gives you complete control over the automation sequence. See [Custom Browser Flows Documentation](./docs/custom-browser-flows.md) for detailed information and examples.
 
-1. Create a [GitHub issue](https://github.com/elephant-xyz/elephant-cli/issues) with details about the site structure
-2. Contact the development team for assistance in creating a new template
+Quick example using a custom flow:
+
+```bash
+elephant-cli prepare input.zip \
+  --output-zip output.zip \
+  --browser-flow-file my-custom-flow.json
+```
 
 To use `transform` with a browser on AWS EC2 instances you need to run Ubuntu 22.04 or later and perfrom the following steps:
 
