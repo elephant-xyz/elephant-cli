@@ -7,7 +7,7 @@ export type IPLDRef = { '/': string };
 export interface PropertyImprovementRelationships {
   property_has_property_improvement?: IPLDRef[];
   property_has_permit?: IPLDRef[];
-  property_improvement_has_contractor_company?: IPLDRef;
+  property_improvement_has_contractor?: IPLDRef[];
   property_improvement_has_fact_sheet?: IPLDRef[];
   property_improvement_has_layout?: IPLDRef[];
   property_improvement_has_owner?: IPLDRef[];
@@ -15,7 +15,7 @@ export interface PropertyImprovementRelationships {
   property_improvement_has_unormalized_address?: IPLDRef;
   property_improvement_has_utility?: IPLDRef;
   communication_has_fact_sheet?: IPLDRef[];
-  contractor_has_communication?: IPLDRef;
+  company_has_communication?: IPLDRef[];
   file_has_fact_sheet?: IPLDRef[];
   property_has_fact_sheet?: IPLDRef[];
   structure_has_fact_sheet?: IPLDRef[];
@@ -46,11 +46,11 @@ export function createPropertyImprovementDataGroup(
   const structureHasFactSheet: IPLDRef[] = [];
   const utilityHasFactSheet: IPLDRef[] = [];
 
-  let propertyImprovementHasContractorCompany: IPLDRef | undefined;
+  const propertyImprovementHasContractor: IPLDRef[] = [];
   let propertyImprovementHasStructure: IPLDRef | undefined;
   let propertyImprovementHasUnormalizedAddress: IPLDRef | undefined;
   let propertyImprovementHasUtility: IPLDRef | undefined;
-  let contractorHasCommunication: IPLDRef | undefined;
+  const companyHasCommunication: IPLDRef[] = [];
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
@@ -68,9 +68,9 @@ export function createPropertyImprovementDataGroup(
       continue;
     }
 
-    // Property improvement to contractor company (singleton)
+    // Property improvement to contractor company (collect)
     if (lower.includes('property_improvement_to_company')) {
-      propertyImprovementHasContractorCompany = ref;
+      propertyImprovementHasContractor.push(ref);
       continue;
     }
 
@@ -116,9 +116,9 @@ export function createPropertyImprovementDataGroup(
       continue;
     }
 
-    // Contractor to communication (singleton)
-    if (lower.includes('person_to_communication')) {
-      contractorHasCommunication = ref;
+    // Company to communication (collect)
+    if (lower.includes('company_to_communication')) {
+      companyHasCommunication.push(ref);
       continue;
     }
 
@@ -154,8 +154,13 @@ export function createPropertyImprovementDataGroup(
     relationships.property_has_property_improvement = propertyHasPropertyImprovement;
   }
 
-  // Only include the required relationship: property_has_property_improvement
-  // The schema only requires this one relationship
+  // Include optional relationships when present
+  if (propertyImprovementHasContractor.length) {
+    relationships.property_improvement_has_contractor = propertyImprovementHasContractor;
+  }
+  if (companyHasCommunication.length) {
+    relationships.company_has_communication = companyHasCommunication;
+  }
 
   return {
     label: 'Property Improvement',

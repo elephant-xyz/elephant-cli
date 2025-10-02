@@ -148,8 +148,8 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    let isSeedMode = false;
-    let isPropertyImprovementMode = false;
+  let isSeedMode = false;
+  let isPropertyImprovementMode = false;
     if (resolvedScriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
@@ -166,9 +166,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       isSeedMode = true;
     }
 
-    if (!isSeedMode && !isPropertyImprovementMode) {
-      await generateFactSheet(tempRoot);
-    }
+    // Skip fact sheet generation per user instruction
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
       zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
@@ -347,28 +345,42 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string): Prom
     logger.warn('No new JSON files detected from scripts execution');
   }
 
-  const propertySeed = await fs.readFile(
-    path.join(tempRoot, 'property_seed.json'),
-    'utf-8'
-  );
-  const propertySeedJson = JSON.parse(propertySeed);
-  const sourceHttpRequest = propertySeedJson.source_http_request;
-  const requestIdentifier = propertySeedJson.request_identifier;
+  let sourceHttpRequest: any | undefined;
+  let requestIdentifier: string | undefined;
+  try {
+    const propertySeed = await fs.readFile(
+      path.join(tempRoot, 'property_seed.json'),
+      'utf-8'
+    );
+    const propertySeedJson = JSON.parse(propertySeed);
+    sourceHttpRequest = propertySeedJson.source_http_request;
+    requestIdentifier = propertySeedJson.request_identifier;
+  } catch {
+    logger.warn('property_seed.json not found; skipping source_http_request enrichment');
+  }
   // Check if this is property improvement data by looking for property improvement files
-  const hasPropertyImprovementData = newJsonRelPaths.some(rel => 
+  let hasPropertyImprovementData = newJsonRelPaths.some(rel =>
     rel.includes('property_improvement_data') && rel.endsWith('.json')
   );
 
   const relationshipFiles: string[] = [];
+  let hasPropertyDataFile = false;
+  const improvementFiles: string[] = [];
   await Promise.all(
     newJsonRelPaths.map(async (rel) => {
-      if ((await fs.stat(path.join(tempRoot, OUTPUT_DIR, rel))).isDirectory()) {
+      const abs = path.join(tempRoot, OUTPUT_DIR, rel);
+      if ((await fs.stat(abs)).isDirectory()) {
         return;
       }
       if (!rel.endsWith('.json')) {
         return;
       }
       if (rel.startsWith('relationship')) {
+        return;
+      }
+      // If script emitted explicit property->improvement relationship files, include them
+      if (/^(property_improvement_to_property_|property_to_property_improvement_)\d+\.json$/i.test(rel)) {
+        relationshipFiles.push(rel);
         return;
       }
       if (rel.endsWith('data.json')) {
@@ -383,8 +395,8 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string): Prom
       // Don't override source_http_request for property improvement data files
       // as they have their own specific URLs
       if (!rel.includes('property_improvement_data')) {
-        jsonObj.source_http_request = sourceHttpRequest;
-        jsonObj.request_identifier = requestIdentifier;
+        if (sourceHttpRequest) jsonObj.source_http_request = sourceHttpRequest;
+        if (requestIdentifier) jsonObj.request_identifier = requestIdentifier;
       }
       
       await fs.writeFile(
@@ -399,17 +411,12 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string): Prom
       
       // Handle property improvement relationships
       if (rel.includes('property_improvement_data')) {
-        const relFileName = `property_improvement_to_property_${rel.match(/\d+/)?.[0] || '1'}.json`;
-        const relData = {
-          from: { '/': './property_data.json' },
-          to: { '/': `./${rel}` }
-        };
-        relationshipFiles.push(relFileName);
-        await fs.writeFile(
-          path.join(tempRoot, OUTPUT_DIR, relFileName),
-          JSON.stringify(relData),
-          'utf-8'
-        );
+        improvementFiles.push(rel);
+        return;
+      }
+
+      if (rel === 'property_data.json') {
+        hasPropertyDataFile = true;
         return;
       }
       
@@ -446,11 +453,110 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string): Prom
     })
   );
 
+  // If we have a property file and improvement files but no explicit relationships, create them now
+  if (hasPropertyDataFile && improvementFiles.length > 0) {
+    for (const file of improvementFiles) {
+      const idx = file.match(/(\d+)/)?.[1] || '1';
+      const relFileName = `property_improvement_to_property_${idx}.json`;
+      const relData = {
+        from: { '/': './property_data.json' },
+        to: { '/': `./${file}` },
+      };
+      relationshipFiles.push(relFileName);
+      await fs.writeFile(
+        path.join(tempRoot, OUTPUT_DIR, relFileName),
+        JSON.stringify(relData),
+        'utf-8'
+      );
+    }
+  }
+
+  // If no explicit property improvement relationships were emitted, optionally create relationships
+  // 1) property -> improvement (when property_data.json and improvement files exist)
+  if (hasPropertyDataFile && improvementFiles.length > 0) {
+    for (const file of improvementFiles) {
+      const idx = file.match(/(\d+)/)?.[1] || '1';
+      const relFileName = `property_improvement_to_property_${idx}.json`;
+      const relData = {
+        from: { '/': './property_data.json' },
+        to: { '/': `./${file}` },
+      };
+      relationshipFiles.push(relFileName);
+      await fs.writeFile(
+        path.join(tempRoot, OUTPUT_DIR, relFileName),
+        JSON.stringify(relData),
+        'utf-8'
+      );
+    }
+    hasPropertyImprovementData = true;
+  }
+
+  // 2) contractor/company/communication from CSV-sourced CID when PI objects not present
+  if (!hasPropertyImprovementData) {
+    // Look for permit CSV in inputs dir
+    const csvCandidates = ['permit_record.csv', 'permit.csv'];
+    let improvementCid: string | null = null;
+    for (const name of csvCandidates) {
+      try {
+        const csvPath = path.join(tempRoot, INPUT_DIR, name);
+        const raw = await fs.readFile(csvPath, 'utf-8');
+        const isTsv = raw.split('\n', 1)[0]?.includes('\t');
+        const rows = parse(raw, { columns: true, skip_empty_lines: true, delimiter: isTsv ? '\t' : ',' });
+        const r = rows[0] as Record<string, string> | undefined;
+        const id = r?.id?.toString().trim();
+        if (id) {
+          improvementCid = id;
+          break;
+        }
+      } catch {}
+    }
+    if (improvementCid) {
+      // Create property_improvement_to_company (contractor) if company.json exists
+      const companyPath = path.join(tempRoot, OUTPUT_DIR, 'company.json');
+      try {
+        await fs.access(companyPath);
+        const relContractorName = 'property_improvement_to_company.json';
+        const relContractor = { from: { '/': improvementCid }, to: { '/': './company.json' } };
+        relationshipFiles.push(relContractorName);
+        await fs.writeFile(
+          path.join(tempRoot, OUTPUT_DIR, relContractorName),
+          JSON.stringify(relContractor),
+          'utf-8'
+        );
+        hasPropertyImprovementData = true;
+      } catch {}
+
+      // Create company_to_communication if both exist
+      try {
+        await fs.access(path.join(tempRoot, OUTPUT_DIR, 'company.json'));
+        await fs.access(path.join(tempRoot, OUTPUT_DIR, 'communication.json'));
+        const relCCName = 'company_to_communication.json';
+        const relCC = { from: { '/': './company.json' }, to: { '/': './communication.json' } };
+        relationshipFiles.push(relCCName);
+        await fs.writeFile(
+          path.join(tempRoot, OUTPUT_DIR, relCCName),
+          JSON.stringify(relCC),
+          'utf-8'
+        );
+        hasPropertyImprovementData = true;
+      } catch {}
+    }
+  }
+
+  // As a secondary signal, treat presence of contractor relationships as property improvement mode
+  if (!hasPropertyImprovementData) {
+    hasPropertyImprovementData = relationshipFiles.some(rel =>
+      rel === 'property_improvement_to_company.json' || rel === 'company_to_communication.json'
+    );
+  }
+
   if (hasPropertyImprovementData) {
     // For Property Improvement, only create the required relationships
-    // Filter relationshipFiles to only include property_improvement_to_property relationships
+    // Filter relationshipFiles to required PI relationships
     const propertyImprovementRelationships = relationshipFiles.filter(rel => 
-      rel.startsWith('property_improvement_to_property')
+      rel.startsWith('property_improvement_to_property') ||
+      rel === 'property_improvement_to_company.json' ||
+      rel === 'company_to_communication.json'
     );
     
     // Create property improvement data group with only required relationships
@@ -467,6 +573,14 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string): Prom
       'utf-8'
     );
     logger.info('Created Property Improvement data group');
+
+    // Cleanup: remove property_data.json and unwanted relationships
+    // Cleanup: remove unwanted relationships and any auto-created property_improvement_to_property_*.json
+    const files = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
+    await Promise.all([
+      fs.rm(path.join(tempRoot, OUTPUT_DIR, 'relationship_company_property.json')).catch(() => {}),
+      fs.rm(path.join(tempRoot, OUTPUT_DIR, 'relationship_property_communication.json')).catch(() => {}),
+    ]);
   } else {
     // Create county data group
     const countyDataGroup = createCountyDataGroup(relationshipFiles);
@@ -498,6 +612,15 @@ async function normalizeInputsForScripts(
   };
   await copyIfExists('unnormalized_address.json');
   await copyIfExists('property_seed.json');
+  // Also surface any CSVs to CWD so scripts can read them
+  try {
+    const entries = await fs.readdir(inputsDir, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isFile() && /\.csv$/i.test(e.name)) {
+        await fs.copyFile(path.join(inputsDir, e.name), path.join(tempRoot, e.name));
+      }
+    }
+  } catch {}
 
   const entries = await fs.readdir(inputsDir, { withFileTypes: true });
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);

@@ -23,7 +23,7 @@ export function registerPrepareCommand(program: Command) {
   program
     .command('prepare <inputZip>')
     .description(
-      'Prepare data from transform output ZIP for further processing'
+      'Prepare site content from input ZIP. Accepts either: (a) seed ZIP containing property_seed.json + unnormalized_address.json, or (b) a ZIP with a single CSV/TSV row describing source_http_request fields.'
     )
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
     .option('--use-browser', 'Force headless browser functionality')
