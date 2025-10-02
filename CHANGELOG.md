@@ -1,3 +1,10 @@
+## [1.46.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.1...v1.46.2) (2025-10-02)
+
+
+### Bug Fixes
+
+* fix Orange County data retrieval by fetching parcelId from quicksearch endpoint ([#175](https://github.com/elephant-xyz/elephant-cli/issues/175)) ([cc412be](https://github.com/elephant-xyz/elephant-cli/commit/cc412bee989d46081f7b4e1cd1fa1dac0567f2ad))
+
 ## [1.46.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.0...v1.46.1) (2025-10-02)
 
 
