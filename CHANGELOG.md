@@ -1,3 +1,10 @@
+## [1.46.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.2...v1.46.3) (2025-10-02)
+
+
+### Bug Fixes
+
+* Extend api calls and data fetching logic for Orange county prepare flow ([#176](https://github.com/elephant-xyz/elephant-cli/issues/176)) ([4e80388](https://github.com/elephant-xyz/elephant-cli/commit/4e80388a2f90d79198083b8fbdf873fa438f7f8c))
+
 ## [1.46.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.1...v1.46.2) (2025-10-02)
 
 
