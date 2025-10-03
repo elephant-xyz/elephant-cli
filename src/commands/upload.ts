@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { promises as fsPromises } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
@@ -46,6 +47,12 @@ export function registerUploadCommand(program: Command) {
 
       await handleUpload(commandOptions);
     });
+}
+
+async function createTempDir(prefix: string): Promise<string> {
+  const base = path.join(tmpdir(), `${prefix}-`);
+  const dir = await fsPromises.mkdtemp(base);
+  return dir;
 }
 
 export interface UploadServiceOverrides {
@@ -158,7 +165,7 @@ export async function handleUpload(
     }> = [];
 
     // Create temp directory in OS temp dir for better reliability
-    tempDir = await fsPromises.mkdtemp('elephant-upload-');
+    tempDir = await createTempDir('elephant-upload-');
     for (const propertyDir of propertyDirs) {
       logger.info(`Processing property directory: ${propertyDir.name}`);
 
