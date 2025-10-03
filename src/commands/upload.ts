@@ -72,6 +72,7 @@ export async function handleUpload(
   const zipExtractorService =
     serviceOverrides.zipExtractorService ?? new ZipExtractorService();
   let extractedPath: string | null = null;
+  let tempDir: string | null = null;
   let progressTracker = serviceOverrides.progressTracker;
 
   if (!options.pinataJwt) {
@@ -80,86 +81,84 @@ export async function handleUpload(
     );
   }
 
-  logger.info(`Checking input file: ${options.input}`);
-  const inputStats = await fsPromises.stat(options.input).catch(() => null);
-  if (!inputStats || !inputStats.isFile()) {
-    throw new Error(`Input file not found: ${options.input}`);
-  }
-
-  const isZip = await zipExtractorService.isZipFile(options.input);
-  if (!isZip) {
-    throw new Error('Input must be a ZIP file (output from hash command)');
-  }
-
-  // Extract the ZIP file
-  logger.info('Extracting ZIP file...');
-  extractedPath = await zipExtractorService.extractZip(options.input);
-  logger.technical(`Extracted to: ${extractedPath}`);
-
-  // Validate the extracted structure
-  const entries = await fsPromises.readdir(extractedPath, {
-    withFileTypes: true,
-  });
-
-  // Determine if we need to go up one level
-  // If the extracted path contains only JSON files (no subdirectories),
-  // it means we're already inside a property directory
-  const jsonFiles = entries.filter(
-    (entry) => entry.isFile() && entry.name.endsWith('.json')
-  );
-  const subdirs = entries.filter((entry) => entry.isDirectory());
-
-  let propertyDirs: Array<{ name: string; path: string }> = [];
-
-  if (subdirs.length === 0 && jsonFiles.length > 0) {
-    // We're inside a property directory already (single property case)
-    // Use the parent directory name as the property name
-    const propertyName = path.basename(extractedPath);
-    propertyDirs = [{ name: propertyName, path: extractedPath }];
-    logger.info(
-      `Detected single property directory: ${propertyName} with ${jsonFiles.length} JSON files`
-    );
-  } else if (subdirs.length >= 1) {
-    propertyDirs = subdirs.map((dir) => ({
-      name: dir.name,
-      path: path.join(extractedPath!, dir.name),
-    }));
-    logger.info(
-      `Found ${subdirs.length} property ${subdirs.length === 1 ? 'directory' : 'directories'}`
-    );
-  } else {
-    throw new Error(
-      'No valid structure found in the extracted ZIP. Expected property directories with JSON files from hash command.'
-    );
-  }
-
-  // Initialize Pinata service
-  const pinataService =
-    serviceOverrides.pinataDirectoryUploadService ??
-    new PinataDirectoryUploadService(options.pinataJwt!);
-
-  // Initialize progress tracking
-  if (!progressTracker) {
-    progressTracker = new SimpleProgress(
-      propertyDirs.length,
-      'Uploading to IPFS'
-    );
-  }
-  progressTracker.start();
-
-  // Upload the property directory
-  const uploadResults: Array<{
-    propertyDir: string;
-    success: boolean;
-    cid?: string;
-    error?: string;
-  }> = [];
-
-  const tempDir = await fsPromises.mkdtemp(
-    path.join(options.cwd || process.cwd(), 'elephant-upload-')
-  );
-
   try {
+    logger.info(`Checking input file: ${options.input}`);
+    const inputStats = await fsPromises.stat(options.input).catch(() => null);
+    if (!inputStats || !inputStats.isFile()) {
+      throw new Error(`Input file not found: ${options.input}`);
+    }
+
+    const isZip = await zipExtractorService.isZipFile(options.input);
+    if (!isZip) {
+      throw new Error('Input must be a ZIP file (output from hash command)');
+    }
+
+    // Extract the ZIP file
+    logger.info('Extracting ZIP file...');
+    extractedPath = await zipExtractorService.extractZip(options.input);
+    logger.technical(`Extracted to: ${extractedPath}`);
+
+    // Validate the extracted structure
+    const entries = await fsPromises.readdir(extractedPath, {
+      withFileTypes: true,
+    });
+
+    // Determine if we need to go up one level
+    // If the extracted path contains only JSON files (no subdirectories),
+    // it means we're already inside a property directory
+    const jsonFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.json')
+    );
+    const subdirs = entries.filter((entry) => entry.isDirectory());
+
+    let propertyDirs: Array<{ name: string; path: string }> = [];
+
+    if (subdirs.length === 0 && jsonFiles.length > 0) {
+      // We're inside a property directory already (single property case)
+      // Use the parent directory name as the property name
+      const propertyName = path.basename(extractedPath);
+      propertyDirs = [{ name: propertyName, path: extractedPath }];
+      logger.info(
+        `Detected single property directory: ${propertyName} with ${jsonFiles.length} JSON files`
+      );
+    } else if (subdirs.length >= 1) {
+      propertyDirs = subdirs.map((dir) => ({
+        name: dir.name,
+        path: path.join(extractedPath!, dir.name),
+      }));
+      logger.info(
+        `Found ${subdirs.length} property ${subdirs.length === 1 ? 'directory' : 'directories'}`
+      );
+    } else {
+      throw new Error(
+        'No valid structure found in the extracted ZIP. Expected property directories with JSON files from hash command.'
+      );
+    }
+
+    // Initialize Pinata service
+    const pinataService =
+      serviceOverrides.pinataDirectoryUploadService ??
+      new PinataDirectoryUploadService(options.pinataJwt!);
+
+    // Initialize progress tracking
+    if (!progressTracker) {
+      progressTracker = new SimpleProgress(
+        propertyDirs.length,
+        'Uploading to IPFS'
+      );
+    }
+    progressTracker.start();
+
+    // Upload the property directory
+    const uploadResults: Array<{
+      propertyDir: string;
+      success: boolean;
+      cid?: string;
+      error?: string;
+    }> = [];
+
+    // Create temp directory in OS temp dir for better reliability
+    tempDir = await fsPromises.mkdtemp('elephant-upload-');
     for (const propertyDir of propertyDirs) {
       logger.info(`Processing property directory: ${propertyDir.name}`);
 
@@ -239,12 +238,6 @@ export async function handleUpload(
       const errorMsg = 'No properties with JSON files to upload';
       logger.warn(errorMsg);
 
-      // Clean up temp directory
-      const tempRootDir = zipExtractorService.getTempRootDir(extractedPath!);
-      if (tempRootDir) {
-        await zipExtractorService.cleanup(tempRootDir);
-      }
-
       if (options.silent) {
         return {
           success: false,
@@ -294,13 +287,6 @@ export async function handleUpload(
         console.log();
       }
 
-      // Clean up temp directory
-      const tempRootDir = zipExtractorService.getTempRootDir(extractedPath!);
-      if (tempRootDir) {
-        await zipExtractorService.cleanup(tempRootDir);
-        logger.debug('Cleaned up temporary extraction directory');
-      }
-
       return {
         success: true,
         cid: uploadResult.cid,
@@ -311,12 +297,9 @@ export async function handleUpload(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(`Failed to upload to IPFS: ${errorMsg}`);
-    progressTracker.stop();
 
-    // Clean up temp directory
-    const tempRootDir = zipExtractorService.getTempRootDir(extractedPath!);
-    if (tempRootDir) {
-      await zipExtractorService.cleanup(tempRootDir);
+    if (progressTracker) {
+      progressTracker.stop();
     }
 
     if (options.silent) {
@@ -333,6 +316,29 @@ export async function handleUpload(
 
     throw error;
   } finally {
-    await fsPromises.rm(tempDir, { recursive: true, force: true });
+    // Clean up temp directory for upload staging
+    if (tempDir) {
+      try {
+        await fsPromises.rm(tempDir, { recursive: true, force: true });
+      } catch (err) {
+        logger.debug(
+          `Failed to cleanup temp directory: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
+    // Clean up extracted ZIP directory
+    if (extractedPath) {
+      const tempRootDir = zipExtractorService.getTempRootDir(extractedPath);
+      if (tempRootDir) {
+        try {
+          await zipExtractorService.cleanup(tempRootDir);
+        } catch (err) {
+          logger.debug(
+            `Failed to cleanup extracted directory: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    }
   }
 }

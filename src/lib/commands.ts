@@ -305,12 +305,7 @@ export async function upload(options: UploadOptions): Promise<UploadResult> {
       cwd: options.cwd,
     };
 
-    return (
-      (await handleUpload(uploadOptions)) ?? {
-        success: false,
-        error: 'Unknown error',
-      }
-    );
+    return await handleUpload(uploadOptions);
   } catch (error) {
     return {
       success: false,
