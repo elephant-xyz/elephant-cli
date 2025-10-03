@@ -248,7 +248,7 @@ export async function handleUpload(
         return {
           success: false,
           errorMessage: errorMsg,
-          errors: uploadResults.filter((r) => r.success),
+          errors: uploadResults.filter((r) => !r.success),
         };
       }
 
