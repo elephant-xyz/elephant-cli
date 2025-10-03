@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { z } from 'zod';
 import { Workflow } from '../withBrowserFlow.js';
 import { logger } from '../../utils/logger.js';
 
@@ -7,252 +8,111 @@ export interface CustomFlowValidationResult {
   errors?: string[];
 }
 
-function isValidWaitUntil(value: unknown): boolean {
-  const validValues = [
-    'load',
-    'domcontentloaded',
-    'networkidle0',
-    'networkidle2',
-  ];
-  return typeof value === 'string' && validValues.includes(value);
-}
+const waitUntilSchema = z.enum([
+  'load',
+  'domcontentloaded',
+  'networkidle0',
+  'networkidle2',
+]);
 
-function isValidNodeType(value: unknown): boolean {
-  const validTypes = [
-    'open_page',
-    'wait_for_selector',
-    'click',
-    'type',
-    'keyboard_press',
-  ];
-  return typeof value === 'string' && validTypes.includes(value);
-}
+const openPageInputSchema = z.object({
+  url: z.string().min(1),
+  timeout: z.number().optional(),
+  wait_until: waitUntilSchema.optional(),
+});
 
-function validateOpenPageInput(input: unknown): string[] {
+const waitForSelectorInputSchema = z.object({
+  selector: z.string().min(1),
+  timeout: z.number().optional(),
+  visible: z.boolean().optional(),
+  iframe_selector: z.string().optional(),
+});
+
+const clickInputSchema = z.object({
+  selector: z.string().min(1),
+  iframe_selector: z.string().optional(),
+});
+
+const typeInputSchema = z.object({
+  selector: z.string().min(1),
+  value: z.string(),
+  delay: z.number().optional(),
+  iframe_selector: z.string().optional(),
+});
+
+const keyboardPressInputSchema = z.object({
+  key: z.string().min(1),
+});
+
+const baseNodeSchema = z.object({
+  next: z.string().optional(),
+  result: z.string().optional(),
+  end: z.boolean().optional(),
+});
+
+const openPageNodeSchema = baseNodeSchema.extend({
+  type: z.literal('open_page'),
+  input: openPageInputSchema,
+});
+
+const waitForSelectorNodeSchema = baseNodeSchema.extend({
+  type: z.literal('wait_for_selector'),
+  input: waitForSelectorInputSchema,
+});
+
+const clickNodeSchema = baseNodeSchema.extend({
+  type: z.literal('click'),
+  input: clickInputSchema,
+});
+
+const typeNodeSchema = baseNodeSchema.extend({
+  type: z.literal('type'),
+  input: typeInputSchema,
+});
+
+const keyboardPressNodeSchema = baseNodeSchema.extend({
+  type: z.literal('keyboard_press'),
+  input: keyboardPressInputSchema,
+});
+
+const nodeSchema = z.discriminatedUnion('type', [
+  openPageNodeSchema,
+  waitForSelectorNodeSchema,
+  clickNodeSchema,
+  typeNodeSchema,
+  keyboardPressNodeSchema,
+]);
+
+const captureConfigSchema = z.union([
+  z.object({ type: z.literal('page') }),
+  z.object({ type: z.literal('iframe'), selector: z.string().min(1) }),
+]);
+
+const workflowSchema = z.object({
+  starts_at: z.string(),
+  states: z.record(nodeSchema),
+  capture: captureConfigSchema.optional(),
+});
+
+function validateStateReferences(workflow: {
+  starts_at: string;
+  states: Record<string, { next?: string }>;
+}): string[] {
   const errors: string[] = [];
-  if (!input || typeof input !== 'object') {
-    errors.push('open_page input must be an object');
-    return errors;
+  const stateNames = Object.keys(workflow.states);
+
+  if (stateNames.length === 0) {
+    errors.push('states must contain at least one state');
   }
 
-  const inputObj = input as Record<string, unknown>;
-
-  if (typeof inputObj.url !== 'string' || inputObj.url.length === 0) {
-    errors.push('open_page input.url must be a non-empty string');
+  if (!stateNames.includes(workflow.starts_at)) {
+    errors.push(`starts_at references unknown state "${workflow.starts_at}"`);
   }
 
-  if (inputObj.timeout !== undefined && typeof inputObj.timeout !== 'number') {
-    errors.push('open_page input.timeout must be a number');
-  }
-
-  if (
-    inputObj.wait_until !== undefined &&
-    !isValidWaitUntil(inputObj.wait_until)
-  ) {
-    errors.push(
-      'open_page input.wait_until must be one of: load, domcontentloaded, networkidle0, networkidle2'
-    );
-  }
-
-  return errors;
-}
-
-function validateWaitForSelectorInput(input: unknown): string[] {
-  const errors: string[] = [];
-  if (!input || typeof input !== 'object') {
-    errors.push('wait_for_selector input must be an object');
-    return errors;
-  }
-
-  const inputObj = input as Record<string, unknown>;
-
-  if (typeof inputObj.selector !== 'string' || inputObj.selector.length === 0) {
-    errors.push('wait_for_selector input.selector must be a non-empty string');
-  }
-
-  if (inputObj.timeout !== undefined && typeof inputObj.timeout !== 'number') {
-    errors.push('wait_for_selector input.timeout must be a number');
-  }
-
-  if (inputObj.visible !== undefined && typeof inputObj.visible !== 'boolean') {
-    errors.push('wait_for_selector input.visible must be a boolean');
-  }
-
-  if (
-    inputObj.iframe_selector !== undefined &&
-    typeof inputObj.iframe_selector !== 'string'
-  ) {
-    errors.push('wait_for_selector input.iframe_selector must be a string');
-  }
-
-  return errors;
-}
-
-function validateClickInput(input: unknown): string[] {
-  const errors: string[] = [];
-  if (!input || typeof input !== 'object') {
-    errors.push('click input must be an object');
-    return errors;
-  }
-
-  const inputObj = input as Record<string, unknown>;
-
-  if (typeof inputObj.selector !== 'string' || inputObj.selector.length === 0) {
-    errors.push('click input.selector must be a non-empty string');
-  }
-
-  if (
-    inputObj.iframe_selector !== undefined &&
-    typeof inputObj.iframe_selector !== 'string'
-  ) {
-    errors.push('click input.iframe_selector must be a string');
-  }
-
-  return errors;
-}
-
-function validateTypeInput(input: unknown): string[] {
-  const errors: string[] = [];
-  if (!input || typeof input !== 'object') {
-    errors.push('type input must be an object');
-    return errors;
-  }
-
-  const inputObj = input as Record<string, unknown>;
-
-  if (typeof inputObj.selector !== 'string' || inputObj.selector.length === 0) {
-    errors.push('type input.selector must be a non-empty string');
-  }
-
-  if (typeof inputObj.value !== 'string') {
-    errors.push('type input.value must be a string');
-  }
-
-  if (inputObj.delay !== undefined && typeof inputObj.delay !== 'number') {
-    errors.push('type input.delay must be a number');
-  }
-
-  if (
-    inputObj.iframe_selector !== undefined &&
-    typeof inputObj.iframe_selector !== 'string'
-  ) {
-    errors.push('type input.iframe_selector must be a string');
-  }
-
-  return errors;
-}
-
-function validateKeyboardPressInput(input: unknown): string[] {
-  const errors: string[] = [];
-  if (!input || typeof input !== 'object') {
-    errors.push('keyboard_press input must be an object');
-    return errors;
-  }
-
-  const inputObj = input as Record<string, unknown>;
-
-  if (typeof inputObj.key !== 'string' || inputObj.key.length === 0) {
-    errors.push('keyboard_press input.key must be a non-empty string');
-  }
-
-  return errors;
-}
-
-function validateNode(
-  stateName: string,
-  node: unknown,
-  allStateNames: string[]
-): string[] {
-  const errors: string[] = [];
-
-  if (!node || typeof node !== 'object') {
-    errors.push(`State "${stateName}": node must be an object`);
-    return errors;
-  }
-
-  const nodeObj = node as Record<string, unknown>;
-
-  if (!isValidNodeType(nodeObj.type)) {
-    errors.push(
-      `type must be one of: open_page, wait_for_selector, click, type, keyboard_press`
-    );
-    return errors;
-  }
-
-  if (!nodeObj.input) {
-    errors.push(`input is required`);
-  }
-
-  const type = nodeObj.type as string;
-  switch (type) {
-    case 'open_page':
-      errors.push(...validateOpenPageInput(nodeObj.input));
-      break;
-    case 'wait_for_selector':
-      errors.push(...validateWaitForSelectorInput(nodeObj.input));
-      break;
-    case 'click':
-      errors.push(...validateClickInput(nodeObj.input));
-      break;
-    case 'type':
-      errors.push(...validateTypeInput(nodeObj.input));
-      break;
-    case 'keyboard_press':
-      errors.push(...validateKeyboardPressInput(nodeObj.input));
-      break;
-  }
-
-  if (nodeObj.next !== undefined) {
-    if (typeof nodeObj.next !== 'string') {
-      errors.push(`next must be a string`);
-    }
-    if (
-      typeof nodeObj.next === 'string' &&
-      !allStateNames.includes(nodeObj.next)
-    ) {
-      errors.push(`next references unknown state "${nodeObj.next}"`);
-    }
-  }
-
-  if (nodeObj.result !== undefined && typeof nodeObj.result !== 'string') {
-    errors.push(`result must be a string`);
-  }
-
-  if (nodeObj.end !== undefined && typeof nodeObj.end !== 'boolean') {
-    errors.push(`end must be a boolean`);
-  }
-
-  return errors;
-}
-
-function validateCaptureConfig(capture: unknown): string[] {
-  const errors: string[] = [];
-
-  if (!capture) return errors;
-
-  if (typeof capture !== 'object') {
-    errors.push('capture must be an object');
-    return errors;
-  }
-
-  const captureObj = capture as Record<string, unknown>;
-
-  if (typeof captureObj.type !== 'string') {
-    errors.push('capture.type must be a string');
-    return errors;
-  }
-
-  if (captureObj.type !== 'page' && captureObj.type !== 'iframe') {
-    errors.push('capture.type must be either "page" or "iframe"');
-  }
-
-  if (captureObj.type === 'iframe') {
-    if (
-      typeof captureObj.selector !== 'string' ||
-      captureObj.selector.length === 0
-    ) {
+  for (const [stateName, node] of Object.entries(workflow.states)) {
+    if (node.next && !stateNames.includes(node.next)) {
       errors.push(
-        'capture.selector must be a non-empty string when type is "iframe"'
+        `State "${stateName}": next references unknown state "${node.next}"`
       );
     }
   }
@@ -263,55 +123,147 @@ function validateCaptureConfig(capture: unknown): string[] {
 export function validateCustomFlow(
   workflow: unknown
 ): CustomFlowValidationResult {
-  const errors: string[] = [];
+  const result = workflowSchema.safeParse(workflow);
 
-  if (!workflow || typeof workflow !== 'object') {
-    return {
-      valid: false,
-      errors: ['Workflow must be an object'],
-    };
-  }
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => {
+      const path = issue.path.join('.');
 
-  const workflowObj = workflow as Record<string, unknown>;
+      // Top-level type errors
+      if (issue.code === 'invalid_type' && !path) {
+        return 'Workflow must be an object';
+      }
 
-  if (typeof workflowObj.starts_at !== 'string') {
-    errors.push('starts_at must be a string');
-  }
+      // Missing required fields at top level
+      if (
+        issue.code === 'invalid_type' &&
+        issue.received === 'undefined' &&
+        (path === 'starts_at' || path === 'states')
+      ) {
+        return `${path} must be ${path === 'starts_at' ? 'a string' : 'an object'}`;
+      }
 
-  if (!workflowObj.states || typeof workflowObj.states !== 'object') {
-    errors.push('states must be an object');
+      // State-level validation errors
+      if (path.startsWith('states.')) {
+        const pathParts = issue.path;
+        const stateName = pathParts[1] as string;
+
+        if (issue.code === 'invalid_union_discriminator') {
+          return `State "${stateName}": type must be one of: open_page, wait_for_selector, click, type, keyboard_press`;
+        }
+
+        // Input field validation
+        if (pathParts.length >= 4 && pathParts[2] === 'input') {
+          const fieldName = pathParts[3];
+
+          if (issue.code === 'too_small' && issue.type === 'string') {
+            return `State "${stateName}": ${fieldName} must be a non-empty string`;
+          }
+
+          // Check if field has min length requirement in schema
+          if (issue.code === 'invalid_type' && issue.expected === 'string') {
+            // Fields like 'selector' and 'key' have .min(1), so use non-empty
+            // Fields like 'value' don't have .min(1), so just use 'string'
+            const fieldsWithMinLength = ['selector', 'key'];
+            if (fieldsWithMinLength.includes(fieldName as string)) {
+              return `State "${stateName}": ${fieldName} must be a non-empty string`;
+            }
+            return `State "${stateName}": ${fieldName} must be a ${issue.expected}`;
+          }
+
+          if (issue.code === 'invalid_type') {
+            return `State "${stateName}": ${fieldName} must be a ${issue.expected}`;
+          }
+        }
+
+        // Node-level validation
+        if (
+          issue.code === 'invalid_type' &&
+          issue.received === 'undefined' &&
+          pathParts.length === 3
+        ) {
+          return `State "${stateName}": ${pathParts[2]} is required`;
+        }
+
+        if (issue.code === 'invalid_type' && pathParts.length === 3) {
+          return `State "${stateName}": ${pathParts[2]} must be a ${issue.expected}`;
+        }
+      }
+
+      // Capture config validation
+      if (path === 'capture' || path.startsWith('capture.')) {
+        if (issue.code === 'invalid_union') {
+          // Check unionErrors for missing selector in iframe type
+          const zodIssue = issue as any;
+          if (zodIssue.unionErrors) {
+            // Check if the actual type value is 'iframe'
+            const workflowObj = workflow as any;
+            const captureType = workflowObj?.capture?.type;
+
+            const hasMissingSelectorError = zodIssue.unionErrors.some(
+              (unionErr: any) =>
+                unionErr.issues?.some(
+                  (innerIssue: any) =>
+                    innerIssue.path.length >= 2 &&
+                    innerIssue.path[0] === 'capture' &&
+                    innerIssue.path[1] === 'selector' &&
+                    innerIssue.code === 'invalid_type' &&
+                    innerIssue.received === 'undefined'
+                )
+            );
+
+            // Only report missing selector if type is actually 'iframe'
+            if (hasMissingSelectorError && captureType === 'iframe') {
+              return 'capture.selector must be a non-empty string when type is "iframe"';
+            }
+          }
+          return 'capture.type must be either "page" or "iframe"';
+        }
+
+        if (
+          issue.code === 'invalid_type' &&
+          issue.received === 'undefined' &&
+          path === 'capture.selector'
+        ) {
+          return 'capture.selector must be a non-empty string when type is "iframe"';
+        }
+
+        if (issue.code === 'too_small' && path === 'capture.selector') {
+          return 'capture.selector must be a non-empty string when type is "iframe"';
+        }
+      }
+
+      // Generic type validation
+      if (issue.code === 'invalid_type' && issue.received === 'undefined') {
+        return `${path} is required`;
+      }
+
+      if (issue.code === 'too_small' && issue.type === 'string') {
+        return `${path} must be a non-empty string`;
+      }
+
+      if (issue.code === 'invalid_type') {
+        return `${path} must be a ${issue.expected}`;
+      }
+
+      if (issue.code === 'invalid_enum_value') {
+        const options = issue.options.join(', ');
+        return `${path} must be one of: ${options}`;
+      }
+
+      if (path) return `${path}: ${issue.message}`;
+      return issue.message;
+    });
+
     return { valid: false, errors };
   }
 
-  const states = workflowObj.states as Record<string, unknown>;
-  const stateNames = Object.keys(states);
-
-  if (stateNames.length === 0) {
-    errors.push('states must contain at least one state');
+  const referenceErrors = validateStateReferences(result.data);
+  if (referenceErrors.length > 0) {
+    return { valid: false, errors: referenceErrors };
   }
 
-  if (
-    typeof workflowObj.starts_at === 'string' &&
-    !stateNames.includes(workflowObj.starts_at)
-  ) {
-    errors.push(
-      `starts_at references unknown state "${workflowObj.starts_at}"`
-    );
-  }
-
-  for (const [stateName, node] of Object.entries(states)) {
-    const nodeErrors = validateNode(stateName, node, stateNames);
-    errors.push(...nodeErrors.map((err) => `State "${stateName}": ${err}`));
-  }
-
-  if (workflowObj.capture !== undefined) {
-    errors.push(...validateCaptureConfig(workflowObj.capture));
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors: errors.length > 0 ? errors : undefined,
-  };
+  return { valid: true };
 }
 
 export async function loadCustomFlow(filePath: string): Promise<Workflow> {
