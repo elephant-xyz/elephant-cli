@@ -51,8 +51,8 @@ export function registerUploadCommand(program: Command) {
 
 async function createTempDir(prefix: string): Promise<string> {
   const base = path.join(tmpdir(), `${prefix}-`);
-  const dir = await fsPromises.mkdtemp(base);
-  return dir;
+  await fsPromises.mkdir(base);
+  return base;
 }
 
 export interface UploadServiceOverrides {
