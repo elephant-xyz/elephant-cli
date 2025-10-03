@@ -83,7 +83,9 @@ async function prettierFormat(content: string): Promise<string> {
   try {
     return prettier.format(content, { parser: 'html' });
   } catch (error) {
-    logger.warn('Failed to format HTML with prettier, returning unformatted content');
+    logger.warn(
+      'Failed to format HTML with prettier, returning unformatted content'
+    );
     return content;
   }
 }
