@@ -117,26 +117,31 @@ describe('Upload Command - Media Files Support', () => {
             name: 'bafkreidata1.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'bafkreidata2.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'index.html',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'logo.png',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'icon.svg',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
         ] as any);
 
@@ -212,11 +217,13 @@ describe('Upload Command - Media Files Support', () => {
             name: 'bafkreidata1.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'bafkreidata2.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
         ] as any);
 
@@ -283,16 +290,19 @@ describe('Upload Command - Media Files Support', () => {
             name: 'bafkreidata.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'index.html',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'style.css',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
         ] as any);
 
@@ -344,6 +354,7 @@ describe('Upload Command - Media Files Support', () => {
             name: 'bafkreidata.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
         ] as any);
 
@@ -397,11 +408,13 @@ describe('Upload Command - Media Files Support', () => {
             name: 'bafkreidata.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           {
             name: 'index.html',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
         ] as any);
 
@@ -467,11 +480,13 @@ describe('Upload Command - Media Files Support', () => {
             name: 'data.json',
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           },
           ...mediaFiles.map((name) => ({
             name,
             isDirectory: () => false,
             isFile: () => true,
+            parentPath: testExtractedPath,
           })),
         ] as any);
 
