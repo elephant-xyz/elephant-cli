@@ -100,7 +100,13 @@ export interface UploadOptions {
 export interface UploadResult {
   success: boolean;
   cid?: string;
-  error?: string;
+  errorMessage?: string;
+  errors?: {
+    propertyDir: string;
+    success: boolean;
+    cid?: string;
+    error?: string;
+  }[];
 }
 
 // Submit-to-Contract function interface
@@ -309,7 +315,7 @@ export async function upload(options: UploadOptions): Promise<UploadResult> {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      errorMessage: error instanceof Error ? error.message : String(error),
     };
   }
 }
