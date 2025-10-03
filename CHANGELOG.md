@@ -1,3 +1,10 @@
+# [1.48.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.47.0...v1.48.0) (2025-10-03)
+
+
+### Features
+
+* add optional clear field to type input for browser flow ([#183](https://github.com/elephant-xyz/elephant-cli/issues/183)) ([ca287bb](https://github.com/elephant-xyz/elephant-cli/commit/ca287bb675963dcfe119b002c93b078229138807))
+
 # [1.47.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.5...v1.47.0) (2025-10-03)
 
 
