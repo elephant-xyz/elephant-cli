@@ -1,3 +1,31 @@
+## [1.46.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.3...v1.46.4) (2025-10-03)
+
+
+### Bug Fixes
+
+* **upload:** simplify upload flow and remove CSV ([#177](https://github.com/elephant-xyz/elephant-cli/issues/177)) ([3ab2f24](https://github.com/elephant-xyz/elephant-cli/commit/3ab2f2472b4e356d4e1d79b04779c63df64b663c))
+
+## [1.46.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.2...v1.46.3) (2025-10-02)
+
+
+### Bug Fixes
+
+* Extend api calls and data fetching logic for Orange county prepare flow ([#176](https://github.com/elephant-xyz/elephant-cli/issues/176)) ([4e80388](https://github.com/elephant-xyz/elephant-cli/commit/4e80388a2f90d79198083b8fbdf873fa438f7f8c))
+
+## [1.46.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.1...v1.46.2) (2025-10-02)
+
+
+### Bug Fixes
+
+* fix Orange County data retrieval by fetching parcelId from quicksearch endpoint ([#175](https://github.com/elephant-xyz/elephant-cli/issues/175)) ([cc412be](https://github.com/elephant-xyz/elephant-cli/commit/cc412bee989d46081f7b4e1cd1fa1dac0567f2ad))
+
+## [1.46.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.0...v1.46.1) (2025-10-02)
+
+
+### Bug Fixes
+
+* **common:** handle prettierFormat errors gracefully ([#174](https://github.com/elephant-xyz/elephant-cli/issues/174)) ([f8b5413](https://github.com/elephant-xyz/elephant-cli/commit/f8b5413accee3eb8b0476a7f0e7ebc9e91602139))
+
 # [1.46.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.45.0...v1.46.0) (2025-10-02)
 
 

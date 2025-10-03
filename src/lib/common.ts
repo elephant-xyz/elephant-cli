@@ -71,7 +71,12 @@ export async function cleanHtml(rawHtml: string): Promise<string> {
   });
 
   const cleaned = $.root().children().toString();
-  return await prettierFormat(`${doctype}\n${cleaned}`);
+  const html = `${doctype}\n${cleaned}`;
+  try {
+    return await prettierFormat(html);
+  } catch (error) {
+    return html;
+  }
 }
 
 async function prettierFormat(content: string): Promise<string> {

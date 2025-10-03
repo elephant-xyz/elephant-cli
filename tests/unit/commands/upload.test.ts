@@ -106,31 +106,33 @@ describe('Upload Command', () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
-      outputCsv: path.join(tempDir, 'results.csv'),
+      silent: true,
     };
 
-    await handleUpload(options, {
+    const result = await handleUpload(options, {
       zipExtractorService: mockZipExtractor,
       pinataDirectoryUploadService: mockPinataService,
       progressTracker: mockProgress,
     });
 
-    // Verify the single directory was uploaded (JSON files)
+    // Verify the directory was uploaded once (single unified upload)
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      expect.stringContaining('_json_temp'),
+      expect.stringContaining('elephant-upload-'),
       expect.objectContaining({
-        name: 'bafybeisinglecid',
+        name: 'elephant-upload',
         keyvalues: {
           source: 'elephant-cli-upload',
-          propertyId: 'bafybeisinglecid',
-          type: 'json',
+          timestamp: expect.any(String),
         },
       })
     );
 
-    // CSV verification would require mocking the datagroup analyzer
-    // which is tested separately
+    // Verify success result
+    expect(result).toEqual({
+      success: true,
+      cid: 'bafybeimockcid',
+    });
   });
 
   it('should successfully upload single property directory from hash output ZIP', async () => {
@@ -184,10 +186,10 @@ describe('Upload Command', () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
-      outputCsv: path.join(tempDir, 'results.csv'),
+      silent: true,
     };
 
-    await handleUpload(options, {
+    const result = await handleUpload(options, {
       zipExtractorService: mockZipExtractor,
       pinataDirectoryUploadService: mockPinataService,
       progressTracker: mockProgress,
@@ -197,16 +199,15 @@ describe('Upload Command', () => {
     expect(mockZipExtractor.isZipFile).toHaveBeenCalledWith(mockZipPath);
     expect(mockZipExtractor.extractZip).toHaveBeenCalledWith(mockZipPath);
 
-    // Verify directory upload for JSON files (media files are handled separately)
+    // Verify directory upload (single unified upload)
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledWith(
-      expect.stringContaining('_json_temp'),
+      expect.stringContaining('elephant-upload-'),
       expect.objectContaining({
-        name: 'bafybeiabc123',
+        name: 'elephant-upload',
         keyvalues: {
           source: 'elephant-cli-upload',
-          propertyId: 'bafybeiabc123',
-          type: 'json',
+          timestamp: expect.any(String),
         },
       })
     );
@@ -220,11 +221,11 @@ describe('Upload Command', () => {
     // Verify cleanup
     expect(mockZipExtractor.cleanup).toHaveBeenCalledWith(tempDir);
 
-    // Verify CSV output was created with new format including htmlLink column
-    const csvContent = await fsPromises.readFile(options.outputCsv!, 'utf-8');
-    expect(csvContent).toContain(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
-    );
+    // Verify success result
+    expect(result).toEqual({
+      success: true,
+      cid: 'bafybeimockcid1',
+    });
   });
 
   it('should handle upload failures gracefully', async () => {
@@ -273,10 +274,10 @@ describe('Upload Command', () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
-      outputCsv: path.join(tempDir, 'results.csv'),
+      silent: true,
     };
 
-    await handleUpload(options, {
+    const result = await handleUpload(options, {
       zipExtractorService: mockZipExtractor,
       pinataDirectoryUploadService: mockPinataService,
       progressTracker: mockProgress,
@@ -285,14 +286,11 @@ describe('Upload Command', () => {
     // Verify upload was attempted
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
 
-    // Verify progress tracking for error
-    expect(mockProgress.increment).toHaveBeenCalledWith('errors');
-
-    // Verify CSV was created with new format including htmlLink column
-    const csvContent = await fsPromises.readFile(options.outputCsv!, 'utf-8');
-    expect(csvContent).toContain(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
-    );
+    // Verify error result
+    expect(result).toEqual({
+      success: false,
+      error: 'Network error',
+    });
   });
 
   it('should skip single directory without JSON files', async () => {
@@ -339,9 +337,10 @@ describe('Upload Command', () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
+      silent: true,
     };
 
-    await handleUpload(options, {
+    const result = await handleUpload(options, {
       zipExtractorService: mockZipExtractor,
       pinataDirectoryUploadService: mockPinataService,
       progressTracker: mockProgress,
@@ -350,6 +349,12 @@ describe('Upload Command', () => {
     // Should not upload directories without JSON files
     expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(0);
     expect(mockProgress.increment).toHaveBeenCalledWith('skipped');
+
+    // Since nothing was uploaded, return error
+    expect(result).toEqual({
+      success: false,
+      error: 'No properties with JSON files to upload',
+    });
   });
 
   it('should throw error if input is not a ZIP file', async () => {
@@ -424,8 +429,8 @@ describe('Upload Command', () => {
     ).rejects.toThrow('No valid structure found in the extracted ZIP');
   });
 
-  it('should throw error if multiple property directories are found', async () => {
-    // Create multiple property directories (should fail)
+  it('should successfully handle multiple property directories', async () => {
+    // Create multiple property directories (now supported)
     const multiPropertyPath = path.join(tempDir, 'multi-extracted');
     await fsPromises.mkdir(multiPropertyPath, { recursive: true });
 
@@ -451,16 +456,47 @@ describe('Upload Command', () => {
       cleanup: vi.fn().mockResolvedValue(undefined),
     } as unknown as ZipExtractorService;
 
+    const mockPinataService = {
+      uploadDirectory: vi.fn().mockResolvedValue({
+        success: true,
+        cid: 'bafybeimultipropcid',
+      }),
+    } as unknown as PinataDirectoryUploadService;
+
+    const mockProgress = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      increment: vi.fn(),
+      getMetrics: vi.fn().mockReturnValue({
+        processed: 2,
+        errors: 0,
+        skipped: 0,
+        total: 2,
+      }),
+    } as unknown as SimpleProgress;
+
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
+      silent: true,
     };
 
-    await expect(
-      handleUpload(options, {
-        zipExtractorService: mockZipExtractor,
-      })
-    ).rejects.toThrow('Multiple property directories found');
+    const result = await handleUpload(options, {
+      zipExtractorService: mockZipExtractor,
+      pinataDirectoryUploadService: mockPinataService,
+      progressTracker: mockProgress,
+    });
+
+    // Verify both properties were processed
+    expect(mockPinataService.uploadDirectory).toHaveBeenCalledTimes(1);
+    expect(mockProgress.increment).toHaveBeenCalledWith('processed');
+    expect(mockProgress.increment).toHaveBeenCalledTimes(2);
+
+    // Verify success result
+    expect(result).toEqual({
+      success: true,
+      cid: 'bafybeimultipropcid',
+    });
   });
 
   it('should throw error if no JWT is provided', async () => {
@@ -513,22 +549,19 @@ describe('Upload Command', () => {
     const options: UploadCommandOptions = {
       input: mockZipPath,
       pinataJwt: 'test-jwt-token',
-      outputCsv: path.join(tempDir, 'results.csv'),
+      silent: true,
     };
 
-    await handleUpload(options, {
+    const result = await handleUpload(options, {
       zipExtractorService: mockZipExtractor,
       pinataDirectoryUploadService: mockPinataService,
       progressTracker: mockProgress,
     });
 
-    // Should handle the error
-    expect(mockProgress.increment).toHaveBeenCalledWith('errors');
-
-    // Verify CSV was created with proper headers
-    const csvContent = await fsPromises.readFile(options.outputCsv!, 'utf-8');
-    expect(csvContent).toContain(
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
-    );
+    // Should handle the error and return error result
+    expect(result).toEqual({
+      success: false,
+      error: 'Connection timeout',
+    });
   });
 });

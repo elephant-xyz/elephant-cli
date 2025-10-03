@@ -4,13 +4,7 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import chalk from 'chalk';
-import {
-  PrepareOptions,
-  Request,
-  ProxyUrl,
-  ProxyOptions,
-  Prepared,
-} from './types.js';
+import { PrepareOptions, Request, ProxyUrl, ProxyOptions } from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
@@ -18,6 +12,7 @@ import { createWorkflowFromTemplate } from './browser-flow/index.js';
 import { loadCustomFlow } from './browser-flow/customFlow.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
+import { fetchOrangeCountyData } from './county-specific-prepare/orange.js';
 
 function parseProxy(proxy: ProxyUrl): ProxyOptions {
   const [, username, password, ip, port] =
@@ -39,69 +34,6 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
     `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
   );
   return proxyOptions;
-}
-
-async function fetchOrangeCountyData(requestId: string): Promise<Prepared> {
-  logger.info('Orange County detected - using hardcoded API flow');
-
-  const cleanRequestId = requestId.replace(/-/g, '');
-
-  const endpoints = [
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`,
-      key: 'parcelQuickSearchSummary',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCStats?PID=${cleanRequestId}`,
-      key: 'parcelValuationStats',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCGeneralInfo?pid=${cleanRequestId}`,
-      key: 'parcelGeneralProfile',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCPropertyValues?PID=${cleanRequestId}&TaxYear=0&ShowAllFlag=1`,
-      key: 'parcelPropertyValuesByYear',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCCertifiedTaxes?PID=${cleanRequestId}&TaxYear=0`,
-      key: 'parcelCertifiedTaxesByAuthority',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCNonAdValorem?PID=${cleanRequestId}&TaxYear=0`,
-      key: 'parcelNonAdValoremAssessments',
-    },
-    {
-      url: `https://ocpa-mainsite-afd-standard.azurefd.net/api/PRC/GetPRCTotalTaxes?PID=${cleanRequestId}&TaxYear=0`,
-      key: 'parcelTotalTaxesSummary',
-    },
-  ];
-
-  const responses = await Promise.all(
-    endpoints.map(async ({ url, key }) => {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(
-          `API request to ${url} failed with status ${response.status}`
-        );
-      }
-      const data = await response.json();
-      return { key, data };
-    })
-  );
-
-  const combinedData = responses.reduce(
-    (acc, { key, data }) => {
-      acc[key] = data;
-      return acc;
-    },
-    {} as Record<string, unknown>
-  );
-
-  return {
-    type: 'json',
-    content: JSON.stringify(combinedData, null, 2),
-  };
 }
 
 export async function prepare(
