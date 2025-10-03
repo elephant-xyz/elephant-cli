@@ -1,3 +1,10 @@
+## [1.46.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.3...v1.46.4) (2025-10-03)
+
+
+### Bug Fixes
+
+* **upload:** simplify upload flow and remove CSV ([#177](https://github.com/elephant-xyz/elephant-cli/issues/177)) ([3ab2f24](https://github.com/elephant-xyz/elephant-cli/commit/3ab2f2472b4e356d4e1d79b04779c63df64b663c))
+
 ## [1.46.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.2...v1.46.3) (2025-10-02)
 
 
