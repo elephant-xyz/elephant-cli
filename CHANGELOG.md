@@ -1,3 +1,10 @@
+# [1.47.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.5...v1.47.0) (2025-10-03)
+
+
+### Features
+
+* add support for custom browser flows via JSON files ([#181](https://github.com/elephant-xyz/elephant-cli/issues/181)) ([3d53780](https://github.com/elephant-xyz/elephant-cli/commit/3d53780d3e604d4da18f887106629fc35eea75a5))
+
 ## [1.46.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.4...v1.46.5) (2025-10-03)
 
 
