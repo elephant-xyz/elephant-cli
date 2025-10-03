@@ -31,6 +31,7 @@ interface TypeInput {
   value: string;
   delay?: number;
   iframe_selector?: Selector;
+  clear?: boolean;
 }
 
 interface KeyboardPressInput {
@@ -242,7 +243,7 @@ export async function withBrowserFlow(
         break;
       }
       case 'type': {
-        const { selector, value, delay, iframe_selector } = input;
+        const { selector, value, delay, iframe_selector, clear } = input;
         if (iframe_selector) {
           const frame = await getFrameBySelector(page, iframe_selector);
           // Use JavaScript to set the value directly in frames
@@ -259,6 +260,15 @@ export async function withBrowserFlow(
             value
           );
         } else {
+          if (clear) {
+            // Clear the field first using JavaScript
+            await page.evaluate((sel) => {
+              const element = document.querySelector(sel) as HTMLInputElement;
+              if (element) {
+                element.value = '';
+              }
+            }, selector);
+          }
           await page.type(selector, value, { delay });
         }
         break;

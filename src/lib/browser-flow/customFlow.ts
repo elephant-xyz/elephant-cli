@@ -38,6 +38,7 @@ const typeInputSchema = z.object({
   value: z.string(),
   delay: z.number().optional(),
   iframe_selector: z.string().optional(),
+  clear: z.boolean().optional(),
 });
 
 const keyboardPressInputSchema = z.object({
