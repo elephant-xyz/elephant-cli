@@ -51,7 +51,7 @@ export function registerUploadCommand(program: Command) {
 
 async function createTempDir(prefix: string): Promise<string> {
   const base = path.join(tmpdir(), `${prefix}-`);
-  await fsPromises.mkdir(base);
+  await fsPromises.mkdir(base, { recursive: true });
   return base;
 }
 
