@@ -57,7 +57,7 @@ export function createPropertyImprovementDataGroup(
     const ref: IPLDRef = { '/': `./${file}` };
 
     // Property to property improvement relationships
-    if (lower.includes('property_improvement_to_property')) {
+    if (lower.includes('property_to_property_improvement')) {
       propertyHasPropertyImprovement.push(ref);
       continue;
     }

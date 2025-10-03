@@ -364,7 +364,10 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string, force
   }
   // Check if this is property improvement data by looking for property improvement files
   let hasPropertyImprovementData = forcePropertyImprovement || newJsonRelPaths.some(rel =>
-    rel.includes('property_improvement_data') && rel.endsWith('.json')
+    (rel.includes('property_improvement_data') || 
+     rel.includes('property_improvement_to_company') ||
+     rel.includes('company_to_communication') ||
+     rel.includes('property_to_property_improvement')) && rel.endsWith('.json')
   );
 
   const relationshipFiles: string[] = [];
@@ -574,7 +577,7 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string, force
     // For Property Improvement, only create the required relationships
     // Filter relationshipFiles to required PI relationships
     const propertyImprovementRelationships = relationshipFiles.filter(rel => 
-      rel.startsWith('property_improvement_to_property') ||
+      rel.startsWith('property_to_property_improvement') ||
       rel === 'property_improvement_to_company.json' ||
       rel === 'company_to_communication.json'
     );
