@@ -77,7 +77,7 @@ describe('Custom Browser Flow', () => {
     it('should reject non-object workflow', () => {
       const result = validateCustomFlow('not an object');
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Workflow must be an object');
+      expect(result.errors).toContain('Expected object, received string');
     });
 
     it('should reject workflow without starts_at', () => {
@@ -93,7 +93,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('starts_at must be a string');
+      expect(result.errors).toContain('starts_at: Required');
     });
 
     it('should reject workflow with invalid starts_at reference', () => {
@@ -122,7 +122,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('states must be an object');
+      expect(result.errors).toContain('states: Required');
     });
 
     it('should reject workflow with empty states', () => {
@@ -150,9 +150,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors?.[0]).toContain(
-        'type must be one of: open_page, wait_for_selector, click, type, keyboard_press'
-      );
+      expect(result.errors?.[0]).toContain('Invalid discriminator value');
     });
 
     it('should reject state with invalid next reference', () => {
@@ -190,7 +188,9 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors?.[0]).toContain('url must be a non-empty string');
+      expect(result.errors?.[0]).toContain(
+        'String must contain at least 1 character'
+      );
     });
 
     it('should validate wait_for_selector input', () => {
@@ -231,9 +231,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors?.[0]).toContain(
-        'selector must be a non-empty string'
-      );
+      expect(result.errors?.[0]).toContain('Expected string');
     });
 
     it('should validate type input', () => {
@@ -253,7 +251,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors?.[0]).toContain('value must be a string');
+      expect(result.errors?.[0]).toContain('Expected string');
     });
 
     it('should validate keyboard_press input', () => {
@@ -272,7 +270,9 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors?.[0]).toContain('key must be a non-empty string');
+      expect(result.errors?.[0]).toContain(
+        'String must contain at least 1 character'
+      );
     });
 
     it('should validate capture config with invalid type', () => {
@@ -292,9 +292,7 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(
-        'capture.type must be either "page" or "iframe"'
-      );
+      expect(result.errors?.[0]).toContain('Invalid discriminator value');
     });
 
     it('should validate iframe capture requires selector', () => {
@@ -314,9 +312,8 @@ describe('Custom Browser Flow', () => {
 
       const result = validateCustomFlow(workflow);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(
-        'capture.selector must be a non-empty string when type is "iframe"'
-      );
+      expect(result.errors?.[0]).toContain('capture.selector');
+      expect(result.errors?.[0]).toContain('Required');
     });
 
     it('should validate complex workflow with all node types', () => {

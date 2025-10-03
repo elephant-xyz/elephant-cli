@@ -83,7 +83,7 @@ const nodeSchema = z.discriminatedUnion('type', [
   keyboardPressNodeSchema,
 ]);
 
-const captureConfigSchema = z.union([
+const captureConfigSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('page') }),
   z.object({ type: z.literal('iframe'), selector: z.string().min(1) }),
 ]);
@@ -128,129 +128,6 @@ export function validateCustomFlow(
   if (!result.success) {
     const errors = result.error.issues.map((issue) => {
       const path = issue.path.join('.');
-
-      // Top-level type errors
-      if (issue.code === 'invalid_type' && !path) {
-        return 'Workflow must be an object';
-      }
-
-      // Missing required fields at top level
-      if (
-        issue.code === 'invalid_type' &&
-        issue.received === 'undefined' &&
-        (path === 'starts_at' || path === 'states')
-      ) {
-        return `${path} must be ${path === 'starts_at' ? 'a string' : 'an object'}`;
-      }
-
-      // State-level validation errors
-      if (path.startsWith('states.')) {
-        const pathParts = issue.path;
-        const stateName = pathParts[1] as string;
-
-        if (issue.code === 'invalid_union_discriminator') {
-          return `State "${stateName}": type must be one of: open_page, wait_for_selector, click, type, keyboard_press`;
-        }
-
-        // Input field validation
-        if (pathParts.length >= 4 && pathParts[2] === 'input') {
-          const fieldName = pathParts[3];
-
-          if (issue.code === 'too_small' && issue.type === 'string') {
-            return `State "${stateName}": ${fieldName} must be a non-empty string`;
-          }
-
-          // Check if field has min length requirement in schema
-          if (issue.code === 'invalid_type' && issue.expected === 'string') {
-            // Fields like 'selector' and 'key' have .min(1), so use non-empty
-            // Fields like 'value' don't have .min(1), so just use 'string'
-            const fieldsWithMinLength = ['selector', 'key'];
-            if (fieldsWithMinLength.includes(fieldName as string)) {
-              return `State "${stateName}": ${fieldName} must be a non-empty string`;
-            }
-            return `State "${stateName}": ${fieldName} must be a ${issue.expected}`;
-          }
-
-          if (issue.code === 'invalid_type') {
-            return `State "${stateName}": ${fieldName} must be a ${issue.expected}`;
-          }
-        }
-
-        // Node-level validation
-        if (
-          issue.code === 'invalid_type' &&
-          issue.received === 'undefined' &&
-          pathParts.length === 3
-        ) {
-          return `State "${stateName}": ${pathParts[2]} is required`;
-        }
-
-        if (issue.code === 'invalid_type' && pathParts.length === 3) {
-          return `State "${stateName}": ${pathParts[2]} must be a ${issue.expected}`;
-        }
-      }
-
-      // Capture config validation
-      if (path === 'capture' || path.startsWith('capture.')) {
-        if (issue.code === 'invalid_union') {
-          // Check unionErrors for missing selector in iframe type
-          const zodIssue = issue as any;
-          if (zodIssue.unionErrors) {
-            // Check if the actual type value is 'iframe'
-            const workflowObj = workflow as any;
-            const captureType = workflowObj?.capture?.type;
-
-            const hasMissingSelectorError = zodIssue.unionErrors.some(
-              (unionErr: any) =>
-                unionErr.issues?.some(
-                  (innerIssue: any) =>
-                    innerIssue.path.length >= 2 &&
-                    innerIssue.path[0] === 'capture' &&
-                    innerIssue.path[1] === 'selector' &&
-                    innerIssue.code === 'invalid_type' &&
-                    innerIssue.received === 'undefined'
-                )
-            );
-
-            // Only report missing selector if type is actually 'iframe'
-            if (hasMissingSelectorError && captureType === 'iframe') {
-              return 'capture.selector must be a non-empty string when type is "iframe"';
-            }
-          }
-          return 'capture.type must be either "page" or "iframe"';
-        }
-
-        if (
-          issue.code === 'invalid_type' &&
-          issue.received === 'undefined' &&
-          path === 'capture.selector'
-        ) {
-          return 'capture.selector must be a non-empty string when type is "iframe"';
-        }
-
-        if (issue.code === 'too_small' && path === 'capture.selector') {
-          return 'capture.selector must be a non-empty string when type is "iframe"';
-        }
-      }
-
-      // Generic type validation
-      if (issue.code === 'invalid_type' && issue.received === 'undefined') {
-        return `${path} is required`;
-      }
-
-      if (issue.code === 'too_small' && issue.type === 'string') {
-        return `${path} must be a non-empty string`;
-      }
-
-      if (issue.code === 'invalid_type') {
-        return `${path} must be a ${issue.expected}`;
-      }
-
-      if (issue.code === 'invalid_enum_value') {
-        const options = issue.options.join(', ');
-        return `${path} must be one of: ${options}`;
-      }
-
       if (path) return `${path}: ${issue.message}`;
       return issue.message;
     });
