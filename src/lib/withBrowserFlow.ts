@@ -258,8 +258,7 @@ export async function withBrowserFlow(
             selector,
             value
           );
-        }
-        if (!iframe_selector) {
+        } else {
           await page.type(selector, value, { delay });
         }
         break;

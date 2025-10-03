@@ -174,13 +174,13 @@ function validateNode(
 
   if (!isValidNodeType(nodeObj.type)) {
     errors.push(
-      `State "${stateName}": type must be one of: open_page, wait_for_selector, click, type, keyboard_press`
+      `type must be one of: open_page, wait_for_selector, click, type, keyboard_press`
     );
     return errors;
   }
 
   if (!nodeObj.input) {
-    errors.push(`State "${stateName}": input is required`);
+    errors.push(`input is required`);
   }
 
   const type = nodeObj.type as string;
@@ -204,24 +204,22 @@ function validateNode(
 
   if (nodeObj.next !== undefined) {
     if (typeof nodeObj.next !== 'string') {
-      errors.push(`State "${stateName}": next must be a string`);
+      errors.push(`next must be a string`);
     }
     if (
       typeof nodeObj.next === 'string' &&
       !allStateNames.includes(nodeObj.next)
     ) {
-      errors.push(
-        `State "${stateName}": next references unknown state "${nodeObj.next}"`
-      );
+      errors.push(`next references unknown state "${nodeObj.next}"`);
     }
   }
 
   if (nodeObj.result !== undefined && typeof nodeObj.result !== 'string') {
-    errors.push(`State "${stateName}": result must be a string`);
+    errors.push(`result must be a string`);
   }
 
   if (nodeObj.end !== undefined && typeof nodeObj.end !== 'boolean') {
-    errors.push(`State "${stateName}": end must be a boolean`);
+    errors.push(`end must be a boolean`);
   }
 
   return errors;
