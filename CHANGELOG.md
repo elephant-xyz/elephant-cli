@@ -1,3 +1,10 @@
+## [1.46.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.4...v1.46.5) (2025-10-03)
+
+
+### Bug Fixes
+
+* **upload:** use helper for temp dir creation ([#180](https://github.com/elephant-xyz/elephant-cli/issues/180)) ([0d6e1dc](https://github.com/elephant-xyz/elephant-cli/commit/0d6e1dc2c1d097a7a87976288e711f23de81ce04))
+
 ## [1.46.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.46.3...v1.46.4) (2025-10-03)
 
 

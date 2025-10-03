@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { promises as fsPromises } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
@@ -46,6 +47,11 @@ export function registerUploadCommand(program: Command) {
 
       await handleUpload(commandOptions);
     });
+}
+
+async function createTempDir(prefix: string): Promise<string> {
+  const tempDir = await fsPromises.mkdtemp(path.join(tmpdir(), prefix));
+  return tempDir;
 }
 
 export interface UploadServiceOverrides {
@@ -102,6 +108,7 @@ export async function handleUpload(
     const entries = await fsPromises.readdir(extractedPath, {
       withFileTypes: true,
     });
+    // console.log(entries);
 
     // Determine if we need to go up one level
     // If the extracted path contains only JSON files (no subdirectories),
@@ -110,6 +117,7 @@ export async function handleUpload(
       (entry) => entry.isFile() && entry.name.endsWith('.json')
     );
     const subdirs = entries.filter((entry) => entry.isDirectory());
+    // console.log(subdirs);
 
     let propertyDirs: Array<{ name: string; path: string }> = [];
 
@@ -150,7 +158,7 @@ export async function handleUpload(
     progressTracker.start();
 
     // Upload the property directory
-    const uploadResults: Array<{
+    const preUpload: Array<{
       propertyDir: string;
       success: boolean;
       cid?: string;
@@ -158,7 +166,7 @@ export async function handleUpload(
     }> = [];
 
     // Create temp directory in OS temp dir for better reliability
-    tempDir = await fsPromises.mkdtemp('elephant-upload-');
+    tempDir = await createTempDir('elephant-upload-');
     for (const propertyDir of propertyDirs) {
       logger.info(`Processing property directory: ${propertyDir.name}`);
 
@@ -166,15 +174,17 @@ export async function handleUpload(
         // Check directory contents and separate JSON from media files
         const propertyFiles = await fsPromises.readdir(propertyDir.path, {
           withFileTypes: true,
+          recursive: true,
         });
+        // console.log(propertyFiles);
 
-        const jsonFiles = propertyFiles
-          .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-          .map((entry) => entry.name);
+        const jsonFiles = propertyFiles.filter(
+          (entry) => entry.isFile() && entry.name.endsWith('.json')
+        );
 
-        const mediaFiles = propertyFiles
-          .filter((entry) => entry.isFile() && isMediaFile(entry.name))
-          .map((entry) => entry.name);
+        const mediaFiles = propertyFiles.filter(
+          (entry) => entry.isFile() && isMediaFile(entry.name)
+        );
 
         if (jsonFiles.length === 0) {
           logger.warn(
@@ -199,8 +209,9 @@ export async function handleUpload(
           await fsPromises.mkdir(tempMediaDir, { recursive: true });
 
           for (const mediaFile of mediaFiles) {
-            const sourcePath = path.join(propertyDir.path, mediaFile);
-            const destMediaPath = path.join(tempMediaDir, mediaFile);
+            mediaFile.parentPath;
+            const sourcePath = path.join(mediaFile.parentPath, mediaFile.name);
+            const destMediaPath = path.join(tempMediaDir, mediaFile.name);
             await fsPromises.copyFile(sourcePath, destMediaPath);
           }
         }
@@ -210,19 +221,19 @@ export async function handleUpload(
         await fsPromises.mkdir(tempJsonDir, { recursive: true });
 
         for (const jsonFile of jsonFiles) {
-          const sourcePath = path.join(propertyDir.path, jsonFile);
-          const destPath = path.join(tempJsonDir, jsonFile);
+          const sourcePath = path.join(jsonFile.parentPath, jsonFile.name);
+          const destPath = path.join(tempJsonDir, jsonFile.name);
           await fsPromises.copyFile(sourcePath, destPath);
         }
 
-        uploadResults.push({
+        preUpload.push({
           propertyDir: propertyDir.name,
           success: true,
         });
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         logger.error(`Error processing ${propertyDir.name}: ${errorMsg}`);
-        uploadResults.push({
+        preUpload.push({
           propertyDir: propertyDir.name,
           success: false,
           error: errorMsg,
@@ -232,16 +243,21 @@ export async function handleUpload(
     }
 
     // Check if there are any successful property preparations
-    const successfulUploads = uploadResults.filter((r) => r.success);
-    if (successfulUploads.length === 0) {
+    const failedPreps = preUpload.filter((r) => !r.success);
+    const successfulPreps = preUpload.filter((r) => r.success);
+    if (failedPreps.length > 0 || successfulPreps.length === 0) {
       progressTracker.stop();
-      const errorMsg = 'No properties with JSON files to upload';
+      const errorMsg =
+        failedPreps.length > 0
+          ? 'Upload preparation failed'
+          : 'No properties with JSON files to upload';
       logger.warn(errorMsg);
 
       if (options.silent) {
         return {
           success: false,
           error: errorMsg,
+          errors: failedPreps.length > 0 ? failedPreps : undefined,
         };
       }
 
@@ -268,7 +284,7 @@ export async function handleUpload(
         `Successfully uploaded to IPFS - CID: ${uploadResult.cid}`
       );
 
-      for (const result of uploadResults) {
+      for (const result of preUpload) {
         if (result.success) {
           result.cid = uploadResult.cid;
           progressTracker.increment('processed');
