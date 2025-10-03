@@ -244,16 +244,20 @@ export async function handleUpload(
 
     // Check if there are any successful property preparations
     const failedPreps = preUpload.filter((r) => !r.success);
-    if (failedPreps.length > 0) {
+    const successfulPreps = preUpload.filter((r) => r.success);
+    if (failedPreps.length > 0 || successfulPreps.length === 0) {
       progressTracker.stop();
-      const errorMsg = 'Upload preparation failed';
+      const errorMsg =
+        failedPreps.length > 0
+          ? 'Upload preparation failed'
+          : 'No properties with JSON files to upload';
       logger.warn(errorMsg);
 
       if (options.silent) {
         return {
           success: false,
-          errorMessage: errorMsg,
-          errors: failedPreps,
+          error: errorMsg,
+          errors: failedPreps.length > 0 ? failedPreps : undefined,
         };
       }
 
