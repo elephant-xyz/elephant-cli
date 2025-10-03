@@ -80,7 +80,14 @@ export async function cleanHtml(rawHtml: string): Promise<string> {
 }
 
 async function prettierFormat(content: string): Promise<string> {
-  return prettier.format(content, { parser: 'html' });
+  try {
+    return prettier.format(content, { parser: 'html' });
+  } catch (error) {
+    logger.warn(
+      'Failed to format HTML with prettier, returning unformatted content'
+    );
+    return content;
+  }
 }
 
 export async function createBrowserPage(

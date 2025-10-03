@@ -15,6 +15,7 @@ export interface PrepareCommandOptions {
   headless?: boolean;
   browserFlowTemplate?: string;
   browserFlowParameters?: string;
+  browserFlowFile?: string;
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
 }
@@ -40,6 +41,10 @@ export function registerPrepareCommand(program: Command) {
     .option(
       '--browser-flow-parameters <json>',
       'JSON parameters for the browser flow template'
+    )
+    .option(
+      '--browser-flow-file <path>',
+      'Path to custom browser flow JSON file (takes precedence over template)'
     )
     .option(
       '--ignore-captcha',
@@ -69,6 +74,7 @@ export async function handlePrepare(
     headless: options.headless,
     browserFlowTemplate: options.browserFlowTemplate,
     browserFlowParameters: options.browserFlowParameters,
+    browserFlowFile: options.browserFlowFile,
     ignoreCaptcha: options.ignoreCaptcha,
     proxy: options.proxy,
   });
