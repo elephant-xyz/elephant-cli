@@ -231,11 +231,13 @@ export async function withBrowserFlow(
               timeout,
             });
 
+        let timedOut = false;
         const waitResult = await waitPromise.catch((error) => {
           if (continueOnTimeout && error instanceof TimeoutError) {
             logger.info(
               `Selector ${selector} timeout, continuing to fallback path`
             );
+            timedOut = true;
             return null;
           }
           throw error;
@@ -243,6 +245,10 @@ export async function withBrowserFlow(
 
         if (waitResult !== null) {
           stepResult = selector;
+        }
+
+        if (timedOut) {
+          stepResult = '__timeout__';
         }
         break;
       }
@@ -296,14 +302,15 @@ export async function withBrowserFlow(
       default:
         throw new Error(`Unknown type: ${type}`);
     }
-    if (result && stepResult) {
+    if (result && stepResult && stepResult !== '__timeout__') {
       executionState[result] = stepResult;
     }
     if (result && !stepResult && !continueOnTimeout) {
       throw new Error(`Missing result at step ${currentStep}`);
     }
 
-    if (result && !stepResult && continueOnTimeout) {
+    const isTimeout = stepResult === '__timeout__';
+    if (isTimeout && continueOnTimeout) {
       if (!next_on_timeout) {
         throw new Error(
           `Step ${currentStep} timed out with continue_on_timeout, but no next_on_timeout is defined`
