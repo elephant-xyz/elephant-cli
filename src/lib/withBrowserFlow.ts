@@ -21,6 +21,18 @@ interface WaitForSelectorInput {
   iframe_selector?: Selector;
 }
 
+interface SelectorRaceOption {
+  selector: Selector;
+  label: string;
+  timeout?: number;
+}
+
+interface WaitForSelectorRaceInput {
+  selectors: SelectorRaceOption[];
+  visible?: boolean;
+  iframe_selector?: Selector;
+}
+
 interface ClickInput {
   selector: Selector;
   iframe_selector?: Selector;
@@ -55,6 +67,11 @@ type WaitForSelectorNode = {
   input: WaitForSelectorInput;
   continue_on_timeout?: boolean;
 } & Node;
+type WaitForSelectorRaceNode = {
+  type: 'wait_for_selector_race';
+  input: WaitForSelectorRaceInput;
+  next_map: Record<string, string>;
+} & Omit<Node, 'next'>;
 type ClickNode = {
   type: 'click';
   input: ClickInput;
@@ -71,6 +88,7 @@ type KeyboardPressNode = {
 type StepNode =
   | OpenPageNode
   | WaitForSelectorNode
+  | WaitForSelectorRaceNode
   | ClickNode
   | TypeNode
   | KeyboardPressNode;
@@ -153,7 +171,11 @@ export async function withBrowserFlow(
   let end = false;
   while (!end) {
     const state = workflow.states[currentStep];
-    const { type, input, next, next_on_timeout, result } = state;
+    const { type, input, result } = state;
+    const next = 'next' in state ? state.next : undefined;
+    const next_on_timeout =
+      'next_on_timeout' in state ? state.next_on_timeout : undefined;
+    const next_map = 'next_map' in state ? state.next_map : undefined;
     const continueOnTimeout =
       'continue_on_timeout' in state ? state.continue_on_timeout : false;
     for (const [key, value] of Object.entries(input)) {
@@ -252,6 +274,27 @@ export async function withBrowserFlow(
         }
         break;
       }
+      case 'wait_for_selector_race': {
+        const { selectors, visible, iframe_selector } = input;
+        const targetFrame = iframe_selector
+          ? await getFrameBySelector(page, iframe_selector)
+          : page;
+
+        const racePromises = selectors.map(async (option) => {
+          const waitPromise = targetFrame.waitForSelector(option.selector, {
+            visible,
+            timeout: option.timeout ?? 30000,
+          });
+          return waitPromise.then(() => option.label);
+        });
+
+        stepResult = await Promise.race(racePromises).catch((error) => {
+          throw error;
+        });
+
+        logger.info(`Selector race won by: ${stepResult}`);
+        break;
+      }
       case 'click': {
         const { selector, iframe_selector } = input;
         if (iframe_selector) {
@@ -317,6 +360,14 @@ export async function withBrowserFlow(
         );
       }
       currentStep = next_on_timeout;
+    } else if (next_map && typeof stepResult === 'string') {
+      const nextStep = next_map[stepResult];
+      if (!nextStep) {
+        throw new Error(
+          `Step ${currentStep} result '${stepResult}' not found in next_map`
+        );
+      }
+      currentStep = nextStep;
     } else if (next) {
       currentStep = next;
     }
