@@ -1,3 +1,10 @@
+# [1.49.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.48.0...v1.49.0) (2025-10-08)
+
+
+### Features
+
+* enhance browser flow templates with optional continue buttons and timeout handling ([#184](https://github.com/elephant-xyz/elephant-cli/issues/184)) ([259f16d](https://github.com/elephant-xyz/elephant-cli/commit/259f16dbe916820aef539c8e1ad38b2b20d12dbe))
+
 # [1.48.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.47.0...v1.48.0) (2025-10-03)
 
 
