@@ -56,9 +56,12 @@ describe('Browser Flow Templates', () => {
 
       const workflow = SEARCH_BY_PARCEL_ID.createWorkflow(params, context);
       expect(workflow.starts_at).toBe('open_search_page');
-      expect(workflow.states.open_search_page.next).toBe('enter_parcel_id');
+      expect(workflow.states.open_search_page.next).toBe(
+        'wait_for_search_form_ready'
+      );
       expect(workflow.states.wait_for_button).toBeUndefined();
       expect(workflow.states.click_continue_button).toBeUndefined();
+      expect(workflow.states.check_search_form).toBeUndefined();
     });
 
     it('should create workflow with continue button', () => {
@@ -74,12 +77,17 @@ describe('Browser Flow Templates', () => {
 
       const workflow = SEARCH_BY_PARCEL_ID.createWorkflow(params, context);
       expect(workflow.starts_at).toBe('open_search_page');
-      expect(workflow.states.open_search_page.next).toBe('wait_for_button');
-      expect(workflow.states.wait_for_button).toBeDefined();
-      expect(workflow.states.click_continue_button).toBeDefined();
-      expect((workflow.states.wait_for_button.input as any).selector).toBe(
-        '.continue'
+      expect(workflow.states.open_search_page.next).toBe('race_form_or_button');
+      expect(workflow.states.race_form_or_button).toBeDefined();
+      expect(workflow.states.race_form_or_button.type).toBe(
+        'wait_for_selector_race'
       );
+      expect(workflow.states.click_continue_button).toBeDefined();
+      const raceInput = workflow.states.race_form_or_button.input as any;
+      expect(raceInput.selectors).toHaveLength(2);
+      expect(
+        raceInput.selectors.some((s: any) => s.selector === '.continue')
+      ).toBe(true);
     });
 
     it('should include template syntax in workflow', () => {

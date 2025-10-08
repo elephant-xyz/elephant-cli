@@ -75,16 +75,25 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
       states: {
         open_search_page: {
           type: 'open_page',
-          next: params.continue_button_selector
-            ? 'wait_for_button'
-            : params.continue2_button_selector
-              ? 'wait_for_button2'
-              : 'enter_parcel_id',
+          next:
+            params.continue_button_selector || params.continue2_button_selector
+              ? 'race_form_or_button'
+              : 'wait_for_search_form_ready',
           input: {
             url: context.url,
             timeout: 30000,
             wait_until: 'domcontentloaded',
           },
+        },
+        wait_for_search_form_ready: {
+          type: 'wait_for_selector',
+          input: {
+            selector: params.search_form_selector as string,
+            timeout: 30000,
+            visible: true,
+            iframe_selector: params.iframe_selector as string | undefined,
+          },
+          next: 'enter_parcel_id',
         },
         enter_parcel_id: {
           type: 'type',
@@ -108,7 +117,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           end: !params.property_details_button,
           input: {
             selector: params.search_result_selector as string,
-            timeout: 60000,
+            timeout: 30000,
             visible: true,
             iframe_selector: params.iframe_selector as string | undefined,
           },
@@ -119,73 +128,100 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
       },
     };
 
-    if (params.continue_button_selector) {
-      workflow.states.wait_for_button = {
-        type: 'wait_for_selector',
-        input: {
-          selector: params.continue_button_selector as string,
-          timeout: 15000,
-          visible: true,
-          iframe_selector: params.iframe_selector as string | undefined,
-        },
-        next: 'click_continue_button',
-        result: 'continue_button',
-      };
-      workflow.states.click_continue_button = {
-        type: 'click',
-        input: {
-          selector: '{{=it.continue_button}}',
-          iframe_selector: params.iframe_selector as string | undefined,
-        },
-        next: params.continue2_button_selector
-          ? 'wait_for_button2'
-          : 'wait_for_search_form',
-      };
-      workflow.states.wait_for_search_form = {
-        type: 'wait_for_selector',
-        input: {
+    if (params.continue_button_selector || params.continue2_button_selector) {
+      const raceSelectors = [
+        {
           selector: params.search_form_selector as string,
+          label: 'search_form',
           timeout: 30000,
+        },
+      ];
+
+      if (params.continue_button_selector) {
+        raceSelectors.push({
+          selector: params.continue_button_selector as string,
+          label: 'continue_button',
+          timeout: 30000,
+        });
+      } else if (params.continue2_button_selector) {
+        raceSelectors.push({
+          selector: params.continue2_button_selector as string,
+          label: 'continue_button2',
+          timeout: 30000,
+        });
+      }
+
+      const nextMap: Record<string, string> = {
+        search_form: 'wait_for_search_form_ready',
+      };
+
+      if (params.continue_button_selector) {
+        nextMap.continue_button = 'click_continue_button';
+      } else if (params.continue2_button_selector) {
+        nextMap.continue_button2 = 'click_continue_button2';
+      }
+
+      workflow.states.race_form_or_button = {
+        type: 'wait_for_selector_race',
+        input: {
+          selectors: raceSelectors,
           visible: true,
           iframe_selector: params.iframe_selector as string | undefined,
         },
-        next: 'enter_parcel_id',
+        next_map: nextMap,
       };
     }
 
-    if (params.continue2_button_selector) {
-      workflow.states.wait_for_button2 = {
-        type: 'wait_for_selector',
-        input: {
-          selector: params.continue2_button_selector as string,
-          timeout: 15000,
-          visible: true,
-          iframe_selector: params.iframe_selector as string | undefined,
-        },
-        next: 'click_continue_button2',
-        result: 'continue_button2',
-      };
-      workflow.states.click_continue_button2 = {
+    if (params.continue_button_selector) {
+      workflow.states.click_continue_button = {
         type: 'click',
         input: {
-          selector: '{{=it.continue_button2}}',
+          selector: params.continue_button_selector as string,
           iframe_selector: params.iframe_selector as string | undefined,
         },
-        next: 'wait_for_search_form',
+        next: params.continue2_button_selector
+          ? 'race_form_or_button2'
+          : 'wait_for_search_form_ready',
       };
 
-      if (!params.continue_button_selector) {
-        workflow.states.wait_for_search_form = {
-          type: 'wait_for_selector',
-          input: {
+      if (params.continue2_button_selector) {
+        const race2Selectors = [
+          {
             selector: params.search_form_selector as string,
+            label: 'search_form',
             timeout: 30000,
+          },
+          {
+            selector: params.continue2_button_selector as string,
+            label: 'continue_button2',
+            timeout: 30000,
+          },
+        ];
+
+        workflow.states.race_form_or_button2 = {
+          type: 'wait_for_selector_race',
+          input: {
+            selectors: race2Selectors,
             visible: true,
             iframe_selector: params.iframe_selector as string | undefined,
           },
-          next: 'enter_parcel_id',
+          next_map: {
+            search_form: 'wait_for_search_form_ready',
+            continue_button2: 'click_continue_button2',
+          },
         };
       }
+    }
+
+    if (params.continue2_button_selector) {
+      workflow.states.click_continue_button2 = {
+        type: 'click',
+        input: {
+          selector: params.continue2_button_selector as string,
+          iframe_selector: params.iframe_selector as string | undefined,
+        },
+        next: 'wait_for_search_form_ready',
+      };
     }
 
     if (params.property_details_button) {
@@ -206,7 +242,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           type: 'wait_for_selector',
           input: {
             selector: params.property_details_selector as string,
-            timeout: 60000,
+            timeout: 30000,
             visible: true,
             iframe_selector: params.iframe_selector as string | undefined,
           },
