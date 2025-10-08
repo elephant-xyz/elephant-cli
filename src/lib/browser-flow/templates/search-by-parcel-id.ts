@@ -122,7 +122,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
     if (params.continue_button_selector) {
       const nextAfterButton = params.continue2_button_selector
         ? 'wait_for_button2'
-        : 'enter_parcel_id';
+        : 'wait_for_search_form';
 
       workflow.states.wait_for_button = {
         type: 'wait_for_selector',
@@ -133,7 +133,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'click_continue_button',
-        next_on_timeout: nextAfterButton,
+        next_on_timeout: 'enter_parcel_id',
         result: 'continue_button',
         continue_on_timeout: true,
       };
@@ -144,6 +144,16 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           iframe_selector: params.iframe_selector as string | undefined,
         },
         next: nextAfterButton,
+      };
+      workflow.states.wait_for_search_form = {
+        type: 'wait_for_selector',
+        input: {
+          selector: params.search_form_selector as string,
+          timeout: 30000,
+          visible: true,
+          iframe_selector: params.iframe_selector as string | undefined,
+        },
+        next: 'enter_parcel_id',
       };
     }
 
@@ -167,8 +177,21 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: '{{=it.continue_button2}}',
           iframe_selector: params.iframe_selector as string | undefined,
         },
-        next: 'enter_parcel_id',
+        next: 'wait_for_search_form',
       };
+
+      if (!params.continue_button_selector) {
+        workflow.states.wait_for_search_form = {
+          type: 'wait_for_selector',
+          input: {
+            selector: params.search_form_selector as string,
+            timeout: 30000,
+            visible: true,
+            iframe_selector: params.iframe_selector as string | undefined,
+          },
+          next: 'enter_parcel_id',
+        };
+      }
     }
 
     if (params.property_details_button) {
