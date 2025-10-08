@@ -85,20 +85,6 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
             wait_until: 'domcontentloaded',
           },
         },
-        check_search_form: {
-          type: 'wait_for_selector',
-          input: {
-            selector: params.search_form_selector as string,
-            timeout: 3000,
-            visible: true,
-            iframe_selector: params.iframe_selector as string | undefined,
-          },
-          next: 'wait_for_search_form_ready',
-          next_on_timeout: params.continue_button_selector
-            ? 'wait_for_button'
-            : 'wait_for_button2',
-          continue_on_timeout: true,
-        },
         wait_for_search_form_ready: {
           type: 'wait_for_selector',
           input: {
@@ -141,6 +127,23 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         },
       },
     };
+
+    if (params.continue_button_selector || params.continue2_button_selector) {
+      workflow.states.check_search_form = {
+        type: 'wait_for_selector',
+        input: {
+          selector: params.search_form_selector as string,
+          timeout: 3000,
+          visible: true,
+          iframe_selector: params.iframe_selector as string | undefined,
+        },
+        next: 'wait_for_search_form_ready',
+        next_on_timeout: params.continue_button_selector
+          ? 'wait_for_button'
+          : 'wait_for_button2',
+        continue_on_timeout: true,
+      };
+    }
 
     if (params.continue_button_selector) {
       workflow.states.wait_for_button = {
