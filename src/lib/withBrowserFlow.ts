@@ -303,7 +303,12 @@ export async function withBrowserFlow(
       throw new Error(`Missing result at step ${currentStep}`);
     }
 
-    if (result && !stepResult && continueOnTimeout && next_on_timeout) {
+    if (result && !stepResult && continueOnTimeout) {
+      if (!next_on_timeout) {
+        throw new Error(
+          `Step ${currentStep} timed out with continue_on_timeout, but no next_on_timeout is defined`
+        );
+      }
       currentStep = next_on_timeout;
     } else if (next) {
       currentStep = next;
