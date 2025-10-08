@@ -40,6 +40,7 @@ interface KeyboardPressInput {
 
 type Node = {
   next?: string;
+  next_on_timeout?: string;
   result?: string;
   end?: boolean;
 };
@@ -52,6 +53,7 @@ type OpenPageNode = {
 type WaitForSelectorNode = {
   type: 'wait_for_selector';
   input: WaitForSelectorInput;
+  continue_on_timeout?: boolean;
 } & Node;
 type ClickNode = {
   type: 'click';
@@ -151,7 +153,9 @@ export async function withBrowserFlow(
   let end = false;
   while (!end) {
     const state = workflow.states[currentStep];
-    const { type, input, next, result } = state;
+    const { type, input, next, next_on_timeout, result } = state;
+    const continueOnTimeout =
+      'continue_on_timeout' in state ? state.continue_on_timeout : false;
     for (const [key, value] of Object.entries(input)) {
       if (typeof value === 'string' && value.includes('=it.')) {
         (input as Record<string, any>)[key] =
@@ -215,20 +219,35 @@ export async function withBrowserFlow(
       }
       case 'wait_for_selector': {
         const { selector, timeout, visible, iframe_selector } = input;
-        if (iframe_selector) {
-          const frame = await getFrameBySelector(page, iframe_selector);
-          await frame.waitForSelector(selector, {
-            visible,
-            timeout,
-          });
+        const waitPromise = iframe_selector
+          ? getFrameBySelector(page, iframe_selector).then((frame) =>
+              frame.waitForSelector(selector, {
+                visible,
+                timeout,
+              })
+            )
+          : page.waitForSelector(selector, {
+              visible,
+              timeout,
+            });
+
+        const waitResult = await waitPromise.catch((error) => {
+          const isTimeout =
+            error.message.includes('Waiting for selector') ||
+            error.message.includes('timeout');
+
+          if (continueOnTimeout && isTimeout) {
+            logger.info(
+              `Selector ${selector} timeout, continuing to fallback path`
+            );
+            return null;
+          }
+          throw error;
+        });
+
+        if (waitResult !== null) {
+          stepResult = selector;
         }
-        if (!iframe_selector) {
-          await page.waitForSelector(selector, {
-            visible,
-            timeout,
-          });
-        }
-        stepResult = selector;
         break;
       }
       case 'click': {
@@ -284,12 +303,16 @@ export async function withBrowserFlow(
     if (result && stepResult) {
       executionState[result] = stepResult;
     }
-    if (result && !stepResult) {
+    if (result && !stepResult && !continueOnTimeout) {
       throw new Error(`Missing result at step ${currentStep}`);
     }
-    if (next) {
+
+    if (result && !stepResult && continueOnTimeout && next_on_timeout) {
+      currentStep = next_on_timeout;
+    } else if (next) {
       currentStep = next;
     }
+
     end = state.end ?? false;
   }
   const elapsedMs = Date.now() - startMs;

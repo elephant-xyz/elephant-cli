@@ -108,7 +108,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           end: !params.property_details_button,
           input: {
             selector: params.search_result_selector as string,
-            timeout: 60000,
+            timeout: 30000,
             visible: true,
             iframe_selector: params.iframe_selector as string | undefined,
           },
@@ -120,16 +120,22 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
     };
 
     if (params.continue_button_selector) {
+      const nextAfterButton = params.continue2_button_selector
+        ? 'wait_for_button2'
+        : 'enter_parcel_id';
+
       workflow.states.wait_for_button = {
         type: 'wait_for_selector',
         input: {
           selector: params.continue_button_selector as string,
-          timeout: 15000,
+          timeout: 10000,
           visible: true,
           iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'click_continue_button',
+        next_on_timeout: nextAfterButton,
         result: 'continue_button',
+        continue_on_timeout: true,
       };
       workflow.states.click_continue_button = {
         type: 'click',
@@ -137,19 +143,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: '{{=it.continue_button}}',
           iframe_selector: params.iframe_selector as string | undefined,
         },
-        next: params.continue2_button_selector
-          ? 'wait_for_button2'
-          : 'wait_for_search_form',
-      };
-      workflow.states.wait_for_search_form = {
-        type: 'wait_for_selector',
-        input: {
-          selector: params.search_form_selector as string,
-          timeout: 30000,
-          visible: true,
-          iframe_selector: params.iframe_selector as string | undefined,
-        },
-        next: 'enter_parcel_id',
+        next: nextAfterButton,
       };
     }
 
@@ -158,12 +152,14 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         type: 'wait_for_selector',
         input: {
           selector: params.continue2_button_selector as string,
-          timeout: 15000,
+          timeout: 10000,
           visible: true,
           iframe_selector: params.iframe_selector as string | undefined,
         },
         next: 'click_continue_button2',
+        next_on_timeout: 'enter_parcel_id',
         result: 'continue_button2',
+        continue_on_timeout: true,
       };
       workflow.states.click_continue_button2 = {
         type: 'click',
@@ -171,21 +167,8 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           selector: '{{=it.continue_button2}}',
           iframe_selector: params.iframe_selector as string | undefined,
         },
-        next: 'wait_for_search_form',
+        next: 'enter_parcel_id',
       };
-
-      if (!params.continue_button_selector) {
-        workflow.states.wait_for_search_form = {
-          type: 'wait_for_selector',
-          input: {
-            selector: params.search_form_selector as string,
-            timeout: 30000,
-            visible: true,
-            iframe_selector: params.iframe_selector as string | undefined,
-          },
-          next: 'enter_parcel_id',
-        };
-      }
     }
 
     if (params.property_details_button) {
@@ -206,7 +189,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           type: 'wait_for_selector',
           input: {
             selector: params.property_details_selector as string,
-            timeout: 60000,
+            timeout: 30000,
             visible: true,
             iframe_selector: params.iframe_selector as string | undefined,
           },
