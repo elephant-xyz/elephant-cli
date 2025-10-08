@@ -1,7 +1,7 @@
 import dot from 'dot';
 import { logger } from '../utils/logger.js';
 import { Prepared, ProxyOptions } from './types.js';
-import { Frame, KeyInput, Page } from 'puppeteer';
+import { Frame, KeyInput, Page, TimeoutError } from 'puppeteer';
 import { cleanHtml, createBrowserPage } from './common.js';
 
 type WaitUntil = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
@@ -232,11 +232,7 @@ export async function withBrowserFlow(
             });
 
         const waitResult = await waitPromise.catch((error) => {
-          const isTimeout =
-            error.message.includes('Waiting for selector') ||
-            error.message.includes('timeout');
-
-          if (continueOnTimeout && isTimeout) {
+          if (continueOnTimeout && error instanceof TimeoutError) {
             logger.info(
               `Selector ${selector} timeout, continuing to fallback path`
             );
