@@ -71,6 +71,10 @@ type WaitForSelectorRaceNode = {
   type: 'wait_for_selector_race';
   input: WaitForSelectorRaceInput;
   next_map: Record<string, string>;
+  validate_winner?: Record<
+    string,
+    { check_selector: string; if_exists_goto: string }
+  >;
 } & Omit<Node, 'next'>;
 type ClickNode = {
   type: 'click';
@@ -176,6 +180,8 @@ export async function withBrowserFlow(
     const next_on_timeout =
       'next_on_timeout' in state ? state.next_on_timeout : undefined;
     const next_map = 'next_map' in state ? state.next_map : undefined;
+    const validate_winner =
+      'validate_winner' in state ? state.validate_winner : undefined;
     const continueOnTimeout =
       'continue_on_timeout' in state ? state.continue_on_timeout : false;
     for (const [key, value] of Object.entries(input)) {
@@ -293,6 +299,21 @@ export async function withBrowserFlow(
         });
 
         logger.info(`Selector race won by: ${stepResult}`);
+
+        if (
+          validate_winner &&
+          typeof stepResult === 'string' &&
+          validate_winner[stepResult]
+        ) {
+          const validation = validate_winner[stepResult];
+          const elementExists = await targetFrame.$(validation.check_selector);
+          if (elementExists) {
+            logger.info(
+              `Winner '${stepResult}' validation: found ${validation.check_selector}, redirecting to ${validation.if_exists_goto}`
+            );
+            stepResult = `__validate_redirect__:${validation.if_exists_goto}`;
+          }
+        }
         break;
       }
       case 'click': {
@@ -353,7 +374,14 @@ export async function withBrowserFlow(
     }
 
     const isTimeout = stepResult === '__timeout__';
-    if (isTimeout && continueOnTimeout) {
+    const isValidateRedirect =
+      typeof stepResult === 'string' &&
+      stepResult.startsWith('__validate_redirect__:');
+
+    if (isValidateRedirect && typeof stepResult === 'string') {
+      const redirectTarget = stepResult.split(':')[1];
+      currentStep = redirectTarget;
+    } else if (isTimeout && continueOnTimeout) {
       if (!next_on_timeout) {
         throw new Error(
           `Step ${currentStep} timed out with continue_on_timeout, but no next_on_timeout is defined`

@@ -104,7 +104,7 @@ npx elephant-cli prepare input.zip \
 
 **Note:** The URL is automatically extracted from your input data's `property_seed.json` file and does not need to be specified as a parameter.
 
-**Optional Continue Buttons:** The `continue_button_selector` and `continue2_button_selector` parameters handle intermittent disclaimer/terms acceptance dialogs. The workflow intelligently waits for either the search form or continue buttons to appear, whichever comes first, eliminating unnecessary waiting time. If a button appears, it's clicked and the process repeats until the search form is found. This works efficiently whether buttons are present or not.
+**Optional Continue Buttons:** The `continue_button_selector` and `continue2_button_selector` parameters handle intermittent disclaimer/terms acceptance dialogs. The workflow uses an intelligent race approach: it waits for either the search form or continue button to appear, whichever comes first. If the search form appears but a continue button also exists on the page, the button is prioritized and clicked first. This ensures correct behavior whether buttons are present or not, with zero wasted waiting time.
 
 ### Parameter Validation
 
