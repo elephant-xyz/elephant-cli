@@ -155,10 +155,23 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
         search_form: 'wait_for_search_form_ready',
       };
 
+      const validateWinner: Record<
+        string,
+        { check_selector: string; if_exists_goto: string }
+      > = {};
+
       if (params.continue_button_selector) {
         nextMap.continue_button = 'click_continue_button';
+        validateWinner.search_form = {
+          check_selector: params.continue_button_selector as string,
+          if_exists_goto: 'click_continue_button',
+        };
       } else if (params.continue2_button_selector) {
         nextMap.continue_button2 = 'click_continue_button2';
+        validateWinner.search_form = {
+          check_selector: params.continue2_button_selector as string,
+          if_exists_goto: 'click_continue_button2',
+        };
       }
 
       workflow.states.race_form_or_button = {
@@ -169,6 +182,7 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           iframe_selector: params.iframe_selector as string | undefined,
         },
         next_map: nextMap,
+        validate_winner: validateWinner,
       };
     }
 
@@ -208,6 +222,12 @@ export const SEARCH_BY_PARCEL_ID: BrowserFlowTemplate = {
           next_map: {
             search_form: 'wait_for_search_form_ready',
             continue_button2: 'click_continue_button2',
+          },
+          validate_winner: {
+            search_form: {
+              check_selector: params.continue2_button_selector as string,
+              if_exists_goto: 'click_continue_button2',
+            },
           },
         };
       }
