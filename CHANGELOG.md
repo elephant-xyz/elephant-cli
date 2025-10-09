@@ -1,3 +1,10 @@
+## [1.49.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.49.0...v1.49.1) (2025-10-09)
+
+
+### Bug Fixes
+
+* implement "validation" for continue buttons in browser flow templates ([#185](https://github.com/elephant-xyz/elephant-cli/issues/185)) ([fb8f9ac](https://github.com/elephant-xyz/elephant-cli/commit/fb8f9acd493acec9bdd606c659add142cf03c73e))
+
 # [1.49.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.48.0...v1.49.0) (2025-10-08)
 
 
