@@ -147,7 +147,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     );
     await normalizeInputsForScripts(inputsDir, tempRoot);
 
-    let isSeedMode = false;
+    // let isSeedMode = false;
     if (resolvedScriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
@@ -159,12 +159,12 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     } else {
       logger.info('Processing seed data group...');
       await handleSeedTransform(tempRoot);
-      isSeedMode = true;
+      // isSeedMode = true;
     }
 
-    if (!isSeedMode) {
-      await generateFactSheet(tempRoot);
-    }
+    // if (!isSeedMode) {
+    //   await generateFactSheet(tempRoot);
+    // }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
       zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
