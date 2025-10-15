@@ -112,8 +112,8 @@
     "access": "public"
   },
   "files": [
+    "bin/",
     "dist/",
     "README.md"
   ]
 }
-
