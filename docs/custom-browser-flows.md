@@ -145,6 +145,47 @@ Wait for an element to appear.
     "timeout": 60000,                                // Optional (default: 30000ms)
     "visible": true,                                 // Optional (default: false)
     "iframe_selector": "#iframe-id"                  // Optional: Selector for iframe context
+  },
+  "continue_on_timeout": true,                       // Optional: Continue even if selector times out
+  "next_on_timeout": "fallback_state"                // Optional: State to go to on timeout
+}
+```
+
+**Timeout Handling**: Use `continue_on_timeout: true` to gracefully handle cases where an element might not appear. This is useful for:
+- Optional elements (e.g., disclaimer buttons that may or may not show)
+- Implementing delays without using a selector (wait for a non-existent element)
+- Handling intermittent UI elements
+
+**Important**: When `continue_on_timeout: true` is set, you **must** also specify `next_on_timeout` to define which state to go to when the timeout occurs. If `next_on_timeout` is missing, an error will be thrown.
+
+**Example - Optional Element**:
+```json
+{
+  "wait_for_optional_button": {
+    "type": "wait_for_selector",
+    "input": {
+      "selector": "#disclaimer-button",
+      "timeout": 10000,
+      "visible": true
+    },
+    "continue_on_timeout": true,
+    "next": "click_disclaimer",
+    "next_on_timeout": "enter_search"
+  }
+}
+```
+
+**Example - Delay/Sleep**:
+```json
+{
+  "wait_5_seconds": {
+    "type": "wait_for_selector",
+    "input": {
+      "selector": "#non-existent-element",
+      "timeout": 5000
+    },
+    "continue_on_timeout": true,
+    "next": "next_step"
   }
 }
 ```
