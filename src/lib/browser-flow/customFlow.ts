@@ -45,6 +45,18 @@ const keyboardPressInputSchema = z.object({
   key: z.string().min(1),
 });
 
+const selectorRaceOptionSchema = z.object({
+  selector: z.string().min(1),
+  label: z.string().min(1),
+  timeout: z.number().optional(),
+});
+
+const waitForSelectorRaceInputSchema = z.object({
+  selectors: z.array(selectorRaceOptionSchema).min(1),
+  visible: z.boolean().optional(),
+  iframe_selector: z.string().optional(),
+});
+
 const baseNodeSchema = z.object({
   next: z.string().optional(),
   result: z.string().optional(),
@@ -59,6 +71,8 @@ const openPageNodeSchema = baseNodeSchema.extend({
 const waitForSelectorNodeSchema = baseNodeSchema.extend({
   type: z.literal('wait_for_selector'),
   input: waitForSelectorInputSchema,
+  continue_on_timeout: z.boolean().optional(),
+  next_on_timeout: z.string().optional(),
 });
 
 const clickNodeSchema = baseNodeSchema.extend({
@@ -76,9 +90,26 @@ const keyboardPressNodeSchema = baseNodeSchema.extend({
   input: keyboardPressInputSchema,
 });
 
+const waitForSelectorRaceNodeSchema = z.object({
+  type: z.literal('wait_for_selector_race'),
+  input: waitForSelectorRaceInputSchema,
+  next_map: z.record(z.string()),
+  validate_winner: z
+    .record(
+      z.object({
+        check_selector: z.string().min(1),
+        if_exists_goto: z.string().min(1),
+      })
+    )
+    .optional(),
+  result: z.string().optional(),
+  end: z.boolean().optional(),
+});
+
 const nodeSchema = z.discriminatedUnion('type', [
   openPageNodeSchema,
   waitForSelectorNodeSchema,
+  waitForSelectorRaceNodeSchema,
   clickNodeSchema,
   typeNodeSchema,
   keyboardPressNodeSchema,
@@ -97,7 +128,15 @@ const workflowSchema = z.object({
 
 function validateStateReferences(workflow: {
   starts_at: string;
-  states: Record<string, { next?: string }>;
+  states: Record<
+    string,
+    {
+      next?: string;
+      next_on_timeout?: string;
+      next_map?: Record<string, string>;
+      validate_winner?: Record<string, { if_exists_goto: string }>;
+    }
+  >;
 }): string[] {
   const errors: string[] = [];
   const stateNames = Object.keys(workflow.states);
@@ -115,6 +154,32 @@ function validateStateReferences(workflow: {
       errors.push(
         `State "${stateName}": next references unknown state "${node.next}"`
       );
+    }
+
+    if (node.next_on_timeout && !stateNames.includes(node.next_on_timeout)) {
+      errors.push(
+        `State "${stateName}": next_on_timeout references unknown state "${node.next_on_timeout}"`
+      );
+    }
+
+    if (node.next_map) {
+      for (const [label, targetState] of Object.entries(node.next_map)) {
+        if (!stateNames.includes(targetState)) {
+          errors.push(
+            `State "${stateName}": next_map["${label}"] references unknown state "${targetState}"`
+          );
+        }
+      }
+    }
+
+    if (node.validate_winner) {
+      for (const [label, config] of Object.entries(node.validate_winner)) {
+        if (!stateNames.includes(config.if_exists_goto)) {
+          errors.push(
+            `State "${stateName}": validate_winner["${label}"].if_exists_goto references unknown state "${config.if_exists_goto}"`
+          );
+        }
+      }
     }
   }
 
