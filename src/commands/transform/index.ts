@@ -74,9 +74,6 @@ interface AddressData {
   lot: string | null;
   municipality_name: string | null;
   normalized_address: string | null;
-  address_has_parcel: {
-    '/': string;
-  };
 }
 
 interface ParcelData {
@@ -297,6 +294,9 @@ async function handleSeedTransform(tempRoot: string) {
   const seedRow = parsed[0] as SeedRow;
   const seedJson = JSON.stringify({
     label: 'Seed',
+    address_has_parcel: {
+      '/': './address_to_parcel.json',
+    },
   });
   const relAddressToParcelJson = JSON.stringify({
     from: {
@@ -358,9 +358,6 @@ async function handleSeedTransform(tempRoot: string) {
     lot: null,
     municipality_name: null,
     normalized_address: null,
-    address_has_parcel: {
-      '/': './address_to_parcel.json',
-    },
   };
 
   const parcelData: ParcelData = {
@@ -372,6 +369,28 @@ async function handleSeedTransform(tempRoot: string) {
 
   const addressJson = JSON.stringify(addressData);
   const parcelJson = JSON.stringify(parcelData);
+
+  // Create unnormalized_address.json for backward compatibility
+  const unnormalizedAddressData: Record<string, unknown> = {
+    source_http_request: sourceHttpRequest,
+    request_identifier: seedRow.source_identifier,
+    full_address: seedRow.address,
+    county_jurisdiction: capitalizeWords(seedRow.county),
+  };
+  if (seedRow.longitude && seedRow.latitude) {
+    unnormalizedAddressData.longitude = parseFloat(seedRow.longitude);
+    unnormalizedAddressData.latitude = parseFloat(seedRow.latitude);
+  }
+  const unnormalizedAddressJson = JSON.stringify(unnormalizedAddressData);
+
+  // Create property_seed.json for backward compatibility
+  const propertySeedData: Record<string, unknown> = {
+    source_http_request: sourceHttpRequest,
+    request_identifier: seedRow.source_identifier,
+    parcel_id: seedRow.parcel_id,
+  };
+  const propertySeedJson = JSON.stringify(propertySeedData);
+
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
   const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
@@ -380,6 +399,8 @@ async function handleSeedTransform(tempRoot: string) {
     { name: 'address_to_parcel.json', content: relAddressToParcelJson },
     { name: 'address.json', content: addressJson },
     { name: 'parcel.json', content: parcelJson },
+    { name: 'unnormalized_address.json', content: unnormalizedAddressJson },
+    { name: 'property_seed.json', content: propertySeedJson },
   ];
   await Promise.all(
     fileNameContent.map(async (file) => {
@@ -489,13 +510,20 @@ async function normalizeInputsForScripts(
   };
   await copyIfExists('address.json');
   await copyIfExists('parcel.json');
+  await copyIfExists('unnormalized_address.json');
+  await copyIfExists('property_seed.json');
 
   const entries = await fs.readdir(inputsDir, { withFileTypes: true });
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);
   const htmlOrJson =
     files.find((f) => /\.html?$/i.test(f)) ||
     files.find(
-      (f) => /\.json$/i.test(f) && f !== 'address.json' && f !== 'parcel.json'
+      (f) =>
+        /\.json$/i.test(f) &&
+        f !== 'address.json' &&
+        f !== 'parcel.json' &&
+        f !== 'unnormalized_address.json' &&
+        f !== 'property_seed.json'
     );
   if (htmlOrJson) {
     const destName = /\.html?$/i.test(htmlOrJson) ? 'input.html' : 'input.json';

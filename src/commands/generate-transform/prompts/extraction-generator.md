@@ -106,7 +106,7 @@ You must systematically adhere to these principles:
       - Utilities: from `utilities_data` content (if available in user message)
       - Layout: from `layout_data` content (if available in user message)
       - Property: from `input_file` content
-      - Address: from `address` content and `input_file` content
+      - Address: copy the `unnormalized_address` property from the `address` content if available, OR copy individual address fields (street_number, street_name, city_name, postal_code, etc.) from the `address` content if `unnormalized_address` is not present; DO NOT extract address information from HTML as it contains broken data
       - Tax: from `input_file` content
       - Flood: from `input_file` content
       - Sales: from `input_file` content
@@ -151,7 +151,7 @@ You must systematically adhere to these principles:
 3.  **Output Specification**
     - For each property, generate these files inside the `{data_dir}` directory :
       - `property.json` (This is required for the property data extraction)
-      - `address.json` (fields: street_number, street_name, etc.; extracted with any supporting files as appropriate)
+      - `address.json` (copy `unnormalized_address` OR individual address fields from `address` content; DO NOT extract from HTML)
       - `lot.json`
       - `tax_*.json`
       - `flood_storm_information.json`
