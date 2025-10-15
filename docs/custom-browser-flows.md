@@ -107,12 +107,13 @@ Each state represents a single action and has this structure:
   "type": "action_type",             // Required: Type of action to perform
   "input": { ... },                  // Required: Action-specific parameters
   "next": "next_state_name",         // Optional: Next state to execute
+  "next_map": { ... },               // Optional: For wait_for_selector_race - conditional routing
   "result": "variable_name",         // Optional: Store result in variable
   "end": true                        // Optional: Mark this as final state
 }
 ```
 
-**Important**: Either `next` or `end: true` must be specified (or both, where `end` takes precedence).
+**Important**: Either `next`, `next_map` (for `wait_for_selector_race`), or `end: true` must be specified.
 
 ## Available Actions
 
@@ -187,6 +188,118 @@ Wait for an element to appear.
     "continue_on_timeout": true,
     "next": "next_step",
     "next_on_timeout": "next_step"
+  }
+}
+```
+
+### wait_for_selector_race
+
+Wait for multiple selectors in parallel and proceed with whichever appears first. This is useful for handling pages where different elements might appear depending on the scenario (e.g., a search form might appear immediately, or a disclaimer button might appear first).
+
+```json
+{
+  "type": "wait_for_selector_race",
+  "input": {
+    "selectors": [                                    // Required: Array of selectors to race
+      {
+        "selector": "#search-form",                   // Required: CSS selector
+        "label": "search_form",                       // Required: Label for routing
+        "timeout": 30000                              // Optional (default: 30000ms)
+      },
+      {
+        "selector": "#disclaimer-button",
+        "label": "disclaimer",
+        "timeout": 30000
+      }
+    ],
+    "visible": true,                                  // Optional (default: false)
+    "iframe_selector": "#frame-id"                    // Optional: Selector for iframe context
+  },
+  "next_map": {                                       // Required: Routing based on winner
+    "search_form": "enter_search",
+    "disclaimer": "click_disclaimer"
+  },
+  "validate_winner": {                                // Optional: Post-race validation
+    "search_form": {
+      "check_selector": "#disclaimer-button",         // Check if this also exists
+      "if_exists_goto": "click_disclaimer"            // If yes, go here instead
+    }
+  }
+}
+```
+
+**How It Works**:
+1. All selectors are checked in parallel using `Promise.race()`
+2. The first selector that appears wins the race
+3. The workflow routes to the state specified in `next_map` for that label
+4. **Optional validation**: If `validate_winner` is configured, it checks if another selector also exists and can redirect accordingly
+
+**Winner Validation**: The `validate_winner` feature ensures correct priority when multiple elements are present. For example, if the search form appears first but a disclaimer button also exists on the page, you can redirect to click the disclaimer first.
+
+**Example - Handle Optional Disclaimer**:
+```json
+{
+  "check_page_state": {
+    "type": "wait_for_selector_race",
+    "input": {
+      "selectors": [
+        {
+          "selector": "#search-input",
+          "label": "search_ready",
+          "timeout": 30000
+        },
+        {
+          "selector": "button#accept-terms",
+          "label": "terms_button",
+          "timeout": 30000
+        }
+      ],
+      "visible": true
+    },
+    "next_map": {
+      "search_ready": "enter_search",
+      "terms_button": "click_terms"
+    },
+    "validate_winner": {
+      "search_ready": {
+        "check_selector": "button#accept-terms",
+        "if_exists_goto": "click_terms"
+      }
+    }
+  }
+}
+```
+
+**Example - Multiple Disclaimer Screens**:
+```json
+{
+  "check_for_disclaimers": {
+    "type": "wait_for_selector_race",
+    "input": {
+      "selectors": [
+        {
+          "selector": "#search-form",
+          "label": "form",
+          "timeout": 30000
+        },
+        {
+          "selector": "#disclaimer1",
+          "label": "disclaimer1",
+          "timeout": 30000
+        },
+        {
+          "selector": "#disclaimer2",
+          "label": "disclaimer2",
+          "timeout": 30000
+        }
+      ],
+      "visible": true
+    },
+    "next_map": {
+      "form": "enter_parcel_id",
+      "disclaimer1": "click_disclaimer1",
+      "disclaimer2": "click_disclaimer2"
+    }
   }
 }
 ```
