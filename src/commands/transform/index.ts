@@ -108,7 +108,7 @@ export function registerTransformCommand(program: Command) {
     )
     .option(
       '--input-zip <path>',
-      'Input ZIP for scripts mode (must include address.json, parcel.json, and an HTML/JSON file)'
+      'Input ZIP for scripts mode (must include address.json or unnormalized_address.json, parcel.json or property_seed.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
     .action(async (options: TransformCommandOptions) => {
@@ -419,10 +419,19 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
     logger.warn('No new JSON files detected from scripts execution');
   }
 
-  const addressFile = await fs.readFile(
-    path.join(tempRoot, 'address.json'),
-    'utf-8'
-  );
+  // Try address.json first, fallback to unnormalized_address.json for backward compatibility
+  let addressFile: string;
+  try {
+    addressFile = await fs.readFile(
+      path.join(tempRoot, 'address.json'),
+      'utf-8'
+    );
+  } catch {
+    addressFile = await fs.readFile(
+      path.join(tempRoot, 'unnormalized_address.json'),
+      'utf-8'
+    );
+  }
   const addressJson = JSON.parse(addressFile);
   const sourceHttpRequest = addressJson.source_http_request;
   const requestIdentifier = addressJson.request_identifier;
