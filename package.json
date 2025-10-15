@@ -1,11 +1,11 @@
 {
   "name": "@elephant-xyz/cli",
-  "version": "1.49.1",
+  "version": "1.50.0",
   "description": "CLI tool for Elephant Network",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "elephant-cli": "./dist/index.js"
+    "elephant-cli": "./bin/elephant-cli"
   },
   "exports": {
     ".": {
@@ -112,6 +112,7 @@
     "access": "public"
   },
   "files": [
+    "bin/",
     "dist/",
     "README.md"
   ]
