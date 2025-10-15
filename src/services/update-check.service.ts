@@ -12,12 +12,7 @@ type UpdateCache = {
 const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
 function getCacheDir(): string {
-  const isEphemeral = Boolean(
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-      process.env.AIRFLOW_HOME ||
-      process.env.AIRFLOW__CORE__DAGS_FOLDER ||
-      process.env.AIRFLOW__CORE__EXECUTOR
-  );
+  const isEphemeral = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
   return isEphemeral
     ? path.join('/tmp', 'elephant-cli', 'update-cache')
     : path.join(os.homedir(), '.elephant-cli', 'update-cache');

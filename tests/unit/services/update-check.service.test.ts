@@ -19,6 +19,7 @@ describe('update-check.service', () => {
   let homedirSpy: MockInstance<[], string>;
   let exitSpy: MockInstance<[code?: string | number | null | undefined], never>;
   let dateSpy: MockInstance<[], number>;
+  let warnSpy: MockInstance<unknown[], void>;
   let now: number;
 
   beforeEach(() => {
@@ -37,6 +38,7 @@ describe('update-check.service', () => {
       .mockImplementation(
         (_code?: string | number | null | undefined) => undefined as never
       );
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     now = 1_700_000_000_000; // fixed timestamp
     dateSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
   });
@@ -45,6 +47,7 @@ describe('update-check.service', () => {
     homedirSpy.mockRestore();
     exitSpy.mockRestore();
     dateSpy.mockRestore();
+    warnSpy.mockRestore();
     try {
       fs.rmSync(tmpHome, { recursive: true, force: true });
     } catch {}
@@ -72,9 +75,7 @@ describe('update-check.service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledOnce();
     // message should include npx guidance
-    const warnCalls = (console.warn as unknown as ReturnType<typeof vi.fn>).mock
-      .calls;
-    const printed = warnCalls.map((c) => String(c[0])).join('\n');
+    const printed = warnSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(printed).toContain('npx @elephant-xyz/cli@latest');
   });
 

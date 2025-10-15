@@ -30,8 +30,10 @@ const packageJson = JSON.parse(
 
 const program = new Command();
 
-// Block CLI startup if outdated
-await checkCliUpdate(packageJson.name, packageJson.version);
+// Block CLI startup if outdated, but only when invoked via CLI bin
+if (process.env.ELEPHANT_CLI_ENTRY === '1') {
+  await checkCliUpdate(packageJson.name, packageJson.version);
+}
 
 program
   .name('elephant-cli')
