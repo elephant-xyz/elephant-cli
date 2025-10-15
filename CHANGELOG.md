@@ -1,3 +1,10 @@
+## [1.50.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.0...v1.50.1) (2025-10-15)
+
+
+### Bug Fixes
+
+* Add missing documentation for features of Custom Browser Flows ([#189](https://github.com/elephant-xyz/elephant-cli/issues/189)) ([764ac34](https://github.com/elephant-xyz/elephant-cli/commit/764ac34739eef99eae3ed1315356acb26521ed85))
+
 # [1.50.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.49.1...v1.50.0) (2025-10-15)
 
 
