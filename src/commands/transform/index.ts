@@ -73,7 +73,7 @@ export function registerTransformCommand(program: Command) {
     )
     .option(
       '--input-zip <path>',
-      'Input ZIP for scripts mode (must include unnormalized_address.json, property_seed.json, and an HTML/JSON file)'
+      'Input ZIP for scripts mode (must include address.json, parcel.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
     .action(async (options: TransformCommandOptions) => {
@@ -167,7 +167,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
-      zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
+      // For seed mode, add files at root; for county mode, add in 'data' subdirectory
+      const subdirName = isSeedMode ? undefined : 'data';
+      zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), subdirName);
     }
     zip.writeZip(resolvedOutputZip);
 
@@ -259,18 +261,13 @@ async function handleSeedTransform(tempRoot: string) {
   const seedRow = parsed[0] as SeedRow;
   const seedJson = JSON.stringify({
     label: 'Seed',
-    relationships: {
-      property_seed: {
-        '/': './relationship_property_to_address.json',
-      },
-    },
   });
-  const relJson = JSON.stringify({
+  const relAddressToParcelJson = JSON.stringify({
     from: {
-      '/': './property_seed.json',
+      '/': './address.json',
     },
     to: {
-      '/': './unnormalized_address.json',
+      '/': './parcel.json',
     },
   });
   const sourceHttpRequest: SourceHttpRequest = {
@@ -299,32 +296,54 @@ async function handleSeedTransform(tempRoot: string) {
   if (seedRow.body) {
     sourceHttpRequest.body = seedRow.body;
   }
-  const propSeedJson = JSON.stringify({
-    parcel_id: seedRow.parcel_id,
-    source_http_request: sourceHttpRequest,
-    request_identifier: seedRow.source_identifier,
-  });
   const addressData: any = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
-    full_address: seedRow.address,
-    county_jurisdiction: capitalizeWords(seedRow.county),
+    unnormalized_address: seedRow.address,
+    county_name: capitalizeWords(seedRow.county),
+    city_name: null,
+    country_code: null,
+    latitude: seedRow.latitude ? parseFloat(seedRow.latitude) : null,
+    longitude: seedRow.longitude ? parseFloat(seedRow.longitude) : null,
+    plus_four_postal_code: null,
+    postal_code: null,
+    state_code: null,
+    street_name: null,
+    street_post_directional_text: null,
+    street_pre_directional_text: null,
+    street_number: null,
+    street_suffix_type: null,
+    unit_identifier: null,
+    route_number: null,
+    township: null,
+    range: null,
+    section: null,
+    block: null,
+    lot: null,
+    municipality_name: null,
+    normalized_address: null,
+    address_has_parcel: {
+      '/': './address_to_parcel.json',
+    },
   };
 
-  if (seedRow.longitude && seedRow.latitude) {
-    addressData.longitude = parseFloat(seedRow.longitude);
-    addressData.latitude = parseFloat(seedRow.latitude);
-  }
+  const parcelData = {
+    source_http_request: sourceHttpRequest,
+    request_identifier: seedRow.source_identifier,
+    parcel_identifier: seedRow.parcel_id,
+    formatted_parcel_identifier: null,
+  };
 
   const addressJson = JSON.stringify(addressData);
+  const parcelJson = JSON.stringify(parcelData);
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
   const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
   const fileNameContent: { name: string; content: string }[] = [
     { name: `${seedDataGroupCid}.json`, content: seedJson },
-    { name: 'relationship_property_to_address.json', content: relJson },
-    { name: 'property_seed.json', content: propSeedJson },
-    { name: 'unnormalized_address.json', content: addressJson },
+    { name: 'address_to_parcel.json', content: relAddressToParcelJson },
+    { name: 'address.json', content: addressJson },
+    { name: 'parcel.json', content: parcelJson },
   ];
   await Promise.all(
     fileNameContent.map(async (file) => {
@@ -343,13 +362,13 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
     logger.warn('No new JSON files detected from scripts execution');
   }
 
-  const propertySeed = await fs.readFile(
-    path.join(tempRoot, 'property_seed.json'),
+  const addressFile = await fs.readFile(
+    path.join(tempRoot, 'address.json'),
     'utf-8'
   );
-  const propertySeedJson = JSON.parse(propertySeed);
-  const sourceHttpRequest = propertySeedJson.source_http_request;
-  const requestIdentifier = propertySeedJson.request_identifier;
+  const addressJson = JSON.parse(addressFile);
+  const sourceHttpRequest = addressJson.source_http_request;
+  const requestIdentifier = addressJson.request_identifier;
   const relationshipFiles: string[] = [];
   await Promise.all(
     newJsonRelPaths.map(async (rel) => {
@@ -432,18 +451,15 @@ async function normalizeInputsForScripts(
       logger.warn(`Unable to copy ${src} to ${tempRoot}`);
     }
   };
-  await copyIfExists('unnormalized_address.json');
-  await copyIfExists('property_seed.json');
+  await copyIfExists('address.json');
+  await copyIfExists('parcel.json');
 
   const entries = await fs.readdir(inputsDir, { withFileTypes: true });
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);
   const htmlOrJson =
     files.find((f) => /\.html?$/i.test(f)) ||
     files.find(
-      (f) =>
-        /\.json$/i.test(f) &&
-        f !== 'unnormalized_address.json' &&
-        f !== 'property_seed.json'
+      (f) => /\.json$/i.test(f) && f !== 'address.json' && f !== 'parcel.json'
     );
   if (htmlOrJson) {
     const destName = /\.html?$/i.test(htmlOrJson) ? 'input.html' : 'input.json';

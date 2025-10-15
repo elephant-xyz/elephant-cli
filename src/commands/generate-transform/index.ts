@@ -41,7 +41,7 @@ export function registerGenerateTransformCommand(program: Command): void {
     .description('Generate JavaScript extraction scripts from an input ZIP')
     .argument(
       '<inputZip>',
-      'Path to input ZIP containing unnormalized_address.json, property_seed.json, and an HTML/JSON file'
+      'Path to input ZIP containing address.json, parcel.json, and an HTML/JSON file'
     )
     .option(
       '-o, --output-zip <path>',

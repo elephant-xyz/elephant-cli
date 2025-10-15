@@ -15,8 +15,8 @@ export type ScriptItem = {
 export const AgentStateAnnotation = Annotation.Root({
   tempDir: Annotation<string>,
   inputPaths: Annotation<{
-    unnormalized: string;
-    seed: string;
+    address: string;
+    parcel: string;
     input: string;
     priorScriptsDir?: string;
     priorErrorsPath?: string;
