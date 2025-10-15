@@ -48,6 +48,44 @@ interface SeedRow {
   headers?: string;
 }
 
+interface AddressData {
+  source_http_request: SourceHttpRequest;
+  request_identifier: string;
+  unnormalized_address: string;
+  county_name: string;
+  city_name: string | null;
+  country_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  plus_four_postal_code: string | null;
+  postal_code: string | null;
+  state_code: string | null;
+  street_name: string | null;
+  street_post_directional_text: string | null;
+  street_pre_directional_text: string | null;
+  street_number: string | null;
+  street_suffix_type: string | null;
+  unit_identifier: string | null;
+  route_number: string | null;
+  township: string | null;
+  range: string | null;
+  section: string | null;
+  block: string | null;
+  lot: string | null;
+  municipality_name: string | null;
+  normalized_address: string | null;
+  address_has_parcel: {
+    '/': string;
+  };
+}
+
+interface ParcelData {
+  source_http_request: SourceHttpRequest;
+  request_identifier: string;
+  parcel_identifier: string;
+  formatted_parcel_identifier: string | null;
+}
+
 function capitalizeWords(str: string) {
   return str
     .split(' ')
@@ -294,7 +332,7 @@ async function handleSeedTransform(tempRoot: string) {
   if (seedRow.body) {
     sourceHttpRequest.body = seedRow.body;
   }
-  const addressData: any = {
+  const addressData: AddressData = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     unnormalized_address: seedRow.address,
@@ -325,7 +363,7 @@ async function handleSeedTransform(tempRoot: string) {
     },
   };
 
-  const parcelData = {
+  const parcelData: ParcelData = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     parcel_identifier: seedRow.parcel_id,
