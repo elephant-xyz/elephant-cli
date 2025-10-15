@@ -7,7 +7,6 @@ import { dirname, join } from 'path';
 
 config({ path: '.env' });
 import { registerValidateCommand } from './commands/validate.js';
-import { checkCliUpdate } from './services/update-check.service.js';
 import { registerValidateAndUploadCommand } from './commands/validate-and-upload.js';
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
 import { registerFetchDataCommand } from './commands/fetch-data.js';
@@ -29,11 +28,6 @@ const packageJson = JSON.parse(
 );
 
 const program = new Command();
-
-// Block CLI startup if outdated, but only when invoked via CLI bin
-if (process.env.ELEPHANT_CLI_ENTRY === '1') {
-  await checkCliUpdate(packageJson.name, packageJson.version);
-}
 
 program
   .name('elephant-cli')
