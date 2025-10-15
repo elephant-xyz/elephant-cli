@@ -185,7 +185,8 @@ Wait for an element to appear.
       "timeout": 5000
     },
     "continue_on_timeout": true,
-    "next": "next_step"
+    "next": "next_step",
+    "next_on_timeout": "next_step"
   }
 }
 ```
