@@ -167,9 +167,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
-      // For seed mode, add files at root; for county mode, add in 'data' subdirectory
-      const subdirName = isSeedMode ? undefined : 'data';
-      zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), subdirName);
+      zip.addLocalFile(path.join(tempRoot, OUTPUT_DIR, rel), 'data');
     }
     zip.writeZip(resolvedOutputZip);
 
