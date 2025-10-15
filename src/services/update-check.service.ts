@@ -108,7 +108,7 @@ export async function checkCliUpdate(
   if (
     cache &&
     Number.isFinite(cache.lastChecked) &&
-    cache.latest &&
+    typeof cache.latest === 'string' &&
     now - cache.lastChecked < THIRTY_MINUTES_MS
   ) {
     logger.debug(`Cache hit for ${pkgName}`);
