@@ -67,14 +67,14 @@ export async function prepare(
       await fs.access(path.join(dir, 'parcel.json'));
       hasParcelJson = true;
     } catch {
-      // parcel.json doesn't exist
+      logger.debug('parcel.json not found, will check for property_seed.json');
     }
 
     try {
       await fs.access(path.join(dir, 'property_seed.json'));
       hasPropertySeedJson = true;
     } catch {
-      // property_seed.json doesn't exist
+      logger.debug('property_seed.json not found');
     }
 
     if (!hasParcelJson && !hasPropertySeedJson) {
@@ -108,14 +108,14 @@ export async function prepare(
       await fs.access(path.join(dir, 'address.json'));
       hasAddressJson = true;
     } catch {
-      // address.json doesn't exist
+      logger.debug('address.json not found, will check for unnormalized_address.json');
     }
 
     try {
       await fs.access(path.join(dir, 'unnormalized_address.json'));
       hasUnnormalizedAddressJson = true;
     } catch {
-      // unnormalized_address.json doesn't exist
+      logger.debug('unnormalized_address.json not found');
     }
 
     if (!hasAddressJson && !hasUnnormalizedAddressJson) {
@@ -145,6 +145,7 @@ export async function prepare(
       addressContent = await fs.readFile(addressPath, 'utf-8');
       addressData = JSON.parse(addressContent);
     } catch {
+      logger.debug(`Failed to read ${addressPath}, falling back to unnormalized_address.json`);
       // Fallback to old format
       addressPath = path.join(dir, 'unnormalized_address.json');
       addressContent = await fs.readFile(addressPath, 'utf-8');

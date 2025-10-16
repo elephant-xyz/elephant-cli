@@ -419,6 +419,7 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
     logger.warn('No new JSON files detected from scripts execution');
   }
 
+  // Read source_http_request and request_identifier from address file
   // Try address.json first, fallback to unnormalized_address.json for backward compatibility
   let addressFile: string;
   try {
@@ -435,6 +436,78 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
   const addressJson = JSON.parse(addressFile);
   const sourceHttpRequest = addressJson.source_http_request;
   const requestIdentifier = addressJson.request_identifier;
+
+  // Check for seed files - support both new and old formats
+  let hasAddressJson = false;
+  let hasParcelJson = false;
+  let hasUnnormalizedAddressJson = false;
+  let hasPropertySeedJson = false;
+
+  try {
+    await fs.access(path.join(tempRoot, 'address.json'));
+    hasAddressJson = true;
+  } catch {
+    logger.debug('address.json not found in tempRoot, skipping');
+  }
+
+  try {
+    await fs.access(path.join(tempRoot, 'parcel.json'));
+    hasParcelJson = true;
+  } catch {
+    logger.debug('parcel.json not found in tempRoot, skipping');
+  }
+
+  try {
+    await fs.access(path.join(tempRoot, 'unnormalized_address.json'));
+    hasUnnormalizedAddressJson = true;
+  } catch {
+    logger.debug('unnormalized_address.json not found in tempRoot, skipping');
+  }
+
+  try {
+    await fs.access(path.join(tempRoot, 'property_seed.json'));
+    hasPropertySeedJson = true;
+  } catch {
+    logger.debug('property_seed.json not found in tempRoot, skipping');
+  }
+
+  // Copy seed files to output directory so they get processed through the normal loop
+  if (hasAddressJson) {
+    await fs.copyFile(
+      path.join(tempRoot, 'address.json'),
+      path.join(tempRoot, OUTPUT_DIR, 'address.json')
+    );
+    logger.debug('Copied address.json to output directory for processing');
+  }
+
+  if (hasParcelJson) {
+    await fs.copyFile(
+      path.join(tempRoot, 'parcel.json'),
+      path.join(tempRoot, OUTPUT_DIR, 'parcel.json')
+    );
+    logger.debug('Copied parcel.json to output directory for processing');
+  }
+
+  if (hasUnnormalizedAddressJson) {
+    await fs.copyFile(
+      path.join(tempRoot, 'unnormalized_address.json'),
+      path.join(tempRoot, OUTPUT_DIR, 'unnormalized_address.json')
+    );
+    logger.debug(
+      'Copied unnormalized_address.json to output directory for processing'
+    );
+  }
+
+  if (hasPropertySeedJson) {
+    await fs.copyFile(
+      path.join(tempRoot, 'property_seed.json'),
+      path.join(tempRoot, OUTPUT_DIR, 'property_seed.json')
+    );
+    logger.debug(
+      'Copied property_seed.json to output directory for processing'
+    );
+  }
+
   const relationshipFiles: string[] = [];
   await Promise.all(
     newJsonRelPaths.map(async (rel) => {

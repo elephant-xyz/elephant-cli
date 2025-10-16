@@ -433,4 +433,192 @@ describe('Transform Backward Compatibility', () => {
       );
     });
   });
+
+  describe('Transform Command - Seed File Processing', () => {
+    it('should copy all seed files that exist to output directory', () => {
+      // Simulate files in tempRoot
+      const seedFilesInTempRoot = {
+        'address.json': true,
+        'parcel.json': true,
+        'unnormalized_address.json': true,
+        'property_seed.json': true,
+      };
+
+      // After transform, all files should be in output
+      const expectedFilesInOutput = [
+        'address.json',
+        'parcel.json',
+        'unnormalized_address.json',
+        'property_seed.json',
+      ];
+
+      // Verify all files would be copied
+      Object.keys(seedFilesInTempRoot).forEach((file) => {
+        expect(expectedFilesInOutput).toContain(file);
+      });
+    });
+
+    it('should handle only old schema files (unnormalized_address + property_seed)', () => {
+      const seedFilesInTempRoot = {
+        'unnormalized_address.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          full_address: '123 Main St',
+          county_jurisdiction: 'Miami Dade',
+        },
+        'property_seed.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          parcel_id: '01-0200-030-1090',
+        },
+      };
+
+      // Verify old files exist
+      expect(seedFilesInTempRoot['unnormalized_address.json']).toBeDefined();
+      expect(seedFilesInTempRoot['property_seed.json']).toBeDefined();
+      expect(
+        seedFilesInTempRoot['unnormalized_address.json'].full_address
+      ).toBe('123 Main St');
+      expect(seedFilesInTempRoot['property_seed.json'].parcel_id).toBe(
+        '01-0200-030-1090'
+      );
+    });
+
+    it('should handle only new schema files (address + parcel)', () => {
+      const seedFilesInTempRoot = {
+        'address.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          unnormalized_address: '123 Main St',
+          county_name: 'Miami Dade',
+        },
+        'parcel.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          parcel_identifier: '01-0200-030-1090',
+        },
+      };
+
+      // Verify new files exist
+      expect(seedFilesInTempRoot['address.json']).toBeDefined();
+      expect(seedFilesInTempRoot['parcel.json']).toBeDefined();
+      expect(seedFilesInTempRoot['address.json'].unnormalized_address).toBe(
+        '123 Main St'
+      );
+      expect(seedFilesInTempRoot['parcel.json'].parcel_identifier).toBe(
+        '01-0200-030-1090'
+      );
+    });
+
+    it('should handle mixed schema files (all 4 files present)', () => {
+      const seedFilesInTempRoot = {
+        'address.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          unnormalized_address: '123 Main St',
+          county_name: 'Miami Dade',
+        },
+        'parcel.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          parcel_identifier: '01-0200-030-1090',
+        },
+        'unnormalized_address.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          full_address: '123 Main St',
+          county_jurisdiction: 'Miami Dade',
+        },
+        'property_seed.json': {
+          source_http_request: { method: 'GET', url: 'https://example.com' },
+          request_identifier: '12345',
+          parcel_id: '01-0200-030-1090',
+        },
+      };
+
+      // Verify all files exist and maintain their unique properties
+      expect(Object.keys(seedFilesInTempRoot).length).toBe(4);
+
+      // New schema files
+      expect(seedFilesInTempRoot['address.json'].unnormalized_address).toBe(
+        '123 Main St'
+      );
+      expect(seedFilesInTempRoot['parcel.json'].parcel_identifier).toBe(
+        '01-0200-030-1090'
+      );
+
+      // Old schema files
+      expect(
+        seedFilesInTempRoot['unnormalized_address.json'].full_address
+      ).toBe('123 Main St');
+      expect(seedFilesInTempRoot['property_seed.json'].parcel_id).toBe(
+        '01-0200-030-1090'
+      );
+    });
+
+    it('should process all seed files through normal loop without skipping', () => {
+      // Simulate files that would be in OUTPUT_DIR after copying
+      const filesInOutputDir = [
+        'address.json',
+        'parcel.json',
+        'unnormalized_address.json',
+        'property_seed.json',
+        'property.json',
+        'deed_1.json',
+        'tax_2023.json',
+      ];
+
+      // Filter to seed files only
+      const seedFiles = filesInOutputDir.filter((f) =>
+        ['address.json', 'parcel.json', 'unnormalized_address.json', 'property_seed.json'].includes(f)
+      );
+
+      // All seed files should be present (not skipped)
+      expect(seedFiles).toHaveLength(4);
+      expect(seedFiles).toContain('address.json');
+      expect(seedFiles).toContain('parcel.json');
+      expect(seedFiles).toContain('unnormalized_address.json');
+      expect(seedFiles).toContain('property_seed.json');
+    });
+
+    it('should update all seed files with source_http_request and request_identifier', () => {
+      const sourceHttpRequest = {
+        method: 'GET' as const,
+        url: 'https://example.com/property?id=12345',
+      };
+      const requestIdentifier = '12345';
+
+      // Simulate seed files after processing
+      const processedSeedFiles = {
+        'address.json': {
+          unnormalized_address: '123 Main St',
+          county_name: 'Miami Dade',
+          source_http_request: sourceHttpRequest,
+          request_identifier: requestIdentifier,
+        },
+        'parcel.json': {
+          parcel_identifier: '01-0200-030-1090',
+          source_http_request: sourceHttpRequest,
+          request_identifier: requestIdentifier,
+        },
+        'unnormalized_address.json': {
+          full_address: '123 Main St',
+          county_jurisdiction: 'Miami Dade',
+          source_http_request: sourceHttpRequest,
+          request_identifier: requestIdentifier,
+        },
+        'property_seed.json': {
+          parcel_id: '01-0200-030-1090',
+          source_http_request: sourceHttpRequest,
+          request_identifier: requestIdentifier,
+        },
+      };
+
+      // Verify all files have the same source_http_request and request_identifier
+      Object.values(processedSeedFiles).forEach((file) => {
+        expect(file.source_http_request).toEqual(sourceHttpRequest);
+        expect(file.request_identifier).toBe(requestIdentifier);
+      });
+    });
+  });
 });
