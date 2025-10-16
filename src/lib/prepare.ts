@@ -56,31 +56,108 @@ export async function prepare(
   try {
     const dir = await extractZipToTemp(inputZip, root);
 
-    const seed = await fs.readFile(
-      path.join(dir, 'property_seed.json'),
-      'utf-8'
-    );
+    // Check for parcel files - support both new and old formats
+    // Read from parcel.json first, fallback to property_seed.json
+    let parcelFile: string;
+    let parcelFileName: string;
+    let hasParcelJson = false;
+    let hasPropertySeedJson = false;
+
     try {
-      await fs.access(path.join(dir, 'unnormalized_address.json'));
+      await fs.access(path.join(dir, 'parcel.json'));
+      hasParcelJson = true;
     } catch {
-      console.error(
-        chalk.red('unnormalized_address.json is missing in the input zip')
-      );
-      throw new Error('unnormalized_address.json is missing in the input zip');
+      logger.debug('parcel.json not found, will check for property_seed.json');
     }
 
-    const obj = JSON.parse(seed) as Record<string, unknown>;
+    try {
+      await fs.access(path.join(dir, 'property_seed.json'));
+      hasPropertySeedJson = true;
+    } catch {
+      logger.debug('property_seed.json not found');
+    }
+
+    if (!hasParcelJson && !hasPropertySeedJson) {
+      console.error(
+        chalk.red(
+          'Neither parcel.json nor property_seed.json found in input zip'
+        )
+      );
+      throw new Error(
+        'Neither parcel.json nor property_seed.json found in input zip'
+      );
+    }
+
+    // Read the parcel file (prefer new format)
+    if (hasParcelJson) {
+      parcelFile = await fs.readFile(path.join(dir, 'parcel.json'), 'utf-8');
+      parcelFileName = 'parcel.json';
+    } else {
+      parcelFile = await fs.readFile(
+        path.join(dir, 'property_seed.json'),
+        'utf-8'
+      );
+      parcelFileName = 'property_seed.json';
+    }
+
+    // Check for address files - support both new and old formats
+    let hasAddressJson = false;
+    let hasUnnormalizedAddressJson = false;
+
+    try {
+      await fs.access(path.join(dir, 'address.json'));
+      hasAddressJson = true;
+    } catch {
+      logger.debug(
+        'address.json not found, will check for unnormalized_address.json'
+      );
+    }
+
+    try {
+      await fs.access(path.join(dir, 'unnormalized_address.json'));
+      hasUnnormalizedAddressJson = true;
+    } catch {
+      logger.debug('unnormalized_address.json not found');
+    }
+
+    if (!hasAddressJson && !hasUnnormalizedAddressJson) {
+      console.error(
+        chalk.red(
+          'Neither address.json nor unnormalized_address.json found in input zip'
+        )
+      );
+      throw new Error(
+        'Neither address.json nor unnormalized_address.json found in input zip'
+      );
+    }
+
+    const obj = JSON.parse(parcelFile) as Record<string, unknown>;
     const req = obj.source_http_request as Request | undefined;
     const requestId = obj.request_identifier as string | undefined;
-    if (!req) throw new Error('property_seed.json missing source_http_request');
+    if (!req) throw new Error(`${parcelFileName} missing source_http_request`);
     if (!requestId)
-      throw new Error('property_seed.json missing request_identifier');
+      throw new Error(`${parcelFileName} missing request_identifier`);
 
     // Check for Orange County hardcoded flow
-    const addressPath = path.join(dir, 'unnormalized_address.json');
-    const addressContent = await fs.readFile(addressPath, 'utf-8');
-    const addressData = JSON.parse(addressContent);
-    const isOrangeCounty = addressData.county_jurisdiction === 'Orange';
+    // Try new address.json first, fallback to old unnormalized_address.json
+    let addressPath = path.join(dir, 'address.json');
+    let addressContent: string;
+    let addressData: Record<string, unknown>;
+    try {
+      addressContent = await fs.readFile(addressPath, 'utf-8');
+      addressData = JSON.parse(addressContent);
+    } catch {
+      logger.debug(
+        `Failed to read ${addressPath}, falling back to unnormalized_address.json`
+      );
+      // Fallback to old format
+      addressPath = path.join(dir, 'unnormalized_address.json');
+      addressContent = await fs.readFile(addressPath, 'utf-8');
+      addressData = JSON.parse(addressContent);
+    }
+    const isOrangeCounty =
+      addressData.county_name === 'Orange' ||
+      addressData.county_jurisdiction === 'Orange';
 
     let prepared;
 
@@ -141,29 +218,89 @@ export async function prepare(
       // Parse the final URL into a request object
       const finalRequest = parseUrlToRequest(prepared.finalUrl);
 
-      // Update property_seed.json
-      const seedPath = path.join(root, 'property_seed.json');
-      const seedContent = await fs.readFile(seedPath, 'utf-8');
-      const seedData = JSON.parse(seedContent);
+      // Update parcel files independently - maintain both if both exist
+      // Update parcel.json if it exists
+      if (hasParcelJson) {
+        const parcelJsonPath = path.join(dir, 'parcel.json');
+        const parcelJsonContent = await fs.readFile(parcelJsonPath, 'utf-8');
+        const parcelJsonData = JSON.parse(parcelJsonContent);
 
-      // Rename source_http_request to entry_http_request and add new source_http_request
-      seedData.entry_http_request = seedData.source_http_request;
-      seedData.source_http_request = finalRequest;
+        parcelJsonData.entry_http_request = parcelJsonData.source_http_request;
+        parcelJsonData.source_http_request = finalRequest;
 
-      await fs.writeFile(seedPath, JSON.stringify(seedData, null, 2), 'utf-8');
-
-      // Also update unnormalized_address.json to include the entry_http_request info
-      // If address file has source_http_request, rename it to entry_http_request
-      if (addressData.source_http_request) {
-        addressData.entry_http_request = addressData.source_http_request;
-        addressData.source_http_request = finalRequest;
+        await fs.writeFile(
+          path.join(root, 'parcel.json'),
+          JSON.stringify(parcelJsonData, null, 2),
+          'utf-8'
+        );
       }
 
-      await fs.writeFile(
-        path.join(root, 'unnormalized_address.json'),
-        JSON.stringify(addressData, null, 2),
-        'utf-8'
-      );
+      // Update property_seed.json if it exists
+      if (hasPropertySeedJson) {
+        const propertySeedJsonPath = path.join(dir, 'property_seed.json');
+        const propertySeedJsonContent = await fs.readFile(
+          propertySeedJsonPath,
+          'utf-8'
+        );
+        const propertySeedJsonData = JSON.parse(propertySeedJsonContent);
+
+        propertySeedJsonData.entry_http_request =
+          propertySeedJsonData.source_http_request;
+        propertySeedJsonData.source_http_request = finalRequest;
+
+        await fs.writeFile(
+          path.join(root, 'property_seed.json'),
+          JSON.stringify(propertySeedJsonData, null, 2),
+          'utf-8'
+        );
+      }
+
+      // Update address files independently - maintain both if both exist
+      // Update address.json if it exists
+      if (hasAddressJson) {
+        const addressJsonPath = path.join(dir, 'address.json');
+        const addressJsonContent = await fs.readFile(addressJsonPath, 'utf-8');
+        const addressJsonData = JSON.parse(addressJsonContent);
+
+        if (addressJsonData.source_http_request) {
+          addressJsonData.entry_http_request =
+            addressJsonData.source_http_request;
+          addressJsonData.source_http_request = finalRequest;
+        }
+
+        await fs.writeFile(
+          path.join(root, 'address.json'),
+          JSON.stringify(addressJsonData, null, 2),
+          'utf-8'
+        );
+      }
+
+      // Update unnormalized_address.json if it exists
+      if (hasUnnormalizedAddressJson) {
+        const unnormalizedAddressJsonPath = path.join(
+          dir,
+          'unnormalized_address.json'
+        );
+        const unnormalizedAddressJsonContent = await fs.readFile(
+          unnormalizedAddressJsonPath,
+          'utf-8'
+        );
+        const unnormalizedAddressJsonData = JSON.parse(
+          unnormalizedAddressJsonContent
+        );
+
+        if (unnormalizedAddressJsonData.source_http_request) {
+          unnormalizedAddressJsonData.entry_http_request =
+            unnormalizedAddressJsonData.source_http_request;
+          unnormalizedAddressJsonData.source_http_request = finalRequest;
+        }
+
+        await fs.writeFile(
+          path.join(root, 'unnormalized_address.json'),
+          JSON.stringify(unnormalizedAddressJsonData, null, 2),
+          'utf-8'
+        );
+      }
     }
 
     const zip = new AdmZip();

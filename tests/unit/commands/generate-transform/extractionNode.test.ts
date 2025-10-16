@@ -43,8 +43,8 @@ describe('extractionNode', () => {
   let tempDir: string;
   const filenames = {
     INPUT_FILE: 'input.html',
-    UNNORMALIZED_ADDRESS: 'unnormalized_address.json',
-    PROPERTY_SEED: 'property_seed.json',
+    ADDRESS: 'address.json',
+    PARCEL: 'parcel.json',
     UTILITIES_DATA: 'utilities.json',
     LAYOUT_DATA: 'layout.json',
     DATA_EXTRACTOR_SCRIPT: 'scripts/data_extractor.js',
@@ -56,8 +56,8 @@ describe('extractionNode', () => {
   const baseState = {
     tempDir: '',
     inputPaths: {
-      unnormalized: '',
-      seed: '',
+      address: '',
+      parcel: '',
       html: '',
     },
     filenames: filenames,
@@ -79,11 +79,11 @@ describe('extractionNode', () => {
       '<html>hi</html>'
     );
     await fs.writeFile(
-      path.join(tempDir, filenames.UNNORMALIZED_ADDRESS),
+      path.join(tempDir, filenames.ADDRESS),
       '{"street":"123 Main St"}'
     );
     await fs.writeFile(
-      path.join(tempDir, filenames.PROPERTY_SEED),
+      path.join(tempDir, filenames.PARCEL),
       '{"apn":"000-000-000"}'
     );
 
@@ -116,8 +116,8 @@ describe('extractionNode', () => {
     expect(firstCall).toBeDefined();
     const generatorMsg = firstCall[1] as string;
     expect(generatorMsg).toContain('<input_file>');
-    expect(generatorMsg).toContain('<unnormalized_address>');
-    expect(generatorMsg).toContain('<property_seed>');
+    expect(generatorMsg).toContain('<address>');
+    expect(generatorMsg).toContain('<parcel>');
     // Optional blocks should be omitted when not present
     expect(generatorMsg).not.toContain('<utilities_data>');
     expect(generatorMsg).not.toContain('<layout_data>');

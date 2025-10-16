@@ -124,7 +124,7 @@ describe('processSinglePropertyInput', () => {
         name: 'bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe.json',
         isDirectory: () => false,
       },
-      { name: 'property_seed.json', isDirectory: () => false },
+      { name: 'parcel.json', isDirectory: () => false },
       { name: 'other_schema.json', isDirectory: () => false },
     ] as any);
 

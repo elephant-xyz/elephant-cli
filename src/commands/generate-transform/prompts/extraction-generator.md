@@ -99,14 +99,14 @@ You must systematically adhere to these principles:
       <file_schema>
       {file_schema}
       </file_schema>
-    - Analyze the provided file contents (`input_file`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
+    - Analyze the provided file contents (`input_file`, `address`, `parcel`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
     - The file contents are already provided to you in the user message - you don't need to read them.
     - Explicitly note for each target data area the exact supporting data source(s):
       - Owners: from `owner_data` content (if available in user message)
       - Utilities: from `utilities_data` content (if available in user message)
       - Layout: from `layout_data` content (if available in user message)
       - Property: from `input_file` content
-      - Address: from `unnormalized_address` content and `input_file` content
+      - Address: copy the `unnormalized_address` property from the `address` content if available, OR copy individual address fields (street_number, street_name, city_name, postal_code, etc.) from the `address` content if `unnormalized_address` is not present; DO NOT extract address information from HTML as it contains broken data
       - Tax: from `input_file` content
       - Flood: from `input_file` content
       - Sales: from `input_file` content
@@ -125,7 +125,7 @@ You must systematically adhere to these principles:
 
 2.  **Script Development or Update**
     - Modify or create `{data_extractor_script}` only if it does not exist or per evaluator agent feedback.
-    - Scripts should read input file from `{input_file}`, `{unnormalized_address_file}`, `{property_seed_file}` and write output files to `{data_dir}/`.
+    - Scripts should read input file from `{input_file}`, `{address_file}`, `{parcel_file}` and write output files to `{data_dir}/`.
     - DO NOT create any input files. They are already created and the content is provided in the user message.
     - Make sure, that the scripts extracts all the required data from the designated sources above for each data area.
     - Before any coding, map how each schema field will be extracted from the appropriate source via step-by-step reasoning.
@@ -151,7 +151,7 @@ You must systematically adhere to these principles:
 3.  **Output Specification**
     - For each property, generate these files inside the `{data_dir}` directory :
       - `property.json` (This is required for the property data extraction)
-      - `address.json` (fields: street_number, street_name, etc.; extracted with any supporting files as appropriate)
+      - `address.json` (copy `unnormalized_address` OR individual address fields from `address` content; DO NOT extract from HTML)
       - `lot.json`
       - `tax_*.json`
       - `flood_storm_information.json`

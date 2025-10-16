@@ -19,7 +19,7 @@ Start with a concise checklist (3-7 bullets) of your conceptual validation actio
 
 For each sampled property, proceed as follows:
 
-1. Examine the input content (provided in user message as `input_file`, `unnormalized_address`, `property_seed`, `owner_data`, `utilities_data`, `layout_data`), and their corresponding outputs from `{data_dir}/`.
+1. Examine the input content (provided in user message as `input_file`, `address`, `parcel`, `owner_data`, `utilities_data`, `layout_data`), and their corresponding outputs from `{data_dir}/`.
 
 - Use `list_dir` tool to list files in the data directory.
 - Use `read_file` tool to access output files from `{data_dir}/` directory for evaluation.
@@ -72,7 +72,7 @@ For each sampled property, proceed as follows:
    - **Tax History Validation:** List years in input; cross-check with `tax_*.json`. Confirm a matching file exists for every year, with no duplicates or omissions.
    - **Owner Validation:** Verify each owner has exactly one corresponding `person_*.json` or `company_*.json` file.
    - **Relationship Validation:** Match each `sales_*.json` entry to its `relationship_sales_*_person/company_*.json` files, ensuring buyer(s) link precisely.
-   - **Address Validation:** Extract individual address fields from input and match them against `address.json`, confirming each component (street_number, street_name, unit_identifier, city_name, postal_code from `unnoramlized_address.json`, state_code, street_pre_directional_text, street_post_directional_text, street_suffix_type, latitude/longitude if present).
+   - **Address Validation:** Verify that the output `address.json` contains either: (1) the `unnormalized_address` property copied from the input `address` content, OR (2) individual address fields (street_number, street_name, city_name, etc.) copied from the input `address` content. Having `unnormalized_address` is not mandatory if individual address fields are populated. Do NOT extract address information from HTML as it contains broken data.
    - **Property Validation:** Extract property fields from input and match them against `property.json`, confirming each component.
    - **Structure Validation:** Extract structure fields from input and match them against `structure.json`, confirming each component.
    - **Utility Validation:** Extract utility fields from input and match them against `utility.json`, confirming each component.

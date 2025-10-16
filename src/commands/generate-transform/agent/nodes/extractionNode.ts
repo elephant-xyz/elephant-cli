@@ -46,8 +46,8 @@ export async function extractionNode(
     file_schema: state.schemas?.file,
     // Add filename variables
     input_file: state.filenames.INPUT_FILE,
-    unnormalized_address_file: state.filenames.UNNORMALIZED_ADDRESS,
-    property_seed_file: state.filenames.PROPERTY_SEED,
+    address_file: state.filenames.ADDRESS,
+    parcel_file: state.filenames.PARCEL,
     utilities_data_file: state.filenames.UTILITIES_DATA,
     layout_data_file: state.filenames.LAYOUT_DATA,
     data_extractor_script: state.filenames.DATA_EXTRACTOR_SCRIPT,
@@ -116,20 +116,17 @@ export async function extractionNode(
   } as const;
 
   let inputFileContent = '';
-  let unnormalizedAddressContent = '';
-  let propertySeedContent = '';
+  let addressContent = '';
+  let parcelContent = '';
 
   const inputFilePath = path.join(state.tempDir, state.filenames.INPUT_FILE);
   inputFileContent = await fs.readFile(inputFilePath, 'utf-8');
 
-  const unnormalizedPath = path.join(
-    state.tempDir,
-    state.filenames.UNNORMALIZED_ADDRESS
-  );
-  unnormalizedAddressContent = await fs.readFile(unnormalizedPath, 'utf-8');
+  const addressPath = path.join(state.tempDir, state.filenames.ADDRESS);
+  addressContent = await fs.readFile(addressPath, 'utf-8');
 
-  const seedPath = path.join(state.tempDir, state.filenames.PROPERTY_SEED);
-  propertySeedContent = await fs.readFile(seedPath, 'utf-8');
+  const parcelPath = path.join(state.tempDir, state.filenames.PARCEL);
+  parcelContent = await fs.readFile(parcelPath, 'utf-8');
 
   let utilitiesDataContent = '';
   let layoutDataContent = '';
@@ -191,13 +188,13 @@ Available file contents:
 ${inputFileContent || 'File not available'}
 </input_file>
 
-<unnormalized_address>
-${unnormalizedAddressContent || 'File not available'}
-</unnormalized_address>
+<address>
+${addressContent || 'File not available'}
+</address>
 
-<property_seed>
-${propertySeedContent || 'File not available'}
-</property_seed>
+<parcel>
+${parcelContent || 'File not available'}
+</parcel>
 
 
 ${
@@ -272,13 +269,13 @@ Available input file contents:
 ${inputFileContent || 'File not available'}
 </input_file>
 
-<unnormalized_address>
-${unnormalizedAddressContent || 'File not available'}
-</unnormalized_address>
+<address>
+${addressContent || 'File not available'}
+</address>
 
-<property_seed>
-${propertySeedContent || 'File not available'}
-</property_seed>
+<parcel>
+${parcelContent || 'File not available'}
+</parcel>
 
 ${
   utilitiesDataContent

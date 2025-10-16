@@ -4,8 +4,8 @@
 const FILENAMES = {
   // Input files
   INPUT_FILE: 'input.html',
-  UNNORMALIZED_ADDRESS: 'unnormalized_address.json',
-  PROPERTY_SEED: 'property_seed.json',
+  ADDRESS: 'address.json',
+  PARCEL: 'parcel.json',
 
   // Owner data files
   OWNER_DATA: 'owners/owner_data.json',

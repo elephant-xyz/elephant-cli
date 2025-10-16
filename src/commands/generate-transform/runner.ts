@@ -12,8 +12,8 @@ import { buildFilename } from './config/filenames.js';
 import chalk from 'chalk';
 
 export type DiscoverResult = {
-  unnormalized: string;
-  seed: string;
+  address: string;
+  parcel: string;
   input: string;
   priorScriptsDir?: string;
   priorErrorsPath?: string;
@@ -24,22 +24,20 @@ export async function discoverRequiredFiles(
 ): Promise<DiscoverResult> {
   const list = await fs.readdir(root, { withFileTypes: true });
   const files = list.filter((d) => d.isFile()).map((d) => d.name);
-  const unnormalized = files.find(
-    (f) => f.toLowerCase() === 'unnormalized_address.json'
-  );
-  const seed = files.find((f) => f.toLowerCase() === 'property_seed.json');
+  const address = files.find((f) => f.toLowerCase() === 'address.json');
+  const parcel = files.find((f) => f.toLowerCase() === 'parcel.json');
   const input =
     files.find((f) => /\.html?$/i.test(f)) ||
     files.find(
       (f) =>
         f.toLowerCase().endsWith('.json') &&
-        f !== 'unnormalized_address.json' &&
-        f !== 'property_seed.json'
+        f !== 'address.json' &&
+        f !== 'parcel.json'
     );
-  if (!unnormalized || !seed || !input) {
+  if (!address || !parcel || !input) {
     console.error(
       chalk.red(
-        'Input should contain unnormalized_address.json, property_seed.json, and an HTML/JSON file'
+        'Input should contain address.json, parcel.json, and an HTML/JSON file'
       )
     );
     throw new Error('E_INPUT_MISSING');
@@ -64,8 +62,8 @@ export async function discoverRequiredFiles(
     files.find((f) => /(?:validation|submit).*errors.*\.csv$/i.test(f)) ||
     files.find((f) => /errors\.csv$/i.test(f));
   return {
-    unnormalized: path.join(root, unnormalized),
-    seed: path.join(root, seed),
+    address: path.join(root, address),
+    parcel: path.join(root, parcel),
     input: inputFileName,
     priorScriptsDir,
     priorErrorsPath: errorCsv ? path.join(root, errorCsv) : undefined,
@@ -170,26 +168,26 @@ export async function generateTransform(
   unzipTo(inputZip, tempRoot);
 
   report({ kind: 'phase', phase: 'discovering' });
-  const { unnormalized, seed, input, priorScriptsDir, priorErrorsPath } =
+  const { address, parcel, input, priorScriptsDir, priorErrorsPath } =
     await discoverRequiredFiles(tempRoot);
 
   // Ensure JSON inputs are available at stable paths in temp root (keep originals intact)
-  const unnormalizedTarget = path.join(tempRoot, 'unnormalized_address.json');
-  if (unnormalized !== unnormalizedTarget) {
+  const addressTarget = path.join(tempRoot, 'address.json');
+  if (address !== addressTarget) {
     try {
-      await fs.copyFile(unnormalized, unnormalizedTarget);
+      await fs.copyFile(address, addressTarget);
     } catch {
-      const buf = await fs.readFile(unnormalized);
-      await fs.writeFile(unnormalizedTarget, buf);
+      const buf = await fs.readFile(address);
+      await fs.writeFile(addressTarget, buf);
     }
   }
-  const seedTarget = path.join(tempRoot, 'property_seed.json');
-  if (seed !== seedTarget) {
+  const parcelTarget = path.join(tempRoot, 'parcel.json');
+  if (parcel !== parcelTarget) {
     try {
-      await fs.copyFile(seed, seedTarget);
+      await fs.copyFile(parcel, parcelTarget);
     } catch {
-      const buf = await fs.readFile(seed);
-      await fs.writeFile(seedTarget, buf);
+      const buf = await fs.readFile(parcel);
+      await fs.writeFile(parcelTarget, buf);
     }
   }
   const filenames = buildFilename(input);
@@ -205,8 +203,8 @@ export async function generateTransform(
   const state: AgentState = {
     tempDir: tempRoot,
     inputPaths: {
-      unnormalized: unnormalizedTarget,
-      seed: seedTarget,
+      address: addressTarget,
+      parcel: parcelTarget,
       input: input,
       priorScriptsDir,
       priorErrorsPath,
