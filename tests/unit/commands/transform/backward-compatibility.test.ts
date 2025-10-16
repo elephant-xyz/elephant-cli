@@ -21,7 +21,7 @@ describe('Transform Backward Compatibility', () => {
       expect((oldAddressData as any).county_name).toBeUndefined();
     });
 
-    it('should handle new schema file structure (address.json)', () => {
+    it('should handle new schema file structure (address.json with unnormalized format)', () => {
       const newAddressData = {
         source_http_request: {
           method: 'GET',
@@ -30,15 +30,55 @@ describe('Transform Backward Compatibility', () => {
         request_identifier: '12345',
         unnormalized_address: '123 Main St',
         county_name: 'Miami Dade',
-        city_name: null,
-        state_code: null,
       };
 
-      // Verify new schema structure
+      // Verify new schema structure (oneOf Option 1: unnormalized format)
       expect(newAddressData.unnormalized_address).toBe('123 Main St');
       expect(newAddressData.county_name).toBe('Miami Dade');
+      expect(newAddressData.source_http_request).toBeDefined();
+      expect(newAddressData.request_identifier).toBe('12345');
       expect((newAddressData as any).full_address).toBeUndefined();
       expect((newAddressData as any).county_jurisdiction).toBeUndefined();
+    });
+
+    it('should handle new schema with all required fields for unnormalized format', () => {
+      // This tests the complete unnormalized format (oneOf Option 1)
+      // which requires: source_http_request, request_identifier, county_name, unnormalized_address
+      const newAddressData = {
+        source_http_request: {
+          method: 'GET' as const,
+          url: 'https://example.com/property?parcel=12345',
+          multiValueQueryString: {
+            parcel: ['12345'],
+          },
+        },
+        request_identifier: '12345',
+        county_name: 'Miami Dade',
+        unnormalized_address: '123 Main St, Miami, FL 33101',
+      };
+
+      // Verify all required fields are present
+      expect(newAddressData).toHaveProperty('source_http_request');
+      expect(newAddressData).toHaveProperty('request_identifier');
+      expect(newAddressData).toHaveProperty('county_name');
+      expect(newAddressData).toHaveProperty('unnormalized_address');
+
+      // Verify values
+      expect(newAddressData.source_http_request.method).toBe('GET');
+      expect(newAddressData.source_http_request.url).toContain('example.com');
+      expect(newAddressData.request_identifier).toBe('12345');
+      expect(newAddressData.county_name).toBe('Miami Dade');
+      expect(newAddressData.unnormalized_address).toContain('123 Main St');
+
+      // Verify it does NOT have old schema fields
+      expect((newAddressData as any).full_address).toBeUndefined();
+      expect((newAddressData as any).county_jurisdiction).toBeUndefined();
+
+      // Verify it does NOT have structured fields (those are in oneOf Option 2)
+      expect((newAddressData as any).street_number).toBeUndefined();
+      expect((newAddressData as any).street_name).toBeUndefined();
+      expect((newAddressData as any).city_name).toBeUndefined();
+      expect((newAddressData as any).state_code).toBeUndefined();
     });
   });
 
@@ -241,8 +281,15 @@ describe('Transform Backward Compatibility', () => {
 
       // Expected output from seed transformation:
       // 1. NEW schema files
-      // address.json now follows oneOf schema: ONLY unnormalized_address (Option 1)
+      // address.json now follows oneOf schema with unnormalized format (Option 1)
+      // Requires: source_http_request, request_identifier, county_name, unnormalized_address
       const expectedAddressJson = {
+        source_http_request: {
+          method: 'GET',
+          url: seedCsvRow.source_url,
+        },
+        request_identifier: seedCsvRow.parcel_identifier,
+        county_name: seedCsvRow.county_name,
         unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
       };
 
@@ -347,8 +394,8 @@ describe('Transform Backward Compatibility', () => {
       // STEP 3: Data Integrity Through Pipeline
       // ========================================
 
-      // All backward-compat files should have the same request_identifier
-      // Note: new schema address.json doesn't have request_identifier (only unnormalized_address)
+      // All files (new and old) should have the same request_identifier
+      expect(expectedAddressJson.request_identifier).toBe('01-0200-030-1090');
       expect(expectedParcelJson.request_identifier).toBe('01-0200-030-1090');
       expect(expectedUnnormalizedAddressJson.request_identifier).toBe(
         '01-0200-030-1090'
@@ -357,10 +404,10 @@ describe('Transform Backward Compatibility', () => {
         '01-0200-030-1090'
       );
 
-      // All backward-compat files should have the same source URL
-      // Note: new schema address.json doesn't have source_http_request
+      // All files (new and old) should have the same source URL
       const expectedUrl =
         'https://example.com/property?parcel=01-0200-030-1090';
+      expect(expectedAddressJson.source_http_request.url).toBe(expectedUrl);
       expect(expectedParcelJson.source_http_request.url).toBe(expectedUrl);
       expect(expectedUnnormalizedAddressJson.source_http_request.url).toBe(
         expectedUrl
@@ -373,9 +420,13 @@ describe('Transform Backward Compatibility', () => {
       // STEP 4: Verify Backward Compatibility
       // ========================================
 
-      // New format address.json follows oneOf schema: ONLY unnormalized_address
+      // New format address.json follows oneOf schema unnormalized format (Option 1)
+      // Requires 4 fields: source_http_request, request_identifier, county_name, unnormalized_address
       expect(expectedAddressJson).toHaveProperty('unnormalized_address');
-      expect(Object.keys(expectedAddressJson).length).toBe(1); // Only one property
+      expect(expectedAddressJson).toHaveProperty('source_http_request');
+      expect(expectedAddressJson).toHaveProperty('request_identifier');
+      expect(expectedAddressJson).toHaveProperty('county_name');
+      expect(Object.keys(expectedAddressJson).length).toBe(4); // 4 required fields
 
       // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
@@ -390,8 +441,10 @@ describe('Transform Backward Compatibility', () => {
       // New format does NOT have old field names
       expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
       expect((expectedAddressJson as any).full_address).toBeUndefined();
-      expect((expectedAddressJson as any).county_name).toBeUndefined(); // Also not in oneOf Option 1
       expect((expectedParcelJson as any).parcel_id).toBeUndefined();
+      
+      // New format HAS county_name (not county_jurisdiction)
+      expect(expectedAddressJson.county_name).toBeDefined();
 
       // Old format does NOT have new field names
       expect(
@@ -435,7 +488,8 @@ describe('Transform Backward Compatibility', () => {
       expect(seedCsvRow.parcel_identifier).toBe(
         countyTransformOutput.property.parcel_identifier
       );
-      // Note: new schema address.json doesn't have county_name, only old format does
+      // Verify county information is preserved
+      expect(seedCsvRow.county_name).toBe(expectedAddressJson.county_name);
       expect(seedCsvRow.county_name).toBe(
         expectedUnnormalizedAddressJson.county_jurisdiction
       );
@@ -507,12 +561,18 @@ describe('Transform Backward Compatibility', () => {
         },
       };
 
-      // Verify new files exist
+      // Verify new files exist with all required fields
       expect(seedFilesInTempRoot['address.json']).toBeDefined();
       expect(seedFilesInTempRoot['parcel.json']).toBeDefined();
+      
+      // address.json should have 4 required fields (oneOf Option 1)
       expect(seedFilesInTempRoot['address.json'].unnormalized_address).toBe(
         '123 Main St'
       );
+      expect(seedFilesInTempRoot['address.json'].county_name).toBe('Miami Dade');
+      expect(seedFilesInTempRoot['address.json'].source_http_request).toBeDefined();
+      expect(seedFilesInTempRoot['address.json'].request_identifier).toBe('12345');
+      
       expect(seedFilesInTempRoot['parcel.json'].parcel_identifier).toBe(
         '01-0200-030-1090'
       );
