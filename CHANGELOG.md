@@ -1,3 +1,24 @@
+## [1.50.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.1...v1.50.2) (2025-10-16)
+
+
+### Bug Fixes
+
+* add support for wait_for_selector_race node in custom browser flows ([#192](https://github.com/elephant-xyz/elephant-cli/issues/192)) ([feb591c](https://github.com/elephant-xyz/elephant-cli/commit/feb591c19f7a8bb710b6596be39eaef401c993ff))
+
+## [1.50.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.0...v1.50.1) (2025-10-15)
+
+
+### Bug Fixes
+
+* Add missing documentation for features of Custom Browser Flows ([#189](https://github.com/elephant-xyz/elephant-cli/issues/189)) ([764ac34](https://github.com/elephant-xyz/elephant-cli/commit/764ac34739eef99eae3ed1315356acb26521ed85))
+
+# [1.50.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.49.1...v1.50.0) (2025-10-15)
+
+
+### Features
+
+* **cli:** add CLI update check and block startup ([#187](https://github.com/elephant-xyz/elephant-cli/issues/187)) ([5058ec7](https://github.com/elephant-xyz/elephant-cli/commit/5058ec7ba206004d10338934fc4493d1042e1b02))
+
 ## [1.49.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.49.0...v1.49.1) (2025-10-09)
 
 
