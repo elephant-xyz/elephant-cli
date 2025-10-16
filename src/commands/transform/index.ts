@@ -61,6 +61,15 @@ interface SeedRow {
   headers?: string;
 }
 
+interface AddressData {
+  source_http_request: SourceHttpRequest;
+  request_identifier: string;
+  county_name: string;
+  unnormalized_address: string;
+  longitude?: number;
+  latitude?: number;
+}
+
 interface ParcelData {
   source_http_request: SourceHttpRequest;
   request_identifier: string;
@@ -373,23 +382,21 @@ async function handleSeedTransform(tempRoot: string) {
         : streetAddress || cityStateZip || '';
   }
 
-  // Helper function to capitalize county name (e.g., "miami dade" -> "Miami Dade")
-  // Required because the schema enum has capitalized values
-  const capitalizeCounty = (county: string): string => {
-    return county
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  };
-
   // New schema: address.json with unnormalized format (oneOf Option 1)
-  // Now requires: source_http_request, request_identifier, county_name, unnormalized_address
-  const addressData = {
+  // Requires: source_http_request, request_identifier, county_name, unnormalized_address
+  // Optional: longitude, latitude
+  const addressData: AddressData = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
-    county_name: capitalizeCounty(seedRow.county),
+    county_name: seedRow.county,
     unnormalized_address: unnormalizedAddress,
   };
+
+  // Add optional coordinates if provided
+  if (seedRow.longitude && seedRow.latitude) {
+    addressData.longitude = parseFloat(seedRow.longitude);
+    addressData.latitude = parseFloat(seedRow.latitude);
+  }
 
   // New schema: parcel.json with required fields
   const parcelData: ParcelData = {

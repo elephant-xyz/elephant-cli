@@ -289,7 +289,7 @@ describe('Transform Backward Compatibility', () => {
           url: seedCsvRow.source_url,
         },
         request_identifier: seedCsvRow.parcel_identifier,
-        county_name: 'Miami Dade',
+        county_name: seedCsvRow.county_name,
         unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
       };
 

@@ -1,10 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import AdmZip from 'adm-zip';
 import { handleTransform } from '../../../../src/commands/transform/index.js';
 import { execSync } from 'child_process';
+
+// Mock the schema fetcher to avoid network dependencies in tests
+vi.mock('../../../../src/utils/schema-fetcher.js', () => ({
+  fetchSchemaManifest: vi.fn().mockResolvedValue({
+    Seed: {
+      ipfsCid: 'bafkreicuufahbh5slf5ia67ii3cxuk7hzjmypcfpezcngff4mcv5bn2bi4',
+      description: 'Seed data group schema',
+    },
+    County: {
+      ipfsCid: 'bafkreiexamplecounty',
+      description: 'County data group schema',
+    },
+  }),
+}));
 
 describe('Seed Transformation and Validation', () => {
   let tempDir: string;
@@ -230,8 +244,8 @@ describe('Seed Transformation and Validation', () => {
     expect(address.unnormalized_address).toContain('FL');
     expect(address.unnormalized_address).toContain('33101');
 
-    // Verify county_name is capitalized (required by schema enum)
-    expect(address.county_name).toBe('Miami Dade');
+    // Verify county_name matches the raw CSV value
+    expect(address.county_name).toBe('miami dade');
 
     // Verify values
     expect(address.source_http_request).toHaveProperty('method', 'GET');
