@@ -37,8 +37,6 @@ describe('Seed Transformation and Validation', () => {
       `01-0200-030-1090,"123 Main St Miami FL 33101",GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,miami dade`,
     ].join('\n');
 
-    console.log('Creating seed CSV:', seedCsv);
-
     // Create ZIP with seed.csv
     const zip = new AdmZip();
     zip.addFile('seed.csv', Buffer.from(seedCsv));
@@ -63,8 +61,6 @@ describe('Seed Transformation and Validation', () => {
     const dataDir = path.join(extractDir, 'data');
     const files = await fs.readdir(dataDir);
 
-    console.log('Generated files:', files);
-
     // Check for expected files
     expect(files).toContain('address.json');
     expect(files).toContain('parcel.json');
@@ -72,13 +68,12 @@ describe('Seed Transformation and Validation', () => {
     expect(files).toContain('unnormalized_address.json'); // backward compat
     expect(files).toContain('property_seed.json'); // backward compat
 
-    // Read and log address.json (NEW SCHEMA: oneOf - only unnormalized_address)
+    // Read address.json
     const addressContent = await fs.readFile(
       path.join(dataDir, 'address.json'),
       'utf-8'
     );
     const address = JSON.parse(addressContent);
-    console.log('Generated address.json:', JSON.stringify(address, null, 2));
 
     // New schema: address.json with unnormalized format (oneOf Option 1)
     // Now requires: source_http_request, request_identifier, county_name, unnormalized_address
@@ -86,7 +81,7 @@ describe('Seed Transformation and Validation', () => {
     expect(address).toHaveProperty('source_http_request');
     expect(address).toHaveProperty('request_identifier');
     expect(address).toHaveProperty('county_name');
-    
+
     // Verify values
     expect(address.source_http_request).toHaveProperty('method', 'GET');
     expect(address.source_http_request.multiValueQueryString).toEqual({
@@ -99,7 +94,6 @@ describe('Seed Transformation and Validation', () => {
       'utf-8'
     );
     const parcel = JSON.parse(parcelContent);
-    console.log('Generated parcel.json:', JSON.stringify(parcel, null, 2));
 
     expect(parcel).toHaveProperty('parcel_identifier', '01-0200-030-1090');
     expect(parcel).toHaveProperty('source_http_request');
@@ -118,10 +112,6 @@ describe('Seed Transformation and Validation', () => {
       'utf-8'
     );
     const seedDataGroup = JSON.parse(seedDataGroupContent);
-    console.log(
-      'Generated Seed data group:',
-      JSON.stringify(seedDataGroup, null, 2)
-    );
 
     // Verify Seed data group structure with relationships wrapper
     expect(seedDataGroup).toHaveProperty('label', 'Seed');
@@ -134,18 +124,9 @@ describe('Seed Transformation and Validation', () => {
       './address_has_parcel.json'
     );
 
-    console.log('\n✅ Seed transformation completed successfully!');
-    console.log('📝 Generated files:', files.join(', '));
-
     // Run validation on the transformed data using CLI command
-    console.log(
-      '\n--- Running CLI validation command on transformed output ---\n'
-    );
-
     const errorsCsv = path.join(tempDir, 'errors.csv');
     const validateCommand = `node dist/index.js validate "${outputZip}" -o "${errorsCsv}"`;
-
-    console.log(`Executing: ${validateCommand}\n`);
 
     let validationFailed = false;
     let validationOutput = '';
@@ -181,7 +162,9 @@ describe('Seed Transformation and Validation', () => {
     console.log('\n✅ All seed transformation files validated successfully!');
     console.log('📊 Summary:');
     console.log('  - Seed data group with address_has_parcel relationship');
-    console.log('  - address.json (oneOf Option 1: unnormalized format with 4 fields)');
+    console.log(
+      '  - address.json (oneOf Option 1: unnormalized format with 4 fields)'
+    );
     console.log('  - parcel.json (without formatted_parcel_identifier)');
     console.log('  - address_has_parcel.json (relationship file)');
     console.log('  - unnormalized_address.json (backward compat)');

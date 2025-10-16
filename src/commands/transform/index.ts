@@ -321,46 +321,49 @@ async function handleSeedTransform(tempRoot: string) {
 
   // Construct unnormalized_address from either direct field or broken down fields
   let unnormalizedAddress: string;
-  
+
   if (seedRow.address) {
     // Use direct address field if provided
     unnormalizedAddress = seedRow.address;
   } else {
     // Construct from broken down fields
     const parts: string[] = [];
-    
+
     // Street address: [pre-directional] street_number street_name [suffix] [post-directional] [unit]
-    if (seedRow.street_pre_directional) parts.push(seedRow.street_pre_directional);
+    if (seedRow.street_pre_directional)
+      parts.push(seedRow.street_pre_directional);
     if (seedRow.street_number) parts.push(seedRow.street_number);
     if (seedRow.street_name) parts.push(seedRow.street_name);
     if (seedRow.street_suffix) parts.push(seedRow.street_suffix);
-    if (seedRow.street_post_directional) parts.push(seedRow.street_post_directional);
+    if (seedRow.street_post_directional)
+      parts.push(seedRow.street_post_directional);
     if (seedRow.unit_identifier) parts.push(seedRow.unit_identifier);
-    
+
     const streetAddress = parts.join(' ');
-    
+
     // City, State ZIP (format: "City, State ZIP")
     const cityStateZipParts: string[] = [];
     if (seedRow.city_name) cityStateZipParts.push(seedRow.city_name);
-    
+
     // Combine State and ZIP without comma between them
     const stateZipParts: string[] = [];
     if (seedRow.state_code) stateZipParts.push(seedRow.state_code);
-    const zip = seedRow.plus_four_postal_code 
+    const zip = seedRow.plus_four_postal_code
       ? `${seedRow.postal_code}-${seedRow.plus_four_postal_code}`
       : seedRow.postal_code;
     if (zip) stateZipParts.push(zip);
-    
+
     if (stateZipParts.length > 0) {
       cityStateZipParts.push(stateZipParts.join(' '));
     }
-    
+
     const cityStateZip = cityStateZipParts.join(', ');
-    
+
     // Combine street and city/state/zip
-    unnormalizedAddress = streetAddress && cityStateZip 
-      ? `${streetAddress}, ${cityStateZip}`
-      : streetAddress || cityStateZip || '';
+    unnormalizedAddress =
+      streetAddress && cityStateZip
+        ? `${streetAddress}, ${cityStateZip}`
+        : streetAddress || cityStateZip || '';
   }
 
   // Helper function to capitalize county name (e.g., "miami dade" -> "Miami Dade")

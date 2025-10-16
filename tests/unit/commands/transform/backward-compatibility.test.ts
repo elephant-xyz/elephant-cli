@@ -442,7 +442,7 @@ describe('Transform Backward Compatibility', () => {
       expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
       expect((expectedAddressJson as any).full_address).toBeUndefined();
       expect((expectedParcelJson as any).parcel_id).toBeUndefined();
-      
+
       // New format HAS county_name (not county_jurisdiction)
       expect(expectedAddressJson.county_name).toBeDefined();
 
@@ -564,15 +564,21 @@ describe('Transform Backward Compatibility', () => {
       // Verify new files exist with all required fields
       expect(seedFilesInTempRoot['address.json']).toBeDefined();
       expect(seedFilesInTempRoot['parcel.json']).toBeDefined();
-      
+
       // address.json should have 4 required fields (oneOf Option 1)
       expect(seedFilesInTempRoot['address.json'].unnormalized_address).toBe(
         '123 Main St'
       );
-      expect(seedFilesInTempRoot['address.json'].county_name).toBe('Miami Dade');
-      expect(seedFilesInTempRoot['address.json'].source_http_request).toBeDefined();
-      expect(seedFilesInTempRoot['address.json'].request_identifier).toBe('12345');
-      
+      expect(seedFilesInTempRoot['address.json'].county_name).toBe(
+        'Miami Dade'
+      );
+      expect(
+        seedFilesInTempRoot['address.json'].source_http_request
+      ).toBeDefined();
+      expect(seedFilesInTempRoot['address.json'].request_identifier).toBe(
+        '12345'
+      );
+
       expect(seedFilesInTempRoot['parcel.json'].parcel_identifier).toBe(
         '01-0200-030-1090'
       );
