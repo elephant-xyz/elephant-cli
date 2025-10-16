@@ -15,6 +15,7 @@ import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
+import { CidCalculatorService } from '../../services/cid-calculator.service.js';
 import {
   parseMultiValueQueryString,
   SourceHttpRequest,
@@ -48,39 +49,41 @@ interface SeedRow {
   headers?: string;
 }
 
-interface AddressData {
-  source_http_request: SourceHttpRequest;
-  request_identifier: string;
-  unnormalized_address: string;
-  county_name: string;
-  city_name: string | null;
-  country_code: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  plus_four_postal_code: string | null;
-  postal_code: string | null;
-  state_code: string | null;
-  street_name: string | null;
-  street_post_directional_text: string | null;
-  street_pre_directional_text: string | null;
-  street_number: string | null;
-  street_suffix_type: string | null;
-  unit_identifier: string | null;
-  route_number: string | null;
-  township: string | null;
-  range: string | null;
-  section: string | null;
-  block: string | null;
-  lot: string | null;
-  municipality_name: string | null;
-  normalized_address: string | null;
-}
+// Address schema uses oneOf: either unnormalized format only OR structured fields
+type AddressData =
+  | {
+      unnormalized_address: string;
+    }
+  | {
+      source_http_request: SourceHttpRequest;
+      request_identifier: string;
+      city_name: string | null;
+      country_code: string | null;
+      county_name: string;
+      latitude: number | null;
+      longitude: number | null;
+      plus_four_postal_code: string | null;
+      postal_code: string | null;
+      state_code: string | null;
+      street_name: string | null;
+      street_post_directional_text: string | null;
+      street_pre_directional_text: string | null;
+      street_number: string | null;
+      street_suffix_type: string | null;
+      unit_identifier: string | null;
+      route_number: string | null;
+      township: string | null;
+      range: string | null;
+      section: string | null;
+      block: string | null;
+      lot: string | null;
+      municipality_name: string | null;
+    };
 
 interface ParcelData {
   source_http_request: SourceHttpRequest;
   request_identifier: string;
   parcel_identifier: string;
-  formatted_parcel_identifier: string | null;
 }
 
 function capitalizeWords(str: string) {
@@ -292,20 +295,29 @@ async function handleSeedTransform(tempRoot: string) {
     skip_empty_lines: true,
   });
   const seedRow = parsed[0] as SeedRow;
-  const seedJson = JSON.stringify({
-    label: 'Seed',
-    address_has_parcel: {
-      '/': './address_to_parcel.json',
-    },
-  });
-  const relAddressToParcelJson = JSON.stringify({
+  
+  // New schema relationship: address_has_parcel (address -> parcel)
+  const relAddressHasParcel = {
     from: {
       '/': './address.json',
     },
     to: {
       '/': './parcel.json',
     },
+  };
+  const relAddressHasParcelJson = JSON.stringify(relAddressHasParcel);
+  
+  // Seed data group with only address_has_parcel relationship
+  // Relationships use IPLD link objects pointing to relationship files
+  const seedJson = JSON.stringify({
+    label: 'Seed',
+    relationships: {
+      address_has_parcel: {
+        '/': './address_has_parcel.json',
+      },
+    },
   });
+  
   const sourceHttpRequest: SourceHttpRequest = {
     url: seedRow.url,
     method: seedRow.method,
@@ -332,39 +344,17 @@ async function handleSeedTransform(tempRoot: string) {
   if (seedRow.body) {
     sourceHttpRequest.body = seedRow.body;
   }
-  const addressData: AddressData = {
-    source_http_request: sourceHttpRequest,
-    request_identifier: seedRow.source_identifier,
+  
+  // New schema: address.json with ONLY unnormalized_address (oneOf Option 1)
+  const addressData = {
     unnormalized_address: seedRow.address,
-    county_name: capitalizeWords(seedRow.county),
-    city_name: null,
-    country_code: null,
-    latitude: seedRow.latitude ? parseFloat(seedRow.latitude) : null,
-    longitude: seedRow.longitude ? parseFloat(seedRow.longitude) : null,
-    plus_four_postal_code: null,
-    postal_code: null,
-    state_code: null,
-    street_name: null,
-    street_post_directional_text: null,
-    street_pre_directional_text: null,
-    street_number: null,
-    street_suffix_type: null,
-    unit_identifier: null,
-    route_number: null,
-    township: null,
-    range: null,
-    section: null,
-    block: null,
-    lot: null,
-    municipality_name: null,
-    normalized_address: null,
   };
 
+  // New schema: parcel.json with required fields
   const parcelData: ParcelData = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     parcel_identifier: seedRow.parcel_id,
-    formatted_parcel_identifier: null,
   };
 
   const addressJson = JSON.stringify(addressData);
@@ -396,9 +386,11 @@ async function handleSeedTransform(tempRoot: string) {
   const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
   const fileNameContent: { name: string; content: string }[] = [
     { name: `${seedDataGroupCid}.json`, content: seedJson },
-    { name: 'address_to_parcel.json', content: relAddressToParcelJson },
+    // New schema files
+    { name: 'address_has_parcel.json', content: relAddressHasParcelJson },
     { name: 'address.json', content: addressJson },
     { name: 'parcel.json', content: parcelJson },
+    // Backward compatibility files
     { name: 'unnormalized_address.json', content: unnormalizedAddressJson },
     { name: 'property_seed.json', content: propertySeedJson },
   ];

@@ -172,22 +172,27 @@ describe('Transform Backward Compatibility', () => {
     it('should create Seed data group with address_has_parcel relationship', () => {
       const seedJson = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
       // Verify structure
       expect(seedJson.label).toBe('Seed');
-      expect(seedJson.address_has_parcel).toBeDefined();
-      expect(seedJson.address_has_parcel['/']).toBe('./address_to_parcel.json');
+      expect(seedJson.relationships).toBeDefined();
+      expect(seedJson.relationships.address_has_parcel).toBeDefined();
+      expect(seedJson.relationships.address_has_parcel['/']).toBe('./address_has_parcel.json');
     });
 
     it('should NOT include direct address reference in Seed data group', () => {
       const seedJson = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
@@ -195,8 +200,8 @@ describe('Transform Backward Compatibility', () => {
       expect((seedJson as any).address).toBeUndefined();
     });
 
-    it('should create address_to_parcel relationship correctly', () => {
-      const relAddressToParcelJson = {
+    it('should create address_has_parcel relationship correctly', () => {
+      const relAddressHasParcelJson = {
         from: {
           '/': './address.json',
         },
@@ -205,8 +210,8 @@ describe('Transform Backward Compatibility', () => {
         },
       };
 
-      expect(relAddressToParcelJson.from['/']).toBe('./address.json');
-      expect(relAddressToParcelJson.to['/']).toBe('./parcel.json');
+      expect(relAddressHasParcelJson.from['/']).toBe('./address.json');
+      expect(relAddressHasParcelJson.to['/']).toBe('./parcel.json');
     });
   });
 
@@ -234,19 +239,9 @@ describe('Transform Backward Compatibility', () => {
 
       // Expected output from seed transformation:
       // 1. NEW schema files
+      // address.json now follows oneOf schema: ONLY unnormalized_address (Option 1)
       const expectedAddressJson = {
         unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
-        county_name: seedCsvRow.county_name,
-        street_number: seedCsvRow.street_number,
-        street_name: seedCsvRow.street_name,
-        city_name: seedCsvRow.city_name,
-        state_code: seedCsvRow.state_code,
-        postal_code: seedCsvRow.postal_code,
-        request_identifier: seedCsvRow.parcel_identifier,
-        source_http_request: {
-          method: 'GET',
-          url: seedCsvRow.source_url,
-        },
       };
 
       const expectedParcelJson = {
@@ -280,27 +275,33 @@ describe('Transform Backward Compatibility', () => {
       };
 
       // 3. Relationship file
-      const expectedAddressToParcelJson = {
+      const expectedAddressHasParcelJson = {
         from: { '/': './address.json' },
         to: { '/': './parcel.json' },
       };
 
-      // 4. Seed data group
+      // 4. Seed data group (with relationships wrapper)
       const expectedSeedDataGroup = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
       // Verify seed transformation produces all files
-      expect(expectedAddressJson.county_name).toBe('Miami Dade');
+      // Note: new schema address.json only has unnormalized_address
+      expect(expectedAddressJson.unnormalized_address).toBe(
+        '123 Main St, Miami, FL 33101'
+      );
       expect(expectedParcelJson.parcel_identifier).toBe('01-0200-030-1090');
       expect(expectedUnnormalizedAddressJson.county_jurisdiction).toBe(
         'Miami Dade'
       );
       expect(expectedPropertySeedJson.parcel_id).toBe('01-0200-030-1090');
-      expect(expectedSeedDataGroup.address_has_parcel).toBeDefined();
+      expect(expectedSeedDataGroup.relationships).toBeDefined();
+      expect(expectedSeedDataGroup.relationships.address_has_parcel).toBeDefined();
 
       // ========================================
       // STEP 2: County Transformation
@@ -342,8 +343,8 @@ describe('Transform Backward Compatibility', () => {
       // STEP 3: Data Integrity Through Pipeline
       // ========================================
 
-      // All files should have the same request_identifier
-      expect(expectedAddressJson.request_identifier).toBe('01-0200-030-1090');
+      // All backward-compat files should have the same request_identifier
+      // Note: new schema address.json doesn't have request_identifier (only unnormalized_address)
       expect(expectedParcelJson.request_identifier).toBe('01-0200-030-1090');
       expect(expectedUnnormalizedAddressJson.request_identifier).toBe(
         '01-0200-030-1090'
@@ -352,10 +353,10 @@ describe('Transform Backward Compatibility', () => {
         '01-0200-030-1090'
       );
 
-      // All files should have the same source URL
+      // All backward-compat files should have the same source URL
+      // Note: new schema address.json doesn't have source_http_request
       const expectedUrl =
         'https://example.com/property?parcel=01-0200-030-1090';
-      expect(expectedAddressJson.source_http_request.url).toBe(expectedUrl);
       expect(expectedParcelJson.source_http_request.url).toBe(expectedUrl);
       expect(expectedUnnormalizedAddressJson.source_http_request.url).toBe(
         expectedUrl
@@ -368,9 +369,11 @@ describe('Transform Backward Compatibility', () => {
       // STEP 4: Verify Backward Compatibility
       // ========================================
 
-      // New format has new fields
-      expect(expectedAddressJson).toHaveProperty('county_name');
+      // New format address.json follows oneOf schema: ONLY unnormalized_address
       expect(expectedAddressJson).toHaveProperty('unnormalized_address');
+      expect(Object.keys(expectedAddressJson).length).toBe(1); // Only one property
+      
+      // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
 
       // Old format has old fields
@@ -383,6 +386,7 @@ describe('Transform Backward Compatibility', () => {
       // New format does NOT have old field names
       expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
       expect((expectedAddressJson as any).full_address).toBeUndefined();
+      expect((expectedAddressJson as any).county_name).toBeUndefined(); // Also not in oneOf Option 1
       expect((expectedParcelJson as any).parcel_id).toBeUndefined();
 
       // Old format does NOT have new field names
@@ -427,7 +431,7 @@ describe('Transform Backward Compatibility', () => {
       expect(seedCsvRow.parcel_identifier).toBe(
         countyTransformOutput.property.parcel_identifier
       );
-      expect(seedCsvRow.county_name).toBe(expectedAddressJson.county_name);
+      // Note: new schema address.json doesn't have county_name, only old format does
       expect(seedCsvRow.county_name).toBe(
         expectedUnnormalizedAddressJson.county_jurisdiction
       );
