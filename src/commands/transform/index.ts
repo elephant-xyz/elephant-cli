@@ -15,7 +15,6 @@ import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
-import { CidCalculatorService } from '../../services/cid-calculator.service.js';
 import {
   parseMultiValueQueryString,
   SourceHttpRequest,
@@ -49,48 +48,10 @@ interface SeedRow {
   headers?: string;
 }
 
-// Address schema uses oneOf: either unnormalized format only OR structured fields
-type AddressData =
-  | {
-      unnormalized_address: string;
-    }
-  | {
-      source_http_request: SourceHttpRequest;
-      request_identifier: string;
-      city_name: string | null;
-      country_code: string | null;
-      county_name: string;
-      latitude: number | null;
-      longitude: number | null;
-      plus_four_postal_code: string | null;
-      postal_code: string | null;
-      state_code: string | null;
-      street_name: string | null;
-      street_post_directional_text: string | null;
-      street_pre_directional_text: string | null;
-      street_number: string | null;
-      street_suffix_type: string | null;
-      unit_identifier: string | null;
-      route_number: string | null;
-      township: string | null;
-      range: string | null;
-      section: string | null;
-      block: string | null;
-      lot: string | null;
-      municipality_name: string | null;
-    };
-
 interface ParcelData {
   source_http_request: SourceHttpRequest;
   request_identifier: string;
   parcel_identifier: string;
-}
-
-function capitalizeWords(str: string) {
-  return str
-    .split(' ')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
 }
 
 export function registerTransformCommand(program: Command) {
