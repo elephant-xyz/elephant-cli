@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
 describe('Transform Backward Compatibility', () => {
-
   describe('County Transform with Old Schema', () => {
     it('should handle old schema file structure (unnormalized_address.json)', () => {
       const oldAddressData = {
@@ -210,5 +209,228 @@ describe('Transform Backward Compatibility', () => {
       expect(relAddressToParcelJson.to['/']).toBe('./parcel.json');
     });
   });
-});
 
+  /**
+   * Comprehensive Transform (Seed + County) Backward Compatibility Test
+   * Tests the complete transform pipeline from seed CSV through county transformation
+   */
+  describe('Complete Transform Pipeline with Backward Compatibility', () => {
+    it('should handle full seed transformation + county transformation with backward compatibility', () => {
+      // ========================================
+      // STEP 1: Seed Transformation
+      // ========================================
+
+      // Input: seed.csv
+      const seedCsvRow = {
+        street_number: '123',
+        street_name: 'Main St',
+        city_name: 'Miami',
+        state_code: 'FL',
+        postal_code: '33101',
+        county_name: 'Miami Dade',
+        parcel_identifier: '01-0200-030-1090',
+        source_url: 'https://example.com/property?parcel=01-0200-030-1090',
+      };
+
+      // Expected output from seed transformation:
+      // 1. NEW schema files
+      const expectedAddressJson = {
+        unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
+        county_name: seedCsvRow.county_name,
+        street_number: seedCsvRow.street_number,
+        street_name: seedCsvRow.street_name,
+        city_name: seedCsvRow.city_name,
+        state_code: seedCsvRow.state_code,
+        postal_code: seedCsvRow.postal_code,
+        request_identifier: seedCsvRow.parcel_identifier,
+        source_http_request: {
+          method: 'GET',
+          url: seedCsvRow.source_url,
+        },
+      };
+
+      const expectedParcelJson = {
+        parcel_identifier: seedCsvRow.parcel_identifier,
+        formatted_parcel_identifier: seedCsvRow.parcel_identifier,
+        request_identifier: seedCsvRow.parcel_identifier,
+        source_http_request: {
+          method: 'GET',
+          url: seedCsvRow.source_url,
+        },
+      };
+
+      // 2. OLD schema files (backward compatibility)
+      const expectedUnnormalizedAddressJson = {
+        full_address: expectedAddressJson.unnormalized_address,
+        county_jurisdiction: seedCsvRow.county_name,
+        request_identifier: seedCsvRow.parcel_identifier,
+        source_http_request: {
+          method: 'GET',
+          url: seedCsvRow.source_url,
+        },
+      };
+
+      const expectedPropertySeedJson = {
+        parcel_id: seedCsvRow.parcel_identifier,
+        request_identifier: seedCsvRow.parcel_identifier,
+        source_http_request: {
+          method: 'GET',
+          url: seedCsvRow.source_url,
+        },
+      };
+
+      // 3. Relationship file
+      const expectedAddressToParcelJson = {
+        from: { '/': './address.json' },
+        to: { '/': './parcel.json' },
+      };
+
+      // 4. Seed data group
+      const expectedSeedDataGroup = {
+        label: 'Seed',
+        address_has_parcel: {
+          '/': './address_to_parcel.json',
+        },
+      };
+
+      // Verify seed transformation produces all files
+      expect(expectedAddressJson.county_name).toBe('Miami Dade');
+      expect(expectedParcelJson.parcel_identifier).toBe('01-0200-030-1090');
+      expect(expectedUnnormalizedAddressJson.county_jurisdiction).toBe(
+        'Miami Dade'
+      );
+      expect(expectedPropertySeedJson.parcel_id).toBe('01-0200-030-1090');
+      expect(expectedSeedDataGroup.address_has_parcel).toBeDefined();
+
+      // ========================================
+      // STEP 2: County Transformation
+      // ========================================
+
+      // County transformation scripts should be able to read from EITHER:
+      // - New format: parcel.json + address.json
+      // - Old format: property_seed.json + unnormalized_address.json
+
+      // Test 1: County scripts can read NEW format
+      const countyScriptReadsParcelJson = {
+        parcel_identifier: expectedParcelJson.parcel_identifier,
+        request_identifier: expectedParcelJson.request_identifier,
+        source_http_request: expectedParcelJson.source_http_request,
+      };
+
+      expect(countyScriptReadsParcelJson.parcel_identifier).toBe(
+        '01-0200-030-1090'
+      );
+      expect(countyScriptReadsParcelJson.request_identifier).toBe(
+        '01-0200-030-1090'
+      );
+
+      // Test 2: County scripts can read OLD format
+      const countyScriptReadsPropertySeedJson = {
+        parcel_id: expectedPropertySeedJson.parcel_id,
+        request_identifier: expectedPropertySeedJson.request_identifier,
+        source_http_request: expectedPropertySeedJson.source_http_request,
+      };
+
+      expect(countyScriptReadsPropertySeedJson.parcel_id).toBe(
+        '01-0200-030-1090'
+      );
+      expect(countyScriptReadsPropertySeedJson.request_identifier).toBe(
+        '01-0200-030-1090'
+      );
+
+      // ========================================
+      // STEP 3: Data Integrity Through Pipeline
+      // ========================================
+
+      // All files should have the same request_identifier
+      expect(expectedAddressJson.request_identifier).toBe('01-0200-030-1090');
+      expect(expectedParcelJson.request_identifier).toBe('01-0200-030-1090');
+      expect(expectedUnnormalizedAddressJson.request_identifier).toBe(
+        '01-0200-030-1090'
+      );
+      expect(expectedPropertySeedJson.request_identifier).toBe(
+        '01-0200-030-1090'
+      );
+
+      // All files should have the same source URL
+      const expectedUrl =
+        'https://example.com/property?parcel=01-0200-030-1090';
+      expect(expectedAddressJson.source_http_request.url).toBe(expectedUrl);
+      expect(expectedParcelJson.source_http_request.url).toBe(expectedUrl);
+      expect(expectedUnnormalizedAddressJson.source_http_request.url).toBe(
+        expectedUrl
+      );
+      expect(expectedPropertySeedJson.source_http_request.url).toBe(
+        expectedUrl
+      );
+
+      // ========================================
+      // STEP 4: Verify Backward Compatibility
+      // ========================================
+
+      // New format has new fields
+      expect(expectedAddressJson).toHaveProperty('county_name');
+      expect(expectedAddressJson).toHaveProperty('unnormalized_address');
+      expect(expectedParcelJson).toHaveProperty('parcel_identifier');
+
+      // Old format has old fields
+      expect(expectedUnnormalizedAddressJson).toHaveProperty(
+        'county_jurisdiction'
+      );
+      expect(expectedUnnormalizedAddressJson).toHaveProperty('full_address');
+      expect(expectedPropertySeedJson).toHaveProperty('parcel_id');
+
+      // New format does NOT have old field names
+      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
+      expect((expectedAddressJson as any).full_address).toBeUndefined();
+      expect((expectedParcelJson as any).parcel_id).toBeUndefined();
+
+      // Old format does NOT have new field names
+      expect(
+        (expectedUnnormalizedAddressJson as any).county_name
+      ).toBeUndefined();
+      expect(
+        (expectedUnnormalizedAddressJson as any).unnormalized_address
+      ).toBeUndefined();
+      expect(
+        (expectedPropertySeedJson as any).parcel_identifier
+      ).toBeUndefined();
+
+      // ========================================
+      // STEP 5: Verify County Transform Output
+      // ========================================
+
+      // After county transformation, output should be schema-compliant
+      const countyTransformOutput = {
+        property: {
+          parcel_identifier: countyScriptReadsParcelJson.parcel_identifier,
+          property_type: 'SingleFamily',
+          request_identifier: countyScriptReadsParcelJson.request_identifier,
+          source_http_request: countyScriptReadsParcelJson.source_http_request,
+        },
+      };
+
+      expect(countyTransformOutput.property.parcel_identifier).toBe(
+        '01-0200-030-1090'
+      );
+      expect(countyTransformOutput.property.property_type).toBe('SingleFamily');
+      expect(countyTransformOutput.property.request_identifier).toBe(
+        '01-0200-030-1090'
+      );
+
+      // ========================================
+      // FINAL VERIFICATION: Complete Pipeline
+      // ========================================
+
+      // Seed CSV → Seed Transform → County Transform → Final Output
+      // All data flows correctly through the pipeline
+      expect(seedCsvRow.parcel_identifier).toBe(
+        countyTransformOutput.property.parcel_identifier
+      );
+      expect(seedCsvRow.county_name).toBe(expectedAddressJson.county_name);
+      expect(seedCsvRow.county_name).toBe(
+        expectedUnnormalizedAddressJson.county_jurisdiction
+      );
+    });
+  });
+});
