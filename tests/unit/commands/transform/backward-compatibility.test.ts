@@ -570,7 +570,12 @@ describe('Transform Backward Compatibility', () => {
 
       // Filter to seed files only
       const seedFiles = filesInOutputDir.filter((f) =>
-        ['address.json', 'parcel.json', 'unnormalized_address.json', 'property_seed.json'].includes(f)
+        [
+          'address.json',
+          'parcel.json',
+          'unnormalized_address.json',
+          'property_seed.json',
+        ].includes(f)
       );
 
       // All seed files should be present (not skipped)

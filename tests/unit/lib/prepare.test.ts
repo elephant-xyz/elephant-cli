@@ -350,9 +350,7 @@ describe('Prepare Command Backward Compatibility', () => {
       // None should have entry_http_request (non-browser flow)
       Object.values(inputFiles).forEach((file) => {
         expect(file).not.toHaveProperty('entry_http_request');
-        expect(file.source_http_request.url).toBe(
-          'https://example.com/mixed'
-        );
+        expect(file.source_http_request.url).toBe('https://example.com/mixed');
       });
     });
   });

@@ -108,7 +108,9 @@ export async function prepare(
       await fs.access(path.join(dir, 'address.json'));
       hasAddressJson = true;
     } catch {
-      logger.debug('address.json not found, will check for unnormalized_address.json');
+      logger.debug(
+        'address.json not found, will check for unnormalized_address.json'
+      );
     }
 
     try {
@@ -145,7 +147,9 @@ export async function prepare(
       addressContent = await fs.readFile(addressPath, 'utf-8');
       addressData = JSON.parse(addressContent);
     } catch {
-      logger.debug(`Failed to read ${addressPath}, falling back to unnormalized_address.json`);
+      logger.debug(
+        `Failed to read ${addressPath}, falling back to unnormalized_address.json`
+      );
       // Fallback to old format
       addressPath = path.join(dir, 'unnormalized_address.json');
       addressContent = await fs.readFile(addressPath, 'utf-8');
