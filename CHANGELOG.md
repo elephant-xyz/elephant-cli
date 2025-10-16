@@ -1,3 +1,10 @@
+## [1.50.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.1...v1.50.2) (2025-10-16)
+
+
+### Bug Fixes
+
+* add support for wait_for_selector_race node in custom browser flows ([#192](https://github.com/elephant-xyz/elephant-cli/issues/192)) ([feb591c](https://github.com/elephant-xyz/elephant-cli/commit/feb591c19f7a8bb710b6596be39eaef401c993ff))
+
 ## [1.50.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.0...v1.50.1) (2025-10-15)
 
 
