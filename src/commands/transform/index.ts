@@ -375,7 +375,7 @@ async function handleSeedTransform(tempRoot: string) {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     full_address: seedRow.address,
-    county_jurisdiction: capitalizeWords(seedRow.county),
+    county_jurisdiction: seedRow.county,
   };
   if (seedRow.longitude && seedRow.latitude) {
     unnormalizedAddressData.longitude = parseFloat(seedRow.longitude);
