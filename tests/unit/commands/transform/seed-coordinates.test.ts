@@ -96,7 +96,7 @@ describe('Seed Transformation with Coordinates', () => {
     expect(unnormalizedAddress).toHaveProperty('latitude');
     expect(unnormalizedAddress.longitude).toBe(-80.1918);
     expect(unnormalizedAddress.latitude).toBe(25.7617);
-    
+
     // Verify it has old schema fields
     expect(unnormalizedAddress).toHaveProperty('full_address');
     expect(unnormalizedAddress).toHaveProperty('county_jurisdiction');
@@ -156,10 +156,9 @@ describe('Seed Transformation with Coordinates', () => {
     // Verify backward compatibility file doesn't have coordinates
     expect(unnormalizedAddress).not.toHaveProperty('longitude');
     expect(unnormalizedAddress).not.toHaveProperty('latitude');
-    
+
     // But it should still have old schema fields
     expect(unnormalizedAddress).toHaveProperty('full_address');
     expect(unnormalizedAddress).toHaveProperty('county_jurisdiction');
   });
 });
-

@@ -363,9 +363,9 @@ async function handleSeedTransform(tempRoot: string) {
     const stateZipParts: string[] = [];
     if (seedRow.state_code) stateZipParts.push(seedRow.state_code);
     const zip = seedRow.postal_code
-      ? (seedRow.plus_four_postal_code
-          ? `${seedRow.postal_code}-${seedRow.plus_four_postal_code}`
-          : seedRow.postal_code)
+      ? seedRow.plus_four_postal_code
+        ? `${seedRow.postal_code}-${seedRow.plus_four_postal_code}`
+        : seedRow.postal_code
       : undefined;
     if (zip) stateZipParts.push(zip);
 
