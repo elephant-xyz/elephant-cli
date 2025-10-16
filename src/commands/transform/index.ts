@@ -319,8 +319,13 @@ async function handleSeedTransform(tempRoot: string) {
     sourceHttpRequest.body = seedRow.body;
   }
 
+  // Validate required fields
+  if (!seedRow.county || !seedRow.county.trim()) {
+    throw new Error('County field is required in seed.csv and cannot be empty');
+  }
+
   // Construct unnormalized_address from either direct field or broken down fields
-  let unnormalizedAddress: string;
+  let unnormalizedAddress = '';
 
   if (seedRow.address) {
     // Use direct address field if provided
@@ -367,6 +372,7 @@ async function handleSeedTransform(tempRoot: string) {
   }
 
   // Helper function to capitalize county name (e.g., "miami dade" -> "Miami Dade")
+  // Required because the schema enum has capitalized values
   const capitalizeCounty = (county: string): string => {
     return county
       .split(' ')

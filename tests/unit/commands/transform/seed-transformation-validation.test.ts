@@ -25,6 +25,46 @@ describe('Seed Transformation and Validation', () => {
     }
   });
 
+  /**
+   * Extract output ZIP and return the data directory path
+   */
+  async function extractOutputZip(
+    zipPath: string,
+    baseDir: string
+  ): Promise<string> {
+    const extractDir = path.join(baseDir, 'extracted');
+    await fs.mkdir(extractDir);
+    const zipFile = new AdmZip(zipPath);
+    zipFile.extractAllTo(extractDir, true);
+    return path.join(extractDir, 'data');
+  }
+
+  /**
+   * Find the Seed data group file by parsing all JSON files and checking for label: 'Seed'
+   */
+  async function findSeedDataGroupFile(
+    dataDir: string,
+    files: string[]
+  ): Promise<{ filename: string; content: any }> {
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+
+      try {
+        const content = await fs.readFile(path.join(dataDir, file), 'utf-8');
+        const parsed = JSON.parse(content);
+
+        if (parsed.label === 'Seed') {
+          return { filename: file, content: parsed };
+        }
+      } catch {
+        // Skip files that aren't valid JSON or can't be read
+        continue;
+      }
+    }
+
+    throw new Error('Seed data group file not found');
+  }
+
   it('should transform seed CSV to valid JSON files', async () => {
     // Create seed CSV with proper JSON format for multiValueQueryString
     // multiValueQueryString must be JSON: {"key":["value"]}
@@ -53,12 +93,7 @@ describe('Seed Transformation and Validation', () => {
     expect(await fs.stat(outputZip)).toBeDefined();
 
     // Extract and check contents
-    const extractDir = path.join(tempDir, 'extracted');
-    await fs.mkdir(extractDir);
-    const outputZipFile = new AdmZip(outputZip);
-    outputZipFile.extractAllTo(extractDir, true);
-
-    const dataDir = path.join(extractDir, 'data');
+    const dataDir = await extractOutputZip(outputZip, tempDir);
     const files = await fs.readdir(dataDir);
 
     // Check for expected files
@@ -102,16 +137,9 @@ describe('Seed Transformation and Validation', () => {
     });
 
     // Check the Seed data group file
-    const seedDataGroupFile = files.find(
-      (f) => f.startsWith('bafkrei') && f.endsWith('.json')
-    );
+    const { filename: seedDataGroupFile, content: seedDataGroup } =
+      await findSeedDataGroupFile(dataDir, files);
     expect(seedDataGroupFile).toBeDefined();
-
-    const seedDataGroupContent = await fs.readFile(
-      path.join(dataDir, seedDataGroupFile!),
-      'utf-8'
-    );
-    const seedDataGroup = JSON.parse(seedDataGroupContent);
 
     // Verify Seed data group structure with relationships wrapper
     expect(seedDataGroup).toHaveProperty('label', 'Seed');
@@ -172,12 +200,7 @@ describe('Seed Transformation and Validation', () => {
     expect(await fs.stat(outputZip)).toBeDefined();
 
     // Extract and check contents
-    const extractDir = path.join(tempDir, 'extracted');
-    await fs.mkdir(extractDir);
-    const outputZipFile = new AdmZip(outputZip);
-    outputZipFile.extractAllTo(extractDir, true);
-
-    const dataDir = path.join(extractDir, 'data');
+    const dataDir = await extractOutputZip(outputZip, tempDir);
     const files = await fs.readdir(dataDir);
 
     // Check for expected files
@@ -207,7 +230,7 @@ describe('Seed Transformation and Validation', () => {
     expect(address.unnormalized_address).toContain('FL');
     expect(address.unnormalized_address).toContain('33101');
 
-    // Verify county_name is capitalized properly
+    // Verify county_name is capitalized (required by schema enum)
     expect(address.county_name).toBe('Miami Dade');
 
     // Verify values

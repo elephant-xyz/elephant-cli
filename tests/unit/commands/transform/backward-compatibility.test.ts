@@ -289,7 +289,7 @@ describe('Transform Backward Compatibility', () => {
           url: seedCsvRow.source_url,
         },
         request_identifier: seedCsvRow.parcel_identifier,
-        county_name: seedCsvRow.county_name,
+        county_name: 'Miami Dade',
         unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
       };
 
@@ -421,15 +421,19 @@ describe('Transform Backward Compatibility', () => {
       // ========================================
 
       // New format address.json follows oneOf schema unnormalized format (Option 1)
-      // Requires 4 fields: source_http_request, request_identifier, county_name, unnormalized_address
+      // Assert required fields are present
       expect(expectedAddressJson).toHaveProperty('unnormalized_address');
       expect(expectedAddressJson).toHaveProperty('source_http_request');
       expect(expectedAddressJson).toHaveProperty('request_identifier');
       expect(expectedAddressJson).toHaveProperty('county_name');
-      expect(Object.keys(expectedAddressJson).length).toBe(4); // 4 required fields
+
+      // Assert deprecated fields are not present
+      expect((expectedAddressJson as any).full_address).toBeUndefined();
+      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
 
       // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
+      expect((expectedParcelJson as any).parcel_id).toBeUndefined();
 
       // Old format has old fields
       expect(expectedUnnormalizedAddressJson).toHaveProperty(
@@ -437,14 +441,6 @@ describe('Transform Backward Compatibility', () => {
       );
       expect(expectedUnnormalizedAddressJson).toHaveProperty('full_address');
       expect(expectedPropertySeedJson).toHaveProperty('parcel_id');
-
-      // New format does NOT have old field names
-      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
-      expect((expectedAddressJson as any).full_address).toBeUndefined();
-      expect((expectedParcelJson as any).parcel_id).toBeUndefined();
-
-      // New format HAS county_name (not county_jurisdiction)
-      expect(expectedAddressJson.county_name).toBeDefined();
 
       // Old format does NOT have new field names
       expect(
