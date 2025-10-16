@@ -371,6 +371,286 @@ describe('Custom Browser Flow', () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toBeUndefined();
     });
+
+    it('should validate wait_for_selector_race with valid next_map', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [
+                { selector: '#option1', label: 'opt1', timeout: 5000 },
+                { selector: '#option2', label: 'opt2' },
+              ],
+              visible: true,
+            },
+            next_map: {
+              opt1: 'handle_opt1',
+              opt2: 'handle_opt2',
+            },
+          },
+          handle_opt1: {
+            type: 'click',
+            input: { selector: '#button1' },
+            end: true,
+          },
+          handle_opt2: {
+            type: 'click',
+            input: { selector: '#button2' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should validate wait_for_selector_race with validate_winner', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [
+                { selector: '#form', label: 'form' },
+                { selector: '#button', label: 'button' },
+              ],
+            },
+            next_map: {
+              form: 'handle_form',
+              button: 'handle_button',
+            },
+            validate_winner: {
+              form: {
+                check_selector: '#button',
+                if_exists_goto: 'handle_button',
+              },
+            },
+          },
+          handle_form: {
+            type: 'type',
+            input: { selector: '#input', value: 'test' },
+            end: true,
+          },
+          handle_button: {
+            type: 'click',
+            input: { selector: '#button' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject wait_for_selector_race with empty selectors array', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [],
+            },
+            next_map: {},
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain('Array must contain at least 1');
+    });
+
+    it('should reject wait_for_selector_race with invalid selector option', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [{ selector: '', label: 'test' }],
+            },
+            next_map: { test: 'next_state' },
+          },
+          next_state: {
+            type: 'click',
+            input: { selector: '#btn' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain('String must contain at least 1');
+    });
+
+    it('should reject wait_for_selector_race with invalid next_map reference', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [{ selector: '#test', label: 'test' }],
+            },
+            next_map: {
+              test: 'non_existent_state',
+            },
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain(
+        'next_map["test"] references unknown state "non_existent_state"'
+      );
+    });
+
+    it('should reject wait_for_selector_race with invalid validate_winner reference', () => {
+      const workflow = {
+        starts_at: 'race_state',
+        states: {
+          race_state: {
+            type: 'wait_for_selector_race',
+            input: {
+              selectors: [{ selector: '#test', label: 'test' }],
+            },
+            next_map: {
+              test: 'next_state',
+            },
+            validate_winner: {
+              test: {
+                check_selector: '#other',
+                if_exists_goto: 'non_existent_state',
+              },
+            },
+          },
+          next_state: {
+            type: 'click',
+            input: { selector: '#btn' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain(
+        'validate_winner["test"].if_exists_goto references unknown state "non_existent_state"'
+      );
+    });
+
+    it('should validate wait_for_selector with continue_on_timeout and next_on_timeout', () => {
+      const workflow = {
+        starts_at: 'wait_optional',
+        states: {
+          wait_optional: {
+            type: 'wait_for_selector',
+            input: {
+              selector: '#optional-button',
+              timeout: 5000,
+            },
+            continue_on_timeout: true,
+            next_on_timeout: 'handle_timeout',
+            next: 'handle_found',
+          },
+          handle_timeout: {
+            type: 'click',
+            input: { selector: '#skip-button' },
+            end: true,
+          },
+          handle_found: {
+            type: 'click',
+            input: { selector: '#optional-button' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject wait_for_selector with invalid next_on_timeout reference', () => {
+      const workflow = {
+        starts_at: 'wait_optional',
+        states: {
+          wait_optional: {
+            type: 'wait_for_selector',
+            input: {
+              selector: '#optional-button',
+            },
+            continue_on_timeout: true,
+            next_on_timeout: 'non_existent_state',
+            next: 'handle_found',
+          },
+          handle_found: {
+            type: 'click',
+            input: { selector: '#optional-button' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(false);
+      expect(result.errors?.[0]).toContain(
+        'next_on_timeout references unknown state "non_existent_state"'
+      );
+    });
+
+    it('should validate workflow with multiple timeout handling scenarios', () => {
+      const workflow = {
+        starts_at: 'wait_button1',
+        states: {
+          wait_button1: {
+            type: 'wait_for_selector',
+            input: {
+              selector: '#button1',
+              timeout: 5000,
+            },
+            continue_on_timeout: true,
+            next_on_timeout: 'wait_button2',
+            next: 'click_button1',
+          },
+          click_button1: {
+            type: 'click',
+            input: { selector: '#button1' },
+            next: 'final',
+          },
+          wait_button2: {
+            type: 'wait_for_selector',
+            input: {
+              selector: '#button2',
+              timeout: 5000,
+            },
+            continue_on_timeout: true,
+            next_on_timeout: 'final',
+            next: 'click_button2',
+          },
+          click_button2: {
+            type: 'click',
+            input: { selector: '#button2' },
+            next: 'final',
+          },
+          final: {
+            type: 'wait_for_selector',
+            input: { selector: '#result' },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+      expect(result.valid).toBe(true);
+    });
   });
 
   describe('loadCustomFlow', () => {
