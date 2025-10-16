@@ -1,3 +1,10 @@
+## [1.51.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.0...v1.51.1) (2025-10-16)
+
+
+### Bug Fixes
+
+* fix schema incompatibality ([#194](https://github.com/elephant-xyz/elephant-cli/issues/194)) ([88cc1c6](https://github.com/elephant-xyz/elephant-cli/commit/88cc1c6e3b5386122e78d14e41b8eeab837edb1a))
+
 # [1.51.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.3...v1.51.0) (2025-10-16)
 
 
