@@ -21,7 +21,7 @@ describe('Transform Backward Compatibility', () => {
       expect((oldAddressData as any).county_name).toBeUndefined();
     });
 
-    it('should handle new schema file structure (address.json)', () => {
+    it('should handle new schema file structure (address.json with unnormalized format)', () => {
       const newAddressData = {
         source_http_request: {
           method: 'GET',
@@ -30,15 +30,55 @@ describe('Transform Backward Compatibility', () => {
         request_identifier: '12345',
         unnormalized_address: '123 Main St',
         county_name: 'Miami Dade',
-        city_name: null,
-        state_code: null,
       };
 
-      // Verify new schema structure
+      // Verify new schema structure (oneOf Option 1: unnormalized format)
       expect(newAddressData.unnormalized_address).toBe('123 Main St');
       expect(newAddressData.county_name).toBe('Miami Dade');
+      expect(newAddressData.source_http_request).toBeDefined();
+      expect(newAddressData.request_identifier).toBe('12345');
       expect((newAddressData as any).full_address).toBeUndefined();
       expect((newAddressData as any).county_jurisdiction).toBeUndefined();
+    });
+
+    it('should handle new schema with all required fields for unnormalized format', () => {
+      // This tests the complete unnormalized format (oneOf Option 1)
+      // which requires: source_http_request, request_identifier, county_name, unnormalized_address
+      const newAddressData = {
+        source_http_request: {
+          method: 'GET' as const,
+          url: 'https://example.com/property?parcel=12345',
+          multiValueQueryString: {
+            parcel: ['12345'],
+          },
+        },
+        request_identifier: '12345',
+        county_name: 'Miami Dade',
+        unnormalized_address: '123 Main St, Miami, FL 33101',
+      };
+
+      // Verify all required fields are present
+      expect(newAddressData).toHaveProperty('source_http_request');
+      expect(newAddressData).toHaveProperty('request_identifier');
+      expect(newAddressData).toHaveProperty('county_name');
+      expect(newAddressData).toHaveProperty('unnormalized_address');
+
+      // Verify values
+      expect(newAddressData.source_http_request.method).toBe('GET');
+      expect(newAddressData.source_http_request.url).toContain('example.com');
+      expect(newAddressData.request_identifier).toBe('12345');
+      expect(newAddressData.county_name).toBe('Miami Dade');
+      expect(newAddressData.unnormalized_address).toContain('123 Main St');
+
+      // Verify it does NOT have old schema fields
+      expect((newAddressData as any).full_address).toBeUndefined();
+      expect((newAddressData as any).county_jurisdiction).toBeUndefined();
+
+      // Verify it does NOT have structured fields (those are in oneOf Option 2)
+      expect((newAddressData as any).street_number).toBeUndefined();
+      expect((newAddressData as any).street_name).toBeUndefined();
+      expect((newAddressData as any).city_name).toBeUndefined();
+      expect((newAddressData as any).state_code).toBeUndefined();
     });
   });
 
@@ -172,22 +212,29 @@ describe('Transform Backward Compatibility', () => {
     it('should create Seed data group with address_has_parcel relationship', () => {
       const seedJson = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
       // Verify structure
       expect(seedJson.label).toBe('Seed');
-      expect(seedJson.address_has_parcel).toBeDefined();
-      expect(seedJson.address_has_parcel['/']).toBe('./address_to_parcel.json');
+      expect(seedJson.relationships).toBeDefined();
+      expect(seedJson.relationships.address_has_parcel).toBeDefined();
+      expect(seedJson.relationships.address_has_parcel['/']).toBe(
+        './address_has_parcel.json'
+      );
     });
 
     it('should NOT include direct address reference in Seed data group', () => {
       const seedJson = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
@@ -195,8 +242,8 @@ describe('Transform Backward Compatibility', () => {
       expect((seedJson as any).address).toBeUndefined();
     });
 
-    it('should create address_to_parcel relationship correctly', () => {
-      const relAddressToParcelJson = {
+    it('should create address_has_parcel relationship correctly', () => {
+      const relAddressHasParcelJson = {
         from: {
           '/': './address.json',
         },
@@ -205,8 +252,8 @@ describe('Transform Backward Compatibility', () => {
         },
       };
 
-      expect(relAddressToParcelJson.from['/']).toBe('./address.json');
-      expect(relAddressToParcelJson.to['/']).toBe('./parcel.json');
+      expect(relAddressHasParcelJson.from['/']).toBe('./address.json');
+      expect(relAddressHasParcelJson.to['/']).toBe('./parcel.json');
     });
   });
 
@@ -227,26 +274,23 @@ describe('Transform Backward Compatibility', () => {
         city_name: 'Miami',
         state_code: 'FL',
         postal_code: '33101',
-        county_name: 'Miami Dade',
+        county_name: 'Miami Dade', // Already capitalized in test data
         parcel_identifier: '01-0200-030-1090',
         source_url: 'https://example.com/property?parcel=01-0200-030-1090',
       };
 
       // Expected output from seed transformation:
       // 1. NEW schema files
+      // address.json now follows oneOf schema with unnormalized format (Option 1)
+      // Requires: source_http_request, request_identifier, county_name, unnormalized_address
       const expectedAddressJson = {
-        unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
-        county_name: seedCsvRow.county_name,
-        street_number: seedCsvRow.street_number,
-        street_name: seedCsvRow.street_name,
-        city_name: seedCsvRow.city_name,
-        state_code: seedCsvRow.state_code,
-        postal_code: seedCsvRow.postal_code,
-        request_identifier: seedCsvRow.parcel_identifier,
         source_http_request: {
           method: 'GET',
           url: seedCsvRow.source_url,
         },
+        request_identifier: seedCsvRow.parcel_identifier,
+        county_name: seedCsvRow.county_name,
+        unnormalized_address: `${seedCsvRow.street_number} ${seedCsvRow.street_name}, ${seedCsvRow.city_name}, ${seedCsvRow.state_code} ${seedCsvRow.postal_code}`,
       };
 
       const expectedParcelJson = {
@@ -280,27 +324,35 @@ describe('Transform Backward Compatibility', () => {
       };
 
       // 3. Relationship file
-      const expectedAddressToParcelJson = {
+      const expectedAddressHasParcelJson = {
         from: { '/': './address.json' },
         to: { '/': './parcel.json' },
       };
 
-      // 4. Seed data group
+      // 4. Seed data group (with relationships wrapper)
       const expectedSeedDataGroup = {
         label: 'Seed',
-        address_has_parcel: {
-          '/': './address_to_parcel.json',
+        relationships: {
+          address_has_parcel: {
+            '/': './address_has_parcel.json',
+          },
         },
       };
 
       // Verify seed transformation produces all files
-      expect(expectedAddressJson.county_name).toBe('Miami Dade');
+      // Note: new schema address.json only has unnormalized_address
+      expect(expectedAddressJson.unnormalized_address).toBe(
+        '123 Main St, Miami, FL 33101'
+      );
       expect(expectedParcelJson.parcel_identifier).toBe('01-0200-030-1090');
       expect(expectedUnnormalizedAddressJson.county_jurisdiction).toBe(
         'Miami Dade'
       );
       expect(expectedPropertySeedJson.parcel_id).toBe('01-0200-030-1090');
-      expect(expectedSeedDataGroup.address_has_parcel).toBeDefined();
+      expect(expectedSeedDataGroup.relationships).toBeDefined();
+      expect(
+        expectedSeedDataGroup.relationships.address_has_parcel
+      ).toBeDefined();
 
       // ========================================
       // STEP 2: County Transformation
@@ -342,7 +394,7 @@ describe('Transform Backward Compatibility', () => {
       // STEP 3: Data Integrity Through Pipeline
       // ========================================
 
-      // All files should have the same request_identifier
+      // All files (new and old) should have the same request_identifier
       expect(expectedAddressJson.request_identifier).toBe('01-0200-030-1090');
       expect(expectedParcelJson.request_identifier).toBe('01-0200-030-1090');
       expect(expectedUnnormalizedAddressJson.request_identifier).toBe(
@@ -352,7 +404,7 @@ describe('Transform Backward Compatibility', () => {
         '01-0200-030-1090'
       );
 
-      // All files should have the same source URL
+      // All files (new and old) should have the same source URL
       const expectedUrl =
         'https://example.com/property?parcel=01-0200-030-1090';
       expect(expectedAddressJson.source_http_request.url).toBe(expectedUrl);
@@ -368,10 +420,19 @@ describe('Transform Backward Compatibility', () => {
       // STEP 4: Verify Backward Compatibility
       // ========================================
 
-      // New format has new fields
-      expect(expectedAddressJson).toHaveProperty('county_name');
+      // New format address.json follows oneOf schema unnormalized format (Option 1)
+      // Assert required fields are present
       expect(expectedAddressJson).toHaveProperty('unnormalized_address');
+      expect(expectedAddressJson).toHaveProperty('source_http_request');
+      expect(expectedAddressJson).toHaveProperty('request_identifier');
+      expect(expectedAddressJson).toHaveProperty('county_name');
+      // Instead of asserting exact key count, assert absence of deprecated fields
+      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
+      expect((expectedAddressJson as any).full_address).toBeUndefined();
+
+      // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
+      expect((expectedParcelJson as any).parcel_id).toBeUndefined();
 
       // Old format has old fields
       expect(expectedUnnormalizedAddressJson).toHaveProperty(
@@ -379,11 +440,6 @@ describe('Transform Backward Compatibility', () => {
       );
       expect(expectedUnnormalizedAddressJson).toHaveProperty('full_address');
       expect(expectedPropertySeedJson).toHaveProperty('parcel_id');
-
-      // New format does NOT have old field names
-      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
-      expect((expectedAddressJson as any).full_address).toBeUndefined();
-      expect((expectedParcelJson as any).parcel_id).toBeUndefined();
 
       // Old format does NOT have new field names
       expect(
@@ -427,6 +483,7 @@ describe('Transform Backward Compatibility', () => {
       expect(seedCsvRow.parcel_identifier).toBe(
         countyTransformOutput.property.parcel_identifier
       );
+      // Verify county information is preserved
       expect(seedCsvRow.county_name).toBe(expectedAddressJson.county_name);
       expect(seedCsvRow.county_name).toBe(
         expectedUnnormalizedAddressJson.county_jurisdiction
@@ -499,12 +556,24 @@ describe('Transform Backward Compatibility', () => {
         },
       };
 
-      // Verify new files exist
+      // Verify new files exist with all required fields
       expect(seedFilesInTempRoot['address.json']).toBeDefined();
       expect(seedFilesInTempRoot['parcel.json']).toBeDefined();
+
+      // address.json should have 4 required fields (oneOf Option 1)
       expect(seedFilesInTempRoot['address.json'].unnormalized_address).toBe(
         '123 Main St'
       );
+      expect(seedFilesInTempRoot['address.json'].county_name).toBe(
+        'Miami Dade'
+      );
+      expect(
+        seedFilesInTempRoot['address.json'].source_http_request
+      ).toBeDefined();
+      expect(seedFilesInTempRoot['address.json'].request_identifier).toBe(
+        '12345'
+      );
+
       expect(seedFilesInTempRoot['parcel.json'].parcel_identifier).toBe(
         '01-0200-030-1090'
       );
