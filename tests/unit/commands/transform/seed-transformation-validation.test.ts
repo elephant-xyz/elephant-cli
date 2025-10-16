@@ -31,7 +31,7 @@ describe('Seed Transformation and Validation', () => {
     const multiValueQueryString = JSON.stringify({
       folioNumber: ['01-0200-030-1090'],
     });
-    
+
     const seedCsv = [
       'parcel_id,address,method,url,multiValueQueryString,source_identifier,county',
       `01-0200-030-1090,"123 Main St Miami FL 33101",GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,miami dade`,
@@ -82,9 +82,7 @@ describe('Seed Transformation and Validation', () => {
 
     // New schema: address.json should ONLY have unnormalized_address (oneOf Option 1)
     expect(address).toHaveProperty('unnormalized_address');
-    expect(address.unnormalized_address).toBe(
-      '123 Main St Miami FL 33101'
-    );
+    expect(address.unnormalized_address).toBe('123 Main St Miami FL 33101');
     // Should NOT have other structured fields in new schema
     expect(address).not.toHaveProperty('county_name');
     expect(address).not.toHaveProperty('source_http_request');
@@ -114,12 +112,15 @@ describe('Seed Transformation and Validation', () => {
       'utf-8'
     );
     const seedDataGroup = JSON.parse(seedDataGroupContent);
-    console.log('Generated Seed data group:', JSON.stringify(seedDataGroup, null, 2));
+    console.log(
+      'Generated Seed data group:',
+      JSON.stringify(seedDataGroup, null, 2)
+    );
 
     // Verify Seed data group structure with relationships wrapper
     expect(seedDataGroup).toHaveProperty('label', 'Seed');
     expect(seedDataGroup).toHaveProperty('relationships');
-    
+
     // Check new schema relationship
     expect(seedDataGroup.relationships).toHaveProperty('address_has_parcel');
     expect(seedDataGroup.relationships.address_has_parcel).toHaveProperty(
@@ -129,25 +130,27 @@ describe('Seed Transformation and Validation', () => {
 
     console.log('\n✅ Seed transformation completed successfully!');
     console.log('📝 Generated files:', files.join(', '));
-    
+
     // Run validation on the transformed data using CLI command
-    console.log('\n--- Running CLI validation command on transformed output ---\n');
-    
+    console.log(
+      '\n--- Running CLI validation command on transformed output ---\n'
+    );
+
     const errorsCsv = path.join(tempDir, 'errors.csv');
     const validateCommand = `node dist/index.js validate "${outputZip}" -o "${errorsCsv}"`;
-    
+
     console.log(`Executing: ${validateCommand}\n`);
-    
+
     let validationFailed = false;
     let validationOutput = '';
-    
+
     try {
       const output = execSync(validateCommand, {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-      
+
       validationOutput = output;
       console.log('Validation output:');
       console.log(output);
@@ -155,7 +158,7 @@ describe('Seed Transformation and Validation', () => {
     } catch (error: any) {
       validationFailed = true;
       validationOutput = error.stdout || '';
-      
+
       console.log('❌ Validation command failed (as expected)');
       console.log('\nValidation stdout:');
       console.log(error.stdout || '(no stdout)');
@@ -164,11 +167,11 @@ describe('Seed Transformation and Validation', () => {
         console.log(error.stderr);
       }
     }
-    
+
     // Expect validation to pass now that schemas are correct
     expect(validationFailed).toBe(false);
     console.log('\n✓ Confirmed: Validation passed successfully');
-    
+
     // Validation should have succeeded
     console.log('\n✅ All seed transformation files validated successfully!');
     console.log('📊 Summary:');
@@ -180,4 +183,3 @@ describe('Seed Transformation and Validation', () => {
     console.log('  - property_seed.json (backward compat)');
   });
 });
-

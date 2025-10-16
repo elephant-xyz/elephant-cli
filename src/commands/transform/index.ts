@@ -295,7 +295,7 @@ async function handleSeedTransform(tempRoot: string) {
     skip_empty_lines: true,
   });
   const seedRow = parsed[0] as SeedRow;
-  
+
   // New schema relationship: address_has_parcel (address -> parcel)
   const relAddressHasParcel = {
     from: {
@@ -306,7 +306,7 @@ async function handleSeedTransform(tempRoot: string) {
     },
   };
   const relAddressHasParcelJson = JSON.stringify(relAddressHasParcel);
-  
+
   // Seed data group with only address_has_parcel relationship
   // Relationships use IPLD link objects pointing to relationship files
   const seedJson = JSON.stringify({
@@ -317,7 +317,7 @@ async function handleSeedTransform(tempRoot: string) {
       },
     },
   });
-  
+
   const sourceHttpRequest: SourceHttpRequest = {
     url: seedRow.url,
     method: seedRow.method,
@@ -344,7 +344,7 @@ async function handleSeedTransform(tempRoot: string) {
   if (seedRow.body) {
     sourceHttpRequest.body = seedRow.body;
   }
-  
+
   // New schema: address.json with ONLY unnormalized_address (oneOf Option 1)
   const addressData = {
     unnormalized_address: seedRow.address,

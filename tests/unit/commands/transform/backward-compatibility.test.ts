@@ -183,7 +183,9 @@ describe('Transform Backward Compatibility', () => {
       expect(seedJson.label).toBe('Seed');
       expect(seedJson.relationships).toBeDefined();
       expect(seedJson.relationships.address_has_parcel).toBeDefined();
-      expect(seedJson.relationships.address_has_parcel['/']).toBe('./address_has_parcel.json');
+      expect(seedJson.relationships.address_has_parcel['/']).toBe(
+        './address_has_parcel.json'
+      );
     });
 
     it('should NOT include direct address reference in Seed data group', () => {
@@ -301,7 +303,9 @@ describe('Transform Backward Compatibility', () => {
       );
       expect(expectedPropertySeedJson.parcel_id).toBe('01-0200-030-1090');
       expect(expectedSeedDataGroup.relationships).toBeDefined();
-      expect(expectedSeedDataGroup.relationships.address_has_parcel).toBeDefined();
+      expect(
+        expectedSeedDataGroup.relationships.address_has_parcel
+      ).toBeDefined();
 
       // ========================================
       // STEP 2: County Transformation
@@ -372,7 +376,7 @@ describe('Transform Backward Compatibility', () => {
       // New format address.json follows oneOf schema: ONLY unnormalized_address
       expect(expectedAddressJson).toHaveProperty('unnormalized_address');
       expect(Object.keys(expectedAddressJson).length).toBe(1); // Only one property
-      
+
       // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
 
