@@ -129,46 +129,19 @@ describe('Seed Transformation and Validation', () => {
     const validateCommand = `node dist/index.js validate "${outputZip}" -o "${errorsCsv}"`;
 
     let validationFailed = false;
-    let validationOutput = '';
 
     try {
-      const output = execSync(validateCommand, {
+      execSync(validateCommand, {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-
-      validationOutput = output;
-      console.log('Validation output:');
-      console.log(output);
-      console.log('\n✅ Validation passed unexpectedly!');
     } catch (error: any) {
       validationFailed = true;
-      validationOutput = error.stdout || '';
-
-      console.log('❌ Validation command failed (as expected)');
-      console.log('\nValidation stdout:');
-      console.log(error.stdout || '(no stdout)');
-      if (error.stderr) {
-        console.log('\nValidation stderr:');
-        console.log(error.stderr);
-      }
     }
 
     // Schema has been deployed to production - validation should now pass
     expect(validationFailed).toBe(false);
-    console.log('\n✓ Confirmed: Validation passed successfully');
-
-    console.log('\n✅ All seed transformation files validated successfully!');
-    console.log('📊 Summary:');
-    console.log('  - Seed data group with address_has_parcel relationship');
-    console.log(
-      '  - address.json (oneOf Option 1: unnormalized format with 4 fields)'
-    );
-    console.log('  - parcel.json (without formatted_parcel_identifier)');
-    console.log('  - address_has_parcel.json (relationship file)');
-    console.log('  - unnormalized_address.json (backward compat)');
-    console.log('  - property_seed.json (backward compat)');
   });
 
   it('should transform seed CSV with structured address fields (oneOf Option 2)', async () => {
@@ -182,8 +155,6 @@ describe('Seed Transformation and Validation', () => {
       'parcel_id,street_number,street_name,city_name,state_code,postal_code,method,url,multiValueQueryString,source_identifier,county',
       `01-0200-030-1090,123,"Main St",MIAMI,FL,33101,GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,miami dade`,
     ].join('\n');
-
-    console.log('Creating seed CSV with structured fields:', seedCsv);
 
     // Create ZIP with seed.csv
     const zip = new AdmZip();
@@ -209,8 +180,6 @@ describe('Seed Transformation and Validation', () => {
     const dataDir = path.join(extractDir, 'data');
     const files = await fs.readdir(dataDir);
 
-    console.log('Generated files:', files);
-
     // Check for expected files
     expect(files).toContain('address.json');
     expect(files).toContain('parcel.json');
@@ -223,7 +192,6 @@ describe('Seed Transformation and Validation', () => {
       'utf-8'
     );
     const address = JSON.parse(addressContent);
-    console.log('Generated address.json:', JSON.stringify(address, null, 2));
 
     // address.json should follow oneOf Option 1 (unnormalized format)
     // with all 4 required fields
@@ -256,50 +224,25 @@ describe('Seed Transformation and Validation', () => {
       'utf-8'
     );
     const parcel = JSON.parse(parcelContent);
-    console.log('Generated parcel.json:', JSON.stringify(parcel, null, 2));
 
     expect(parcel).toHaveProperty('parcel_identifier', '01-0200-030-1090');
     expect(parcel).toHaveProperty('source_http_request');
 
-    console.log('\n✅ Seed transformation with structured input completed!');
-    console.log(
-      '📝 Verified that structured input fields are converted to unnormalized_address'
-    );
-
     // Run validation on the transformed data using CLI command
-    console.log(
-      '\n--- Running CLI validation command on transformed output ---\n'
-    );
-
     const validateCommand = `node dist/index.js validate "${outputZip}"`;
-    console.log(`Executing: ${validateCommand}\n`);
 
     let validationFailed = false;
     try {
-      const output = execSync(validateCommand, {
+      execSync(validateCommand, {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-      console.log('Validation output:');
-      console.log(output);
-      console.log('\n✅ Validation passed unexpectedly!');
     } catch (error: any) {
       validationFailed = true;
-      console.log('❌ Validation command failed (as expected)');
-      console.log('\nValidation stdout:');
-      console.log(error.stdout || '(no stdout)');
-      if (error.stderr) {
-        console.log('\nValidation stderr:');
-        console.log(error.stderr);
-      }
     }
 
     // Schema has been deployed to production - validation should now pass
     expect(validationFailed).toBe(false);
-    console.log('\n✓ Confirmed: Validation passed successfully');
-    console.log(
-      '✅ Seed with structured address fields validated successfully!'
-    );
   });
 });
