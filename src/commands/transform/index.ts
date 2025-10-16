@@ -353,9 +353,11 @@ async function handleSeedTransform(tempRoot: string) {
     // Combine State and ZIP without comma between them
     const stateZipParts: string[] = [];
     if (seedRow.state_code) stateZipParts.push(seedRow.state_code);
-    const zip = seedRow.plus_four_postal_code
-      ? `${seedRow.postal_code}-${seedRow.plus_four_postal_code}`
-      : seedRow.postal_code;
+    const zip = seedRow.postal_code
+      ? (seedRow.plus_four_postal_code
+          ? `${seedRow.postal_code}-${seedRow.plus_four_postal_code}`
+          : seedRow.postal_code)
+      : undefined;
     if (zip) stateZipParts.push(zip);
 
     if (stateZipParts.length > 0) {
