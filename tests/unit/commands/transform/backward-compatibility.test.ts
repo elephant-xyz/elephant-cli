@@ -274,7 +274,7 @@ describe('Transform Backward Compatibility', () => {
         city_name: 'Miami',
         state_code: 'FL',
         postal_code: '33101',
-        county_name: 'Miami Dade',
+        county_name: 'Miami Dade', // Already capitalized in test data
         parcel_identifier: '01-0200-030-1090',
         source_url: 'https://example.com/property?parcel=01-0200-030-1090',
       };

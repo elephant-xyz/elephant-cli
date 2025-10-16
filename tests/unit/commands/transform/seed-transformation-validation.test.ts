@@ -88,7 +88,7 @@ describe('Seed Transformation and Validation', () => {
 
     const seedCsv = [
       'parcel_id,address,method,url,multiValueQueryString,source_identifier,county',
-      `01-0200-030-1090,"123 Main St Miami FL 33101",GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,miami dade`,
+      `01-0200-030-1090,"123 Main St Miami FL 33101",GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,Miami Dade`,
     ].join('\n');
 
     // Create ZIP with seed.csv
@@ -167,22 +167,19 @@ describe('Seed Transformation and Validation', () => {
     );
 
     // Run validation on the transformed data using CLI command
-    const errorsCsv = path.join(tempDir, 'errors.csv');
-    const validateCommand = `node dist/index.js validate "${outputZip}" -o "${errorsCsv}"`;
-
     let validationFailed = false;
 
     try {
-      execSync(validateCommand, {
+      execSync(`node dist/index.js validate "${outputZip}"`, {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-    } catch (error: any) {
+    } catch {
       validationFailed = true;
     }
 
-    // Schema has been deployed to production - validation should now pass
+    // Validation should pass now that longitude and latitude are always included
     expect(validationFailed).toBe(false);
   });
 
@@ -195,7 +192,7 @@ describe('Seed Transformation and Validation', () => {
 
     const seedCsv = [
       'parcel_id,street_number,street_name,city_name,state_code,postal_code,method,url,multiValueQueryString,source_identifier,county',
-      `01-0200-030-1090,123,"Main St",MIAMI,FL,33101,GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,miami dade`,
+      `01-0200-030-1090,123,"Main St",MIAMI,FL,33101,GET,https://example.com/property,"${multiValueQueryString.replace(/"/g, '""')}",01-0200-030-1090,Miami Dade`,
     ].join('\n');
 
     // Create ZIP with seed.csv
@@ -244,8 +241,8 @@ describe('Seed Transformation and Validation', () => {
     expect(address.unnormalized_address).toContain('FL');
     expect(address.unnormalized_address).toContain('33101');
 
-    // Verify county_name matches the raw CSV value
-    expect(address.county_name).toBe('miami dade');
+    // Verify county_name matches the raw CSV value (capitalized)
+    expect(address.county_name).toBe('Miami Dade');
 
     // Verify values
     expect(address.source_http_request).toHaveProperty('method', 'GET');
@@ -266,20 +263,19 @@ describe('Seed Transformation and Validation', () => {
     expect(parcel).toHaveProperty('source_http_request');
 
     // Run validation on the transformed data using CLI command
-    const validateCommand = `node dist/index.js validate "${outputZip}"`;
-
     let validationFailed = false;
+
     try {
-      execSync(validateCommand, {
+      execSync(`node dist/index.js validate "${outputZip}"`, {
         cwd: process.cwd(),
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-    } catch (error: any) {
+    } catch {
       validationFailed = true;
     }
 
-    // Schema has been deployed to production - validation should now pass
+    // Validation should pass now that longitude and latitude are always included
     expect(validationFailed).toBe(false);
   });
 });

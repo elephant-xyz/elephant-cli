@@ -66,8 +66,8 @@ interface AddressData {
   request_identifier: string;
   county_name: string;
   unnormalized_address: string;
-  longitude?: number;
-  latitude?: number;
+  longitude: number | null;
+  latitude: number | null;
 }
 
 interface ParcelData {
@@ -383,20 +383,21 @@ async function handleSeedTransform(tempRoot: string) {
   }
 
   // New schema: address.json with unnormalized format (oneOf Option 1)
-  // Requires: source_http_request, request_identifier, county_name, unnormalized_address
-  // Optional: longitude, latitude
+  // Requires: source_http_request, request_identifier, county_name, unnormalized_address, longitude, latitude
   const addressData: AddressData = {
     source_http_request: sourceHttpRequest,
     request_identifier: seedRow.source_identifier,
     county_name: seedRow.county,
     unnormalized_address: unnormalizedAddress,
+    longitude:
+      seedRow.longitude && seedRow.latitude
+        ? parseFloat(seedRow.longitude)
+        : null,
+    latitude:
+      seedRow.longitude && seedRow.latitude
+        ? parseFloat(seedRow.latitude)
+        : null,
   };
-
-  // Add optional coordinates if provided
-  if (seedRow.longitude && seedRow.latitude) {
-    addressData.longitude = parseFloat(seedRow.longitude);
-    addressData.latitude = parseFloat(seedRow.latitude);
-  }
 
   // New schema: parcel.json with required fields
   const parcelData: ParcelData = {

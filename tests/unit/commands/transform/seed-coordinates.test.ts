@@ -78,7 +78,7 @@ describe('Seed Transformation with Coordinates', () => {
     expect(address).toHaveProperty('request_identifier');
     expect(address).toHaveProperty('county_name');
 
-    // Verify optional coordinate fields are included
+    // Verify coordinate fields are included with values
     expect(address).toHaveProperty('longitude');
     expect(address).toHaveProperty('latitude');
     expect(address.longitude).toBe(-80.1918);
@@ -142,9 +142,9 @@ describe('Seed Transformation with Coordinates', () => {
     expect(address).toHaveProperty('request_identifier');
     expect(address).toHaveProperty('county_name');
 
-    // Verify optional coordinate fields are NOT included
-    expect(address).not.toHaveProperty('longitude');
-    expect(address).not.toHaveProperty('latitude');
+    // Verify coordinate fields are present but set to null when not provided
+    expect(address).toHaveProperty('longitude', null);
+    expect(address).toHaveProperty('latitude', null);
 
     // Check backward compatibility file also doesn't have coordinates
     const unnormalizedAddressContent = await fs.readFile(
