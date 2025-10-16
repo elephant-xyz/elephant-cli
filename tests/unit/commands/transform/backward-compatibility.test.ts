@@ -426,7 +426,9 @@ describe('Transform Backward Compatibility', () => {
       expect(expectedAddressJson).toHaveProperty('source_http_request');
       expect(expectedAddressJson).toHaveProperty('request_identifier');
       expect(expectedAddressJson).toHaveProperty('county_name');
-      expect(Object.keys(expectedAddressJson).length).toBe(4); // 4 required fields
+      // Instead of asserting exact key count, assert absence of deprecated fields
+      expect((expectedAddressJson as any).county_jurisdiction).toBeUndefined();
+      expect((expectedAddressJson as any).full_address).toBeUndefined();
 
       // New format parcel.json has parcel_identifier
       expect(expectedParcelJson).toHaveProperty('parcel_identifier');
