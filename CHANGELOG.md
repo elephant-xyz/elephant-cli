@@ -1,3 +1,10 @@
+## [1.50.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.2...v1.50.3) (2025-10-16)
+
+
+### Bug Fixes
+
+* remove force capitalizeWords , take exact county name from the seed ([#193](https://github.com/elephant-xyz/elephant-cli/issues/193)) ([be70af8](https://github.com/elephant-xyz/elephant-cli/commit/be70af8d6e7bd9a37e204a0d32b3b8e59879d0f6))
+
 ## [1.50.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.1...v1.50.2) (2025-10-16)
 
 
