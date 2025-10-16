@@ -1,3 +1,10 @@
+# [1.51.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.3...v1.51.0) (2025-10-16)
+
+
+### Features
+
+* change transform, prepare and generate-transform to work with new seed group schema ([#188](https://github.com/elephant-xyz/elephant-cli/issues/188)) ([4bb2264](https://github.com/elephant-xyz/elephant-cli/commit/4bb22645605f080b4338137d57c301ad840a5b96))
+
 ## [1.50.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.50.2...v1.50.3) (2025-10-16)
 
 
