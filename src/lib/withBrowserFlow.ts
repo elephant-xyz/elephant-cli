@@ -195,7 +195,7 @@ export async function withBrowserFlow(
     switch (type) {
       case 'open_page': {
         const { url, timeout, wait_until } = input;
-        const maxRetries = 3;
+        const maxRetries = 5;
         const retryDelay = 1000;
 
         for (const attempt of Array(maxRetries).keys()) {

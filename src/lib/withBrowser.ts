@@ -27,24 +27,67 @@ export async function withBrowser(
   const page = browserPage;
   const startMs = Date.now();
   logger.info('Navigating to URL...');
-  try {
-    const url = constructUrl(req);
-    logger.info(`Navigating to URL: ${url}`);
-    const navRes = await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 150000,
-    });
-    assertNavigationOk(navRes, 'initial navigation');
-  } catch (e) {
-    logger.error(`Error navigating to URL: ${e}`);
-    if (e instanceof TimeoutError) {
-      console.error(
-        chalk.red(
-          'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
-        )
-      );
+  const url = constructUrl(req);
+  logger.info(`Navigating to URL: ${url}`);
+
+  const maxRetries = 5;
+  const retryDelay = 1000;
+
+  for (const attempt of Array(maxRetries).keys()) {
+    const isLastAttempt = attempt === maxRetries - 1;
+    const attemptNumber = attempt + 1;
+
+    if (attempt > 0) {
+      logger.info(`Retry attempt ${attemptNumber} for navigation to ${url}`);
+      await new Promise((resolve) => setTimeout(resolve, retryDelay * attempt));
     }
-    throw e;
+
+    try {
+      const navigationPromise = page
+        .goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 150000,
+        })
+        .catch((error) => {
+          const isFrameDetached =
+            error.message.includes('frame') &&
+            (error.message.includes('detached') ||
+              error.message.includes('disposed'));
+
+          if (isFrameDetached && !isLastAttempt) {
+            logger.info(
+              `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
+            );
+            return null;
+          }
+
+          throw error;
+        });
+
+      const navRes = await navigationPromise;
+
+      if (navRes !== null) {
+        assertNavigationOk(navRes, 'initial navigation');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        break;
+      }
+
+      if (isLastAttempt) {
+        throw new Error(`Failed to navigate after ${maxRetries} attempts`);
+      }
+    } catch (e) {
+      if (isLastAttempt) {
+        logger.error(`Error navigating to URL: ${e}`);
+        if (e instanceof TimeoutError) {
+          console.error(
+            chalk.red(
+              'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
+            )
+          );
+        }
+        throw e;
+      }
+    }
   }
 
   // Check if we landed on a reCAPTCHA page and wait for redirect
@@ -88,8 +131,8 @@ export async function withBrowser(
   const html = await page.content();
 
   // Don't treat reCAPTCHA success pages as errors
-  const url = page.url();
-  const isRecaptchaSuccess = url.toLowerCase().includes('recaptchatoken=');
+  const finalUrl = page.url();
+  const isRecaptchaSuccess = finalUrl.toLowerCase().includes('recaptchatoken=');
 
   const bad = detectErrorHtml(
     html,
