@@ -45,18 +45,37 @@ export async function withBrowser(
     // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
     if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
       frameDetached = true;
-      logger.info('Frame detached during navigation (expected for this site) - waiting for page to stabilize...');
+      logger.info('Frame detached during navigation (expected for this site) - waiting for new frame...');
 
-      // Wait for the page to be in a usable state by checking document.readyState
-      await page.waitForFunction(
-        () => document.readyState === 'complete' || document.readyState === 'interactive',
-        { timeout: 30000 }
-      ).catch(() => {
-        logger.warn('Page readyState check timed out, continuing anyway');
+      // Wait for a new frame to be attached to the page
+      // The page loads successfully but the frame reference gets detached during DOM replacement
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          logger.warn('Frame attachment wait timed out, continuing anyway');
+          resolve();
+        }, 30000);
+
+        // Listen for frame navigation completion as a signal the page is ready
+        const handler = () => {
+          logger.info('Frame navigation detected, page should be ready');
+          clearTimeout(timeout);
+          page.off('framenavigated', handler);
+          resolve();
+        };
+
+        page.on('framenavigated', handler);
+
+        // The frame might already be ready, check immediately
+        if (page.mainFrame() && page.url() === url) {
+          logger.info('Main frame already ready');
+          clearTimeout(timeout);
+          page.off('framenavigated', handler);
+          resolve();
+        }
       });
 
       // Give extra time for the new frame to fully render
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     } else if (e instanceof TimeoutError) {
       logger.error(`Navigation timeout: ${e}`);
       console.error(
