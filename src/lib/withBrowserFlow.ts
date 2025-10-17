@@ -217,10 +217,11 @@ export async function withBrowserFlow(
               timeout: timeout ?? 30000,
             })
             .catch((error) => {
+              const errorMsg = error.message.toLowerCase();
               const isFrameDetached =
-                error.message.includes('frame') &&
-                (error.message.includes('detached') ||
-                  error.message.includes('disposed'));
+                errorMsg.includes('frame') &&
+                (errorMsg.includes('detached') ||
+                  errorMsg.includes('disposed'));
 
               if (isFrameDetached && !isLastAttempt) {
                 logger.info(

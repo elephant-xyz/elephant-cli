@@ -49,10 +49,10 @@ export async function withBrowser(
           timeout: 150000,
         })
         .catch((error) => {
+          const errorMsg = error.message.toLowerCase();
           const isFrameDetached =
-            error.message.includes('frame') &&
-            (error.message.includes('detached') ||
-              error.message.includes('disposed'));
+            errorMsg.includes('frame') &&
+            (errorMsg.includes('detached') || errorMsg.includes('disposed'));
 
           if (isFrameDetached && !isLastAttempt) {
             logger.info(
@@ -68,6 +68,21 @@ export async function withBrowser(
 
       if (navRes !== null) {
         assertNavigationOk(navRes, 'initial navigation');
+
+        // Wait for network to settle after navigation (handles progressive loading)
+        logger.info('Waiting for network activity to settle...');
+        try {
+          await page.waitForNetworkIdle({
+            idleTime: 1000,
+            timeout: 30000,
+          });
+          logger.info('Network activity settled');
+        } catch (networkIdleError) {
+          logger.warn(
+            `Network idle timeout: ${networkIdleError instanceof Error ? networkIdleError.message : String(networkIdleError)}`
+          );
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 500));
         break;
       }
