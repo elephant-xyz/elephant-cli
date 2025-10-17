@@ -30,30 +30,38 @@ export async function withBrowser(
   const url = constructUrl(req);
   logger.info(`Navigating to URL: ${url}`);
 
-  // Navigate using networkidle2 which waits for network to settle AFTER frame replacements
-  logger.info(
-    'Starting navigation (using networkidle2 to handle frame replacements)...'
-  );
+  // Navigate - frame detachment during navigation is expected for sites with aggressive DOM replacement
+  logger.info('Starting navigation...');
   try {
     await page.goto(url, {
-      waitUntil: 'networkidle2', // Wait for network to be mostly idle (max 2 connections)
+      waitUntil: 'networkidle2',
       timeout: 150000,
     });
     logger.info('Navigation successful - page loaded and network settled');
   } catch (e) {
-    logger.error(`Error navigating to URL: ${e}`);
-    if (e instanceof TimeoutError) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+
+    // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
+    if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
+      logger.info('Frame detached during navigation (expected for this site) - waiting for page to stabilize...');
+      // Give extra time for the new frame to fully load
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    } else if (e instanceof TimeoutError) {
+      logger.error(`Navigation timeout: ${e}`);
       console.error(
         chalk.red(
           'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
         )
       );
+      throw e;
+    } else {
+      logger.error(`Error navigating to URL: ${e}`);
+      throw e;
     }
-    throw e;
   }
 
   // Give it a final moment to settle
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
   // Check if we landed on a reCAPTCHA page and wait for redirect
   const hasRecaptcha = await checkForRecaptcha(page);

@@ -204,11 +204,25 @@ export async function withBrowserFlow(
         logger.info(
           `Navigating to ${url} (waitUntil: ${effectiveWaitUntil ?? 'networkidle2'})...`
         );
-        await page.goto(url, {
-          waitUntil: effectiveWaitUntil ?? 'networkidle2',
-          timeout: timeout ?? 30000,
-        });
-        logger.info('Navigation successful');
+
+        try {
+          await page.goto(url, {
+            waitUntil: effectiveWaitUntil ?? 'networkidle2',
+            timeout: timeout ?? 30000,
+          });
+          logger.info('Navigation successful');
+        } catch (e) {
+          const errorMsg = e instanceof Error ? e.message : String(e);
+
+          // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
+          if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
+            logger.info('Frame detached during navigation (expected) - waiting for page to stabilize...');
+            // Give extra time for the new frame to fully load
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          } else {
+            throw e;
+          }
+        }
 
         await new Promise((resolve) => setTimeout(resolve, 500));
         break;
