@@ -30,80 +30,30 @@ export async function withBrowser(
   const url = constructUrl(req);
   logger.info(`Navigating to URL: ${url}`);
 
-  const maxRetries = 5;
-  const retryDelay = 1000;
-
-  for (const attempt of Array(maxRetries).keys()) {
-    const isLastAttempt = attempt === maxRetries - 1;
-    const attemptNumber = attempt + 1;
-
-    if (attempt > 0) {
-      logger.info(`Retry attempt ${attemptNumber} for navigation to ${url}`);
-      await new Promise((resolve) => setTimeout(resolve, retryDelay * attempt));
+  // Navigate using networkidle2 which waits for network to settle AFTER frame replacements
+  logger.info(
+    'Starting navigation (using networkidle2 to handle frame replacements)...'
+  );
+  try {
+    await page.goto(url, {
+      waitUntil: 'networkidle2', // Wait for network to be mostly idle (max 2 connections)
+      timeout: 150000,
+    });
+    logger.info('Navigation successful - page loaded and network settled');
+  } catch (e) {
+    logger.error(`Error navigating to URL: ${e}`);
+    if (e instanceof TimeoutError) {
+      console.error(
+        chalk.red(
+          'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
+        )
+      );
     }
-
-    try {
-      const navigationPromise = page
-        .goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 150000,
-        })
-        .catch((error) => {
-          const errorMsg = error.message.toLowerCase();
-          const isFrameDetached =
-            errorMsg.includes('frame') &&
-            (errorMsg.includes('detached') || errorMsg.includes('disposed'));
-
-          if (isFrameDetached && !isLastAttempt) {
-            logger.info(
-              `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
-            );
-            return null;
-          }
-
-          throw error;
-        });
-
-      const navRes = await navigationPromise;
-
-      if (navRes !== null) {
-        assertNavigationOk(navRes, 'initial navigation');
-
-        // Wait for network to settle after navigation (handles progressive loading)
-        logger.info('Waiting for network activity to settle...');
-        try {
-          await page.waitForNetworkIdle({
-            idleTime: 1000,
-            timeout: 30000,
-          });
-          logger.info('Network activity settled');
-        } catch (networkIdleError) {
-          logger.warn(
-            `Network idle timeout: ${networkIdleError instanceof Error ? networkIdleError.message : String(networkIdleError)}`
-          );
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        break;
-      }
-
-      if (isLastAttempt) {
-        throw new Error(`Failed to navigate after ${maxRetries} attempts`);
-      }
-    } catch (e) {
-      if (isLastAttempt) {
-        logger.error(`Error navigating to URL: ${e}`);
-        if (e instanceof TimeoutError) {
-          console.error(
-            chalk.red(
-              'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
-            )
-          );
-        }
-        throw e;
-      }
-    }
+    throw e;
   }
+
+  // Give it a final moment to settle
+  await new Promise((resolve) => setTimeout(resolve, 1000));
 
   // Check if we landed on a reCAPTCHA page and wait for redirect
   const hasRecaptcha = await checkForRecaptcha(page);

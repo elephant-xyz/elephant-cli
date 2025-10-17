@@ -195,55 +195,22 @@ export async function withBrowserFlow(
     switch (type) {
       case 'open_page': {
         const { url, timeout, wait_until } = input;
-        const maxRetries = 5;
-        const retryDelay = 1000;
 
-        for (const attempt of Array(maxRetries).keys()) {
-          const isLastAttempt = attempt === maxRetries - 1;
-          const attemptNumber = attempt + 1;
+        // Use networkidle2 for domcontentloaded to avoid frame detachment issues
+        // networkidle2 waits for network to settle AFTER all frame replacements
+        const effectiveWaitUntil =
+          wait_until === 'domcontentloaded' ? 'networkidle2' : wait_until;
 
-          if (attempt > 0) {
-            logger.info(
-              `Retry attempt ${attemptNumber} for navigation to ${url}`
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryDelay * attempt)
-            );
-          }
+        logger.info(
+          `Navigating to ${url} (waitUntil: ${effectiveWaitUntil ?? 'networkidle2'})...`
+        );
+        await page.goto(url, {
+          waitUntil: effectiveWaitUntil ?? 'networkidle2',
+          timeout: timeout ?? 30000,
+        });
+        logger.info('Navigation successful');
 
-          const navigationPromise = page
-            .goto(url, {
-              waitUntil: wait_until ?? 'domcontentloaded',
-              timeout: timeout ?? 30000,
-            })
-            .catch((error) => {
-              const errorMsg = error.message.toLowerCase();
-              const isFrameDetached =
-                errorMsg.includes('frame') &&
-                (errorMsg.includes('detached') ||
-                  errorMsg.includes('disposed'));
-
-              if (isFrameDetached && !isLastAttempt) {
-                logger.info(
-                  `Frame detachment during navigation (attempt ${attemptNumber}), will retry`
-                );
-                return null;
-              }
-
-              throw error;
-            });
-
-          const response = await navigationPromise;
-
-          if (response !== null) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            break;
-          }
-
-          if (isLastAttempt) {
-            throw new Error(`Failed to navigate after ${maxRetries} attempts`);
-          }
-        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
         break;
       }
       case 'wait_for_selector': {
