@@ -32,7 +32,7 @@ export async function withBrowser(
     logger.info(`Navigating to URL: ${url}`);
     const navRes = await page.goto(url, {
       waitUntil: 'domcontentloaded',
-      timeout: 15000,
+      timeout: 150000,
     });
     assertNavigationOk(navRes, 'initial navigation');
   } catch (e) {
