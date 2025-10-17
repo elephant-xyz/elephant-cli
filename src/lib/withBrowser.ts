@@ -32,6 +32,7 @@ export async function withBrowser(
 
   // Navigate - frame detachment during navigation is expected for sites with aggressive DOM replacement
   logger.info('Starting navigation...');
+  let frameDetached = false;
   try {
     await page.goto(url, {
       waitUntil: 'networkidle2',
@@ -43,9 +44,19 @@ export async function withBrowser(
 
     // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
     if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
+      frameDetached = true;
       logger.info('Frame detached during navigation (expected for this site) - waiting for page to stabilize...');
-      // Give extra time for the new frame to fully load
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      // Wait for the page to be in a usable state by checking document.readyState
+      await page.waitForFunction(
+        () => document.readyState === 'complete' || document.readyState === 'interactive',
+        { timeout: 30000 }
+      ).catch(() => {
+        logger.warn('Page readyState check timed out, continuing anyway');
+      });
+
+      // Give extra time for the new frame to fully render
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     } else if (e instanceof TimeoutError) {
       logger.error(`Navigation timeout: ${e}`);
       console.error(
@@ -61,7 +72,9 @@ export async function withBrowser(
   }
 
   // Give it a final moment to settle
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  if (!frameDetached) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 
   // Check if we landed on a reCAPTCHA page and wait for redirect
   const hasRecaptcha = await checkForRecaptcha(page);
@@ -122,14 +135,23 @@ export async function withBrowser(
 }
 
 async function checkForRecaptcha(page: Page): Promise<boolean> {
-  return page.evaluate(() => {
-    const url = window.location.href;
-    const hasRecaptchaElement =
-      !!document.querySelector('.g-recaptcha') ||
-      !!document.querySelector('[id*="recaptcha"]') ||
-      !!document.querySelector('[class*="recaptcha"]');
-    return url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement;
-  });
+  try {
+    return await page.evaluate(() => {
+      const url = window.location.href;
+      const hasRecaptchaElement =
+        !!document.querySelector('.g-recaptcha') ||
+        !!document.querySelector('[id*="recaptcha"]') ||
+        !!document.querySelector('[class*="recaptcha"]');
+      return url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement;
+    });
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    if (errorMsg.toLowerCase().includes('detach')) {
+      logger.warn('Frame detached during reCAPTCHA check, skipping check');
+      return false;
+    }
+    throw e;
+  }
 }
 
 async function handleRecaptchaRedirect(page: Page): Promise<void> {
@@ -177,35 +199,45 @@ async function clickCustomContinueButton(page: Page, selector: string) {
 }
 
 async function clickContinueButton(page: Page) {
-  const info = await page.evaluate(() => {
-    const modal = document.getElementById('pnlIssues');
-    if (!modal) return null as null | { buttonSelector: string };
-    const s = window.getComputedStyle(modal);
-    const vis =
-      s.display !== 'none' && s.visibility !== 'hidden' && Number(s.zIndex) > 0;
-    if (!vis) return null;
-    const btn =
-      (modal.querySelector('#btnContinue') as
-        | HTMLInputElement
-        | HTMLButtonElement
-        | null) ||
-      (modal.querySelector(
-        'input[name="btnContinue"]'
-      ) as HTMLInputElement | null) ||
-      (modal.querySelector(
-        'input[value="Continue"]'
-      ) as HTMLInputElement | null) ||
-      (modal.querySelector(
-        'button[value="Continue"]'
-      ) as HTMLButtonElement | null);
-    if (!btn) return null;
-    const sel = btn.name
-      ? `input[name="${btn.name}"]`
-      : btn.id === 'btnContinue'
-        ? '#btnContinue'
-        : 'input[value="Continue"]';
-    return { buttonSelector: sel };
-  });
+  let info;
+  try {
+    info = await page.evaluate(() => {
+      const modal = document.getElementById('pnlIssues');
+      if (!modal) return null as null | { buttonSelector: string };
+      const s = window.getComputedStyle(modal);
+      const vis =
+        s.display !== 'none' && s.visibility !== 'hidden' && Number(s.zIndex) > 0;
+      if (!vis) return null;
+      const btn =
+        (modal.querySelector('#btnContinue') as
+          | HTMLInputElement
+          | HTMLButtonElement
+          | null) ||
+        (modal.querySelector(
+          'input[name="btnContinue"]'
+        ) as HTMLInputElement | null) ||
+        (modal.querySelector(
+          'input[value="Continue"]'
+        ) as HTMLInputElement | null) ||
+        (modal.querySelector(
+          'button[value="Continue"]'
+        ) as HTMLButtonElement | null);
+      if (!btn) return null;
+      const sel = btn.name
+        ? `input[name="${btn.name}"]`
+        : btn.id === 'btnContinue'
+          ? '#btnContinue'
+          : 'input[value="Continue"]';
+      return { buttonSelector: sel };
+    });
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    if (errorMsg.toLowerCase().includes('detach')) {
+      logger.warn('Frame detached during continue button check, skipping');
+      return;
+    }
+    throw e;
+  }
 
   if (info) {
     try {
