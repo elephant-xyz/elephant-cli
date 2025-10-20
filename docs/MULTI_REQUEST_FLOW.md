@@ -213,14 +213,31 @@ Results in: `https://example.com/api?id=583207459&type=property&type=land`
 
 ## Output Format
 
-The multi-request flow generates a single JSON file containing all request responses:
+The multi-request flow generates a single JSON file containing all request responses. Each request's response is stored under its `key` with:
+
+- `source_http_request`: The actual HTTP request that was made (with template variables replaced and query parameters separated)
+- `response`: The response data (parsed as JSON if possible, otherwise as a string)
+
+### Response Parsing
+
+- **JSON responses**: Automatically parsed into objects or arrays
+- **Non-JSON responses**: Stored as strings (HTML, XML, plain text, etc.)
+- **source_http_request**: Contains the actual resolved request with:
+  - URL without query parameters
+  - Query parameters in `multiValueQueryString` object
+  - Template variables replaced with actual values
+
+### Simple Example
 
 ```json
 {
   "RequestKey1": {
     "source_http_request": {
       "method": "GET",
-      "url": "https://example.com/api?id=583207459"
+      "url": "https://example.com/api",
+      "multiValueQueryString": {
+        "id": ["583207459"]
+      }
     },
     "response": {
       "parsed": "json",
@@ -243,11 +260,156 @@ The multi-request flow generates a single JSON file containing all request respo
 }
 ```
 
-### Response Parsing
+### Real-World Example: Manatee County Output
 
-- **JSON responses**: Automatically parsed into objects or arrays
-- **Non-JSON responses**: Stored as strings (HTML, XML, plain text, etc.)
-- **source_http_request**: Contains the actual resolved request (with template variables replaced)
+Here's an actual output file from Manatee County showing the mix of HTML and JSON responses:
+
+```json
+{
+  "OwnersAndGeneralInformation": {
+    "source_http_request": {
+      "method": "POST",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-owner.php",
+      "headers": {
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "data=%7B%22parid%22%3A%221000000008%22%2C%22ownerType%22%3A%22%22%2C%22parcel_type%22%3A%22real_property%22%7D"
+    },
+    "response": "<div class=\"row m-1 pt-1\"><div class=\"col-sm-12\">...(HTML content)...</div></div>"
+  },
+  "Sales": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-sales.php",
+      "multiValueQueryString": {
+        "parid": ["1000000008"]
+      }
+    },
+    "response": {
+      "cols": [
+        {
+          "title": "Sale Date",
+          "type": "date"
+        },
+        {
+          "title": "BOOK",
+          "type": "text"
+        },
+        {
+          "title": "Sale Price",
+          "type": "num",
+          "className": "text-right"
+        }
+      ],
+      "rows": [
+        [
+          "1991-09-16 00:00:00",
+          "1349",
+          "1"
+        ],
+        [
+          "1991-07-30 00:00:00",
+          "1344",
+          "239000"
+        ]
+      ]
+    }
+  },
+  "Tax": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-value-history.php",
+      "multiValueQueryString": {
+        "parid": ["1000000008"]
+      }
+    },
+    "response": {
+      "cols": [
+        {
+          "title": "Tax Year",
+          "type": "num",
+          "className": "text-right"
+        },
+        {
+          "title": "Land Value",
+          "type": "num",
+          "className": "text-right"
+        },
+        {
+          "title": "Just/Market Value",
+          "type": "num",
+          "className": "text-right"
+        }
+      ],
+      "rows": [
+        [
+          "2025",
+          "735113",
+          "1511017"
+        ],
+        [
+          "2024",
+          "643933",
+          "1408004"
+        ]
+      ]
+    }
+  },
+  "Land": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-land.php",
+      "multiValueQueryString": {
+        "parid": ["1000000008"]
+      }
+    },
+    "response": {
+      "cols": [...],
+      "rows": [...]
+    }
+  },
+  "Buildings": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-buildings.php",
+      "multiValueQueryString": {
+        "parid": ["1000000008"]
+      }
+    },
+    "response": {
+      "cols": [...],
+      "rows": [...]
+    }
+  },
+  "Features": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-features.php",
+      "multiValueQueryString": {
+        "parid": ["1000000008"]
+      }
+    },
+    "response": {
+      "cols": [...],
+      "rows": [...]
+    }
+  }
+}
+```
+
+**Key observations from this real output:**
+
+1. **Query parameter separation**: Notice how all GET requests have their query parameters in `multiValueQueryString` (not in the URL string). This makes it easy to reuse these request definitions in other processes.
+
+2. **Mixed response types**:
+   - `OwnersAndGeneralInformation` returns HTML (stored as a string)
+   - All other requests (`Sales`, `Tax`, `Land`, `Buildings`, `Features`) return JSON with datatables format (automatically parsed)
+
+3. **Individual source tracking**: Each request maintains its own `source_http_request` details, making it easy to trace which API call produced which data.
+
+4. **Datatables format**: Most Manatee County endpoints return data in a consistent format with:
+   - `cols`: Array of column definitions with title, type, and optional className
+   - `rows`: Array of data rows matching the column definitions
 
 ## Usage Examples
 
