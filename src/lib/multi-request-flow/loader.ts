@@ -2,185 +2,176 @@
  * Multi-Request Flow Loader
  *
  * This module provides utilities for loading and validating multi-request flow
- * configurations from JSON files.
+ * configurations from JSON files using Zod for schema validation.
  */
 
 import { promises as fs } from 'fs';
+import { z } from 'zod';
 import { logger } from '../../utils/logger.js';
-import {
-  MultiRequestFlow,
-  NamedHttpRequest,
-  HttpRequestDefinition,
-} from './types.js';
+import { MultiRequestFlow } from './types.js';
 
 /**
- * Validates that a value is a valid HTTP method.
+ * Zod schema for HTTP request headers
  */
-function isValidMethod(
-  method: unknown
-): method is 'GET' | 'POST' | 'PUT' | 'PATCH' {
-  return (
-    typeof method === 'string' &&
-    ['GET', 'POST', 'PUT', 'PATCH'].includes(method)
-  );
-}
-
-/**
- * Validates that a value is a valid content type.
- */
-function isValidContentType(
-  contentType: unknown
-): contentType is
-  | 'application/json'
-  | 'application/x-www-form-urlencoded'
-  | 'text/xml'
-  | null {
-  return (
-    contentType === null ||
-    (typeof contentType === 'string' &&
-      [
+const headersSchema = z
+  .object({
+    'content-type': z
+      .enum([
         'application/json',
         'application/x-www-form-urlencoded',
         'text/xml',
-      ].includes(contentType))
+      ])
+      .nullable()
+      .optional(),
+  })
+  .catchall(z.union([z.string(), z.null(), z.undefined()]))
+  .optional();
+
+/**
+ * Zod schema for multiValueQueryString
+ */
+const multiValueQueryStringSchema = z
+  .record(z.string(), z.array(z.string()))
+  .optional();
+
+/**
+ * Base schema for HTTP request definition
+ */
+const httpRequestBaseSchema = z.object({
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH']),
+  url: z
+    .string()
+    .min(1)
+    .regex(/^https?:\/\//, {
+      message: 'URL must start with http:// or https://',
+    }),
+  headers: headersSchema,
+  multiValueQueryString: multiValueQueryStringSchema,
+  json: z.union([z.record(z.unknown()), z.array(z.unknown())]).optional(),
+  body: z.string().optional(),
+});
+
+/**
+ * Refined schema with custom validation logic for complex rules
+ */
+const httpRequestSchema = httpRequestBaseSchema
+  .refine(
+    (data) => {
+      // GET requests cannot have body, json, or headers
+      if (data.method === 'GET') {
+        return !data.body && !data.json && !data.headers;
+      }
+      return true;
+    },
+    {
+      message: 'GET requests cannot have body, json, or headers',
+    }
+  )
+  .refine(
+    (data) => {
+      // Cannot have both json and body
+      return !(data.json !== undefined && data.body !== undefined);
+    },
+    {
+      message: 'Cannot have both json and body fields',
+    }
+  )
+  .refine(
+    (data) => {
+      // json requires application/json content-type
+      if (data.json !== undefined) {
+        return data.headers?.['content-type'] === 'application/json';
+      }
+      return true;
+    },
+    {
+      message: 'json body requires content-type: application/json',
+    }
+  )
+  .refine(
+    (data) => {
+      // body requires non-json content-type
+      if (data.body !== undefined) {
+        const contentType = data.headers?.['content-type'];
+        return contentType && contentType !== 'application/json';
+      }
+      return true;
+    },
+    {
+      message:
+        'body field requires content-type header to be set (and not application/json)',
+    }
+  )
+  .refine(
+    (data) => {
+      // POST/PUT/PATCH with application/json require json field
+      if (['POST', 'PUT', 'PATCH'].includes(data.method)) {
+        if (data.headers?.['content-type'] === 'application/json') {
+          return data.json !== undefined;
+        }
+      }
+      return true;
+    },
+    {
+      message:
+        'POST/PUT/PATCH with content-type: application/json requires json field',
+    }
+  )
+  .refine(
+    (data) => {
+      // POST/PUT/PATCH with non-json content-type require body field
+      if (['POST', 'PUT', 'PATCH'].includes(data.method)) {
+        const contentType = data.headers?.['content-type'];
+        if (contentType && contentType !== 'application/json') {
+          return data.body !== undefined;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'POST/PUT/PATCH with non-json content-type requires body field',
+    }
   );
-}
 
 /**
- * Validates that an HTTP request definition is well-formed according to schema rules.
- *
- * @param request - Request definition to validate
- * @throws Error if validation fails
+ * Zod schema for named HTTP request
  */
-function validateHttpRequest(request: HttpRequestDefinition): void {
-  if (!isValidMethod(request.method)) {
-    throw new Error(
-      `Invalid HTTP method: ${request.method}. Must be GET, POST, PUT, or PATCH.`
-    );
-  }
+const namedHttpRequestSchema = z.object({
+  key: z.string().min(1, { message: 'Request key cannot be empty' }),
+  request: httpRequestSchema,
+});
 
-  if (!request.url || typeof request.url !== 'string') {
-    throw new Error('Request URL is required and must be a string');
-  }
-
-  if (!request.url.match(/^https?:\/\//)) {
-    throw new Error('Request URL must start with http:// or https://');
-  }
-
-  // Validate GET requests don't have body/json/headers
-  if (request.method === 'GET') {
-    if (request.body !== undefined) {
-      throw new Error('GET requests cannot have a body');
-    }
-    if (request.json !== undefined) {
-      throw new Error('GET requests cannot have a json body');
-    }
-    if (request.headers !== undefined) {
-      throw new Error('GET requests cannot have headers');
-    }
-  }
-
-  // Validate content-type header if present
-  if (request.headers?.['content-type']) {
-    const contentType = request.headers['content-type'];
-    if (!isValidContentType(contentType)) {
-      throw new Error(
-        `Invalid content-type: ${contentType}. Must be application/json, application/x-www-form-urlencoded, text/xml, or null.`
-      );
-    }
-  }
-
-  // Validate json body requires application/json content-type
-  if (request.json !== undefined) {
-    if (!request.headers?.['content-type']) {
-      throw new Error('json body requires content-type header to be set');
-    }
-    if (request.headers['content-type'] !== 'application/json') {
-      throw new Error('json body requires content-type: application/json');
-    }
-    if (request.body !== undefined) {
-      throw new Error('Cannot have both json and body fields');
-    }
-  }
-
-  // Validate body requires non-json content-type
-  if (request.body !== undefined) {
-    if (!request.headers?.['content-type']) {
-      throw new Error('body field requires content-type header to be set');
-    }
-    if (request.headers['content-type'] === 'application/json') {
-      throw new Error(
-        'body field cannot be used with content-type: application/json. Use json field instead.'
-      );
-    }
-    if (request.json !== undefined) {
-      throw new Error('Cannot have both body and json fields');
-    }
-  }
-
-  // Validate POST/PUT/PATCH require either body or json
-  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
-    if (request.headers?.['content-type'] === 'application/json') {
-      if (request.json === undefined) {
-        throw new Error(
-          `${request.method} request with content-type: application/json requires json field`
-        );
+/**
+ * Zod schema for multi-request flow
+ */
+const multiRequestFlowSchema = z
+  .object({
+    requests: z
+      .array(namedHttpRequestSchema)
+      .min(1, { message: 'Multi-request flow must have at least one request' }),
+  })
+  .refine(
+    (data) => {
+      // Check for duplicate keys
+      const keys = data.requests.map((r) => r.key);
+      const uniqueKeys = new Set(keys);
+      return keys.length === uniqueKeys.size;
+    },
+    (data) => {
+      // Find the first duplicate key for error message
+      const keys = data.requests.map((r) => r.key);
+      const seen = new Set<string>();
+      for (const key of keys) {
+        if (seen.has(key)) {
+          return {
+            message: `Duplicate request key: "${key}"`,
+          };
+        }
+        seen.add(key);
       }
-    } else if (request.headers?.['content-type']) {
-      if (request.body === undefined) {
-        throw new Error(
-          `${request.method} request with content-type: ${request.headers['content-type']} requires body field`
-        );
-      }
+      return { message: 'Duplicate request keys found' };
     }
-  }
-}
-
-/**
- * Validates that a named HTTP request is well-formed.
- *
- * @param namedRequest - Named request to validate
- * @throws Error if validation fails
- */
-function validateNamedRequest(namedRequest: NamedHttpRequest): void {
-  if (!namedRequest.key || typeof namedRequest.key !== 'string') {
-    throw new Error('Each request must have a non-empty "key" field');
-  }
-
-  if (!namedRequest.request || typeof namedRequest.request !== 'object') {
-    throw new Error(
-      `Request "${namedRequest.key}" must have a "request" object`
-    );
-  }
-
-  validateHttpRequest(namedRequest.request);
-}
-
-/**
- * Validates that a multi-request flow configuration is well-formed.
- *
- * @param flow - Flow configuration to validate
- * @throws Error if validation fails
- */
-function validateMultiRequestFlow(flow: MultiRequestFlow): void {
-  if (!flow.requests || !Array.isArray(flow.requests)) {
-    throw new Error('Multi-request flow must have a "requests" array');
-  }
-
-  if (flow.requests.length === 0) {
-    throw new Error('Multi-request flow must have at least one request');
-  }
-
-  const keys = new Set<string>();
-  for (const namedRequest of flow.requests) {
-    validateNamedRequest(namedRequest);
-
-    if (keys.has(namedRequest.key)) {
-      throw new Error(`Duplicate request key: "${namedRequest.key}"`);
-    }
-    keys.add(namedRequest.key);
-  }
-}
+  );
 
 /**
  * Loads and validates a multi-request flow configuration from a JSON file.
@@ -216,11 +207,23 @@ export async function loadMultiRequestFlow(
     throw new Error('Multi-request flow must be a JSON object');
   }
 
-  validateMultiRequestFlow(flow as MultiRequestFlow);
+  // Validate using Zod schema
+  const result = multiRequestFlowSchema.safeParse(flow);
+
+  if (!result.success) {
+    // Format Zod errors for better readability
+    const errors = result.error.issues.map((issue) => {
+      const path = issue.path.join('.');
+      return path ? `${path}: ${issue.message}` : issue.message;
+    });
+    throw new Error(
+      `Multi-request flow validation failed:\n  - ${errors.join('\n  - ')}`
+    );
+  }
 
   logger.info(
-    `Successfully loaded multi-request flow with ${(flow as MultiRequestFlow).requests.length} request(s)`
+    `Successfully loaded multi-request flow with ${result.data.requests.length} request(s)`
   );
 
-  return flow as MultiRequestFlow;
+  return result.data;
 }

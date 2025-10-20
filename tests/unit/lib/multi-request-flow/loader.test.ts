@@ -83,7 +83,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Multi-request flow must have a "requests" array'
+        'Required'
       );
     });
 
@@ -97,7 +97,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Multi-request flow must have a "requests" array'
+        'Expected array'
       );
     });
 
@@ -132,7 +132,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Each request must have a non-empty "key" field'
+        'Required'
       );
     });
 
@@ -183,7 +183,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Invalid HTTP method'
+        'Invalid enum value'
       );
     });
 
@@ -204,7 +204,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Request URL is required'
+        'Required'
       );
     });
 
@@ -226,7 +226,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Request URL must start with http:// or https://'
+        'URL must start with http:// or https://'
       );
     });
 
@@ -249,7 +249,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have a body'
+        'GET requests cannot have body, json, or headers'
       );
     });
 
@@ -272,7 +272,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have a json body'
+        'GET requests cannot have body, json, or headers'
       );
     });
 
@@ -297,7 +297,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have headers'
+        'GET requests cannot have body, json, or headers'
       );
     });
 
@@ -320,7 +320,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'json body requires content-type header to be set'
+        'json body requires content-type: application/json'
       );
     });
 
@@ -395,7 +395,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'body field cannot be used with content-type: application/json'
+        'body field requires content-type header to be set (and not application/json)'
       );
     });
 
@@ -447,7 +447,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'POST request with content-type: application/json requires json field'
+        'POST/PUT/PATCH with content-type: application/json requires json field'
       );
     });
 
@@ -472,7 +472,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'POST request with content-type: application/x-www-form-urlencoded requires body field'
+        'POST/PUT/PATCH with non-json content-type requires body field'
       );
     });
 
@@ -640,7 +640,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'Invalid content-type'
+        'Invalid enum value'
       );
     });
   });
