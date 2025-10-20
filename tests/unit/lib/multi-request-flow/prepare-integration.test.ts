@@ -195,8 +195,13 @@ describe('prepare command with multi-request flow integration', () => {
     );
 
     expect(preparedJson.Sales.source_http_request.url).toBe(
-      'https://example.com/api/sales?parid=583207459'
+      'https://example.com/api/sales'
     );
+    expect(
+      preparedJson.Sales.source_http_request.multiValueQueryString
+    ).toEqual({
+      parid: ['583207459'],
+    });
   });
 
   it('substitutes request_identifier in all request parts', async () => {

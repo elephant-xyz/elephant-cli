@@ -47,7 +47,12 @@ describe('multi-request-flow/executor', () => {
       expect(output).toHaveProperty('TestData');
       expect(output.TestData.response).toEqual(mockResponse);
       expect(output.TestData.source_http_request.url).toBe(
-        'https://example.com/api?id=583207459'
+        'https://example.com/api'
+      );
+      expect(output.TestData.source_http_request.multiValueQueryString).toEqual(
+        {
+          id: ['583207459'],
+        }
       );
 
       expect(fetch).toHaveBeenCalledWith(
@@ -224,12 +229,23 @@ describe('multi-request-flow/executor', () => {
         text: async () => JSON.stringify(mockResponse),
       } as Response);
 
-      await executeMultiRequestFlow(flow, testRequestId);
+      const result = await executeMultiRequestFlow(flow, testRequestId);
 
       expect(fetch).toHaveBeenCalledWith(
         'https://example.com/api?id=583207459&type=property&type=land',
         expect.any(Object)
       );
+
+      const output = JSON.parse(result.content);
+      expect(output.QueryTest.source_http_request.url).toBe(
+        'https://example.com/api'
+      );
+      expect(
+        output.QueryTest.source_http_request.multiValueQueryString
+      ).toEqual({
+        id: ['583207459'],
+        type: ['property', 'land'],
+      });
     });
 
     it('parses HTML response as string when not valid JSON', async () => {
@@ -422,7 +438,7 @@ describe('multi-request-flow/executor', () => {
             key: 'FullTest',
             request: {
               method: 'POST',
-              url: 'https://example.com/api/{{request_identifier}}',
+              url: 'https://example.com/api/{{request_identifier}}?extra=value',
               headers: {
                 'content-type': 'application/json',
               },
@@ -458,6 +474,7 @@ describe('multi-request-flow/executor', () => {
           'content-type': 'application/json',
         },
         multiValueQueryString: {
+          extra: ['value'],
           ref: ['583207459'],
         },
         json: {

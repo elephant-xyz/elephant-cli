@@ -569,7 +569,17 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
         'utf-8'
       );
       const jsonObj = JSON.parse(json);
-      jsonObj.source_http_request = sourceHttpRequest;
+
+      // Only set source_http_request from seed if not present or empty
+      if (
+        !jsonObj.source_http_request ||
+        jsonObj.source_http_request === null ||
+        (typeof jsonObj.source_http_request === 'object' &&
+          Object.keys(jsonObj.source_http_request).length === 0)
+      ) {
+        jsonObj.source_http_request = sourceHttpRequest;
+      }
+
       jsonObj.request_identifier = requestIdentifier;
       await fs.writeFile(
         path.join(tempRoot, OUTPUT_DIR, rel),

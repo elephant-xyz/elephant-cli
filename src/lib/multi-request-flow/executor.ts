@@ -135,6 +135,61 @@ async function executeRequest(
 }
 
 /**
+ * Normalizes an HTTP request by extracting query parameters from the URL
+ * and placing them in the multiValueQueryString object.
+ *
+ * @param request - HTTP request definition
+ * @returns Normalized request with query params in multiValueQueryString
+ */
+function normalizeRequest(
+  request: HttpRequestDefinition
+): HttpRequestDefinition {
+  const url = new URL(request.url);
+  const result: HttpRequestDefinition = {
+    method: request.method,
+    url: `${url.origin}${url.pathname}`,
+  };
+
+  if (request.headers) {
+    result.headers = request.headers;
+  }
+
+  if (request.json !== undefined) {
+    result.json = request.json;
+  }
+
+  if (request.body !== undefined) {
+    result.body = request.body;
+  }
+
+  const queryParams: Record<string, string[]> = {};
+
+  if (url.search) {
+    for (const [key, value] of url.searchParams.entries()) {
+      if (!queryParams[key]) {
+        queryParams[key] = [];
+      }
+      queryParams[key].push(value);
+    }
+  }
+
+  if (request.multiValueQueryString) {
+    for (const [key, values] of Object.entries(request.multiValueQueryString)) {
+      if (!queryParams[key]) {
+        queryParams[key] = [];
+      }
+      queryParams[key].push(...values);
+    }
+  }
+
+  if (Object.keys(queryParams).length > 0) {
+    result.multiValueQueryString = queryParams;
+  }
+
+  return result;
+}
+
+/**
  * Executes a multi-request flow by making all defined HTTP requests in sequence
  * and combining their responses into a single JSON output.
  *
@@ -163,8 +218,10 @@ export async function executeMultiRequestFlow(
 
     const responseData = await executeRequest(resolvedRequest);
 
+    const normalizedRequest = normalizeRequest(resolvedRequest);
+
     const httpResponse: HttpRequestResponse = {
-      source_http_request: resolvedRequest,
+      source_http_request: normalizedRequest,
       response: responseData,
     };
 
