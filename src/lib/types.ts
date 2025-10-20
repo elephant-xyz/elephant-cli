@@ -21,6 +21,7 @@ export type PrepareOptions = {
   browserFlowFile?: string;
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
+  multiRequestFlowFile?: string;
 };
 
 export type Prepared = {

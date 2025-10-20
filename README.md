@@ -206,12 +206,17 @@ elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
   --use-browser \
   --proxy "username:password@192.168.1.1:8080"
+
+# Using multi-request flow for APIs with multiple endpoints
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --multi-request-flow-file flow.json
 ```
 
 **What it does**
 
 - Reads `source_http_request` from `property_seed.json`.
-- Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints).
+- Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints, or multi-request flow for multiple API endpoints).
 - Writes the response to `<request_identifier>.html` or `<request_identifier>.json` alongside the seed files.
 
 **Inputs**
@@ -229,17 +234,18 @@ prepared-site.zip
 
 **Options**
 
-| Option                             | Description                                                                     | Default  |
-| ---------------------------------- | ------------------------------------------------------------------------------- | -------- |
-| `--output-zip <path>`              | Destination ZIP containing the fetched response.                                | Required |
-| `--use-browser`                    | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
-| `--no-continue`                    | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
-| `--continue-button <selector>`     | CSS selector for a simple continue/agree button to click.                       | None     |
-| `--ignore-captcha`                 | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
-| `--browser-flow-template <name>`   | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
-| `--browser-flow-parameters <json>` | JSON parameters for the browser flow template.                                  | None     |
-| `--browser-flow-file <path>`       | Path to custom browser flow JSON file (takes precedence over template).         | None     |
-| `--proxy <url>`                    | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
+| Option                               | Description                                                                     | Default  |
+| ------------------------------------ | ------------------------------------------------------------------------------- | -------- |
+| `--output-zip <path>`                | Destination ZIP containing the fetched response.                                | Required |
+| `--use-browser`                      | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
+| `--no-continue`                      | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
+| `--continue-button <selector>`       | CSS selector for a simple continue/agree button to click.                       | None     |
+| `--ignore-captcha`                   | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
+| `--browser-flow-template <name>`     | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
+| `--browser-flow-parameters <json>`   | JSON parameters for the browser flow template.                                  | None     |
+| `--browser-flow-file <path>`         | Path to custom browser flow JSON file (takes precedence over template).         | None     |
+| `--multi-request-flow-file <path>`   | Path to JSON file defining a multi-request flow (sequence of HTTP requests).    | None     |
+| `--proxy <url>`                      | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
 
 ### Browser Flow Templates
 
@@ -265,6 +271,66 @@ elephant-cli prepare input.zip \
   --output-zip output.zip \
   --browser-flow-file my-custom-flow.json
 ```
+
+### Multi-Request Flows
+
+For counties where property data is distributed across multiple API endpoints, use multi-request flows to fetch and combine data from a sequence of HTTP requests into a single JSON output.
+
+**When to Use Multi-Request Flows:**
+
+- Property data is spread across multiple API endpoints (e.g., owner info, sales history, tax data)
+- Different aspects of property information require separate API calls
+- The property appraiser provides API access rather than HTML pages
+- A single page view or request cannot capture all necessary data
+
+**Key Features:**
+
+- Execute multiple HTTP requests in sequence (GET, POST, PUT, PATCH)
+- Automatically substitute `{{request_identifier}}` template variables in URLs, headers, bodies, and query parameters
+- Support for JSON and form-encoded request bodies
+- Automatic response parsing (JSON or string)
+- Combined output with all request/response pairs in a single JSON file
+
+For detailed documentation, configuration format, validation rules, and troubleshooting, see [Multi-Request Flow Documentation](./docs/MULTI_REQUEST_FLOW.md).
+
+**Quick Example:**
+
+Create a flow file `manatee-flow.json`:
+
+```json
+{
+  "requests": [
+    {
+      "key": "OwnersAndGeneralInformation",
+      "request": {
+        "method": "POST",
+        "url": "https://example.com/api/owner",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "parid={{request_identifier}}"
+      }
+    },
+    {
+      "key": "Sales",
+      "request": {
+        "method": "GET",
+        "url": "https://example.com/api/sales?parid={{request_identifier}}"
+      }
+    }
+  ]
+}
+```
+
+Then run:
+
+```bash
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --multi-request-flow-file manatee-flow.json
+```
+
+See the [examples directory](./examples/manatee-multi-request-prepare-flow.json) for a complete real-world example.
 
 To use `transform` with a browser on AWS EC2 instances you need to run Ubuntu 22.04 or later and perfrom the following steps:
 

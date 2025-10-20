@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Multi-Request Flow",
+  "description": "JSON Schema for multi-request flow configurations used by the elephant-cli prepare command",
+  "type": "object",
+  "required": ["requests"],
+  "additionalProperties": false,
+  "properties": {
+    "requests": {
+      "type": "array",
+      "description": "Array of named HTTP requests to execute in sequence",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["key", "request"],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Unique identifier for this request (used as property name in output)",
+            "minLength": 1
+          },
+          "request": {
+            "type": "object",
+            "required": ["method", "url"],
+            "additionalProperties": false,
+            "properties": {
+              "method": {
+                "type": "string",
+                "description": "HTTP method for the request",
+                "enum": ["GET", "POST", "PUT", "PATCH"]
+              },
+              "url": {
+                "type": "string",
+                "description": "The URL endpoint (may contain {{request_identifier}} template variable)",
+                "pattern": "^https?://",
+                "minLength": 1
+              },
+              "headers": {
+                "type": "object",
+                "description": "HTTP headers for the request",
+                "properties": {
+                  "content-type": {
+                    "type": ["string", "null"],
+                    "description": "Content-Type header",
+                    "enum": [
+                      "application/json",
+                      "application/x-www-form-urlencoded",
+                      "text/xml",
+                      null
+                    ]
+                  }
+                },
+                "additionalProperties": {
+                  "type": ["string", "null"]
+                }
+              },
+              "multiValueQueryString": {
+                "type": "object",
+                "description": "Multi-value query string parameters (may contain {{request_identifier}})",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "json": {
+                "description": "JSON body for application/json requests (may contain {{request_identifier}} in nested strings)",
+                "anyOf": [
+                  { "type": "object" },
+                  { "type": "array" }
+                ]
+              },
+              "body": {
+                "type": "string",
+                "description": "String body for non-JSON requests (may contain {{request_identifier}})"
+              }
+            },
+            "allOf": [
+              {
+                "description": "GET requests cannot have body, json, or headers",
+                "if": {
+                  "properties": {
+                    "method": {
+                      "const": "GET"
+                    }
+                  }
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      { "required": ["body"] },
+                      { "required": ["json"] },
+                      { "required": ["headers"] }
+                    ]
+                  }
+                }
+              },
+              {
+                "description": "json field requires content-type: application/json",
+                "if": {
+                  "required": ["json"]
+                },
+                "then": {
+                  "properties": {
+                    "headers": {
+                      "required": ["content-type"],
+                      "properties": {
+                        "content-type": {
+                          "const": "application/json"
+                        }
+                      }
+                    }
+                  },
+                  "required": ["headers"]
+                }
+              },
+              {
+                "description": "body field requires non-JSON content-type",
+                "if": {
+                  "required": ["body"]
+                },
+                "then": {
+                  "properties": {
+                    "headers": {
+                      "required": ["content-type"],
+                      "properties": {
+                        "content-type": {
+                          "not": {
+                            "const": "application/json"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["headers"]
+                }
+              },
+              {
+                "description": "Cannot have both json and body",
+                "not": {
+                  "allOf": [
+                    { "required": ["json"] },
+                    { "required": ["body"] }
+                  ]
+                }
+              },
+              {
+                "description": "POST/PUT/PATCH with application/json requires json field",
+                "if": {
+                  "properties": {
+                    "method": {
+                      "enum": ["POST", "PUT", "PATCH"]
+                    },
+                    "headers": {
+                      "properties": {
+                        "content-type": {
+                          "const": "application/json"
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["json"],
+                  "not": {
+                    "required": ["body"]
+                  }
+                }
+              },
+              {
+                "description": "POST/PUT/PATCH with non-JSON content-type requires body field",
+                "if": {
+                  "properties": {
+                    "method": {
+                      "enum": ["POST", "PUT", "PATCH"]
+                    },
+                    "headers": {
+                      "properties": {
+                        "content-type": {
+                          "not": {
+                            "const": "application/json"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["body"],
+                  "not": {
+                    "required": ["json"]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
