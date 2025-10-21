@@ -14,26 +14,7 @@ import {
   MultiRequestFlowResult,
 } from './types.js';
 import { replaceTemplateVariables } from './template.js';
-
-/**
- * Constructs a full URL from a request definition, including query parameters.
- *
- * @param request - HTTP request definition
- * @returns Complete URL string with query parameters
- */
-function constructUrl(request: HttpRequestDefinition): string {
-  const url = new URL(request.url);
-
-  if (request.multiValueQueryString) {
-    for (const [key, values] of Object.entries(request.multiValueQueryString)) {
-      for (const value of values) {
-        url.searchParams.append(key, value);
-      }
-    }
-  }
-
-  return url.toString();
-}
+import { constructUrl, executeFetch } from '../common.js';
 
 /**
  * Attempts to parse a string as JSON. Returns the parsed object/array on success,
@@ -89,46 +70,11 @@ async function executeRequest(
     }
   }
 
-  logger.debug(`Request headers: ${JSON.stringify(headers)}`);
-  if (body) {
-    logger.debug(
-      `Request body: ${body.substring(0, 200)}${body.length > 200 ? '...' : ''}`
-    );
-  }
-
-  const startMs = Date.now();
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      method: request.method,
-      headers,
-      body,
-    });
-  } catch (error) {
-    logger.error(
-      `Network error: ${error instanceof Error ? error.message : String(error)}`
-    );
-    throw error;
-  }
-
-  logger.info(`Response status: ${response.status} ${response.statusText}`);
-  logger.debug(
-    `Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`
-  );
-
-  if (!response.ok) {
-    const errorText = await response
-      .text()
-      .catch(() => 'Unable to read error response');
-    logger.error(`HTTP error response body: ${errorText}`);
-    throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-  }
-
-  const responseText = await response.text();
-  const elapsedMs = Date.now() - startMs;
-  logger.info(
-    `Downloaded response body in ${elapsedMs}ms (${responseText.length} bytes)`
+  const { responseText } = await executeFetch(
+    url,
+    request.method,
+    headers,
+    body
   );
 
   return tryParseJson(responseText);
