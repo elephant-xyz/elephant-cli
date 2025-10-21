@@ -285,8 +285,8 @@ For counties where property data is distributed across multiple API endpoints, u
 
 **Key Features:**
 
-- Execute multiple HTTP requests in sequence (GET, POST, PUT, PATCH)
-- Automatically substitute `{{request_identifier}}` template variables in URLs, headers, bodies, and query parameters
+- Execute multiple HTTP requests in parallel (GET, POST, PUT, PATCH)
+- Automatically substitute `{{=it.request_identifier}}` template variables in URLs, headers, bodies, and query parameters using doT.js syntax
 - Support for JSON and form-encoded request bodies
 - Automatic response parsing (JSON or string)
 - Combined output with all request/response pairs in a single JSON file
@@ -308,14 +308,14 @@ Create a flow file `manatee-flow.json`:
         "headers": {
           "content-type": "application/x-www-form-urlencoded"
         },
-        "body": "parid={{request_identifier}}"
+        "body": "parid={{=it.request_identifier}}"
       }
     },
     {
       "key": "Sales",
       "request": {
         "method": "GET",
-        "url": "https://example.com/api/sales?parid={{request_identifier}}"
+        "url": "https://example.com/api/sales?parid={{=it.request_identifier}}"
       }
     }
   ]
