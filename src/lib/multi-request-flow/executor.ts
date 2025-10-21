@@ -136,7 +136,7 @@ function normalizeRequest(
 }
 
 /**
- * Executes a multi-request flow by making all defined HTTP requests in sequence
+ * Executes a multi-request flow by making all defined HTTP requests in parallel
  * and combining their responses into a single JSON output.
  *
  * @param flow - Multi-request flow configuration
@@ -152,9 +152,7 @@ export async function executeMultiRequestFlow(
   );
   logger.info(`Request identifier: ${requestIdentifier}`);
 
-  const output: MultiRequestFlowOutput = {};
-
-  for (const namedRequest of flow.requests) {
+  const requestPromises = flow.requests.map(async (namedRequest) => {
     logger.info(`Processing request: ${namedRequest.key}`);
 
     const resolvedRequest = replaceTemplateVariables(
@@ -171,9 +169,16 @@ export async function executeMultiRequestFlow(
       response: responseData,
     };
 
-    output[namedRequest.key] = httpResponse;
-
     logger.info(`Successfully completed request: ${namedRequest.key}`);
+
+    return { key: namedRequest.key, response: httpResponse };
+  });
+
+  const results = await Promise.all(requestPromises);
+
+  const output: MultiRequestFlowOutput = {};
+  for (const result of results) {
+    output[result.key] = result.response;
   }
 
   logger.info('Multi-request flow completed successfully');
