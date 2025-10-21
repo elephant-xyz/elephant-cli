@@ -1,3 +1,10 @@
+# [1.52.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.1...v1.52.0) (2025-10-21)
+
+
+### Features
+
+* Implement multi-requests flow feature for prepare ([#197](https://github.com/elephant-xyz/elephant-cli/issues/197)) ([ba1a5a5](https://github.com/elephant-xyz/elephant-cli/commit/ba1a5a530dc4cfef92c080f91d497e2ab22ec6a7))
+
 ## [1.51.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.0...v1.51.1) (2025-10-16)
 
 
