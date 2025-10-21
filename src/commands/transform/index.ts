@@ -516,11 +516,9 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
   // Only copy address.json if scripts didn't create one
   if (hasAddressJson) {
     const scriptCreatedAddressPath = path.join(tempRoot, OUTPUT_DIR, 'address.json');
-    try {
-      await fs.access(scriptCreatedAddressPath);
+    if (existsSync(scriptCreatedAddressPath)) {
       logger.debug('Scripts created address.json, skipping copy');
-    } catch {
-      // If fs.access throws, the file does not exist, so we can copy it.
+    } else {
       await fs.copyFile(
         path.join(tempRoot, 'address.json'),
         scriptCreatedAddressPath
