@@ -101,6 +101,7 @@ You must systematically adhere to these principles:
       </file_schema>
     - Analyze the provided file contents (`input_file`, `address`, `parcel`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
     - The file contents are already provided to you in the user message - you don't need to read them.
+    - Note: `input_file` may be in multi-request flow format (nested objects with `source_http_request` and `response` fields) or standard format (single HTML/JSON document). Detect the format and extract accordingly.
     - Explicitly note for each target data area the exact supporting data source(s):
       - Owners: from `owner_data` content (if available in user message)
       - Utilities: from `utilities_data` content (if available in user message)
@@ -146,7 +147,9 @@ You must systematically adhere to these principles:
       - Produces JSON outputs for each data type in `{data_dir}` directory.
       - Never generates or mentions empty files for missing data.
       - Remains re-runnable, idempotent, and schema-compliant.
-      - Do not populate `source_http_request` and `request_identifier` in output data.
+      - Handle `source_http_request` correctly:
+        - If input data contains top-level nested objects where each has its own `source_http_request` field (multi-request flow format), extract data from the appropriate nested object's `response` field and copy that object's `source_http_request` to the corresponding output file.
+        - Otherwise, do not populate `source_http_request` in output data.
 
 3.  **Output Specification**
     - For each property, generate these files inside the `{data_dir}` directory :
@@ -238,11 +241,40 @@ Determine the source for each data area. For owner data, utilities, and layout d
 **Action:**  
 In `scripts/data_extractor.js`, implement extraction logic accordingly—owners, utilities, and layout use the specified JSON files, everything else is parsed from HTML.
 
-_Example 2: Handling Absent Data_  
-**Reasoning:**  
-If some fields required by the schema are not present in any source, no file should be created for that data type, and missing optional fields within files should be set to null or schema-allowed empty values.  
-**Action:**  
+_Example 2: Handling Absent Data_
+**Reasoning:**
+If some fields required by the schema are not present in any source, no file should be created for that data type, and missing optional fields within files should be set to null or schema-allowed empty values.
+**Action:**
 Check for existence of necessary data before file creation; never generate empty output files.
+
+_Example 3: Multi-Request Flow Format_
+**Reasoning:**
+When input data is from a multi-request flow (multiple API calls), it has nested structure like:
+```json
+{
+  "Sales": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://example.com/sales.php",
+      "multiValueQueryString": {"parid": ["123"]}
+    },
+    "response": {
+      "cols": [...],
+      "rows": [[...]]
+    }
+  },
+  "Tax": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://example.com/tax.php",
+      "multiValueQueryString": {"parid": ["123"]}
+    },
+    "response": {...}
+  }
+}
+```
+**Action:**
+Extract sales data from `inputData.Sales.response` and include `inputData.Sales.source_http_request` in each `sales_*.json` file. Extract tax data from `inputData.Tax.response` and include `inputData.Tax.source_http_request` in each `tax_*.json` file. This preserves API source tracking for each data type.
 
 # Notes
 
