@@ -12,14 +12,15 @@ describe('multi-request-flow/template', () => {
   const testRequestId = '583207459';
 
   describe('replaceInString', () => {
-    it('replaces single occurrence of {{request_identifier}}', () => {
-      const template = 'https://example.com/api?id={{request_identifier}}';
+    it('replaces single occurrence of {{=it.request_identifier}}', () => {
+      const template = 'https://example.com/api?id={{=it.request_identifier}}';
       const result = replaceInString(template, testRequestId);
       expect(result).toBe('https://example.com/api?id=583207459');
     });
 
-    it('replaces multiple occurrences of {{request_identifier}}', () => {
-      const template = '{{request_identifier}}-test-{{request_identifier}}';
+    it('replaces multiple occurrences of {{=it.request_identifier}}', () => {
+      const template =
+        '{{=it.request_identifier}}-test-{{=it.request_identifier}}';
       const result = replaceInString(template, testRequestId);
       expect(result).toBe('583207459-test-583207459');
     });
@@ -39,17 +40,17 @@ describe('multi-request-flow/template', () => {
 
   describe('replaceInValue', () => {
     it('replaces template in string value', () => {
-      const value = 'parid={{request_identifier}}';
+      const value = 'parid={{=it.request_identifier}}';
       const result = replaceInValue(value, testRequestId);
       expect(result).toBe('parid=583207459');
     });
 
     it('replaces template in nested object', () => {
       const value = {
-        parid: '{{request_identifier}}',
+        parid: '{{=it.request_identifier}}',
         ownerType: '',
         nested: {
-          id: '{{request_identifier}}',
+          id: '{{=it.request_identifier}}',
         },
       };
       const result = replaceInValue(value, testRequestId);
@@ -64,9 +65,9 @@ describe('multi-request-flow/template', () => {
 
     it('replaces template in array', () => {
       const value = [
-        '{{request_identifier}}',
+        '{{=it.request_identifier}}',
         'test',
-        '{{request_identifier}}-suffix',
+        '{{=it.request_identifier}}-suffix',
       ];
       const result = replaceInValue(value, testRequestId);
       expect(result).toEqual(['583207459', 'test', '583207459-suffix']);
@@ -74,8 +75,8 @@ describe('multi-request-flow/template', () => {
 
     it('replaces template in nested arrays', () => {
       const value = [
-        ['{{request_identifier}}', 'a'],
-        ['b', '{{request_identifier}}'],
+        ['{{=it.request_identifier}}', 'a'],
+        ['b', '{{=it.request_identifier}}'],
       ];
       const result = replaceInValue(value, testRequestId);
       expect(result).toEqual([
@@ -95,12 +96,12 @@ describe('multi-request-flow/template', () => {
       const value = {
         data: {
           items: [
-            { id: '{{request_identifier}}', name: 'test' },
-            { id: 'other', ref: '{{request_identifier}}' },
+            { id: '{{=it.request_identifier}}', name: 'test' },
+            { id: 'other', ref: '{{=it.request_identifier}}' },
           ],
         },
         metadata: {
-          source: 'https://example.com/{{request_identifier}}',
+          source: 'https://example.com/{{=it.request_identifier}}',
         },
       };
       const result = replaceInValue(value, testRequestId);
@@ -121,7 +122,7 @@ describe('multi-request-flow/template', () => {
   describe('replaceInMultiValueQueryString', () => {
     it('replaces template in query string values', () => {
       const mvqs = {
-        parid: ['{{request_identifier}}'],
+        parid: ['{{=it.request_identifier}}'],
         type: ['real_property'],
       };
       const result = replaceInMultiValueQueryString(mvqs, testRequestId);
@@ -133,7 +134,7 @@ describe('multi-request-flow/template', () => {
 
     it('replaces template in multiple values', () => {
       const mvqs = {
-        ids: ['{{request_identifier}}', 'other-{{request_identifier}}'],
+        ids: ['{{=it.request_identifier}}', 'other-{{=it.request_identifier}}'],
         status: ['active'],
       };
       const result = replaceInMultiValueQueryString(mvqs, testRequestId);
@@ -154,7 +155,7 @@ describe('multi-request-flow/template', () => {
     it('replaces template in header values', () => {
       const headers = {
         'content-type': 'application/json',
-        'x-request-id': '{{request_identifier}}',
+        'x-request-id': '{{=it.request_identifier}}',
       };
       const result = replaceInHeaders(headers, testRequestId);
       expect(result).toEqual({
@@ -188,7 +189,7 @@ describe('multi-request-flow/template', () => {
     it('replaces template in GET request URL', () => {
       const request: HttpRequestDefinition = {
         method: 'GET',
-        url: 'https://example.com/api?pid={{request_identifier}}',
+        url: 'https://example.com/api?pid={{=it.request_identifier}}',
       };
       const result = replaceTemplateVariables(request, testRequestId);
       expect(result).toEqual({
@@ -202,7 +203,7 @@ describe('multi-request-flow/template', () => {
         method: 'GET',
         url: 'https://example.com/api',
         multiValueQueryString: {
-          pid: ['{{request_identifier}}'],
+          pid: ['{{=it.request_identifier}}'],
           type: ['property'],
         },
       };
@@ -225,7 +226,7 @@ describe('multi-request-flow/template', () => {
           'content-type': 'application/json',
         },
         json: {
-          parid: '{{request_identifier}}',
+          parid: '{{=it.request_identifier}}',
           ownerType: '',
           parcel_type: 'real_property',
         },
@@ -252,7 +253,7 @@ describe('multi-request-flow/template', () => {
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
         },
-        body: 'data=%7B%22parid%22%3A%22{{request_identifier}}%22%7D',
+        body: 'data=%7B%22parid%22%3A%22{{=it.request_identifier}}%22%7D',
       };
       const result = replaceTemplateVariables(request, testRequestId);
       expect(result).toEqual({
@@ -271,7 +272,7 @@ describe('multi-request-flow/template', () => {
         url: 'https://example.com/api',
         headers: {
           'content-type': 'application/json',
-          'x-parcel-id': '{{request_identifier}}',
+          'x-parcel-id': '{{=it.request_identifier}}',
         },
         json: {},
       };
@@ -290,18 +291,18 @@ describe('multi-request-flow/template', () => {
     it('replaces template in all fields simultaneously', () => {
       const request: HttpRequestDefinition = {
         method: 'POST',
-        url: 'https://example.com/{{request_identifier}}/api',
+        url: 'https://example.com/{{=it.request_identifier}}/api',
         headers: {
           'content-type': 'application/json',
-          'x-id': '{{request_identifier}}',
+          'x-id': '{{=it.request_identifier}}',
         },
         multiValueQueryString: {
-          ref: ['{{request_identifier}}'],
+          ref: ['{{=it.request_identifier}}'],
         },
         json: {
           data: {
-            id: '{{request_identifier}}',
-            nested: ['{{request_identifier}}'],
+            id: '{{=it.request_identifier}}',
+            nested: ['{{=it.request_identifier}}'],
           },
         },
       };

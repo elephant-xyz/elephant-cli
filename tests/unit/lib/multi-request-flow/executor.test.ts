@@ -25,7 +25,7 @@ describe('multi-request-flow/executor', () => {
             key: 'TestData',
             request: {
               method: 'GET',
-              url: 'https://example.com/api?id={{request_identifier}}',
+              url: 'https://example.com/api?id={{=it.request_identifier}}',
             },
           },
         ],
@@ -70,14 +70,14 @@ describe('multi-request-flow/executor', () => {
             key: 'Request1',
             request: {
               method: 'GET',
-              url: 'https://example.com/api1?id={{request_identifier}}',
+              url: 'https://example.com/api1?id={{=it.request_identifier}}',
             },
           },
           {
             key: 'Request2',
             request: {
               method: 'GET',
-              url: 'https://example.com/api2?id={{request_identifier}}',
+              url: 'https://example.com/api2?id={{=it.request_identifier}}',
             },
           },
         ],
@@ -122,7 +122,7 @@ describe('multi-request-flow/executor', () => {
                 'content-type': 'application/json',
               },
               json: {
-                parid: '{{request_identifier}}',
+                parid: '{{=it.request_identifier}}',
                 ownerType: '',
               },
             },
@@ -171,7 +171,7 @@ describe('multi-request-flow/executor', () => {
               headers: {
                 'content-type': 'application/x-www-form-urlencoded',
               },
-              body: 'parid={{request_identifier}}&type=property',
+              body: 'parid={{=it.request_identifier}}&type=property',
             },
           },
         ],
@@ -212,7 +212,7 @@ describe('multi-request-flow/executor', () => {
               method: 'GET',
               url: 'https://example.com/api',
               multiValueQueryString: {
-                id: ['{{request_identifier}}'],
+                id: ['{{=it.request_identifier}}'],
                 type: ['property', 'land'],
               },
             },
@@ -361,7 +361,7 @@ describe('multi-request-flow/executor', () => {
               headers: {
                 'content-type': 'application/json',
                 'x-custom-header': 'custom-value',
-                'x-parcel-id': '{{request_identifier}}',
+                'x-parcel-id': '{{=it.request_identifier}}',
               },
               json: {},
             },
@@ -438,15 +438,15 @@ describe('multi-request-flow/executor', () => {
             key: 'FullTest',
             request: {
               method: 'POST',
-              url: 'https://example.com/api/{{request_identifier}}?extra=value',
+              url: 'https://example.com/api/{{=it.request_identifier}}?extra=value',
               headers: {
                 'content-type': 'application/json',
               },
               multiValueQueryString: {
-                ref: ['{{request_identifier}}'],
+                ref: ['{{=it.request_identifier}}'],
               },
               json: {
-                id: '{{request_identifier}}',
+                id: '{{=it.request_identifier}}',
               },
             },
           },

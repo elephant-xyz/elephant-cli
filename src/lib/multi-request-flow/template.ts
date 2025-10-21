@@ -1,30 +1,33 @@
 /**
  * Template Replacement Utilities
  *
- * This module provides utilities for replacing template variables (like {{request_identifier}})
- * in HTTP request definitions with actual values.
+ * This module provides utilities for replacing template variables (like {{=it.request_identifier}})
+ * in HTTP request definitions with actual values using doT.js template engine.
  */
 
+import dot from 'dot';
 import { HttpRequestDefinition } from './types.js';
 
-const TEMPLATE_VARIABLE = '{{request_identifier}}';
-
 /**
- * Replaces {{request_identifier}} template variable in a string with the actual value.
+ * Replaces template variables in a string using doT.js template engine.
+ * Supports {{=it.request_identifier}} syntax (same as browser flows).
  *
- * @param template - String that may contain {{request_identifier}}
+ * @param template - String that may contain template variables
  * @param requestIdentifier - The actual request identifier value
- * @returns String with template variable replaced
+ * @returns String with template variables replaced
  */
 export function replaceInString(
   template: string,
   requestIdentifier: string
 ): string {
-  return template.replaceAll(TEMPLATE_VARIABLE, requestIdentifier);
+  if (template.includes('=it.')) {
+    return dot.template(template)({ request_identifier: requestIdentifier });
+  }
+  return template;
 }
 
 /**
- * Recursively replaces {{request_identifier}} in JSON-compatible values.
+ * Recursively replaces template variables in JSON-compatible values.
  * Handles objects, arrays, strings, and primitive types.
  *
  * @param value - Any JSON-compatible value
@@ -55,7 +58,7 @@ export function replaceInValue(
 }
 
 /**
- * Replaces {{request_identifier}} in multiValueQueryString.
+ * Replaces template variables in multiValueQueryString.
  *
  * @param mvqs - Multi-value query string object
  * @param requestIdentifier - The actual request identifier value
@@ -75,7 +78,7 @@ export function replaceInMultiValueQueryString(
 }
 
 /**
- * Replaces {{request_identifier}} in headers object.
+ * Replaces template variables in headers object.
  *
  * @param headers - Headers object
  * @param requestIdentifier - The actual request identifier value
@@ -99,7 +102,7 @@ export function replaceInHeaders(
 }
 
 /**
- * Replaces all {{request_identifier}} occurrences in an HTTP request definition.
+ * Replaces all template variables in an HTTP request definition.
  * Creates a new request object with all template variables replaced.
  *
  * @param request - HTTP request definition that may contain template variables

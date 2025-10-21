@@ -103,21 +103,21 @@ describe('prepare command with multi-request flow integration', () => {
             headers: {
               'content-type': 'application/x-www-form-urlencoded',
             },
-            body: 'parid={{request_identifier}}',
+            body: 'parid={{=it.request_identifier}}',
           },
         },
         {
           key: 'Sales',
           request: {
             method: 'GET',
-            url: 'https://example.com/api/sales?parid={{request_identifier}}',
+            url: 'https://example.com/api/sales?parid={{=it.request_identifier}}',
           },
         },
         {
           key: 'Tax',
           request: {
             method: 'GET',
-            url: 'https://example.com/api/tax?parid={{request_identifier}}',
+            url: 'https://example.com/api/tax?parid={{=it.request_identifier}}',
           },
         },
       ],
@@ -226,18 +226,18 @@ describe('prepare command with multi-request flow integration', () => {
           key: 'ComplexRequest',
           request: {
             method: 'POST',
-            url: 'https://example.com/{{request_identifier}}/api',
+            url: 'https://example.com/{{=it.request_identifier}}/api',
             headers: {
               'content-type': 'application/json',
-              'x-request-id': '{{request_identifier}}',
+              'x-request-id': '{{=it.request_identifier}}',
             },
             multiValueQueryString: {
-              ref: ['{{request_identifier}}'],
+              ref: ['{{=it.request_identifier}}'],
             },
             json: {
-              id: '{{request_identifier}}',
+              id: '{{=it.request_identifier}}',
               nested: {
-                value: '{{request_identifier}}',
+                value: '{{=it.request_identifier}}',
               },
             },
           },
@@ -311,7 +311,7 @@ describe('prepare command with multi-request flow integration', () => {
           key: 'GetRequest',
           request: {
             method: 'GET',
-            url: 'https://example.com/api1?id={{request_identifier}}',
+            url: 'https://example.com/api1?id={{=it.request_identifier}}',
           },
         },
         {
@@ -323,7 +323,7 @@ describe('prepare command with multi-request flow integration', () => {
               'content-type': 'application/json',
             },
             json: {
-              parid: '{{request_identifier}}',
+              parid: '{{=it.request_identifier}}',
             },
           },
         },
@@ -335,7 +335,7 @@ describe('prepare command with multi-request flow integration', () => {
             headers: {
               'content-type': 'application/x-www-form-urlencoded',
             },
-            body: 'data=%7B%22parid%22%3A%22{{request_identifier}}%22%7D',
+            body: 'data=%7B%22parid%22%3A%22{{=it.request_identifier}}%22%7D',
           },
         },
         {
@@ -346,7 +346,7 @@ describe('prepare command with multi-request flow integration', () => {
             headers: {
               'content-type': 'text/xml',
             },
-            body: '<data><id>{{request_identifier}}</id></data>',
+            body: '<data><id>{{=it.request_identifier}}</id></data>',
           },
         },
       ],

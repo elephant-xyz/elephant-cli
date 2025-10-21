@@ -75,18 +75,20 @@ Multi-request flows are defined in JSON files with the following structure:
 
 ## Template Variables
 
-The `{{request_identifier}}` template variable can be used anywhere in the flow configuration and will be replaced with the actual parcel ID at runtime.
+Template variables allow you to dynamically insert the request identifier (parcel ID) into your flow configuration using the doT.js template engine syntax: `{{=it.request_identifier}}`
+
+This uses the same template engine as browser flows, providing consistency across features and enabling complex template expressions if needed.
 
 ### Supported Locations
 
 Template variables can be used in:
 
-- URL paths: `https://example.com/api/{{request_identifier}}`
-- Query parameters: `?parid={{request_identifier}}`
-- Headers: `"x-parcel-id": "{{request_identifier}}"`
-- JSON body fields: `{"parid": "{{request_identifier}}"}`
-- String body: `parid={{request_identifier}}&type=property`
-- Multi-value query strings: `{"ids": ["{{request_identifier}}"]}`
+- URL paths: `https://example.com/api/{{=it.request_identifier}}`
+- Query parameters: `?parid={{=it.request_identifier}}`
+- Headers: `"x-parcel-id": "{{=it.request_identifier}}"`
+- JSON body fields: `{"parid": "{{=it.request_identifier}}"}`
+- String body: `parid={{=it.request_identifier}}&type=property`
+- Multi-value query strings: `{"ids": ["{{=it.request_identifier}}"]}`
 
 ### Example with Template Variables
 
@@ -97,13 +99,13 @@ Template variables can be used in:
       "key": "PropertyDetails",
       "request": {
         "method": "POST",
-        "url": "https://example.com/api/property/{{request_identifier}}",
+        "url": "https://example.com/api/property/{{=it.request_identifier}}",
         "headers": {
           "content-type": "application/json",
-          "x-request-id": "{{request_identifier}}"
+          "x-request-id": "{{=it.request_identifier}}"
         },
         "json": {
-          "parcelId": "{{request_identifier}}",
+          "parcelId": "{{=it.request_identifier}}",
           "requestType": "full"
         }
       }
