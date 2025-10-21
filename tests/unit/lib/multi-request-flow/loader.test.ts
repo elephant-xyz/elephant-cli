@@ -285,8 +285,8 @@ describe('multi-request-flow/loader', () => {
               method: 'GET',
               url: 'https://example.com/api',
               headers: {
-                'Authorization': 'Bearer token123',
-                'Accept': 'application/json',
+                Authorization: 'Bearer token123',
+                Accept: 'application/json',
               },
             },
           },
@@ -299,8 +299,8 @@ describe('multi-request-flow/loader', () => {
 
       const flow = await loadMultiRequestFlow('/path/to/flow.json');
       expect(flow.requests[0].request.headers).toEqual({
-        'Authorization': 'Bearer token123',
-        'Accept': 'application/json',
+        Authorization: 'Bearer token123',
+        Accept: 'application/json',
       });
     });
 
