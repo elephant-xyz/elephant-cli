@@ -30,6 +30,7 @@ export default defineConfig({
     loader: 'ts',
     include: /\.[cm]?ts$/,
     exclude: [],
+    target: 'es2022',
   },
   optimizeDeps: {
     esbuildOptions: {
