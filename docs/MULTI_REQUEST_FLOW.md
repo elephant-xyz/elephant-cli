@@ -240,8 +240,8 @@ The multi-request flow generates a single JSON file containing all request respo
       }
     },
     "response": {
-      "parsed": "json",
-      "data": "here"
+      "some_key": "some_value",
+      "parcel_id": "583207459"
     }
   },
   "RequestKey2": {

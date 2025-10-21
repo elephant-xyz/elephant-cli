@@ -249,7 +249,7 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have body, json, or headers'
+        'GET requests cannot have body or json fields'
       );
     });
 
@@ -272,12 +272,12 @@ describe('multi-request-flow/loader', () => {
       );
 
       await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have body, json, or headers'
+        'GET requests cannot have body or json fields'
       );
     });
 
-    it('throws error when GET request has headers', async () => {
-      const invalidFlow = {
+    it('accepts GET request with headers (for authentication, content negotiation, etc.)', async () => {
+      const validFlow = {
         requests: [
           {
             key: 'GetWithHeaders',
@@ -285,7 +285,8 @@ describe('multi-request-flow/loader', () => {
               method: 'GET',
               url: 'https://example.com/api',
               headers: {
-                'content-type': 'application/json',
+                'Authorization': 'Bearer token123',
+                'Accept': 'application/json',
               },
             },
           },
@@ -293,12 +294,14 @@ describe('multi-request-flow/loader', () => {
       };
 
       vi.mocked(fs.readFile).mockResolvedValueOnce(
-        JSON.stringify(invalidFlow) as any
+        JSON.stringify(validFlow) as any
       );
 
-      await expect(loadMultiRequestFlow('/path/to/flow.json')).rejects.toThrow(
-        'GET requests cannot have body, json, or headers'
-      );
+      const flow = await loadMultiRequestFlow('/path/to/flow.json');
+      expect(flow.requests[0].request.headers).toEqual({
+        'Authorization': 'Bearer token123',
+        'Accept': 'application/json',
+      });
     });
 
     it('throws error when json field is used without content-type header', async () => {

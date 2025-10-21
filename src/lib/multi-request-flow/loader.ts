@@ -57,14 +57,14 @@ const httpRequestBaseSchema = z.object({
 const httpRequestSchema = httpRequestBaseSchema
   .refine(
     (data) => {
-      // GET requests cannot have body, json, or headers
+      // GET requests cannot have body or json
       if (data.method === 'GET') {
-        return !data.body && !data.json && !data.headers;
+        return !data.body && !data.json;
       }
       return true;
     },
     {
-      message: 'GET requests cannot have body, json, or headers',
+      message: 'GET requests cannot have body or json fields',
     }
   )
   .refine(
