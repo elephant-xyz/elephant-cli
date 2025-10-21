@@ -1,3 +1,10 @@
+## [1.52.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.0...v1.52.1) (2025-10-21)
+
+
+### Bug Fixes
+
+* **transform:** the address.json not being copied over if transformation script generates it ([#198](https://github.com/elephant-xyz/elephant-cli/issues/198)) ([c8275d0](https://github.com/elephant-xyz/elephant-cli/commit/c8275d04570604f5672adcfca71fa37d38ea1e07))
+
 # [1.52.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.1...v1.52.0) (2025-10-21)
 
 
