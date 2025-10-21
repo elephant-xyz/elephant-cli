@@ -515,18 +515,17 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
   // Copy seed files to output directory so they get processed through the normal loop
   // Only copy address.json if scripts didn't create one
   if (hasAddressJson) {
-    const scriptCreatedAddress = await fs
-      .access(path.join(tempRoot, OUTPUT_DIR, 'address.json'))
-      .then(() => true)
-      .catch(() => false);
-    if (!scriptCreatedAddress) {
+    const scriptCreatedAddressPath = path.join(tempRoot, OUTPUT_DIR, 'address.json');
+    try {
+      await fs.access(scriptCreatedAddressPath);
+      logger.debug('Scripts created address.json, skipping copy');
+    } catch {
+      // If fs.access throws, the file does not exist, so we can copy it.
       await fs.copyFile(
         path.join(tempRoot, 'address.json'),
-        path.join(tempRoot, OUTPUT_DIR, 'address.json')
+        scriptCreatedAddressPath
       );
       logger.debug('Copied address.json to output directory for processing');
-    } else {
-      logger.debug('Scripts created address.json, skipping copy');
     }
   }
 
