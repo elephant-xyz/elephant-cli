@@ -122,15 +122,15 @@ export function createCountyDataGroup(
     }
 
     // Layout relationships
-    if (lower.includes('layout') && lower.includes('layout') {
+    if (lower.includes('layout') && lower.includes('layout')) {
       layoutHasLayout = ref;
       continue;
     }
-    if (lower.includes('layout') && lower.includes('utility') {
+    if (lower.includes('layout') && lower.includes('utility')) {
       layoutHasUtility = ref;
       continue;
     }
-    if (lower.includes('layout') && lower.includes('structure') {
+    if (lower.includes('layout') && lower.includes('structure')) {
       layoutHasStructure = ref;
       continue;
     }
