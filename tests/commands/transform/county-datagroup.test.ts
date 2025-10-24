@@ -124,6 +124,49 @@ describe('createCountyDataGroup', () => {
         { '/': './relationship_layout_structure_2.json' },
       ]);
     });
+
+    it('should return layout_has_layout as an array, not a single object', () => {
+      const relationshipFiles = ['relationship_layout_layout.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.layout_has_layout)).toBe(true);
+      expect(result.relationships.layout_has_layout).toHaveLength(1);
+    });
+
+    it('should return layout_has_utility as an array, not a single object', () => {
+      const relationshipFiles = ['relationship_layout_utility.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.layout_has_utility)).toBe(true);
+      expect(result.relationships.layout_has_utility).toHaveLength(1);
+    });
+
+    it('should return layout_has_structure as an array, not a single object', () => {
+      const relationshipFiles = ['relationship_layout_structure.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(true);
+      expect(result.relationships.layout_has_structure).toHaveLength(1);
+    });
+
+    it('should return all layout relationships as arrays when multiple files exist', () => {
+      const relationshipFiles = [
+        'relationship_layout_layout_1.json',
+        'relationship_layout_layout_2.json',
+        'relationship_layout_utility_1.json',
+        'relationship_layout_utility_2.json',
+        'relationship_layout_structure_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.layout_has_layout)).toBe(true);
+      expect(Array.isArray(result.relationships.layout_has_utility)).toBe(true);
+      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(true);
+
+      expect(result.relationships.layout_has_layout).toHaveLength(2);
+      expect(result.relationships.layout_has_utility).toHaveLength(2);
+      expect(result.relationships.layout_has_structure).toHaveLength(1);
+    });
   });
 
   describe('deed and sales relationships', () => {
