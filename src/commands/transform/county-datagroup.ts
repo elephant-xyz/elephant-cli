@@ -52,8 +52,6 @@ export function createCountyDataGroup(
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
   let propertyHasFloodStormInformation: IPLDRef | undefined;
-  let propertyHasUtility: IPLDRef | undefined;
-  let propertyHasStructure: IPLDRef | undefined;
   let layoutHasLayout: IPLDRef | undefined;
   let layoutHasUtility: IPLDRef | undefined;
   let layoutHasStructure: IPLDRef | undefined;
@@ -87,14 +85,6 @@ export function createCountyDataGroup(
       propertyHasFloodStormInformation = ref;
       continue;
     }
-    if (lower.includes('property_utility')) {
-      propertyHasUtility = ref;
-      continue;
-    }
-    if (lower.includes('property_structure')) {
-      propertyHasStructure = ref;
-      continue;
-    }
     if (lower.includes('property_file')) {
       // Not assigned in the original loop, but present in the schema.
       propertyHasFile.push(ref);
@@ -122,15 +112,28 @@ export function createCountyDataGroup(
     }
 
     // Layout relationships
-    if (lower.includes('layout') && lower.includes('layout')) {
+    if (
+      lower.includes('relationship') &&
+      lower.includes('layout') &&
+      lower.includes('layout') &&
+      (lower.match(/layout/g) || []).length >= 2
+    ) {
       layoutHasLayout = ref;
       continue;
     }
-    if (lower.includes('layout') && lower.includes('utility')) {
+    if (
+      lower.includes('relationship') &&
+      lower.includes('layout') &&
+      lower.includes('utility')
+    ) {
       layoutHasUtility = ref;
       continue;
     }
-    if (lower.includes('layout') && lower.includes('structure')) {
+    if (
+      lower.includes('relationship') &&
+      lower.includes('layout') &&
+      lower.includes('structure')
+    ) {
       layoutHasStructure = ref;
       continue;
     }
