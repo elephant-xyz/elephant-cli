@@ -1,3 +1,10 @@
+## [1.52.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.1...v1.52.2) (2025-10-24)
+
+
+### Bug Fixes
+
+* update-fact-sheet-version ([#199](https://github.com/elephant-xyz/elephant-cli/issues/199)) ([b636682](https://github.com/elephant-xyz/elephant-cli/commit/b6366820d7051a85250c7cbe393edabcc0c752b7))
+
 ## [1.52.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.0...v1.52.1) (2025-10-21)
 
 
