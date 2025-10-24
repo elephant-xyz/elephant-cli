@@ -1,3 +1,10 @@
+## [1.52.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.2...v1.52.3) (2025-10-24)
+
+
+### Bug Fixes
+
+* Update county datagorup relationships ([#202](https://github.com/elephant-xyz/elephant-cli/issues/202)) ([33fe96a](https://github.com/elephant-xyz/elephant-cli/commit/33fe96a869b9a611ff8c3066cf9cf5fafe2fcf34))
+
 ## [1.52.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.1...v1.52.2) (2025-10-24)
 
 
