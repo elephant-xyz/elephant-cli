@@ -20,6 +20,9 @@ export interface Relationships {
   sales_history_has_company?: IPLDRef[];
   deed_has_file?: IPLDRef[];
   sales_history_has_deed?: IPLDRef[];
+  layout_has_layout?: IPLDRef;
+  layout_has_utility?: IPLDRef;
+  layout_has_structure?: IPLDRef;
 }
 
 export interface CountyData {
@@ -51,20 +54,13 @@ export function createCountyDataGroup(
   let propertyHasFloodStormInformation: IPLDRef | undefined;
   let propertyHasUtility: IPLDRef | undefined;
   let propertyHasStructure: IPLDRef | undefined;
+  let layoutHasLayout: IPLDRef | undefined;
+  let layoutHasUtility: IPLDRef | undefined;
+  let layoutHasStructure: IPLDRef | undefined;
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
     const ref: IPLDRef = { '/': `./${file}` };
-
-    // Pairings with "property"
-    if (lower.includes('person') && lower.includes('property')) {
-      personHasProperty.push(ref);
-      continue;
-    }
-    if (lower.includes('company') && lower.includes('property')) {
-      companyHasProperty.push(ref);
-      continue;
-    }
 
     // Property sub-resources (singletons or arrays)
     if (lower.includes('property_address')) {
@@ -124,6 +120,20 @@ export function createCountyDataGroup(
       salesHistoryHasDeed.push(ref);
       continue;
     }
+
+    // Layout relationships
+    if (lower.includes('layout') && lower.includes('layout') {
+      layoutHasLayout = ref;
+      continue;
+    }
+    if (lower.includes('layout') && lower.includes('utility') {
+      layoutHasUtility = ref;
+      continue;
+    }
+    if (lower.includes('layout') && lower.includes('structure') {
+      layoutHasStructure = ref;
+      continue;
+    }
   }
 
   const relationships: Relationships = {};
@@ -145,10 +155,6 @@ export function createCountyDataGroup(
       propertyHasFloodStormInformation;
   }
   if (propertyHasFile.length) relationships.property_has_file = propertyHasFile;
-  if (propertyHasStructure)
-    relationships.property_has_structure = propertyHasStructure;
-  if (propertyHasUtility)
-    relationships.property_has_utility = propertyHasUtility;
   if (salesHistoryHasPerson.length) {
     relationships.sales_history_has_person = salesHistoryHasPerson;
   }
@@ -161,6 +167,10 @@ export function createCountyDataGroup(
   if (salesHistoryHasDeed.length) {
     relationships.sales_history_has_deed = salesHistoryHasDeed;
   }
+  if (layoutHasLayout) relationships.layout_has_layout = layoutHasLayout;
+  if (layoutHasUtility) relationships.layout_has_utility = layoutHasUtility;
+  if (layoutHasStructure)
+    relationships.layout_has_structure = layoutHasStructure;
 
   return {
     label: 'County',
