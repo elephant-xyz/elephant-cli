@@ -10,6 +10,7 @@ import { handleLegacyTransform } from './legacy-agent.js';
 import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
 import { createCountyDataGroup } from './county-datagroup.js';
+import { createPropertyImprovementDataGroup } from './property-improvement-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
 import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
@@ -30,6 +31,7 @@ export interface TransformCommandOptions {
   legacyMode?: boolean;
   silent?: boolean;
   cwd?: string;
+  propertyImprovement?: boolean;
   [key: string]: any;
 }
 
@@ -97,6 +99,11 @@ export function registerTransformCommand(program: Command) {
       'Input ZIP for scripts mode (must include address.json or unnormalized_address.json, parcel.json or property_seed.json, and an HTML/JSON file)'
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
+    .option(
+      '--property-improvement',
+      'Enable Property Improvement data group creation',
+      false
+    )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
     });
@@ -179,7 +186,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       await handleCountyTransform(scriptsDir, tempRoot);
     } else {
       logger.info('Processing seed data group...');
-      await handleSeedTransform(tempRoot);
+      await handleSeedTransform(tempRoot, options);
       isSeedMode = true;
     }
 
@@ -268,7 +275,10 @@ async function moveDirectory(src: string, dest: string): Promise<void> {
     }
   }
 }
-async function handleSeedTransform(tempRoot: string) {
+async function handleSeedTransform(
+  tempRoot: string,
+  options: TransformCommandOptions
+) {
   const seedCsv = await fs.readFile(
     path.join(tempRoot, INPUT_DIR, 'seed.csv'),
     'utf-8'
@@ -433,6 +443,20 @@ async function handleSeedTransform(tempRoot: string) {
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
   const schemaManifest = await fetchSchemaManifest();
   const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
+
+  // Check for Property Improvement files in input
+  let propertyImprovementFiles: string[] = [];
+  try {
+    const inputFiles = await fs.readdir(path.join(tempRoot, INPUT_DIR));
+    propertyImprovementFiles = inputFiles.filter(
+      (file) =>
+        file.toLowerCase().includes('property_improvement') &&
+        file.endsWith('.json')
+    );
+  } catch {
+    // Input directory might not exist or be accessible
+  }
+
   const fileNameContent: { name: string; content: string }[] = [
     { name: `${seedDataGroupCid}.json`, content: seedJson },
     // New schema files
@@ -443,12 +467,111 @@ async function handleSeedTransform(tempRoot: string) {
     { name: 'unnormalized_address.json', content: unnormalizedAddressJson },
     { name: 'property_seed.json', content: propertySeedJson },
   ];
+
+  // Add Property Improvement files if they exist
+  for (const file of propertyImprovementFiles) {
+    try {
+      const content = await fs.readFile(
+        path.join(tempRoot, INPUT_DIR, file),
+        'utf-8'
+      );
+      const jsonObj = JSON.parse(content);
+
+      // Add source_http_request and request_identifier if not present
+      if (!jsonObj.source_http_request) {
+        jsonObj.source_http_request = sourceHttpRequest;
+      }
+      jsonObj.request_identifier = seedRow.source_identifier;
+
+      fileNameContent.push({
+        name: file,
+        content: JSON.stringify(jsonObj),
+      });
+    } catch (error) {
+      logger.warn(
+        `Failed to process Property Improvement file ${file}: ${error}`
+      );
+    }
+  }
   await Promise.all(
     fileNameContent.map(async (file) => {
       const absPath = path.join(tempRoot, OUTPUT_DIR, file.name);
       await fs.writeFile(absPath, file.content, 'utf-8');
     })
   );
+
+  // Create Property Improvement data group if Property Improvement files exist and flag is enabled
+  if (propertyImprovementFiles.length > 0 && options.propertyImprovement) {
+    // Create relationship files for Property Improvement
+    const propertyImprovementRelationships: string[] = [];
+
+    // Create parcel_has_property_improvement relationship
+    const parcelHasPropertyImprovement = {
+      from: { '/': './parcel.json' },
+      to: { '/': './property_improvement.json' },
+    };
+    const parcelHasPropertyImprovementJson = JSON.stringify(
+      parcelHasPropertyImprovement
+    );
+    propertyImprovementRelationships.push(
+      'parcel_has_property_improvement.json'
+    );
+    await fs.writeFile(
+      path.join(tempRoot, OUTPUT_DIR, 'parcel_has_property_improvement.json'),
+      parcelHasPropertyImprovementJson,
+      'utf-8'
+    );
+
+    // Create property_has_property_improvement relationship
+    const propertyHasPropertyImprovement = {
+      from: { '/': './property.json' },
+      to: { '/': './property_improvement.json' },
+    };
+    const propertyHasPropertyImprovementJson = JSON.stringify(
+      propertyHasPropertyImprovement
+    );
+    propertyImprovementRelationships.push(
+      'property_has_property_improvement.json'
+    );
+    await fs.writeFile(
+      path.join(tempRoot, OUTPUT_DIR, 'property_has_property_improvement.json'),
+      propertyHasPropertyImprovementJson,
+      'utf-8'
+    );
+
+    // Create property_improvement_has_contractor relationship
+    const propertyImprovementHasContractor = {
+      from: { '/': './property_improvement.json' },
+      to: { '/': './company.json' },
+    };
+    const propertyImprovementHasContractorJson = JSON.stringify(
+      propertyImprovementHasContractor
+    );
+    propertyImprovementRelationships.push(
+      'property_improvement_has_contractor.json'
+    );
+    await fs.writeFile(
+      path.join(
+        tempRoot,
+        OUTPUT_DIR,
+        'property_improvement_has_contractor.json'
+      ),
+      propertyImprovementHasContractorJson,
+      'utf-8'
+    );
+
+    const propertyImprovementDataGroup = createPropertyImprovementDataGroup(
+      propertyImprovementRelationships
+    );
+    const propertyImprovementSchema =
+      schemaManifest['Property Improvement']!.ipfsCid;
+    await fs.writeFile(
+      path.join(tempRoot, OUTPUT_DIR, `${propertyImprovementSchema}.json`),
+      JSON.stringify(propertyImprovementDataGroup),
+      'utf-8'
+    );
+    logger.info('Created Property Improvement data group with relationships');
+  }
 }
 
 async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
