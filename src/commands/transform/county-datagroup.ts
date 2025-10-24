@@ -20,9 +20,9 @@ export interface Relationships {
   sales_history_has_company?: IPLDRef[];
   deed_has_file?: IPLDRef[];
   sales_history_has_deed?: IPLDRef[];
-  layout_has_layout?: IPLDRef;
-  layout_has_utility?: IPLDRef;
-  layout_has_structure?: IPLDRef;
+  layout_has_layout?: IPLDRef[];
+  layout_has_utility?: IPLDRef[];
+  layout_has_structure?: IPLDRef[];
 }
 
 export interface CountyData {
@@ -49,12 +49,13 @@ export function createCountyDataGroup(
   const salesHistoryHasDeed: IPLDRef[] = [];
   const propertyHasFile: IPLDRef[] = [];
 
+  const layoutHasLayout: IPLDRef[] = [];
+  const layoutHasUtility: IPLDRef[] = [];
+  const layoutHasStructure: IPLDRef[] = [];
+
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
   let propertyHasFloodStormInformation: IPLDRef | undefined;
-  let layoutHasLayout: IPLDRef | undefined;
-  let layoutHasUtility: IPLDRef | undefined;
-  let layoutHasStructure: IPLDRef | undefined;
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
@@ -118,7 +119,7 @@ export function createCountyDataGroup(
       lower.includes('layout') &&
       (lower.match(/layout/g) || []).length >= 2
     ) {
-      layoutHasLayout = ref;
+      layoutHasLayout.push(ref);
       continue;
     }
     if (
@@ -126,7 +127,7 @@ export function createCountyDataGroup(
       lower.includes('layout') &&
       lower.includes('utility')
     ) {
-      layoutHasUtility = ref;
+      layoutHasUtility.push(ref);
       continue;
     }
     if (
@@ -134,7 +135,7 @@ export function createCountyDataGroup(
       lower.includes('layout') &&
       lower.includes('structure')
     ) {
-      layoutHasStructure = ref;
+      layoutHasStructure.push(ref);
       continue;
     }
   }
@@ -170,9 +171,10 @@ export function createCountyDataGroup(
   if (salesHistoryHasDeed.length) {
     relationships.sales_history_has_deed = salesHistoryHasDeed;
   }
-  if (layoutHasLayout) relationships.layout_has_layout = layoutHasLayout;
-  if (layoutHasUtility) relationships.layout_has_utility = layoutHasUtility;
-  if (layoutHasStructure)
+  if (layoutHasLayout.length) relationships.layout_has_layout = layoutHasLayout;
+  if (layoutHasUtility.length)
+    relationships.layout_has_utility = layoutHasUtility;
+  if (layoutHasStructure.length)
     relationships.layout_has_structure = layoutHasStructure;
 
   return {

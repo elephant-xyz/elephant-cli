@@ -7,27 +7,27 @@ describe('createCountyDataGroup', () => {
       const relationshipFiles = ['relationship_layout_layout.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.layout_has_layout).toEqual({
-        '/': './relationship_layout_layout.json',
-      });
+      expect(result.relationships.layout_has_layout).toEqual([
+        { '/': './relationship_layout_layout.json' },
+      ]);
     });
 
     it('should include layout_has_utility when file contains layout, utility, and relationship', () => {
       const relationshipFiles = ['relationship_layout_utility.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.layout_has_utility).toEqual({
-        '/': './relationship_layout_utility.json',
-      });
+      expect(result.relationships.layout_has_utility).toEqual([
+        { '/': './relationship_layout_utility.json' },
+      ]);
     });
 
     it('should include layout_has_structure when file contains layout, structure, and relationship', () => {
       const relationshipFiles = ['relationship_layout_structure.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.layout_has_structure).toEqual({
-        '/': './relationship_layout_structure.json',
-      });
+      expect(result.relationships.layout_has_structure).toEqual([
+        { '/': './relationship_layout_structure.json' },
+      ]);
     });
 
     it('should handle all three layout relationships together', () => {
@@ -38,15 +38,15 @@ describe('createCountyDataGroup', () => {
       ];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.layout_has_layout).toEqual({
-        '/': './relationship_layout_layout.json',
-      });
-      expect(result.relationships.layout_has_utility).toEqual({
-        '/': './relationship_layout_utility.json',
-      });
-      expect(result.relationships.layout_has_structure).toEqual({
-        '/': './relationship_layout_structure.json',
-      });
+      expect(result.relationships.layout_has_layout).toEqual([
+        { '/': './relationship_layout_layout.json' },
+      ]);
+      expect(result.relationships.layout_has_utility).toEqual([
+        { '/': './relationship_layout_utility.json' },
+      ]);
+      expect(result.relationships.layout_has_structure).toEqual([
+        { '/': './relationship_layout_structure.json' },
+      ]);
     });
 
     it('should handle case-insensitive matching for layout relationships', () => {
@@ -57,15 +57,15 @@ describe('createCountyDataGroup', () => {
       ];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.layout_has_layout).toEqual({
-        '/': './Relationship_Layout_Layout.json',
-      });
-      expect(result.relationships.layout_has_utility).toEqual({
-        '/': './RELATIONSHIP_LAYOUT_UTILITY.json',
-      });
-      expect(result.relationships.layout_has_structure).toEqual({
-        '/': './relationship_Layout_Structure.json',
-      });
+      expect(result.relationships.layout_has_layout).toEqual([
+        { '/': './Relationship_Layout_Layout.json' },
+      ]);
+      expect(result.relationships.layout_has_utility).toEqual([
+        { '/': './RELATIONSHIP_LAYOUT_UTILITY.json' },
+      ]);
+      expect(result.relationships.layout_has_structure).toEqual([
+        { '/': './relationship_Layout_Structure.json' },
+      ]);
     });
 
     it('should not include layout relationships when files are missing required keywords', () => {
@@ -79,6 +79,50 @@ describe('createCountyDataGroup', () => {
       expect(result.relationships.layout_has_layout).toBeUndefined();
       expect(result.relationships.layout_has_utility).toBeUndefined();
       expect(result.relationships.layout_has_structure).toBeUndefined();
+    });
+
+    it('should handle multiple layout_has_layout relationships', () => {
+      const relationshipFiles = [
+        'relationship_layout_layout_1.json',
+        'relationship_layout_layout_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_layout).toHaveLength(2);
+      expect(result.relationships.layout_has_layout).toEqual([
+        { '/': './relationship_layout_layout_1.json' },
+        { '/': './relationship_layout_layout_2.json' },
+      ]);
+    });
+
+    it('should handle multiple layout_has_utility relationships', () => {
+      const relationshipFiles = [
+        'relationship_layout_utility_1.json',
+        'relationship_layout_utility_2.json',
+        'relationship_layout_utility_3.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_utility).toHaveLength(3);
+      expect(result.relationships.layout_has_utility).toEqual([
+        { '/': './relationship_layout_utility_1.json' },
+        { '/': './relationship_layout_utility_2.json' },
+        { '/': './relationship_layout_utility_3.json' },
+      ]);
+    });
+
+    it('should handle multiple layout_has_structure relationships', () => {
+      const relationshipFiles = [
+        'relationship_layout_structure_1.json',
+        'relationship_layout_structure_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_structure).toHaveLength(2);
+      expect(result.relationships.layout_has_structure).toEqual([
+        { '/': './relationship_layout_structure_1.json' },
+        { '/': './relationship_layout_structure_2.json' },
+      ]);
     });
   });
 
