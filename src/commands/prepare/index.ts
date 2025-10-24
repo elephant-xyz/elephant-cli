@@ -19,13 +19,14 @@ export interface PrepareCommandOptions {
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
   multiRequestFlowFile?: string;
+  inputCsv?: string;
 }
 
 export function registerPrepareCommand(program: Command) {
   program
-    .command('prepare <inputZip>')
+    .command('prepare [inputZip]')
     .description(
-      'Prepare data from transform output ZIP for further processing'
+      'Prepare data from transform output ZIP or seed CSV for further processing'
     )
     .requiredOption('--output-zip <path>', 'Output ZIP file path')
     .option('--use-browser', 'Force headless browser functionality')
@@ -59,20 +60,44 @@ export function registerPrepareCommand(program: Command) {
       '--multi-request-flow-file <path>',
       'Path to JSON file defining a multi-request flow (sequence of HTTP requests)'
     )
-    .action(async (inputZip: string, options: PrepareCommandOptions) => {
-      await handlePrepare(inputZip, options);
-    });
+    .option(
+      '--input-csv <path>',
+      'CSV file with request_identifier column (alternative to input ZIP)'
+    )
+    .action(
+      async (inputZip: string | undefined, options: PrepareCommandOptions) => {
+        await handlePrepare(inputZip, options);
+      }
+    );
 }
 
 export async function handlePrepare(
-  inputZip: string,
+  inputZip: string | undefined,
   options: PrepareCommandOptions
 ) {
   console.log(chalk.bold.blue('🐘 Elephant Network CLI - Prepare'));
   console.log();
 
-  const spinner = createSpinner(`Preparing data from ${inputZip}...`);
-  await prepareCore(inputZip, options.outputZip, {
+  if (!inputZip && !options.inputCsv) {
+    console.error(
+      chalk.red('Error: Either provide an input ZIP or use --input-csv')
+    );
+    process.exit(1);
+  }
+
+  if (inputZip && options.inputCsv) {
+    console.error(
+      chalk.red(
+        'Error: Cannot use both input ZIP and --input-csv at the same time'
+      )
+    );
+    process.exit(1);
+  }
+
+  const source = inputZip || options.inputCsv!;
+  const spinner = createSpinner(`Preparing data from ${source}...`);
+
+  await prepareCore(inputZip || '', options.outputZip, {
     clickContinue: options['continue'],
     continueButtonSelector: options.continueButton,
     useBrowser: options.useBrowser,
@@ -83,6 +108,7 @@ export async function handlePrepare(
     ignoreCaptcha: options.ignoreCaptcha,
     proxy: options.proxy,
     multiRequestFlowFile: options.multiRequestFlowFile,
+    inputCsv: options.inputCsv,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);

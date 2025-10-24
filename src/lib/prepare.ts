@@ -40,11 +40,118 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
   return proxyOptions;
 }
 
+/**
+ * Extract and replace URL from browser workflow with request_identifier
+ */
+function extractUrlFromWorkflow(
+  workflow: { starts_at: string; states: Record<string, unknown> },
+  requestId: string
+): string | undefined {
+  const startState = workflow.states[workflow.starts_at] as {
+    type: string;
+    input?: { url?: string };
+  };
+  if (startState?.type === 'open_page' && startState.input?.url) {
+    return startState.input.url.replace(
+      /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i,
+      requestId
+    );
+  }
+  return undefined;
+}
+
+/**
+ * Prepare data from an input CSV file containing request identifiers.
+ * Processes each row and executes either multi-request or browser flow.
+ */
+async function prepareFromInputCsv(
+  outputZip: string,
+  options: PrepareOptions
+): Promise<void> {
+  if (!options.multiRequestFlowFile && !options.browserFlowFile) {
+    throw new Error(
+      '--multi-request-flow-file or --browser-flow-file is required when using --input-csv'
+    );
+  }
+
+  const { parse } = await import('csv-parse/sync');
+
+  const csvContent = await fs.readFile(options.inputCsv!, 'utf-8');
+  const rows = parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+  }) as Array<Record<string, string>>;
+
+  if (rows.length === 0) {
+    throw new Error('CSV file is empty or has no valid rows');
+  }
+
+  if (!rows[0].request_identifier) {
+    throw new Error('CSV file must have a request_identifier column');
+  }
+
+  logger.info(`Processing ${rows.length} request(s) from CSV`);
+
+  const root = await fs.mkdtemp(path.join(tmpdir(), 'elephant-prepare-csv-'));
+  try {
+    const flow = options.multiRequestFlowFile
+      ? await loadMultiRequestFlow(options.multiRequestFlowFile)
+      : undefined;
+    const browserWorkflow = options.browserFlowFile
+      ? await loadCustomFlow(options.browserFlowFile)
+      : undefined;
+    const headless = options.headless ?? true;
+    const proxy = options.proxy ? parseProxy(options.proxy) : undefined;
+
+    for (const [index, row] of rows.entries()) {
+      const requestId = row.request_identifier;
+      if (!requestId || !requestId.trim()) {
+        logger.warn(`Skipping row ${index + 1}: empty request_identifier`);
+        continue;
+      }
+
+      logger.info(`[${index + 1}/${rows.length}] Processing: ${requestId}`);
+
+      const prepared = flow
+        ? await executeMultiRequestFlow(flow, requestId)
+        : await withBrowserFlow(
+            browserWorkflow!,
+            headless,
+            requestId,
+            proxy,
+            extractUrlFromWorkflow(browserWorkflow!, requestId)
+          );
+
+      const name = `${requestId}.${prepared.type}`;
+      await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
+    }
+
+    const zip = new AdmZip();
+    for (const rel of await fs.readdir(root)) {
+      zip.addLocalFile(path.join(root, rel));
+    }
+    zip.writeZip(outputZip);
+
+    logger.info(`Created output ZIP with ${rows.length} result(s)`);
+  } finally {
+    try {
+      await fs.rm(root, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function prepare(
   inputZip: string,
   outputZip: string,
   options: PrepareOptions = {}
 ) {
+  // Handle input CSV mode - batch processing
+  if (options.inputCsv) {
+    return await prepareFromInputCsv(outputZip, options);
+  }
+
   // Defaults: browser=false (via useBrowser flag only), clickContinue defaults to false (handled below)
   const effectiveBrowser = options.useBrowser ?? false;
   const effectiveClickContinue = options.clickContinue ?? false;

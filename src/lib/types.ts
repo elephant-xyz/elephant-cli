@@ -22,6 +22,7 @@ export type PrepareOptions = {
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
   multiRequestFlowFile?: string;
+  inputCsv?: string;
 };
 
 export type Prepared = {
