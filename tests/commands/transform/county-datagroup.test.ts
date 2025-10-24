@@ -145,7 +145,9 @@ describe('createCountyDataGroup', () => {
       const relationshipFiles = ['relationship_layout_structure.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(true);
+      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(
+        true
+      );
       expect(result.relationships.layout_has_structure).toHaveLength(1);
     });
 
@@ -161,7 +163,9 @@ describe('createCountyDataGroup', () => {
 
       expect(Array.isArray(result.relationships.layout_has_layout)).toBe(true);
       expect(Array.isArray(result.relationships.layout_has_utility)).toBe(true);
-      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(true);
+      expect(Array.isArray(result.relationships.layout_has_structure)).toBe(
+        true
+      );
 
       expect(result.relationships.layout_has_layout).toHaveLength(2);
       expect(result.relationships.layout_has_utility).toHaveLength(2);
