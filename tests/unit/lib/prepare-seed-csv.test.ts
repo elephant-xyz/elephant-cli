@@ -272,52 +272,48 @@ describe('Prepare Command - Input CSV Support', () => {
   });
 
   describe('Browser Flow with CSV', () => {
-    it(
-      'should process single permit with browser flow',
-      async () => {
-        await fs.writeFile(
-          csvPath,
-          'request_identifier\ne7e6ec95-4042-4710-ad00-f946bb30291f',
-          'utf-8'
-        );
+    it('should process single permit with browser flow', async () => {
+      await fs.writeFile(
+        csvPath,
+        'request_identifier\ne7e6ec95-4042-4710-ad00-f946bb30291f',
+        'utf-8'
+      );
 
-        const mockBrowserFlow = {
-          starts_at: 'navigate',
-          states: {
-            navigate: {
-              type: 'open_page',
-              input: {
-                url: 'https://example.com/permit/e7e6ec95-4042-4710-ad00-f946bb30291f',
-                timeout: 30000,
-                wait_until: 'networkidle0',
-              },
-              result: 'page',
-              end: true,
+      const mockBrowserFlow = {
+        starts_at: 'navigate',
+        states: {
+          navigate: {
+            type: 'open_page',
+            input: {
+              url: 'https://example.com/permit/e7e6ec95-4042-4710-ad00-f946bb30291f',
+              timeout: 30000,
+              wait_until: 'networkidle0',
             },
+            result: 'page',
+            end: true,
           },
-          capture: {
-            type: 'page',
-          },
-        };
+        },
+        capture: {
+          type: 'page',
+        },
+      };
 
-        await fs.writeFile(
-          browserFlowPath,
-          JSON.stringify(mockBrowserFlow),
-          'utf-8'
-        );
+      await fs.writeFile(
+        browserFlowPath,
+        JSON.stringify(mockBrowserFlow),
+        'utf-8'
+      );
 
-        // Note: This will fail without actual browser, but validates the flow logic
-        // In real tests, we'd mock Puppeteer
-        await expect(
-          prepare('', outputZipPath, {
-            inputCsv: csvPath,
-            browserFlowFile: browserFlowPath,
-            headless: true,
-          })
-        ).rejects.toThrow(); // Will fail trying to launch browser
-      },
-      30000
-    ); // 30 second timeout
+      // Note: This will fail without actual browser, but validates the flow logic
+      // In real tests, we'd mock Puppeteer
+      await expect(
+        prepare('', outputZipPath, {
+          inputCsv: csvPath,
+          browserFlowFile: browserFlowPath,
+          headless: true,
+        })
+      ).rejects.toThrow(); // Will fail trying to launch browser
+    }, 30000); // 30 second timeout
 
     it('should extract URL from browser workflow', async () => {
       // Test the extractUrlFromWorkflow function logic
