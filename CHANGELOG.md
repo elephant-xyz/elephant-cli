@@ -1,3 +1,31 @@
+## [1.52.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.2...v1.52.3) (2025-10-24)
+
+
+### Bug Fixes
+
+* Update county datagorup relationships ([#202](https://github.com/elephant-xyz/elephant-cli/issues/202)) ([33fe96a](https://github.com/elephant-xyz/elephant-cli/commit/33fe96a869b9a611ff8c3066cf9cf5fafe2fcf34))
+
+## [1.52.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.1...v1.52.2) (2025-10-24)
+
+
+### Bug Fixes
+
+* update-fact-sheet-version ([#199](https://github.com/elephant-xyz/elephant-cli/issues/199)) ([b636682](https://github.com/elephant-xyz/elephant-cli/commit/b6366820d7051a85250c7cbe393edabcc0c752b7))
+
+## [1.52.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.0...v1.52.1) (2025-10-21)
+
+
+### Bug Fixes
+
+* **transform:** the address.json not being copied over if transformation script generates it ([#198](https://github.com/elephant-xyz/elephant-cli/issues/198)) ([c8275d0](https://github.com/elephant-xyz/elephant-cli/commit/c8275d04570604f5672adcfca71fa37d38ea1e07))
+
+# [1.52.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.1...v1.52.0) (2025-10-21)
+
+
+### Features
+
+* Implement multi-requests flow feature for prepare ([#197](https://github.com/elephant-xyz/elephant-cli/issues/197)) ([ba1a5a5](https://github.com/elephant-xyz/elephant-cli/commit/ba1a5a530dc4cfef92c080f91d497e2ab22ec6a7))
+
 ## [1.51.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.51.0...v1.51.1) (2025-10-16)
 
 

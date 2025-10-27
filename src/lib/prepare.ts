@@ -13,6 +13,10 @@ import { loadCustomFlow } from './browser-flow/customFlow.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
 import { fetchOrangeCountyData } from './county-specific-prepare/orange.js';
+import {
+  loadMultiRequestFlow,
+  executeMultiRequestFlow,
+} from './multi-request-flow/index.js';
 
 function parseProxy(proxy: ProxyUrl): ProxyOptions {
   const [, username, password, ip, port] =
@@ -161,7 +165,10 @@ export async function prepare(
 
     let prepared;
 
-    if (isOrangeCounty) {
+    if (options.multiRequestFlowFile) {
+      const flow = await loadMultiRequestFlow(options.multiRequestFlowFile);
+      prepared = await executeMultiRequestFlow(flow, requestId);
+    } else if (isOrangeCounty) {
       prepared = await fetchOrangeCountyData(requestId);
     } else if (options.browserFlowFile) {
       const url = constructUrl(req);
@@ -208,6 +215,7 @@ export async function prepare(
 
     // If browser flow was used and we have a final URL, update the seed files
     if (
+      'finalUrl' in prepared &&
       prepared.finalUrl &&
       (options.browserFlowTemplate || options.browserFlowFile)
     ) {

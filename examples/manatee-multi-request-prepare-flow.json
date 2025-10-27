@@ -1,0 +1,50 @@
+{
+  "requests": [
+    {
+      "key": "OwnersAndGeneralInformation",
+      "request": {
+        "method": "POST",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-owner.php",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "data=%7B%22parid%22%3A%22{{=it.request_identifier}}%22%2C%22ownerType%22%3A%22%22%2C%22parcel_type%22%3A%22real_property%22%7D"
+      }
+    },
+    {
+      "key": "Sales",
+      "request": {
+        "method": "GET",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-sales.php?parid={{=it.request_identifier}}"
+      }
+    },
+    {
+      "key": "Tax",
+      "request": {
+        "method": "GET",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-value-history.php?parid={{=it.request_identifier}}"
+      }
+    },
+    {
+      "key": "Land",
+      "request": {
+        "method": "GET",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-land.php?parid={{=it.request_identifier}}"
+      }
+    },
+    {
+      "key": "Buildings",
+      "request": {
+        "method": "GET",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-buildings.php?parid={{=it.request_identifier}}"
+      }
+    },
+    {
+      "key": "Features",
+      "request": {
+        "method": "GET",
+        "url": "https://www.manateepao.gov/wp-content/themes/frontier-child/models/pao-model-features.php?parid={{=it.request_identifier}}"
+      }
+    }
+  ]
+}

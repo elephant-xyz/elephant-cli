@@ -101,6 +101,7 @@ You must systematically adhere to these principles:
       </file_schema>
     - Analyze the provided file contents (`input_file`, `address`, `parcel`, `owner_data`, `utilities_data`, `layout_data`) that are available in the user message and build a detailed extraction plan using step-by-step reasoning before implementation.
     - The file contents are already provided to you in the user message - you don't need to read them.
+    - Note: `input_file` may be in multi-request flow format (nested objects with `source_http_request` and `response` fields) or standard format (single HTML/JSON document). Detect the format and extract accordingly.
     - Explicitly note for each target data area the exact supporting data source(s):
       - Owners: from `owner_data` content (if available in user message)
       - Utilities: from `utilities_data` content (if available in user message)
@@ -146,7 +147,14 @@ You must systematically adhere to these principles:
       - Produces JSON outputs for each data type in `{data_dir}` directory.
       - Never generates or mentions empty files for missing data.
       - Remains re-runnable, idempotent, and schema-compliant.
-      - Do not populate `source_http_request` and `request_identifier` in output data.
+      - **CRITICAL: Handle `source_http_request` for EVERY output file!**
+        - **MULTI-REQUEST FLOW FORMAT DETECTION:** Check if `input_file` has nested objects (like `Sales`, `Tax`, `Land`, etc.) where each object contains BOTH `source_http_request` and `response` fields.
+        - **IF MULTI-REQUEST FLOW FORMAT IS DETECTED:**
+          - **MANDATORY:** Extract data from the nested object's `response` field (e.g., `input.Sales.response`)
+          - **MANDATORY:** Copy that nested object's `source_http_request` field to EVERY output file created from that data (e.g., every `sales_*.json` file MUST include `input.Sales.source_http_request`)
+          - **EXAMPLE:** When creating `sales_1.json`, `sales_2.json`, etc., ALL of them MUST include the exact `source_http_request` object from `input.Sales.source_http_request`
+          - **EXAMPLE:** When creating `tax_1.json`, it MUST include `input.Tax.source_http_request`
+        - **OTHERWISE (standard single-document format):** Do not populate `source_http_request` in output data.
 
 3.  **Output Specification**
     - For each property, generate these files inside the `{data_dir}` directory :
@@ -238,11 +246,65 @@ Determine the source for each data area. For owner data, utilities, and layout d
 **Action:**  
 In `scripts/data_extractor.js`, implement extraction logic accordingly—owners, utilities, and layout use the specified JSON files, everything else is parsed from HTML.
 
-_Example 2: Handling Absent Data_  
-**Reasoning:**  
-If some fields required by the schema are not present in any source, no file should be created for that data type, and missing optional fields within files should be set to null or schema-allowed empty values.  
-**Action:**  
+_Example 2: Handling Absent Data_
+**Reasoning:**
+If some fields required by the schema are not present in any source, no file should be created for that data type, and missing optional fields within files should be set to null or schema-allowed empty values.
+**Action:**
 Check for existence of necessary data before file creation; never generate empty output files.
+
+_Example 3: Multi-Request Flow Format - CRITICAL IMPLEMENTATION!_
+**Reasoning:**
+When input data is from a multi-request flow (multiple API calls), it has nested structure like:
+```json
+{
+  "Sales": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://example.com/sales.php",
+      "multiValueQueryString": {"parid": ["123"]}
+    },
+    "response": {
+      "cols": [...],
+      "rows": [[...]]
+    }
+  },
+  "Tax": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "https://example.com/tax.php",
+      "multiValueQueryString": {"parid": ["123"]}
+    },
+    "response": {...}
+  }
+}
+```
+**Action:**
+Extract sales data from `inputData.Sales.response` and **MUST include `inputData.Sales.source_http_request` in EVERY `sales_*.json` file**. Extract tax data from `inputData.Tax.response` and **MUST include `inputData.Tax.source_http_request` in EVERY `tax_*.json` file**. This preserves API source tracking for each data type.
+
+**REQUIRED CODE PATTERN:**
+```javascript
+// For sales extraction
+const salesData = input.Sales || {};
+const salesSourceRequest = salesData.source_http_request || null; // SAVE THIS!
+const salesResponse = salesData.response || {};
+
+// When writing EACH sales file:
+const saleOut = {
+  source_http_request: salesSourceRequest, // INCLUDE THIS IN EVERY SALES FILE!
+  ownership_transfer_date: extractedDate,
+  purchase_price_amount: extractedPrice,
+  // ... other fields
+};
+await fsp.writeFile(`sales_1.json`, JSON.stringify(saleOut, null, 2));
+
+// Same pattern for tax, deed, flood, etc.
+const taxData = input.Tax || {};
+const taxSourceRequest = taxData.source_http_request || null; // SAVE THIS!
+const taxOut = {
+  source_http_request: taxSourceRequest, // INCLUDE THIS!
+  // ... tax fields
+};
+```
 
 # Notes
 
@@ -255,6 +317,7 @@ Check for existence of necessary data before file creation; never generate empty
 - Never hardcode enum values, except for the county name.
 - Use vanilla JavaScript for JSON processing.
 - Owners, utility, and layout data must NEVER be extracted from HTML—ALWAYS their respective JSON files.
+- **CRITICAL REMINDER: For multi-request flow format, EVERY output file (sales_*.json, tax_*.json, deed_*.json, flood_*.json, etc.) MUST include the `source_http_request` field copied from the corresponding nested input object! Do NOT forget this—it is MANDATORY for preserving API source tracking!**
   Remember:  
   Begin with schema review and reasoning. For each data type, extract using ONLY the designated source. Do not attempt programmatic JSON Schema validation. Refine iteratively by evaluator feedback until every objective is achieved.
 

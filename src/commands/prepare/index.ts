@@ -18,6 +18,7 @@ export interface PrepareCommandOptions {
   browserFlowFile?: string;
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
+  multiRequestFlowFile?: string;
 }
 
 export function registerPrepareCommand(program: Command) {
@@ -54,6 +55,10 @@ export function registerPrepareCommand(program: Command) {
       '--proxy <url>',
       'Proxy URL to use for headless browser with auth derails (e.g., username:password@ip:port)'
     )
+    .option(
+      '--multi-request-flow-file <path>',
+      'Path to JSON file defining a multi-request flow (sequence of HTTP requests)'
+    )
     .action(async (inputZip: string, options: PrepareCommandOptions) => {
       await handlePrepare(inputZip, options);
     });
@@ -77,6 +82,7 @@ export async function handlePrepare(
     browserFlowFile: options.browserFlowFile,
     ignoreCaptcha: options.ignoreCaptcha,
     proxy: options.proxy,
+    multiRequestFlowFile: options.multiRequestFlowFile,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);

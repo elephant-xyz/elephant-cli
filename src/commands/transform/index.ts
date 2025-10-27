@@ -513,12 +513,22 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
   }
 
   // Copy seed files to output directory so they get processed through the normal loop
+  // Only copy address.json if scripts didn't create one
   if (hasAddressJson) {
-    await fs.copyFile(
-      path.join(tempRoot, 'address.json'),
-      path.join(tempRoot, OUTPUT_DIR, 'address.json')
+    const scriptCreatedAddressPath = path.join(
+      tempRoot,
+      OUTPUT_DIR,
+      'address.json'
     );
-    logger.debug('Copied address.json to output directory for processing');
+    if (existsSync(scriptCreatedAddressPath)) {
+      logger.debug('Scripts created address.json, skipping copy');
+    } else {
+      await fs.copyFile(
+        path.join(tempRoot, 'address.json'),
+        scriptCreatedAddressPath
+      );
+      logger.debug('Copied address.json to output directory for processing');
+    }
   }
 
   if (hasParcelJson) {
@@ -569,7 +579,17 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
         'utf-8'
       );
       const jsonObj = JSON.parse(json);
-      jsonObj.source_http_request = sourceHttpRequest;
+
+      // Only set source_http_request from seed if not present or empty
+      if (
+        !jsonObj.source_http_request ||
+        jsonObj.source_http_request === null ||
+        (typeof jsonObj.source_http_request === 'object' &&
+          Object.keys(jsonObj.source_http_request).length === 0)
+      ) {
+        jsonObj.source_http_request = sourceHttpRequest;
+      }
+
       jsonObj.request_identifier = requestIdentifier;
       await fs.writeFile(
         path.join(tempRoot, OUTPUT_DIR, rel),
@@ -581,17 +601,11 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
         return;
       }
       if (rel.startsWith('person') || rel.startsWith('company')) {
-        const relData = {
-          from: { '/': `./${rel}` },
-          to: { '/': `./property.json` },
-        };
-        const relFileName = `relationship_${rel.replace('.json', '')}_property.json`;
-        relationshipFiles.push(relFileName);
-        await fs.writeFile(
-          path.join(tempRoot, OUTPUT_DIR, relFileName),
-          JSON.stringify(relData),
-          'utf-8'
-        );
+        // Skip creating person/company to property relationships
+        return;
+      }
+      if (rel.startsWith('structure') || rel.startsWith('utility')) {
+        // Skip creating property to structure/utility relationships
         return;
       }
       const relFileName = `relationship_property_${rel}`;
@@ -607,6 +621,16 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
       );
     })
   );
+
+  // Collect all relationship files created by transformation scripts
+  const allOutputFiles = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
+  for (const file of allOutputFiles) {
+    if (file.startsWith('relationship_') && file.endsWith('.json')) {
+      if (!relationshipFiles.includes(file)) {
+        relationshipFiles.push(file);
+      }
+    }
+  }
 
   const countyDataGroup = createCountyDataGroup(relationshipFiles);
   const schemaManifest = await fetchSchemaManifest();

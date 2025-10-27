@@ -10,13 +10,18 @@ interface AsyncDisposablePage extends Page {
   [Symbol.asyncDispose](): Promise<void>;
 }
 
-export function constructUrl(req: Request) {
+export function constructUrl(req: {
+  url: string;
+  multiValueQueryString?: Record<string, string[]>;
+}) {
   const url = new URL(req.url);
-  const query = new URLSearchParams();
-  for (const [key, values] of Object.entries(req.multiValueQueryString)) {
-    for (const value of values) query.append(key, value);
+  if (req.multiValueQueryString) {
+    const query = new URLSearchParams();
+    for (const [key, values] of Object.entries(req.multiValueQueryString)) {
+      for (const value of values) query.append(key, value);
+    }
+    url.search = query.toString();
   }
-  url.search = query.toString();
   return url.toString();
 }
 
@@ -43,6 +48,69 @@ export function parseUrlToRequest(urlString: string): Request {
     method: 'GET',
     multiValueQueryString,
   };
+}
+
+/**
+ * Executes an HTTP request with logging and error handling.
+ * This is a shared implementation used by withFetch and multi-request flow executor.
+ *
+ * @param url - The full URL to request
+ * @param method - HTTP method
+ * @param headers - Optional headers
+ * @param body - Optional request body
+ * @returns Response object and response text
+ */
+export async function executeFetch(
+  url: string,
+  method: string,
+  headers?: Record<string, string>,
+  body?: string
+): Promise<{ response: Response; responseText: string }> {
+  logger.info(`Making ${method} request to: ${url}`);
+
+  logger.debug(`Request headers: ${JSON.stringify(headers)}`);
+  if (body) {
+    logger.debug(
+      `Request body: ${body.substring(0, 200)}${body.length > 200 ? '...' : ''}`
+    );
+  }
+
+  const startMs = Date.now();
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body,
+    });
+  } catch (error) {
+    logger.error(
+      `Network error: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw error;
+  }
+
+  logger.info(`Response status: ${response.status} ${response.statusText}`);
+  logger.debug(
+    `Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`
+  );
+
+  if (!response.ok) {
+    const errorText = await response
+      .text()
+      .catch(() => 'Unable to read error response');
+    logger.error(`HTTP error response body: ${errorText}`);
+    throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+  }
+
+  const responseText = await response.text();
+  const elapsedMs = Date.now() - startMs;
+  logger.info(
+    `Downloaded response body in ${elapsedMs}ms (${responseText.length} bytes)`
+  );
+
+  return { response, responseText };
 }
 
 /**
