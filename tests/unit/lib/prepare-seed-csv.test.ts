@@ -313,7 +313,7 @@ describe('Prepare Command - Input CSV Support', () => {
           headless: true,
         })
       ).rejects.toThrow(); // Will fail trying to launch browser
-    });
+    }, 30000); // 30 second timeout
 
     it('should extract URL from browser workflow', async () => {
       // Test the extractUrlFromWorkflow function logic
