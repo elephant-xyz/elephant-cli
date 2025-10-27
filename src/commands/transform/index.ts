@@ -926,17 +926,11 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
         return;
       }
       if (rel.startsWith('person') || rel.startsWith('company')) {
-        const relData = {
-          from: { '/': `./${rel}` },
-          to: { '/': `./property.json` },
-        };
-        const relFileName = `relationship_${rel.replace('.json', '')}_property.json`;
-        relationshipFiles.push(relFileName);
-        await fs.writeFile(
-          path.join(tempRoot, OUTPUT_DIR, relFileName),
-          JSON.stringify(relData),
-          'utf-8'
-        );
+        // Skip creating person/company to property relationships
+        return;
+      }
+      if (rel.startsWith('structure') || rel.startsWith('utility')) {
+        // Skip creating property to structure/utility relationships
         return;
       }
       const relFileName = `relationship_property_${rel}`;
@@ -952,6 +946,16 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
       );
     })
   );
+
+  // Collect all relationship files created by transformation scripts
+  const allOutputFiles = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
+  for (const file of allOutputFiles) {
+    if (file.startsWith('relationship_') && file.endsWith('.json')) {
+      if (!relationshipFiles.includes(file)) {
+        relationshipFiles.push(file);
+      }
+    }
+  }
 
   const countyDataGroup = createCountyDataGroup(relationshipFiles);
   const schemaManifest = await fetchSchemaManifest();
