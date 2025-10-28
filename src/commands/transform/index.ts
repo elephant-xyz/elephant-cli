@@ -10,7 +10,7 @@ import { handleLegacyTransform } from './legacy-agent.js';
 import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
 import { createCountyDataGroup } from './county-datagroup.js';
-import { createPropertyImprovementDataGroup } from './property-improvement-datagroup.js';
+import { createPropertyImprovementDataGroup as createPropertyImprovementDataGroupFromModule } from './property-improvement-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
 import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
@@ -31,7 +31,7 @@ export interface TransformCommandOptions {
   legacyMode?: boolean;
   silent?: boolean;
   cwd?: string;
-  propertyImprovement?: boolean;
+  dataGroup?: string;
   [key: string]: any;
 }
 
@@ -100,9 +100,9 @@ export function registerTransformCommand(program: Command) {
     )
     .option('--legacy-mode', 'Use legacy mode for transforming data', false)
     .option(
-      '--property-improvement',
-      'Enable Property Improvement data group creation',
-      false
+      '--data-group <string>',
+      'Specify data group type to create (e.g., "Property Improvement")',
+      undefined
     )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
@@ -117,103 +117,8 @@ export async function handleTransform(options: TransformCommandOptions) {
 
   if (options.legacyMode) {
     await handleLegacyTransform(options);
-  } else if (options.propertyImprovement) {
-    await handlePropertyImprovementMode(options);
   } else {
     await handleScriptsMode(options);
-  }
-}
-
-async function handlePropertyImprovementMode(options: TransformCommandOptions) {
-  const workingDir = options.cwd || process.cwd();
-  const outputZip = options.outputZip || 'property-improvement-transformed.zip';
-  const resolvedOutputZip = path.resolve(workingDir, outputZip);
-  const resolvedInputZip = options.inputZip
-    ? path.resolve(workingDir, options.inputZip)
-    : undefined;
-  const resolvedScriptsZip = options.scriptsZip
-    ? path.resolve(workingDir, options.scriptsZip)
-    : undefined;
-
-  if (!resolvedInputZip) {
-    const error = 'In Property Improvement mode, --input-zip is required';
-    logger.error(error);
-    throw new Error(error);
-  }
-
-  const tempRoot = await fs.mkdtemp(path.join(tmpdir(), 'elephant-transform-'));
-  const cleanup = [() => fs.rm(tempRoot, { recursive: true, force: true })];
-
-  try {
-    logger.info('Extracting inputs to tempdir...');
-    await extractZipToTemp(resolvedInputZip, tempRoot, INPUT_DIR);
-
-    // If scripts-zip is provided, run Property Improvement extraction script
-    if (resolvedScriptsZip) {
-      logger.info('Extracting scripts to tempdir...');
-      const scriptsDir = await extractZipToTemp(
-        resolvedScriptsZip,
-        tempRoot,
-        'scripts'
-      );
-      logger.info('Running Property Improvement extraction script...');
-      await runPropertyImprovementScript(scriptsDir, tempRoot);
-
-      // After script runs, copy extracted files from data/ to input/ so they can be processed
-      const dataDir = path.join(tempRoot, OUTPUT_DIR);
-      const inputDir = path.join(tempRoot, INPUT_DIR);
-
-      try {
-        const dataFiles = await fs.readdir(dataDir);
-        logger.info(
-          `Found ${dataFiles.length} files in data directory: ${dataFiles.join(', ')}`
-        );
-        for (const file of dataFiles) {
-          if (file.endsWith('.json')) {
-            await fs.copyFile(
-              path.join(dataDir, file),
-              path.join(inputDir, file)
-            );
-            logger.info(`Copied ${file} from data/ to input/`);
-          }
-        }
-      } catch (error) {
-        logger.error(`Could not copy files from data to input: ${error}`);
-      }
-    }
-
-    logger.info('Processing Property Improvement data group...');
-    await handlePropertyImprovementTransform(tempRoot, options);
-
-    const zip = new AdmZip();
-    // Add files directly to root, not in 'data' subdirectory
-    const outputDir = path.join(tempRoot, OUTPUT_DIR);
-
-    // Ensure output directory exists
-    await fs.mkdir(outputDir, { recursive: true });
-
-    const files = await fs.readdir(outputDir);
-
-    for (const file of files) {
-      const filePath = path.join(outputDir, file);
-      const stats = await fs.stat(filePath);
-      if (stats.isFile()) {
-        const content = await fs.readFile(filePath);
-        zip.addFile(file, content);
-      }
-    }
-
-    zip.writeZip(resolvedOutputZip);
-
-    if (!options.silent) {
-      console.log(
-        chalk.green('✅ Transform (Property Improvement mode) finished')
-      );
-      console.log(chalk.blue('📊 Output:'));
-      console.log(chalk.gray(`  JSON bundle for hash: ${resolvedOutputZip}`));
-    }
-  } finally {
-    for (const fn of cleanup) await fn();
   }
 }
 
@@ -274,20 +179,109 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         tempRoot,
         'scripts'
       );
-      await handleCountyTransform(scriptsDir, tempRoot);
-    } else {
-      logger.info('Processing seed data group...');
-      await handleSeedTransform(tempRoot, options);
-      isSeedMode = true;
-    }
 
-    // Handle Property Improvement data group if flag is enabled
-    if (options.propertyImprovement) {
-      await handlePropertyImprovementTransform(tempRoot, options);
+      // Determine data group type and creation function
+      let dataGroupType = 'County';
+      let createDataGroupFunction = createCountyDataGroup;
+
+      if (options.dataGroup) {
+        const dataGroupLower = options.dataGroup.toLowerCase();
+        if (
+          dataGroupLower === 'property improvement' ||
+          dataGroupLower === 'property_improvement'
+        ) {
+          dataGroupType = 'Property Improvement';
+          // Create a wrapper function that matches the expected signature
+          createDataGroupFunction = (_relationshipFiles: readonly string[]) => {
+            // For Property Improvement, we'll handle this differently in handleDataGroupTransform
+            return { label: 'County', relationships: {} };
+          };
+
+          // For Property Improvement, run the extraction script first
+          logger.info('Running Property Improvement extraction script...');
+          await runScriptsPipeline(scriptsDir, tempRoot, [
+            'property-improvement-extractor.js',
+          ]);
+
+          // After script runs, copy extracted files from data/ to input/ so they can be processed
+          const dataDir = path.join(tempRoot, OUTPUT_DIR);
+          const inputDir = path.join(tempRoot, INPUT_DIR);
+
+          try {
+            const dataFiles = await fs.readdir(dataDir);
+            logger.info(
+              `Found ${dataFiles.length} files in data directory: ${dataFiles.join(', ')}`
+            );
+            for (const file of dataFiles) {
+              if (file.endsWith('.json')) {
+                await fs.copyFile(
+                  path.join(dataDir, file),
+                  path.join(inputDir, file)
+                );
+                logger.info(`Copied ${file} from data/ to input/`);
+              }
+            }
+          } catch (error) {
+            logger.error(`Could not copy files from data to input: ${error}`);
+          }
+        }
+      }
+
+      await handleDataGroupTransform(
+        scriptsDir,
+        tempRoot,
+        dataGroupType,
+        createDataGroupFunction
+      );
+    } else {
+      // Check if this is Property Improvement mode without scripts
+      if (
+        options.dataGroup &&
+        (options.dataGroup.toLowerCase() === 'property improvement' ||
+          options.dataGroup.toLowerCase() === 'property_improvement')
+      ) {
+        logger.info(
+          'Processing Property Improvement data group in seed mode...'
+        );
+        await handleSeedTransform(tempRoot, options);
+        // Also create Property Improvement data group from existing files
+        const outputDir = path.join(tempRoot, OUTPUT_DIR);
+        const files = await fs.readdir(outputDir);
+        const relationshipFiles = files.filter(
+          (file) => file.includes('_has_') && file.endsWith('.json')
+        );
+
+        const dataGroup =
+          createPropertyImprovementDataGroupFromModule(relationshipFiles);
+        const schemaManifestService = new SchemaManifestService();
+        await schemaManifestService.loadSchemaManifest();
+        const schemaCid = schemaManifestService.getDataGroupCidByLabel(
+          'Property Improvement'
+        );
+
+        if (schemaCid) {
+          await fs.writeFile(
+            path.join(outputDir, `${schemaCid}.json`),
+            JSON.stringify(dataGroup),
+            'utf-8'
+          );
+        }
+        isSeedMode = true;
+      } else {
+        logger.info('Processing seed data group...');
+        await handleSeedTransform(tempRoot, options);
+        isSeedMode = true;
+      }
     }
 
     if (!isSeedMode) {
-      await generateFactSheet(tempRoot);
+      // Only generate fact sheets for County data groups, not Property Improvement
+      if (
+        !options.dataGroup ||
+        options.dataGroup.toLowerCase() !== 'property improvement'
+      ) {
+        await generateFactSheet(tempRoot);
+      }
     }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
@@ -597,213 +591,49 @@ async function handleSeedTransform(
   );
 }
 
-async function runPropertyImprovementScript(
+
+async function handleDataGroupTransform(
   scriptsDir: string,
-  tempRoot: string
-): Promise<void> {
-  // Look for property_improvement_extractor.js in the scripts directory
-  const scriptFiles = await fs.readdir(scriptsDir);
-  logger.info(`Script files found: ${scriptFiles.join(', ')}`);
-
-  // The scriptsDir contains a 'scripts' subdirectory, so we need to look inside it
-  const actualScriptsDir = path.join(scriptsDir, 'scripts');
-  const actualScriptFiles = await fs.readdir(actualScriptsDir);
-  const extractorScript = actualScriptFiles.find(
-    (f) =>
-      f.includes('property') &&
-      f.includes('improvement') &&
-      f.includes('extractor') &&
-      f.endsWith('.js')
-  );
-
-  if (!extractorScript) {
-    logger.warn(
-      'No Property Improvement extractor script found, skipping extraction'
-    );
-    return;
-  }
-
-  logger.info(`Found extractor script: ${extractorScript}`);
-  const scriptPath = path.join(actualScriptsDir, extractorScript);
-
-  // Run the extraction script
-  const { spawn } = await import('child_process');
-  const { linkNodeModulesIntoTemp } = await import(
-    '../../utils/node-modules.js'
-  );
-
-  linkNodeModulesIntoTemp(tempRoot);
-
-  // Copy package.json to temp directory so Node.js knows to use ES modules
-  const packageJsonPath = path.join(process.cwd(), 'package.json');
-  const tempPackageJsonPath = path.join(tempRoot, 'package.json');
-  try {
-    await fs.copyFile(packageJsonPath, tempPackageJsonPath);
-  } catch (error) {
-    logger.warn(`Could not copy package.json to temp directory: ${error}`);
-  }
-
-  let stdout = '';
-  let stderr = '';
-
-  const proc = spawn(
-    process.execPath,
-    ['--unhandled-rejections=strict', scriptPath],
-    {
-      cwd: tempRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  );
-
-  proc.stdout.on('data', (data: Buffer) => {
-    stdout += data.toString();
-  });
-
-  proc.stderr.on('data', (data: Buffer) => {
-    stderr += data.toString();
-  });
-
-  await new Promise((resolve, reject) => {
-    proc.on('exit', (code) => {
-      if (stdout) logger.info(`Script output: ${stdout}`);
-      if (stderr) logger.error(`Script error: ${stderr}`);
-      if (code === 0) {
-        resolve(undefined);
-      } else {
-        reject(
-          new Error(
-            `Property Improvement extraction script failed with code ${code}`
-          )
-        );
-      }
-    });
-    proc.on('error', reject);
-  });
-
-  logger.info('Property Improvement extraction complete');
-}
-
-async function handlePropertyImprovementTransform(
   tempRoot: string,
-  _options: TransformCommandOptions
+  dataGroupType: string,
+  createDataGroupFunction: (relationshipFiles: readonly string[]) => any
 ) {
-  logger.info('Processing Property Improvement data group...');
-
-  // Check for Property Improvement files in input
-  let propertyImprovementFiles: string[] = [];
-  try {
-    const inputFiles = await fs.readdir(path.join(tempRoot, INPUT_DIR));
-    propertyImprovementFiles = inputFiles.filter(
-      (file) =>
-        file.toLowerCase().includes('property_improvement') &&
-        file.endsWith('.json')
-    );
-  } catch {
-    // Input directory might not exist or be accessible
-  }
-
-  if (propertyImprovementFiles.length === 0) {
-    logger.warn('No Property Improvement files found in input');
+  if (dataGroupType === 'Property Improvement') {
+    // For Property Improvement, we already ran the extraction script
+    // Just create the data group from existing files
     logger.info(
-      'Note: Property Improvement transform expects pre-extracted JSON files with relationships.'
+      'Creating Property Improvement data group from extracted files...'
     );
-    // Still create the data group with empty relationships
-    const emptyDataGroup = createPropertyImprovementDataGroup([]);
-    const schemaManifest = await fetchSchemaManifest();
-    const propertyImprovementSchema =
-      schemaManifest['Property_Improvement']?.ipfsCid;
-    if (!propertyImprovementSchema) {
-      throw new Error('Property Improvement schema not found in manifest');
+
+    // Call the actual Property Improvement data group creation function
+    const outputDir = path.join(tempRoot, OUTPUT_DIR);
+    const files = await fs.readdir(outputDir);
+    const relationshipFiles = files.filter(
+      (file) => file.includes('_has_') && file.endsWith('.json')
+    );
+
+    const dataGroup =
+      createPropertyImprovementDataGroupFromModule(relationshipFiles);
+    const schemaManifestService = new SchemaManifestService();
+    await schemaManifestService.loadSchemaManifest();
+    const schemaCid =
+      schemaManifestService.getDataGroupCidByLabel(dataGroupType);
+
+    if (!schemaCid) {
+      throw new Error(`Schema not found for data group type: ${dataGroupType}`);
     }
-    await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
+
     await fs.writeFile(
-      path.join(tempRoot, OUTPUT_DIR, `${propertyImprovementSchema}.json`),
-      JSON.stringify(emptyDataGroup),
+      path.join(outputDir, `${schemaCid}.json`),
+      JSON.stringify(dataGroup),
       'utf-8'
     );
-    logger.info(
-      'Created Property Improvement data group with no relationships'
-    );
+
+    logger.info('Property Improvement data group created successfully');
     return;
   }
 
-  // Add Property Improvement files to output
-  const fileNameContent: { name: string; content: string }[] = [];
-
-  for (const file of propertyImprovementFiles) {
-    try {
-      const content = await fs.readFile(
-        path.join(tempRoot, INPUT_DIR, file),
-        'utf-8'
-      );
-      const jsonObj = JSON.parse(content);
-
-      // Only process class files (not relationships) - relationships should not have source_http_request
-      const isRelationshipFile = file.includes('_has_');
-      if (!isRelationshipFile) {
-        // Keep existing source_http_request and request_identifier if present
-        // Do not add hardcoded fallbacks - let the extraction script handle this
-      }
-
-      fileNameContent.push({
-        name: file,
-        content: JSON.stringify(jsonObj),
-      });
-    } catch (error) {
-      logger.warn(
-        `Failed to process Property Improvement file ${file}: ${error}`
-      );
-    }
-  }
-
-  // Ensure output directory exists
-  await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
-
-  await Promise.all(
-    fileNameContent.map(async (file) => {
-      const absPath = path.join(tempRoot, OUTPUT_DIR, file.name);
-      await fs.writeFile(absPath, file.content, 'utf-8');
-    })
-  );
-
-  // Collect relationship files from output directory
-  const newJsonRelPaths = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
-  const relFiles = newJsonRelPaths.filter(
-    (p) =>
-      p.includes('property_improvement') &&
-      (p.includes('_to_') || p.includes('_has_')) &&
-      p.endsWith('.json')
-  );
-
-  logger.info(
-    `Found ${relFiles.length} Property Improvement relationship file(s)`
-  );
-
-  const propertyImprovementRelationships: string[] = relFiles;
-
-  // Create Property Improvement data group
-  const propertyImprovementDataGroup = createPropertyImprovementDataGroup(
-    propertyImprovementRelationships
-  );
-  const schemaManifest = await fetchSchemaManifest();
-
-  // Get the Property Improvement schema CID from manifest
-  const propertyImprovementSchema =
-    schemaManifest['Property_Improvement']?.ipfsCid;
-
-  if (!propertyImprovementSchema) {
-    throw new Error('Property Improvement schema not found in manifest');
-  }
-
-  await fs.writeFile(
-    path.join(tempRoot, OUTPUT_DIR, `${propertyImprovementSchema}.json`),
-    JSON.stringify(propertyImprovementDataGroup),
-    'utf-8'
-  );
-  logger.info('Created Property Improvement data group with relationships');
-}
-
-async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
+  // For County and other data groups, run the normal scripts pipeline
   logger.info('Running generated scripts pipeline...');
   await runScriptsPipeline(scriptsDir, tempRoot);
 
@@ -988,12 +818,18 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
     }
   }
 
-  const countyDataGroup = createCountyDataGroup(relationshipFiles);
-  const schemaManifest = await fetchSchemaManifest();
-  const countySchema = schemaManifest['County']!.ipfsCid;
+  const dataGroup = createDataGroupFunction(relationshipFiles);
+  const schemaManifestService = new SchemaManifestService();
+  await schemaManifestService.loadSchemaManifest();
+  const schemaCid = schemaManifestService.getDataGroupCidByLabel(dataGroupType);
+
+  if (!schemaCid) {
+    throw new Error(`Schema not found for data group type: ${dataGroupType}`);
+  }
+
   await fs.writeFile(
-    path.join(tempRoot, OUTPUT_DIR, `${countySchema}.json`),
-    JSON.stringify(countyDataGroup),
+    path.join(tempRoot, OUTPUT_DIR, `${schemaCid}.json`),
+    JSON.stringify(dataGroup),
     'utf-8'
   );
 }

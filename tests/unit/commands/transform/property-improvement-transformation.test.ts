@@ -134,7 +134,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists
@@ -233,7 +233,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists
@@ -348,7 +348,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      // propertyImprovement flag is NOT provided
+      // dataGroup flag is NOT provided
     });
 
     // Verify output exists
@@ -463,7 +463,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists
@@ -548,7 +548,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists
@@ -826,7 +826,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: false,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists
@@ -912,7 +912,7 @@ describe('Property Improvement Data Group Transformation', () => {
       inputZip,
       outputZip,
       silent: true,
-      propertyImprovement: true,
+      dataGroup: 'Property Improvement',
     });
 
     // Verify output exists

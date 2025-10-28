@@ -127,7 +127,6 @@ export async function cleanHtml(rawHtml: string): Promise<string> {
 
   const $ = cheerio.load(rawHtml, {
     xmlMode: false,
-    scriptingEnabled: false,
   });
 
   $('script, style, noscript').remove();
