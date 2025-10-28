@@ -215,8 +215,13 @@ export async function withBrowserFlow(
           const errorMsg = e instanceof Error ? e.message : String(e);
 
           // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
-          if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
-            logger.info('Frame detached during navigation (expected) - waiting for page to stabilize...');
+          if (
+            errorMsg.toLowerCase().includes('frame') &&
+            errorMsg.toLowerCase().includes('detach')
+          ) {
+            logger.info(
+              'Frame detached during navigation (expected) - waiting for page to stabilize...'
+            );
             // Give extra time for the new frame to fully load
             await new Promise((resolve) => setTimeout(resolve, 5000));
           } else {

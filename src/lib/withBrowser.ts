@@ -1,6 +1,5 @@
 import { logger } from '../utils/logger.js';
-import chalk from 'chalk';
-import { TimeoutError, Page, HTTPResponse } from 'puppeteer';
+import { Page, HTTPResponse } from 'puppeteer';
 import { constructUrl, createBrowserPage } from './common.js';
 import { Prepared, Request, ProxyOptions } from './types.js';
 import { PREPARE_DEFAULT_ERROR_HTML_PATTERNS } from '../config/constants.js';
@@ -35,12 +34,14 @@ export async function withBrowser(
   logger.info('Starting navigation without lifecycle waiting...');
 
   // Start navigation without waiting for lifecycle events
-  const navigationPromise = page.goto(url, {
-    timeout: 150000,
-  }).catch((e) => {
-    // Navigation errors are expected and handled below
-    return null;
-  });
+  const navigationPromise = page
+    .goto(url, {
+      timeout: 150000,
+    })
+    .catch((_e) => {
+      // Navigation errors are expected and handled below
+      return null;
+    });
 
   // Wait for the page to actually load by polling for a usable DOM
   const maxWaitMs = 30000;
@@ -58,12 +59,18 @@ export async function withBrowser(
 
       if (hasContent) {
         pageReady = true;
-        logger.info(`Page content loaded after ${Math.round((Date.now() - startTime) / 1000)}s`);
+        logger.info(
+          `Page content loaded after ${Math.round((Date.now() - startTime) / 1000)}s`
+        );
       }
     } catch (e) {
-      // Frame might still be detaching, keep waiting
+      // Frame might still be detaching/context being destroyed, keep waiting
       const errMsg = e instanceof Error ? e.message : String(e);
-      if (!errMsg.toLowerCase().includes('detach')) {
+      const isNavigationError =
+        errMsg.toLowerCase().includes('detach') ||
+        errMsg.toLowerCase().includes('context') ||
+        errMsg.toLowerCase().includes('destroyed');
+      if (!isNavigationError) {
         throw e;
       }
     }
@@ -96,9 +103,14 @@ export async function withBrowser(
       .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
       .catch((e) => {
         const errMsg = e instanceof Error ? e.message : String(e);
-        if (errMsg.toLowerCase().includes('detach')) {
+        if (
+          errMsg.toLowerCase().includes('detach') ||
+          errMsg.toLowerCase().includes('context')
+        ) {
           logger.warn('Frame detached during waitForSelector, skipping');
+          return null; // Return null to prevent rejection
         }
+        throw e; // Re-throw non-detachment errors
       }),
     page
       .waitForFunction(
@@ -112,9 +124,14 @@ export async function withBrowser(
       )
       .catch((e) => {
         const errMsg = e instanceof Error ? e.message : String(e);
-        if (errMsg.toLowerCase().includes('detach')) {
+        if (
+          errMsg.toLowerCase().includes('detach') ||
+          errMsg.toLowerCase().includes('context')
+        ) {
           logger.warn('Frame detached during waitForFunction, skipping');
+          return null; // Return null to prevent rejection
         }
+        throw e; // Re-throw non-detachment errors
       }),
   ]);
 
@@ -128,7 +145,24 @@ export async function withBrowser(
 
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  const html = await page.content();
+  let html: string;
+  try {
+    html = await page.content();
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    if (
+      errMsg.toLowerCase().includes('detach') ||
+      errMsg.toLowerCase().includes('context')
+    ) {
+      logger.warn(
+        'Frame detached during page.content(), retrying after delay...'
+      );
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      html = await page.content();
+    } else {
+      throw e;
+    }
+  }
 
   // Don't treat reCAPTCHA success pages as errors
   const finalUrl = page.url();
@@ -156,12 +190,18 @@ async function checkForRecaptcha(page: Page): Promise<boolean> {
         !!document.querySelector('.g-recaptcha') ||
         !!document.querySelector('[id*="recaptcha"]') ||
         !!document.querySelector('[class*="recaptcha"]');
-      return url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement;
+      return (
+        url.toLowerCase().includes('recaptchatoken=') || hasRecaptchaElement
+      );
     });
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);
-    if (errorMsg.toLowerCase().includes('detach')) {
-      logger.warn('Frame detached during reCAPTCHA check, skipping check');
+    const isNavigationError =
+      errorMsg.toLowerCase().includes('detach') ||
+      errorMsg.toLowerCase().includes('context') ||
+      errorMsg.toLowerCase().includes('destroyed');
+    if (isNavigationError) {
+      logger.warn('Frame/context error during reCAPTCHA check, skipping check');
       return false;
     }
     throw e;
@@ -220,7 +260,9 @@ async function clickContinueButton(page: Page) {
       if (!modal) return null as null | { buttonSelector: string };
       const s = window.getComputedStyle(modal);
       const vis =
-        s.display !== 'none' && s.visibility !== 'hidden' && Number(s.zIndex) > 0;
+        s.display !== 'none' &&
+        s.visibility !== 'hidden' &&
+        Number(s.zIndex) > 0;
       if (!vis) return null;
       const btn =
         (modal.querySelector('#btnContinue') as
@@ -246,8 +288,12 @@ async function clickContinueButton(page: Page) {
     });
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);
-    if (errorMsg.toLowerCase().includes('detach')) {
-      logger.warn('Frame detached during continue button check, skipping');
+    const isNavigationError =
+      errorMsg.toLowerCase().includes('detach') ||
+      errorMsg.toLowerCase().includes('context') ||
+      errorMsg.toLowerCase().includes('destroyed');
+    if (isNavigationError) {
+      logger.warn('Frame/context error during continue button check, skipping');
       return;
     }
     throw e;
