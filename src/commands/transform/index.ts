@@ -739,20 +739,11 @@ async function handlePropertyImprovementTransform(
       );
       const jsonObj = JSON.parse(content);
 
-      // Add source_http_request and request_identifier only for class files (not relationships)
+      // Only process class files (not relationships) - relationships should not have source_http_request
       const isRelationshipFile = file.includes('_has_');
       if (!isRelationshipFile) {
-        // Add source_http_request if not present (keep existing if already set by extraction script)
-        if (!jsonObj.source_http_request) {
-          jsonObj.source_http_request = {
-            method: 'GET',
-            url: 'https://example.com/property-improvement',
-          };
-        }
-        // Add request_identifier if not present
-        if (!jsonObj.request_identifier) {
-          jsonObj.request_identifier = 'property-improvement-001';
-        }
+        // Keep existing source_http_request and request_identifier if present
+        // Do not add hardcoded fallbacks - let the extraction script handle this
       }
 
       fileNameContent.push({

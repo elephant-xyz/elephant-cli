@@ -12,8 +12,13 @@ export interface PropertyImprovementRelationships {
   property_improvement_has_layout?: IPLDRef | null;
   property_improvement_has_structure?: IPLDRef | null;
   property_improvement_has_utility?: IPLDRef | null;
+  property_improvement_has_file?: IPLDRef[] | null;
+  property_improvement_has_inspection?: IPLDRef[] | null;
   company_has_communication?: IPLDRef[] | null;
   contractor_has_person?: IPLDRef[] | null;
+  inspection_has_company?: IPLDRef[] | null;
+  inspection_has_file?: IPLDRef[] | null;
+  inspection_has_person?: IPLDRef[] | null;
 }
 
 /**
@@ -26,8 +31,13 @@ export function createPropertyImprovementDataGroup(
 ): PropertyImprovementData {
   const propertyHasPropertyImprovement: IPLDRef[] = [];
   const propertyImprovementHasContractor: IPLDRef[] = [];
+  const propertyImprovementHasFile: IPLDRef[] = [];
+  const propertyImprovementHasInspection: IPLDRef[] = [];
   const companyHasCommunication: IPLDRef[] = [];
   const contractorHasPerson: IPLDRef[] = [];
+  const inspectionHasCompany: IPLDRef[] = [];
+  const inspectionHasFile: IPLDRef[] = [];
+  const inspectionHasPerson: IPLDRef[] = [];
 
   let parcelHasPropertyImprovement: IPLDRef | undefined;
   let propertyImprovementHasLayout: IPLDRef | undefined;
@@ -55,6 +65,14 @@ export function createPropertyImprovementDataGroup(
       propertyImprovementHasContractor.push(ref);
       continue;
     }
+    if (lower.includes('property_improvement_has_file')) {
+      propertyImprovementHasFile.push(ref);
+      continue;
+    }
+    if (lower.includes('property_improvement_has_inspection')) {
+      propertyImprovementHasInspection.push(ref);
+      continue;
+    }
     if (lower.includes('property_improvement_has_layout')) {
       propertyImprovementHasLayout = ref;
       continue;
@@ -77,6 +95,20 @@ export function createPropertyImprovementDataGroup(
       contractorHasPerson.push(ref);
       continue;
     }
+
+    // Inspection relationships
+    if (lower.includes('inspection_has_company')) {
+      inspectionHasCompany.push(ref);
+      continue;
+    }
+    if (lower.includes('inspection_has_file')) {
+      inspectionHasFile.push(ref);
+      continue;
+    }
+    if (lower.includes('inspection_has_person')) {
+      inspectionHasPerson.push(ref);
+      continue;
+    }
   }
 
   const relationships: PropertyImprovementRelationships = {};
@@ -95,6 +127,15 @@ export function createPropertyImprovementDataGroup(
   if (propertyImprovementHasContractor.length > 0) {
     relationships.property_improvement_has_contractor =
       propertyImprovementHasContractor;
+  }
+
+  if (propertyImprovementHasFile.length > 0) {
+    relationships.property_improvement_has_file = propertyImprovementHasFile;
+  }
+
+  if (propertyImprovementHasInspection.length > 0) {
+    relationships.property_improvement_has_inspection =
+      propertyImprovementHasInspection;
   }
 
   if (propertyImprovementHasLayout) {
@@ -118,6 +159,18 @@ export function createPropertyImprovementDataGroup(
 
   if (contractorHasPerson.length > 0) {
     relationships.contractor_has_person = contractorHasPerson;
+  }
+
+  if (inspectionHasCompany.length > 0) {
+    relationships.inspection_has_company = inspectionHasCompany;
+  }
+
+  if (inspectionHasFile.length > 0) {
+    relationships.inspection_has_file = inspectionHasFile;
+  }
+
+  if (inspectionHasPerson.length > 0) {
+    relationships.inspection_has_person = inspectionHasPerson;
   }
 
   return {
