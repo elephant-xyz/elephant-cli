@@ -24,6 +24,11 @@ vi.mock('../../../../src/utils/schema-fetcher.js', () => ({
   }),
 }));
 
+// Mock the script runner to avoid actual script execution in tests
+vi.mock('../../../../src/commands/transform/script-runner.js', () => ({
+  runScriptsPipeline: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('Property Improvement Data Group Transformation', () => {
   let tempDir: string;
   let inputZip: string;
@@ -129,10 +134,17 @@ describe('Property Improvement Data Group Transformation', () => {
     );
     zip.writeZip(inputZip);
 
+    // Create mock scripts zip (required for Property Improvement)
+    const scriptsZip = path.join(tempDir, 'scripts.zip');
+    const scriptsZipFile = new AdmZip();
+    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.writeZip(scriptsZip);
+
     // Transform
     await handleTransform({
       inputZip,
       outputZip,
+      scriptsZip,
       silent: true,
       dataGroup: 'Property Improvement',
     });
@@ -228,10 +240,17 @@ describe('Property Improvement Data Group Transformation', () => {
     );
     zip.writeZip(inputZip);
 
+    // Create mock scripts zip (required for Property Improvement)
+    const scriptsZip = path.join(tempDir, 'scripts.zip');
+    const scriptsZipFile = new AdmZip();
+    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.writeZip(scriptsZip);
+
     // Transform
     await handleTransform({
       inputZip,
       outputZip,
+      scriptsZip,
       silent: true,
       dataGroup: 'Property Improvement',
     });
@@ -821,10 +840,17 @@ describe('Property Improvement Data Group Transformation', () => {
 
     zip.writeZip(inputZip);
 
+    // Create mock scripts zip (required for Property Improvement)
+    const scriptsZip = path.join(tempDir, 'scripts.zip');
+    const scriptsZipFile = new AdmZip();
+    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.writeZip(scriptsZip);
+
     // Transform
     await handleTransform({
       inputZip,
       outputZip,
+      scriptsZip,
       silent: false,
       dataGroup: 'Property Improvement',
     });

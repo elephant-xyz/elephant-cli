@@ -144,11 +144,13 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       process.exit(1);
     }
   }
-  
+
   // Property Improvement always requires scripts
-  if (options.dataGroup && 
-      (options.dataGroup.toLowerCase() === 'property improvement' || 
-       options.dataGroup.toLowerCase() === 'property_improvement')) {
+  if (
+    options.dataGroup &&
+    (options.dataGroup.toLowerCase() === 'property improvement' ||
+      options.dataGroup.toLowerCase() === 'property_improvement')
+  ) {
     if (!resolvedScriptsZip) {
       const error = 'Property Improvement data group requires --scripts-zip';
       if (!options.silent) {
@@ -570,7 +572,6 @@ async function handleSeedTransform(tempRoot: string) {
   );
 }
 
-
 async function handleDataGroupTransform(
   scriptsDir: string,
   tempRoot: string,
@@ -585,8 +586,8 @@ async function handleDataGroupTransform(
     );
 
     // Call the actual Property Improvement data group creation function
-    const outputDir = path.join(tempRoot, OUTPUT_DIR);
-    const files = await fs.readdir(outputDir);
+    const inputDir = path.join(tempRoot, INPUT_DIR);
+    const files = await fs.readdir(inputDir);
     const relationshipFiles = files.filter(
       (file) => file.includes('_has_') && file.endsWith('.json')
     );
@@ -600,6 +601,22 @@ async function handleDataGroupTransform(
 
     if (!schemaCid) {
       throw new Error(`Schema not found for data group type: ${dataGroupType}`);
+    }
+
+
+    // Ensure output directory exists
+    const outputDir = path.join(tempRoot, OUTPUT_DIR);
+    await fs.mkdir(outputDir, { recursive: true });
+
+    // Copy individual property improvement files to output directory
+    const inputFiles = await fs.readdir(inputDir);
+    for (const file of inputFiles) {
+      if (file.endsWith('.json') && !file.includes('_has_')) {
+        await fs.copyFile(
+          path.join(inputDir, file),
+          path.join(outputDir, file)
+        );
+      }
     }
 
     await fs.writeFile(
