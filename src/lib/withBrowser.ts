@@ -10,6 +10,18 @@ const DEFAULT_ERROR_PATTERNS_LOWER = PREPARE_DEFAULT_ERROR_HTML_PATTERNS.map(
 
 const BUTTON_CLICK_DELAY_MS = 1000;
 
+function isNavigationRelatedError(error: unknown): boolean {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  const msg = errMsg.toLowerCase();
+  return (
+    msg.includes('detach') ||
+    msg.includes('context') ||
+    msg.includes('destroyed') ||
+    msg.includes('target closed') ||
+    msg.includes('targetcloseerror')
+  );
+}
+
 export async function withBrowser(
   req: Request,
   clickContinue: boolean = false,
@@ -64,13 +76,8 @@ export async function withBrowser(
         );
       }
     } catch (e) {
-      // Frame might still be detaching/context being destroyed, keep waiting
-      const errMsg = e instanceof Error ? e.message : String(e);
-      const isNavigationError =
-        errMsg.toLowerCase().includes('detach') ||
-        errMsg.toLowerCase().includes('context') ||
-        errMsg.toLowerCase().includes('destroyed');
-      if (!isNavigationError) {
+      // Frame might still be detaching/context being destroyed/target closed, keep waiting
+      if (!isNavigationRelatedError(e)) {
         throw e;
       }
     }
@@ -102,12 +109,8 @@ export async function withBrowser(
     page
       .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
       .catch((e) => {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        if (
-          errMsg.toLowerCase().includes('detach') ||
-          errMsg.toLowerCase().includes('context')
-        ) {
-          logger.warn('Frame detached during waitForSelector, skipping');
+        if (isNavigationRelatedError(e)) {
+          logger.warn('Frame/context error during waitForSelector, skipping');
           return null; // Return null to prevent rejection
         }
         throw e; // Re-throw non-detachment errors
@@ -123,12 +126,8 @@ export async function withBrowser(
         { timeout: 15000 }
       )
       .catch((e) => {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        if (
-          errMsg.toLowerCase().includes('detach') ||
-          errMsg.toLowerCase().includes('context')
-        ) {
-          logger.warn('Frame detached during waitForFunction, skipping');
+        if (isNavigationRelatedError(e)) {
+          logger.warn('Frame/context error during waitForFunction, skipping');
           return null; // Return null to prevent rejection
         }
         throw e; // Re-throw non-detachment errors
@@ -149,13 +148,9 @@ export async function withBrowser(
   try {
     html = await page.content();
   } catch (e) {
-    const errMsg = e instanceof Error ? e.message : String(e);
-    if (
-      errMsg.toLowerCase().includes('detach') ||
-      errMsg.toLowerCase().includes('context')
-    ) {
+    if (isNavigationRelatedError(e)) {
       logger.warn(
-        'Frame detached during page.content(), retrying after delay...'
+        'Frame/context error during page.content(), retrying after delay...'
       );
       await new Promise((resolve) => setTimeout(resolve, 3000));
       html = await page.content();
@@ -195,12 +190,7 @@ async function checkForRecaptcha(page: Page): Promise<boolean> {
       );
     });
   } catch (e) {
-    const errorMsg = e instanceof Error ? e.message : String(e);
-    const isNavigationError =
-      errorMsg.toLowerCase().includes('detach') ||
-      errorMsg.toLowerCase().includes('context') ||
-      errorMsg.toLowerCase().includes('destroyed');
-    if (isNavigationError) {
+    if (isNavigationRelatedError(e)) {
       logger.warn('Frame/context error during reCAPTCHA check, skipping check');
       return false;
     }
@@ -287,12 +277,7 @@ async function clickContinueButton(page: Page) {
       return { buttonSelector: sel };
     });
   } catch (e) {
-    const errorMsg = e instanceof Error ? e.message : String(e);
-    const isNavigationError =
-      errorMsg.toLowerCase().includes('detach') ||
-      errorMsg.toLowerCase().includes('context') ||
-      errorMsg.toLowerCase().includes('destroyed');
-    if (isNavigationError) {
+    if (isNavigationRelatedError(e)) {
       logger.warn('Frame/context error during continue button check, skipping');
       return;
     }
