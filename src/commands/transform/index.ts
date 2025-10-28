@@ -144,6 +144,23 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       process.exit(1);
     }
   }
+  
+  // Property Improvement always requires scripts
+  if (options.dataGroup && 
+      (options.dataGroup.toLowerCase() === 'property improvement' || 
+       options.dataGroup.toLowerCase() === 'property_improvement')) {
+    if (!resolvedScriptsZip) {
+      const error = 'Property Improvement data group requires --scripts-zip';
+      if (!options.silent) {
+        console.error(chalk.red(error));
+      }
+      if (options.silent) {
+        throw new Error(error);
+      } else {
+        process.exit(1);
+      }
+    }
+  }
   if (!existsSync(resolvedInputZip)) {
     const error = `input-zip not found: ${resolvedInputZip}`;
     console.error(chalk.red(error));
@@ -235,7 +252,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       );
     } else {
       logger.info('Processing seed data group...');
-      await handleSeedTransform(tempRoot, options);
+      await handleSeedTransform(tempRoot);
       isSeedMode = true;
     }
 
@@ -330,10 +347,7 @@ async function moveDirectory(src: string, dest: string): Promise<void> {
     }
   }
 }
-async function handleSeedTransform(
-  tempRoot: string,
-  _options: TransformCommandOptions
-) {
+async function handleSeedTransform(tempRoot: string) {
   const seedCsv = await fs.readFile(
     path.join(tempRoot, INPUT_DIR, 'seed.csv'),
     'utf-8'
