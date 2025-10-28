@@ -6,14 +6,14 @@ export interface PropertyImprovementData {
 }
 
 export interface PropertyImprovementRelationships {
-  parcel_to_property_improvement?: IPLDRef | null;
-  property_to_property_improvement?: IPLDRef[] | null;
-  property_improvement_to_company?: IPLDRef[] | null;
-  property_improvement_to_file?: IPLDRef[] | null;
-  property_improvement_to_inspection?: IPLDRef[] | null;
-  property_improvement_to_layout?: IPLDRef | null;
-  property_improvement_to_structure?: IPLDRef | null;
-  property_improvement_to_utility?: IPLDRef | null;
+  parcel_has_property_improvement?: IPLDRef | null;
+  property_has_property_improvement?: IPLDRef[] | null;
+  property_improvement_has_contractor?: IPLDRef[] | null;
+  property_improvement_has_layout?: IPLDRef | null;
+  property_improvement_has_structure?: IPLDRef | null;
+  property_improvement_has_utility?: IPLDRef | null;
+  company_has_communication?: IPLDRef[] | null;
+  contractor_has_person?: IPLDRef[] | null;
 }
 
 /**
@@ -24,55 +24,57 @@ export interface PropertyImprovementRelationships {
 export function createPropertyImprovementDataGroup(
   relationshipFiles: readonly string[]
 ): PropertyImprovementData {
-  const propertyToPropertyImprovement: IPLDRef[] = [];
-  const propertyImprovementToCompany: IPLDRef[] = [];
-  const propertyImprovementToFile: IPLDRef[] = [];
-  const propertyImprovementToInspection: IPLDRef[] = [];
+  const propertyHasPropertyImprovement: IPLDRef[] = [];
+  const propertyImprovementHasContractor: IPLDRef[] = [];
+  const companyHasCommunication: IPLDRef[] = [];
+  const contractorHasPerson: IPLDRef[] = [];
 
-  let parcelToPropertyImprovement: IPLDRef | undefined;
-  let propertyImprovementToLayout: IPLDRef | undefined;
-  let propertyImprovementToStructure: IPLDRef | undefined;
-  let propertyImprovementToUtility: IPLDRef | undefined;
+  let parcelHasPropertyImprovement: IPLDRef | undefined;
+  let propertyImprovementHasLayout: IPLDRef | undefined;
+  let propertyImprovementHasStructure: IPLDRef | undefined;
+  let propertyImprovementHasUtility: IPLDRef | undefined;
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
     const ref: IPLDRef = { '/': `./${file}` };
 
     // Parcel relationships
-    if (lower.includes('parcel_to_property_improvement')) {
-      parcelToPropertyImprovement = ref;
+    if (lower.includes('parcel_has_property_improvement')) {
+      parcelHasPropertyImprovement = ref;
       continue;
     }
 
     // Property relationships
-    if (lower.includes('property_to_property_improvement')) {
-      propertyToPropertyImprovement.push(ref);
+    if (lower.includes('property_has_property_improvement')) {
+      propertyHasPropertyImprovement.push(ref);
       continue;
     }
 
     // Property Improvement relationships
-    if (lower.includes('property_improvement_to_company')) {
-      propertyImprovementToCompany.push(ref);
+    if (lower.includes('property_improvement_has_contractor')) {
+      propertyImprovementHasContractor.push(ref);
       continue;
     }
-    if (lower.includes('property_improvement_to_file')) {
-      propertyImprovementToFile.push(ref);
+    if (lower.includes('property_improvement_has_layout')) {
+      propertyImprovementHasLayout = ref;
       continue;
     }
-    if (lower.includes('property_improvement_to_inspection')) {
-      propertyImprovementToInspection.push(ref);
+    if (lower.includes('property_improvement_has_structure')) {
+      propertyImprovementHasStructure = ref;
       continue;
     }
-    if (lower.includes('property_improvement_to_layout')) {
-      propertyImprovementToLayout = ref;
+    if (lower.includes('property_improvement_has_utility')) {
+      propertyImprovementHasUtility = ref;
       continue;
     }
-    if (lower.includes('property_improvement_to_structure')) {
-      propertyImprovementToStructure = ref;
+
+    // Company relationships
+    if (lower.includes('company_has_communication')) {
+      companyHasCommunication.push(ref);
       continue;
     }
-    if (lower.includes('property_improvement_to_utility')) {
-      propertyImprovementToUtility = ref;
+    if (lower.includes('contractor_has_person')) {
+      contractorHasPerson.push(ref);
       continue;
     }
   }
@@ -80,36 +82,42 @@ export function createPropertyImprovementDataGroup(
   const relationships: PropertyImprovementRelationships = {};
 
   // Only include relationships that have values
-  if (parcelToPropertyImprovement) {
-    relationships.parcel_to_property_improvement = parcelToPropertyImprovement;
+  if (parcelHasPropertyImprovement) {
+    relationships.parcel_has_property_improvement =
+      parcelHasPropertyImprovement;
   }
 
-  if (propertyToPropertyImprovement.length > 0) {
-    relationships.property_to_property_improvement = propertyToPropertyImprovement;
+  if (propertyHasPropertyImprovement.length > 0) {
+    relationships.property_has_property_improvement =
+      propertyHasPropertyImprovement;
   }
 
-  if (propertyImprovementToCompany.length > 0) {
-    relationships.property_improvement_to_company = propertyImprovementToCompany;
+  if (propertyImprovementHasContractor.length > 0) {
+    relationships.property_improvement_has_contractor =
+      propertyImprovementHasContractor;
   }
 
-  if (propertyImprovementToFile.length > 0) {
-    relationships.property_improvement_to_file = propertyImprovementToFile;
+  if (propertyImprovementHasLayout) {
+    relationships.property_improvement_has_layout =
+      propertyImprovementHasLayout;
   }
 
-  if (propertyImprovementToInspection.length > 0) {
-    relationships.property_improvement_to_inspection = propertyImprovementToInspection;
+  if (propertyImprovementHasStructure) {
+    relationships.property_improvement_has_structure =
+      propertyImprovementHasStructure;
   }
 
-  if (propertyImprovementToLayout) {
-    relationships.property_improvement_to_layout = propertyImprovementToLayout;
+  if (propertyImprovementHasUtility) {
+    relationships.property_improvement_has_utility =
+      propertyImprovementHasUtility;
   }
 
-  if (propertyImprovementToStructure) {
-    relationships.property_improvement_to_structure = propertyImprovementToStructure;
+  if (companyHasCommunication.length > 0) {
+    relationships.company_has_communication = companyHasCommunication;
   }
 
-  if (propertyImprovementToUtility) {
-    relationships.property_improvement_to_utility = propertyImprovementToUtility;
+  if (contractorHasPerson.length > 0) {
+    relationships.contractor_has_person = contractorHasPerson;
   }
 
   return {

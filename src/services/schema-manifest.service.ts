@@ -56,7 +56,21 @@ export class SchemaManifestService {
       );
     }
 
-    const item = this.schemaManifest[label];
+    // Try direct lookup first
+    let item = this.schemaManifest[label];
+
+    // If not found, try converting spaces to underscores (e.g., "Property Improvement" -> "Property_Improvement")
+    if (!item) {
+      const underscoreKey = label.replace(/ /g, '_');
+      item = this.schemaManifest[underscoreKey];
+    }
+
+    // If still not found, try converting underscores to spaces (e.g., "Property_Improvement" -> "Property Improvement")
+    if (!item) {
+      const spaceKey = label.replace(/_/g, ' ');
+      item = this.schemaManifest[spaceKey];
+    }
+
     if (!item) {
       return null;
     }

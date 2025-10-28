@@ -147,11 +147,7 @@ async function handlePropertyImprovementMode(options: TransformCommandOptions) {
 
   try {
     logger.info('Extracting inputs to tempdir...');
-    const inputsDir = await extractZipToTemp(
-      resolvedInputZip,
-      tempRoot,
-      INPUT_DIR
-    );
+    await extractZipToTemp(resolvedInputZip, tempRoot, INPUT_DIR);
 
     // If scripts-zip is provided, run Property Improvement extraction script
     if (resolvedScriptsZip) {
@@ -163,14 +159,16 @@ async function handlePropertyImprovementMode(options: TransformCommandOptions) {
       );
       logger.info('Running Property Improvement extraction script...');
       await runPropertyImprovementScript(scriptsDir, tempRoot);
-      
+
       // After script runs, copy extracted files from data/ to input/ so they can be processed
       const dataDir = path.join(tempRoot, OUTPUT_DIR);
       const inputDir = path.join(tempRoot, INPUT_DIR);
-      
+
       try {
         const dataFiles = await fs.readdir(dataDir);
-        logger.info(`Found ${dataFiles.length} files in data directory: ${dataFiles.join(', ')}`);
+        logger.info(
+          `Found ${dataFiles.length} files in data directory: ${dataFiles.join(', ')}`
+        );
         for (const file of dataFiles) {
           if (file.endsWith('.json')) {
             await fs.copyFile(
@@ -191,12 +189,12 @@ async function handlePropertyImprovementMode(options: TransformCommandOptions) {
     const zip = new AdmZip();
     // Add files directly to root, not in 'data' subdirectory
     const outputDir = path.join(tempRoot, OUTPUT_DIR);
-    
+
     // Ensure output directory exists
     await fs.mkdir(outputDir, { recursive: true });
-    
+
     const files = await fs.readdir(outputDir);
-    
+
     for (const file of files) {
       const filePath = path.join(outputDir, file);
       const stats = await fs.stat(filePath);
@@ -205,11 +203,13 @@ async function handlePropertyImprovementMode(options: TransformCommandOptions) {
         zip.addFile(file, content);
       }
     }
-    
+
     zip.writeZip(resolvedOutputZip);
 
     if (!options.silent) {
-      console.log(chalk.green('✅ Transform (Property Improvement mode) finished'));
+      console.log(
+        chalk.green('✅ Transform (Property Improvement mode) finished')
+      );
       console.log(chalk.blue('📊 Output:'));
       console.log(chalk.gray(`  JSON bundle for hash: ${resolvedOutputZip}`));
     }
@@ -264,12 +264,8 @@ async function handleScriptsMode(options: TransformCommandOptions) {
 
   try {
     logger.info('Extracting inputs to tempdir...');
-    const inputsDir = await extractZipToTemp(
-      resolvedInputZip,
-      tempRoot,
-      INPUT_DIR
-    );
-    await normalizeInputsForScripts(inputsDir, tempRoot);
+    await extractZipToTemp(resolvedInputZip, tempRoot, INPUT_DIR);
+    await normalizeInputsForScripts(path.join(tempRoot, INPUT_DIR), tempRoot);
 
     let isSeedMode = false;
     if (resolvedScriptsZip) {
@@ -378,7 +374,7 @@ async function moveDirectory(src: string, dest: string): Promise<void> {
 }
 async function handleSeedTransform(
   tempRoot: string,
-  options: TransformCommandOptions
+  _options: TransformCommandOptions
 ) {
   const seedCsv = await fs.readFile(
     path.join(tempRoot, INPUT_DIR, 'seed.csv'),
@@ -600,49 +596,74 @@ async function handleSeedTransform(
       await fs.writeFile(absPath, file.content, 'utf-8');
     })
   );
-
 }
 
-async function runPropertyImprovementScript(scriptsDir: string, tempRoot: string): Promise<void> {
+async function runPropertyImprovementScript(
+  scriptsDir: string,
+  tempRoot: string
+): Promise<void> {
   // Look for property_improvement_extractor.js in the scripts directory
   const scriptFiles = await fs.readdir(scriptsDir);
   logger.info(`Script files found: ${scriptFiles.join(', ')}`);
-  
+
   // The scriptsDir contains a 'scripts' subdirectory, so we need to look inside it
   const actualScriptsDir = path.join(scriptsDir, 'scripts');
   const actualScriptFiles = await fs.readdir(actualScriptsDir);
-  const extractorScript = actualScriptFiles.find(f => f.includes('property') && f.includes('improvement') && f.includes('extractor') && f.endsWith('.js'));
-  
+  const extractorScript = actualScriptFiles.find(
+    (f) =>
+      f.includes('property') &&
+      f.includes('improvement') &&
+      f.includes('extractor') &&
+      f.endsWith('.js')
+  );
+
   if (!extractorScript) {
-    logger.warn('No Property Improvement extractor script found, skipping extraction');
+    logger.warn(
+      'No Property Improvement extractor script found, skipping extraction'
+    );
     return;
   }
-  
+
   logger.info(`Found extractor script: ${extractorScript}`);
   const scriptPath = path.join(actualScriptsDir, extractorScript);
-  
+
   // Run the extraction script
   const { spawn } = await import('child_process');
-  const { linkNodeModulesIntoTemp } = await import('../../utils/node-modules.js');
-  
+  const { linkNodeModulesIntoTemp } = await import(
+    '../../utils/node-modules.js'
+  );
+
   linkNodeModulesIntoTemp(tempRoot);
-  
+
+  // Copy package.json to temp directory so Node.js knows to use ES modules
+  const packageJsonPath = path.join(process.cwd(), 'package.json');
+  const tempPackageJsonPath = path.join(tempRoot, 'package.json');
+  try {
+    await fs.copyFile(packageJsonPath, tempPackageJsonPath);
+  } catch (error) {
+    logger.warn(`Could not copy package.json to temp directory: ${error}`);
+  }
+
   let stdout = '';
   let stderr = '';
-  
-  const proc = spawn(process.execPath, ['--unhandled-rejections=strict', scriptPath], {
-    cwd: tempRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  
+
+  const proc = spawn(
+    process.execPath,
+    ['--unhandled-rejections=strict', scriptPath],
+    {
+      cwd: tempRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
+
   proc.stdout.on('data', (data: Buffer) => {
     stdout += data.toString();
   });
-  
+
   proc.stderr.on('data', (data: Buffer) => {
     stderr += data.toString();
   });
-  
+
   await new Promise((resolve, reject) => {
     proc.on('exit', (code) => {
       if (stdout) logger.info(`Script output: ${stdout}`);
@@ -650,18 +671,25 @@ async function runPropertyImprovementScript(scriptsDir: string, tempRoot: string
       if (code === 0) {
         resolve(undefined);
       } else {
-        reject(new Error(`Property Improvement extraction script failed with code ${code}`));
+        reject(
+          new Error(
+            `Property Improvement extraction script failed with code ${code}`
+          )
+        );
       }
     });
     proc.on('error', reject);
   });
-  
+
   logger.info('Property Improvement extraction complete');
 }
 
-async function handlePropertyImprovementTransform(tempRoot: string, options: TransformCommandOptions) {
+async function handlePropertyImprovementTransform(
+  tempRoot: string,
+  _options: TransformCommandOptions
+) {
   logger.info('Processing Property Improvement data group...');
-  
+
   // Check for Property Improvement files in input
   let propertyImprovementFiles: string[] = [];
   try {
@@ -677,11 +705,14 @@ async function handlePropertyImprovementTransform(tempRoot: string, options: Tra
 
   if (propertyImprovementFiles.length === 0) {
     logger.warn('No Property Improvement files found in input');
-    logger.info('Note: Property Improvement transform expects pre-extracted JSON files with relationships.');
+    logger.info(
+      'Note: Property Improvement transform expects pre-extracted JSON files with relationships.'
+    );
     // Still create the data group with empty relationships
     const emptyDataGroup = createPropertyImprovementDataGroup([]);
     const schemaManifest = await fetchSchemaManifest();
-    const propertyImprovementSchema = schemaManifest['Property_Improvement']?.ipfsCid;
+    const propertyImprovementSchema =
+      schemaManifest['Property_Improvement']?.ipfsCid;
     if (!propertyImprovementSchema) {
       throw new Error('Property Improvement schema not found in manifest');
     }
@@ -691,13 +722,15 @@ async function handlePropertyImprovementTransform(tempRoot: string, options: Tra
       JSON.stringify(emptyDataGroup),
       'utf-8'
     );
-    logger.info('Created Property Improvement data group with no relationships');
+    logger.info(
+      'Created Property Improvement data group with no relationships'
+    );
     return;
   }
 
   // Add Property Improvement files to output
   const fileNameContent: { name: string; content: string }[] = [];
-  
+
   for (const file of propertyImprovementFiles) {
     try {
       const content = await fs.readFile(
@@ -745,14 +778,17 @@ async function handlePropertyImprovementTransform(tempRoot: string, options: Tra
 
   // Collect relationship files from output directory
   const newJsonRelPaths = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
-  const relFiles = newJsonRelPaths.filter((p) => 
-    p.includes('property_improvement') && 
-    (p.includes('_to_') || p.includes('_has_')) && 
-    p.endsWith('.json')
+  const relFiles = newJsonRelPaths.filter(
+    (p) =>
+      p.includes('property_improvement') &&
+      (p.includes('_to_') || p.includes('_has_')) &&
+      p.endsWith('.json')
   );
-  
-  logger.info(`Found ${relFiles.length} Property Improvement relationship file(s)`);
-  
+
+  logger.info(
+    `Found ${relFiles.length} Property Improvement relationship file(s)`
+  );
+
   const propertyImprovementRelationships: string[] = relFiles;
 
   // Create Property Improvement data group
@@ -760,14 +796,15 @@ async function handlePropertyImprovementTransform(tempRoot: string, options: Tra
     propertyImprovementRelationships
   );
   const schemaManifest = await fetchSchemaManifest();
-  
+
   // Get the Property Improvement schema CID from manifest
-  const propertyImprovementSchema = schemaManifest['Property_Improvement']?.ipfsCid;
-    
+  const propertyImprovementSchema =
+    schemaManifest['Property_Improvement']?.ipfsCid;
+
   if (!propertyImprovementSchema) {
     throw new Error('Property Improvement schema not found in manifest');
   }
-    
+
   await fs.writeFile(
     path.join(tempRoot, OUTPUT_DIR, `${propertyImprovementSchema}.json`),
     JSON.stringify(propertyImprovementDataGroup),

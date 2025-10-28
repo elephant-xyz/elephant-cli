@@ -7,22 +7,22 @@ import { handleTransform } from '../../../../src/commands/transform/index.js';
 import { execSync } from 'child_process';
 
 // Mock the schema fetcher to avoid network dependencies in tests
-  vi.mock('../../../../src/utils/schema-fetcher.js', () => ({
-    fetchSchemaManifest: vi.fn().mockResolvedValue({
-      Seed: {
-        ipfsCid: 'bafkreicuufahbh5slf5ia67ii3cxuk7hzjmypcfpezcngff4mcv5bn2bi4',
-        description: 'Seed data group schema',
-      },
-      County: {
-        ipfsCid: 'bafkreiexamplecounty',
-        description: 'County data group schema',
-      },
-      Property_Improvement: {
-        ipfsCid: 'bafkreiap5ideb5xntzfzobhbe7ysjgqqplrcuktzebcr3gabyc4vkwzctq',
-        description: 'Property Improvement data group schema',
-      },
-    }),
-  }));
+vi.mock('../../../../src/utils/schema-fetcher.js', () => ({
+  fetchSchemaManifest: vi.fn().mockResolvedValue({
+    Seed: {
+      ipfsCid: 'bafkreicuufahbh5slf5ia67ii3cxuk7hzjmypcfpezcngff4mcv5bn2bi4',
+      description: 'Seed data group schema',
+    },
+    County: {
+      ipfsCid: 'bafkreiexamplecounty',
+      description: 'County data group schema',
+    },
+    Property_Improvement: {
+      ipfsCid: 'bafkreiap5ideb5xntzfzobhbe7ysjgqqplrcuktzebcr3gabyc4vkwzctq',
+      description: 'Property Improvement data group schema',
+    },
+  }),
+}));
 
 describe('Property Improvement Data Group Transformation', () => {
   let tempDir: string;
@@ -167,7 +167,7 @@ describe('Property Improvement Data Group Transformation', () => {
     );
     expect(propertyImprovementDataGroup).toHaveProperty('relationships');
 
-    // Since we don't have relationship files in the input, 
+    // Since we don't have relationship files in the input,
     // the data group should be empty or minimal
     expect(propertyImprovementDataGroup.relationships).toBeDefined();
   });
@@ -420,7 +420,8 @@ describe('Property Improvement Data Group Transformation', () => {
       improvement_value: 35000,
       contractor_name: 'Quality Roofing LLC',
       permit_number: 'ROOF-2023-123',
-      description: 'Complete roof replacement with hurricane-resistant materials',
+      description:
+        'Complete roof replacement with hurricane-resistant materials',
     };
 
     const hvacImprovement = {
@@ -443,9 +444,18 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create ZIP with seed.csv and multiple property improvements
     const zip = new AdmZip();
     zip.addFile('seed.csv', Buffer.from(seedCsv));
-    zip.addFile('property_improvement_001.json', Buffer.from(JSON.stringify(electricalImprovement)));
-    zip.addFile('property_improvement_002.json', Buffer.from(JSON.stringify(roofImprovement)));
-    zip.addFile('property_improvement_003.json', Buffer.from(JSON.stringify(hvacImprovement)));
+    zip.addFile(
+      'property_improvement_001.json',
+      Buffer.from(JSON.stringify(electricalImprovement))
+    );
+    zip.addFile(
+      'property_improvement_002.json',
+      Buffer.from(JSON.stringify(roofImprovement))
+    );
+    zip.addFile(
+      'property_improvement_003.json',
+      Buffer.from(JSON.stringify(hvacImprovement))
+    );
     zip.writeZip(inputZip);
 
     // Transform
@@ -474,7 +484,10 @@ describe('Property Improvement Data Group Transformation', () => {
       content: propertyImprovementDataGroup,
     } = await findPropertyImprovementDataGroupFile(dataDir, files);
     expect(propertyImprovementDataGroupFile).toBeDefined();
-    expect(propertyImprovementDataGroup).toHaveProperty('label', 'Property Improvement');
+    expect(propertyImprovementDataGroup).toHaveProperty(
+      'label',
+      'Property Improvement'
+    );
 
     // Run validation
     let validationFailed = false;
@@ -517,13 +530,17 @@ describe('Property Improvement Data Group Transformation', () => {
       improvement_value: 250000,
       contractor_name: 'Premium Renovations Group',
       permit_number: 'MAJOR-2022-500',
-      description: 'Full property renovation including foundation work, structural improvements, new windows, doors, and complete interior finish',
+      description:
+        'Full property renovation including foundation work, structural improvements, new windows, doors, and complete interior finish',
     };
 
     // Create ZIP
     const zip = new AdmZip();
     zip.addFile('seed.csv', Buffer.from(seedCsv));
-    zip.addFile('property_improvement_high_value.json', Buffer.from(JSON.stringify(highValueImprovement)));
+    zip.addFile(
+      'property_improvement_high_value.json',
+      Buffer.from(JSON.stringify(highValueImprovement))
+    );
     zip.writeZip(inputZip);
 
     // Transform
@@ -607,7 +624,10 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create ZIP
     const zip = new AdmZip();
     zip.addFile('seed.csv', Buffer.from(seedCsv));
-    zip.addFile('property_improvement_minimal.json', Buffer.from(JSON.stringify(minimalImprovement)));
+    zip.addFile(
+      'property_improvement_minimal.json',
+      Buffer.from(JSON.stringify(minimalImprovement))
+    );
     zip.writeZip(inputZip);
 
     // Transform
