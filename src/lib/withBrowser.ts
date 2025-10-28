@@ -45,37 +45,36 @@ export async function withBrowser(
     // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
     if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
       frameDetached = true;
-      logger.info('Frame detached during navigation (expected for this site) - waiting for new frame...');
+      logger.info('Frame detached during navigation (expected) - waiting for usable frame...');
 
-      // Wait for a new frame to be attached to the page
-      // The page loads successfully but the frame reference gets detached during DOM replacement
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          logger.warn('Frame attachment wait timed out, continuing anyway');
-          resolve();
-        }, 30000);
+      // Wait for a frame that actually works - test it by running a simple evaluation
+      const maxAttempts = 10;
+      let attempt = 0;
+      let frameReady = false;
 
-        // Listen for frame navigation completion as a signal the page is ready
-        const handler = () => {
-          logger.info('Frame navigation detected, page should be ready');
-          clearTimeout(timeout);
-          page.off('framenavigated', handler);
-          resolve();
-        };
+      while (attempt < maxAttempts && !frameReady) {
+        attempt++;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        page.on('framenavigated', handler);
-
-        // The frame might already be ready, check immediately
-        if (page.mainFrame() && page.url() === url) {
-          logger.info('Main frame already ready');
-          clearTimeout(timeout);
-          page.off('framenavigated', handler);
-          resolve();
+        try {
+          // Test if we can actually use the frame by running a simple operation
+          await page.evaluate(() => document.readyState);
+          frameReady = true;
+          logger.info(`Frame is usable after ${attempt} attempts (${attempt * 2}s)`);
+        } catch (testError) {
+          const testErrorMsg = testError instanceof Error ? testError.message : String(testError);
+          if (testErrorMsg.toLowerCase().includes('detach')) {
+            logger.info(`Attempt ${attempt}/${maxAttempts}: Frame still detached, waiting...`);
+          } else {
+            // Different error - rethrow
+            throw testError;
+          }
         }
-      });
+      }
 
-      // Give extra time for the new frame to fully render
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (!frameReady) {
+        logger.warn(`Frame still not ready after ${maxAttempts} attempts (${maxAttempts * 2}s), proceeding anyway`);
+      }
     } else if (e instanceof TimeoutError) {
       logger.error(`Navigation timeout: ${e}`);
       console.error(
@@ -109,7 +108,12 @@ export async function withBrowser(
   await Promise.race([
     page
       .waitForSelector('#pnlIssues', { visible: true, timeout: 8000 })
-      .catch(() => {}),
+      .catch((e) => {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        if (errMsg.toLowerCase().includes('detach')) {
+          logger.warn('Frame detached during waitForSelector, skipping');
+        }
+      }),
     page
       .waitForFunction(
         () =>
@@ -120,7 +124,12 @@ export async function withBrowser(
           document.querySelector('[id*="Property"]'),
         { timeout: 15000 }
       )
-      .catch(() => {}),
+      .catch((e) => {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        if (errMsg.toLowerCase().includes('detach')) {
+          logger.warn('Frame detached during waitForFunction, skipping');
+        }
+      }),
   ]);
 
   if (continueButtonSelector) {
