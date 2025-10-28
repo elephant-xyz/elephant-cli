@@ -28,7 +28,6 @@ export interface TransformCommandOptions {
   outputZip?: string;
   inputZip?: string;
   scriptsZip?: string;
-  inputsZip?: string;
   legacyMode?: boolean;
   silent?: boolean;
   cwd?: string;
