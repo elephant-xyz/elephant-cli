@@ -756,30 +756,69 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create ZIP with all data and relationships
     const zip = new AdmZip();
     zip.addFile('seed.csv', Buffer.from(seedCsv));
-    
+
     // Add class files
-    zip.addFile('property_improvement.json', Buffer.from(JSON.stringify(propertyImprovementData)));
+    zip.addFile(
+      'property_improvement.json',
+      Buffer.from(JSON.stringify(propertyImprovementData))
+    );
     zip.addFile('company_1.json', Buffer.from(JSON.stringify(companyData)));
     zip.addFile('file_1.json', Buffer.from(JSON.stringify(fileData)));
-    zip.addFile('inspection_1.json', Buffer.from(JSON.stringify(inspectionData)));
+    zip.addFile(
+      'inspection_1.json',
+      Buffer.from(JSON.stringify(inspectionData))
+    );
     zip.addFile('person_1.json', Buffer.from(JSON.stringify(personData)));
     zip.addFile('layout_1.json', Buffer.from(JSON.stringify(layoutData)));
     zip.addFile('structure_1.json', Buffer.from(JSON.stringify(structureData)));
     zip.addFile('utility_1.json', Buffer.from(JSON.stringify(utilityData)));
-    
+
     // Add relationship files
-    zip.addFile('property_improvement_has_contractor_1.json', Buffer.from(JSON.stringify(propertyImprovementHasContractor)));
-    zip.addFile('property_improvement_has_file_1.json', Buffer.from(JSON.stringify(propertyImprovementHasFile)));
-    zip.addFile('property_improvement_has_inspection_1.json', Buffer.from(JSON.stringify(propertyImprovementHasInspection)));
-    zip.addFile('property_improvement_has_layout_1.json', Buffer.from(JSON.stringify(propertyImprovementHasLayout)));
-    zip.addFile('property_improvement_has_structure_1.json', Buffer.from(JSON.stringify(propertyImprovementHasStructure)));
-    zip.addFile('property_improvement_has_utility_1.json', Buffer.from(JSON.stringify(propertyImprovementHasUtility)));
-    zip.addFile('inspection_has_company_1.json', Buffer.from(JSON.stringify(inspectionHasCompany)));
-    zip.addFile('inspection_has_file_1.json', Buffer.from(JSON.stringify(inspectionHasFile)));
-    zip.addFile('inspection_has_person_1.json', Buffer.from(JSON.stringify(inspectionHasPerson)));
-    zip.addFile('contractor_has_person_1.json', Buffer.from(JSON.stringify(contractorHasPerson)));
-    zip.addFile('company_has_communication_1.json', Buffer.from(JSON.stringify(companyHasCommunication)));
-    
+    zip.addFile(
+      'property_improvement_has_contractor_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasContractor))
+    );
+    zip.addFile(
+      'property_improvement_has_file_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasFile))
+    );
+    zip.addFile(
+      'property_improvement_has_inspection_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasInspection))
+    );
+    zip.addFile(
+      'property_improvement_has_layout_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasLayout))
+    );
+    zip.addFile(
+      'property_improvement_has_structure_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasStructure))
+    );
+    zip.addFile(
+      'property_improvement_has_utility_1.json',
+      Buffer.from(JSON.stringify(propertyImprovementHasUtility))
+    );
+    zip.addFile(
+      'inspection_has_company_1.json',
+      Buffer.from(JSON.stringify(inspectionHasCompany))
+    );
+    zip.addFile(
+      'inspection_has_file_1.json',
+      Buffer.from(JSON.stringify(inspectionHasFile))
+    );
+    zip.addFile(
+      'inspection_has_person_1.json',
+      Buffer.from(JSON.stringify(inspectionHasPerson))
+    );
+    zip.addFile(
+      'contractor_has_person_1.json',
+      Buffer.from(JSON.stringify(contractorHasPerson))
+    );
+    zip.addFile(
+      'company_has_communication_1.json',
+      Buffer.from(JSON.stringify(companyHasCommunication))
+    );
+
     zip.writeZip(inputZip);
 
     // Transform
@@ -805,7 +844,10 @@ describe('Property Improvement Data Group Transformation', () => {
     expect(propertyImprovementDataGroupFile).toBeDefined();
 
     // Verify Property Improvement data group structure
-    expect(propertyImprovementDataGroup).toHaveProperty('label', 'Property Improvement');
+    expect(propertyImprovementDataGroup).toHaveProperty(
+      'label',
+      'Property Improvement'
+    );
     expect(propertyImprovementDataGroup).toHaveProperty('relationships');
 
     const relationships = propertyImprovementDataGroup.relationships;
@@ -813,13 +855,18 @@ describe('Property Improvement Data Group Transformation', () => {
     // Debug: Log what relationships were actually created
     console.log('Created relationships:', Object.keys(relationships));
     console.log('All files in output:', files);
-    console.log('Full relationships object:', JSON.stringify(relationships, null, 2));
+    console.log(
+      'Full relationships object:',
+      JSON.stringify(relationships, null, 2)
+    );
 
     // For now, just verify that some relationships are present
     // We'll add more specific checks once we see what's actually being created
     expect(Object.keys(relationships).length).toBeGreaterThan(0);
 
-    console.log('✅ Property Improvement data group created successfully with all relationships!');
+    console.log(
+      '✅ Property Improvement data group created successfully with all relationships!'
+    );
   });
 
   it.skip('should handle Property Improvement with minimal required fields', async () => {
