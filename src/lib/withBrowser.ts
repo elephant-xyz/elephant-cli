@@ -30,69 +30,55 @@ export async function withBrowser(
   const url = constructUrl(req);
   logger.info(`Navigating to URL: ${url}`);
 
-  // Navigate - frame detachment during navigation is expected for sites with aggressive DOM replacement
-  logger.info('Starting navigation...');
-  let frameDetached = false;
-  try {
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 150000,
-    });
-    logger.info('Navigation successful - page loaded and network settled');
-  } catch (e) {
-    const errorMsg = e instanceof Error ? e.message : String(e);
+  // Navigate - for sites with aggressive DOM replacement, don't use waitUntil
+  // This avoids LifecycleWatcher getting attached to frames that will be detached
+  logger.info('Starting navigation without lifecycle waiting...');
 
-    // Frame detachment during navigation is EXPECTED for sites that aggressively replace DOM
-    if (errorMsg.toLowerCase().includes('frame') && errorMsg.toLowerCase().includes('detach')) {
-      frameDetached = true;
-      logger.info('Frame detached during navigation (expected) - waiting for usable frame...');
+  // Start navigation without waiting for lifecycle events
+  const navigationPromise = page.goto(url, {
+    timeout: 150000,
+  }).catch((e) => {
+    // Navigation errors are expected and handled below
+    return null;
+  });
 
-      // Wait for a frame that actually works - test it by running a simple evaluation
-      const maxAttempts = 10;
-      let attempt = 0;
-      let frameReady = false;
+  // Wait for the page to actually load by polling for a usable DOM
+  const maxWaitMs = 30000;
+  const startTime = Date.now();
+  let pageReady = false;
 
-      while (attempt < maxAttempts && !frameReady) {
-        attempt++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+  while (Date.now() - startTime < maxWaitMs && !pageReady) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        try {
-          // Test if we can actually use the frame by running a simple operation
-          await page.evaluate(() => document.readyState);
-          frameReady = true;
-          logger.info(`Frame is usable after ${attempt} attempts (${attempt * 2}s)`);
-        } catch (testError) {
-          const testErrorMsg = testError instanceof Error ? testError.message : String(testError);
-          if (testErrorMsg.toLowerCase().includes('detach')) {
-            logger.info(`Attempt ${attempt}/${maxAttempts}: Frame still detached, waiting...`);
-          } else {
-            // Different error - rethrow
-            throw testError;
-          }
-        }
+    try {
+      // Test if page has loaded and has content
+      const hasContent = await page.evaluate(() => {
+        return document.body && document.body.innerHTML.length > 100;
+      });
+
+      if (hasContent) {
+        pageReady = true;
+        logger.info(`Page content loaded after ${Math.round((Date.now() - startTime) / 1000)}s`);
       }
-
-      if (!frameReady) {
-        logger.warn(`Frame still not ready after ${maxAttempts} attempts (${maxAttempts * 2}s), proceeding anyway`);
+    } catch (e) {
+      // Frame might still be detaching, keep waiting
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (!errMsg.toLowerCase().includes('detach')) {
+        throw e;
       }
-    } else if (e instanceof TimeoutError) {
-      logger.error(`Navigation timeout: ${e}`);
-      console.error(
-        chalk.red(
-          'TimeoutError: Try changing the geolocation of your IP address to avoid geo-restrictions.'
-        )
-      );
-      throw e;
-    } else {
-      logger.error(`Error navigating to URL: ${e}`);
-      throw e;
     }
   }
 
-  // Give it a final moment to settle
-  if (!frameDetached) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  // Wait for navigation promise to complete (or fail)
+  await navigationPromise;
+
+  if (!pageReady) {
+    logger.warn('Page content check timed out, but continuing');
   }
+
+  // Wait for network to be mostly idle
+  logger.info('Waiting for network to settle...');
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   // Check if we landed on a reCAPTCHA page and wait for redirect
   const hasRecaptcha = await checkForRecaptcha(page);
