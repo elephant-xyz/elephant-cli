@@ -173,7 +173,7 @@ export async function createBrowserPage(
     browser = await puppeteer.launch({
       ignoreDefaultArgs: ['--disable-extensions'],
       executablePath: await Chromium.executablePath(),
-      headless: 'shell',
+      headless: true,
       args: [
         ...Chromium.args,
         '--hide-scrollbars',
