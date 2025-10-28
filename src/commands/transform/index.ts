@@ -234,44 +234,9 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         createDataGroupFunction
       );
     } else {
-      // Check if this is Property Improvement mode without scripts
-      if (
-        options.dataGroup &&
-        (options.dataGroup.toLowerCase() === 'property improvement' ||
-          options.dataGroup.toLowerCase() === 'property_improvement')
-      ) {
-        logger.info(
-          'Processing Property Improvement data group in seed mode...'
-        );
-        await handleSeedTransform(tempRoot, options);
-        // Also create Property Improvement data group from existing files
-        const outputDir = path.join(tempRoot, OUTPUT_DIR);
-        const files = await fs.readdir(outputDir);
-        const relationshipFiles = files.filter(
-          (file) => file.includes('_has_') && file.endsWith('.json')
-        );
-
-        const dataGroup =
-          createPropertyImprovementDataGroupFromModule(relationshipFiles);
-        const schemaManifestService = new SchemaManifestService();
-        await schemaManifestService.loadSchemaManifest();
-        const schemaCid = schemaManifestService.getDataGroupCidByLabel(
-          'Property Improvement'
-        );
-
-        if (schemaCid) {
-          await fs.writeFile(
-            path.join(outputDir, `${schemaCid}.json`),
-            JSON.stringify(dataGroup),
-            'utf-8'
-          );
-        }
-        isSeedMode = true;
-      } else {
-        logger.info('Processing seed data group...');
-        await handleSeedTransform(tempRoot, options);
-        isSeedMode = true;
-      }
+      logger.info('Processing seed data group...');
+      await handleSeedTransform(tempRoot, options);
+      isSeedMode = true;
     }
 
     if (!isSeedMode) {
