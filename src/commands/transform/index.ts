@@ -970,6 +970,10 @@ async function handleCountyTransform(scriptsDir: string, tempRoot: string) {
         // Skip creating property to structure/utility relationships
         return;
       }
+      if (rel.startsWith('mailing_address')) {
+        // Skip creating property to mailing_address relationships
+        return;
+      }
       const relFileName = `relationship_property_${rel}`;
       const relData = {
         from: { '/': `./property.json` },
