@@ -603,7 +603,6 @@ async function handleDataGroupTransform(
       throw new Error(`Schema not found for data group type: ${dataGroupType}`);
     }
 
-
     // Ensure output directory exists
     const outputDir = path.join(tempRoot, OUTPUT_DIR);
     await fs.mkdir(outputDir, { recursive: true });

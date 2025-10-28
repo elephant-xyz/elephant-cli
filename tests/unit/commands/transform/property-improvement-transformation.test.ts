@@ -137,7 +137,10 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create mock scripts zip (required for Property Improvement)
     const scriptsZip = path.join(tempDir, 'scripts.zip');
     const scriptsZipFile = new AdmZip();
-    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.addFile(
+      'property-improvement-extractor.js',
+      Buffer.from('console.log("mock script");')
+    );
     scriptsZipFile.writeZip(scriptsZip);
 
     // Transform
@@ -243,7 +246,10 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create mock scripts zip (required for Property Improvement)
     const scriptsZip = path.join(tempDir, 'scripts.zip');
     const scriptsZipFile = new AdmZip();
-    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.addFile(
+      'property-improvement-extractor.js',
+      Buffer.from('console.log("mock script");')
+    );
     scriptsZipFile.writeZip(scriptsZip);
 
     // Transform
@@ -843,7 +849,10 @@ describe('Property Improvement Data Group Transformation', () => {
     // Create mock scripts zip (required for Property Improvement)
     const scriptsZip = path.join(tempDir, 'scripts.zip');
     const scriptsZipFile = new AdmZip();
-    scriptsZipFile.addFile('property-improvement-extractor.js', Buffer.from('console.log("mock script");'));
+    scriptsZipFile.addFile(
+      'property-improvement-extractor.js',
+      Buffer.from('console.log("mock script");')
+    );
     scriptsZipFile.writeZip(scriptsZip);
 
     // Transform
