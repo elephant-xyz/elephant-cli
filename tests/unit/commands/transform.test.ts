@@ -94,7 +94,11 @@ describe('transform command', () => {
     // Mock schema fetcher
     vi.mocked(schemaFetcher.fetchSchemaManifest).mockResolvedValue({
       Seed: { ipfsCid: 'test-seed-cid', type: 'dataGroup' },
+      County: { ipfsCid: 'test-county-cid', type: 'dataGroup' },
     });
+
+    // Mock fsPromises.access
+    vi.mocked(fsPromises.access as any).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -465,6 +469,52 @@ describe('transform command', () => {
         expect(console.error).toHaveBeenCalledWith(
           expect.stringContaining('Error during transform (scripts mode)')
         );
+      });
+    });
+
+    describe('County Transform - Relationship Creation Rules', () => {
+      it('should not create property relationship for mailing_address.json', async () => {
+        const options = {
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+        };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        const writeFileCalls: any[] = [];
+        vi.mocked(fsPromises.writeFile).mockImplementation(
+          async (file: any, data: any) => {
+            writeFileCalls.push({ file, data });
+          }
+        );
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          if (file.includes('address.json')) {
+            return JSON.stringify({
+              source_http_request: { url: 'test' },
+              request_identifier: 'test-123',
+            });
+          }
+          if (file.includes('mailing_address.json')) {
+            return JSON.stringify({ address: '123 Main St' });
+          }
+          return '{}';
+        });
+
+        vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
+          if (typeof dir === 'string' && dir.includes('data')) {
+            return ['property.json', 'mailing_address.json'] as any;
+          }
+          return [] as any;
+        });
+
+        await handleTransform(options);
+
+        const relationshipFiles = writeFileCalls.filter((call) =>
+          call.file.includes('relationship_property_mailing_address.json')
+        );
+
+        expect(relationshipFiles.length).toBe(0);
       });
     });
   });

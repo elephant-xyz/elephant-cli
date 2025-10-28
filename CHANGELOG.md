@@ -1,3 +1,17 @@
+## [1.53.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.53.0...v1.53.1) (2025-10-27)
+
+
+### Bug Fixes
+
+*  fix mailing address relationship ([#205](https://github.com/elephant-xyz/elephant-cli/issues/205)) ([8164c21](https://github.com/elephant-xyz/elephant-cli/commit/8164c211156387cd134f663c9911e058808262d3))
+
+# [1.53.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.3...v1.53.0) (2025-10-27)
+
+
+### Features
+
+* **prepare:** support of prepare with add parcel and address json an… ([#200](https://github.com/elephant-xyz/elephant-cli/issues/200)) ([803d57b](https://github.com/elephant-xyz/elephant-cli/commit/803d57b68bb8394c0295d513fbc0c4577be250c9))
+
 ## [1.52.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.52.2...v1.52.3) (2025-10-24)
 
 
