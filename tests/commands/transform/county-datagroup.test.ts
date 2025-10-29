@@ -410,6 +410,8 @@ describe('createCountyDataGroup', () => {
         'relationship_layout_layout.json',
         'relationship_layout_utility.json',
         'relationship_layout_structure.json',
+        'relationship_person_1_has_mailing_address.json',
+        'relationship_company_has_mailing_address_1.json',
       ];
 
       const result = createCountyDataGroup(relationshipFiles);
@@ -425,6 +427,8 @@ describe('createCountyDataGroup', () => {
       expect(result.relationships.layout_has_layout).toBeDefined();
       expect(result.relationships.layout_has_utility).toBeDefined();
       expect(result.relationships.layout_has_structure).toBeDefined();
+      expect(result.relationships.person_has_mailing_address).toHaveLength(1);
+      expect(result.relationships.company_has_mailing_address).toHaveLength(1);
     });
 
     it('should not include person_has_property or company_has_property relationships', () => {
