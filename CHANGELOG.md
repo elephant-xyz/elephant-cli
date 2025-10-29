@@ -1,3 +1,10 @@
+# [1.54.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.53.1...v1.54.0) (2025-10-29)
+
+
+### Features
+
+* **transform:** property improvement ([#206](https://github.com/elephant-xyz/elephant-cli/issues/206)) ([d3cc57a](https://github.com/elephant-xyz/elephant-cli/commit/d3cc57adce8161dfa6aa56c3862650cc9618fa7e))
+
 ## [1.53.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.53.0...v1.53.1) (2025-10-27)
 
 
