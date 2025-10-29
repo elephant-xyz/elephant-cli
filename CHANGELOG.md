@@ -1,3 +1,10 @@
+## [1.54.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.0...v1.54.1) (2025-10-29)
+
+
+### Bug Fixes
+
+* Create person company has mailing address ([#209](https://github.com/elephant-xyz/elephant-cli/issues/209)) ([323580f](https://github.com/elephant-xyz/elephant-cli/commit/323580f5cf28926c7a12fb0d72cc4402860ca546))
+
 # [1.54.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.53.1...v1.54.0) (2025-10-29)
 
 
