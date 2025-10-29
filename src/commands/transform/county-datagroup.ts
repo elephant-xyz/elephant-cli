@@ -7,6 +7,8 @@ export type IPLDRef = { '/': string };
 export interface Relationships {
   person_has_property?: IPLDRef[];
   company_has_property?: IPLDRef[];
+  person_has_mailing_address?: IPLDRef[];
+  company_has_mailing_address?: IPLDRef[];
   property_has_address?: IPLDRef;
   property_has_lot?: IPLDRef;
   property_has_tax?: IPLDRef[];
@@ -40,6 +42,8 @@ export function createCountyDataGroup(
 ): CountyData {
   const personHasProperty: IPLDRef[] = [];
   const companyHasProperty: IPLDRef[] = [];
+  const personHasMailingAddress: IPLDRef[] = [];
+  const companyHasMailingAddress: IPLDRef[] = [];
   const propertyHasTax: IPLDRef[] = [];
   const propertyHasSalesHistory: IPLDRef[] = [];
   const propertyHasLayout: IPLDRef[] = [];
@@ -112,6 +116,24 @@ export function createCountyDataGroup(
       continue;
     }
 
+    // Person/Company mailing address relationships
+    if (
+      lower.includes('person') &&
+      lower.includes('mailing_address') &&
+      lower.includes('relationship')
+    ) {
+      personHasMailingAddress.push(ref);
+      continue;
+    }
+    if (
+      lower.includes('company') &&
+      lower.includes('mailing_address') &&
+      lower.includes('relationship')
+    ) {
+      companyHasMailingAddress.push(ref);
+      continue;
+    }
+
     // Layout relationships
     if (
       lower.includes('relationship') &&
@@ -145,6 +167,10 @@ export function createCountyDataGroup(
     relationships.person_has_property = personHasProperty;
   if (companyHasProperty.length)
     relationships.company_has_property = companyHasProperty;
+  if (personHasMailingAddress.length)
+    relationships.person_has_mailing_address = personHasMailingAddress;
+  if (companyHasMailingAddress.length)
+    relationships.company_has_mailing_address = companyHasMailingAddress;
   if (propertyHasAddress)
     relationships.property_has_address = propertyHasAddress;
   if (propertyHasLot) relationships.property_has_lot = propertyHasLot;
