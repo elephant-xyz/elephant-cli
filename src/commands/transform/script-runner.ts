@@ -14,7 +14,7 @@ type ExecResult = {
   script: string;
 };
 
-function execNode(
+export async function execNode(
   entryAbsPath: string,
   args: string[],
   cwd: string,
@@ -139,7 +139,8 @@ function summarizeFailure(name: string, r: ExecResult): string {
 
 export async function runScriptsPipeline(
   scriptsDir: string,
-  workDir: string
+  workDir: string,
+  scriptNames?: string[]
 ): Promise<void> {
   // Resolve script paths by name; scripts may be placed anywhere in scriptsDir
   const resolveScript = async (name: string): Promise<string> => {
@@ -150,28 +151,26 @@ export async function runScriptsPipeline(
 
   linkNodeModulesIntoTemp(workDir);
 
-  const names = [
+  // Use custom script names if provided, otherwise use default County scripts
+  const names = scriptNames || [
     'ownerMapping.js',
     'structureMapping.js',
     'layoutMapping.js',
     'utilityMapping.js',
   ];
-  const [owner, structure, layout, utility] = await Promise.all(
-    names.map((n) => resolveScript(n))
-  );
+
+  const scripts = await Promise.all(names.map((n) => resolveScript(n)));
 
   const timeoutMs = 120000; // 2 minutes default per script
 
-  // Run four in parallel
-  const parallel = await Promise.all([
-    execNode(owner, [], workDir, timeoutMs),
-    execNode(structure, [], workDir, timeoutMs),
-    execNode(layout, [], workDir, timeoutMs),
-    execNode(utility, [], workDir, timeoutMs),
-  ]);
+  // Run scripts in parallel
+  const results = await Promise.all(
+    scripts.map((script) => execNode(script, [], workDir, timeoutMs))
+  );
 
-  for (let i = 0; i < parallel.length; i++) {
-    const res = parallel[i];
+  // Check for any failures
+  for (let i = 0; i < results.length; i++) {
+    const res = results[i];
     if (res.code !== 0) {
       const msg = summarizeFailure(names[i], res);
       logger.error(msg);
@@ -179,15 +178,19 @@ export async function runScriptsPipeline(
     }
   }
 
-  // Final extractor runs after the others succeed
-  const extractionName = 'data_extractor.js';
-  const extraction = await resolveScript(extractionName);
-  const finalRes = await execNode(extraction, [], workDir, timeoutMs);
-  if (finalRes.code !== 0) {
-    const msg = summarizeFailure(extractionName, finalRes);
-    logger.error(msg);
-    throw new Error(msg);
+  // For County scripts, also run the final data extractor
+  if (!scriptNames) {
+    const extractionName = 'data_extractor.js';
+    const extraction = await resolveScript(extractionName);
+    const finalRes = await execNode(extraction, [], workDir, timeoutMs);
+    if (finalRes.code !== 0) {
+      const msg = summarizeFailure(extractionName, finalRes);
+      logger.error(msg);
+      throw new Error(msg);
+    }
   }
+
+  // Scripts executed successfully
 }
 
 async function findFileRecursive(

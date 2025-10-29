@@ -9,6 +9,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Installation](#installation)
 - [Create an Encrypted Keystore](#create-an-encrypted-keystore)
 - [Transform Input Requirements](#transform-input-requirements)
+- [Property Improvement Workflow](#property-improvement-workflow)
 - [Build the Seed Bundle](#build-the-seed-bundle)
 - [Fetch Current Source Content](#fetch-current-source-content)
 - [Browser Flow Templates](#browser-flow-templates)
@@ -26,6 +27,7 @@ The Elephant CLI enables oracles to:
 - Derive canonical seed files from jurisdiction sourcing metadata (`transform`).
 - Download the live county response for reproducible processing (`prepare`).
 - Generate and execute extraction scripts for county-specific transformations (`generate-transform` and `transform`).
+- Process Property Improvement data groups with HTML extraction and relationship mapping (`transform --data-group "Property Improvement"`).
 - Canonicalize outputs, upload to IPFS, and record submissions on the Polygon network (`hash`, `upload`, `submit-to-contract`).
 
 Each section below explains what a command does, the inputs it expects, the resulting artifacts, available options, and a runnable example.
@@ -120,6 +122,132 @@ Example row:
 parcel_id,address,method,url,multiValueQueryString,source_identifier,county,json
 074527L1060260060,123 Example Ave,GET,https://county.example.com/search,"{\"parcel\":[\"074527L1060260060\"]}",ALACHUA-074527L1060260060,Alachua,
 ```
+
+## Property Improvement Workflow
+
+The Property Improvement workflow extracts structured data from permit websites and creates a Property Improvement data group with all related entities and relationships.
+
+### Overview
+
+The Property Improvement workflow consists of three main steps:
+
+1. **Prepare**: Fetch HTML content from permit websites using HTTP requests
+2. **Extract**: Run extraction scripts to parse HTML and create structured JSON files  
+3. **Transform**: Create Property Improvement data group with relationships
+
+### Step 1: Prepare HTML Content
+
+Create an `input.csv` file with HTTP request details for the permit website:
+
+```csv
+source_http_request,request_identifier
+"https://egweb1.cityofbonitasprings.org/energov/selfservice#/permit/e7e6ec95-4042-4710-ad00-f946bb30291f",permit-123
+```
+
+Then run the prepare step to fetch the HTML content:
+
+```bash
+# Create input.zip with input.csv
+elephant-cli prepare input.zip --output-zip prepared-property-improvement.zip
+```
+
+**What this does:**
+- Reads HTTP request details from `input.csv`
+- Fetches HTML content from the permit website
+- Creates `prepared-property-improvement.zip` containing both `input.csv` and the fetched HTML file
+
+### Step 2: Create Extraction Scripts
+
+Create a `property-improvement-extractor.js` script that:
+- Reads HTML files from the input directory
+- Extracts Property Improvement data (permit details, contractors, inspections, etc.)
+- Creates structured JSON files for each entity type
+- Outputs files to the data directory
+
+Example script structure:
+```javascript
+// property-improvement-extractor.js
+const fs = require('fs');
+const cheerio = require('cheerio');
+
+// Read HTML file
+const html = fs.readFileSync('input/permit.html', 'utf8');
+const $ = cheerio.load(html);
+
+// Extract Property Improvement data
+const propertyImprovement = {
+  permit_number: $('.permit-number').text(),
+  permit_type: $('.permit-type').text(),
+  // ... more fields
+};
+
+// Write JSON files
+fs.writeFileSync('data/property_improvement.json', JSON.stringify(propertyImprovement));
+fs.writeFileSync('data/property_improvement_has_contractor_1.json', JSON.stringify(contractorRelationship));
+```
+
+Package your script into `property-improvement-scripts.zip`:
+```
+property-improvement-scripts.zip
+└── scripts/
+    └── property-improvement-extractor.js
+```
+
+### Step 3: Transform to Data Group
+
+Run the transform command to create the Property Improvement data group:
+
+```bash
+elephant-cli transform \
+  --data-group "Property Improvement" \
+  --input-zip prepared-property-improvement.zip \
+  --scripts-zip property-improvement-scripts.zip \
+  --output-zip property-improvement-output.zip
+```
+
+**What this does:**
+
+1. **Runs extraction script**: Executes `property-improvement-extractor.js` to parse HTML and create JSON files
+2. **Copies extracted files**: Moves JSON files from `data/` to `input/` for processing
+3. **Creates data group**: Builds Property Improvement data group structure with relationships
+4. **Validates output**: Ensures all files conform to Property Improvement schema
+
+**Input Requirements:**
+
+- **input.csv**: HTTP request details (same format as seed.csv)
+- **HTML file**: Property improvement data from permit website
+- **Extraction script**: `property-improvement-extractor.js` that parses HTML and creates JSON files
+
+**Output Structure:**
+
+```
+property-improvement-output.zip
+└── data/
+    ├── <property_improvement_schema_cid>.json    # Data group root file
+    ├── property_improvement.json                # Main Property Improvement entity
+    ├── company_1.json                           # Contractor/company entities
+    ├── file_1.json                              # File attachments
+    ├── inspection_1.json                       # Inspection records
+    ├── property_improvement_has_contractor_1.json  # Relationships
+    ├── property_improvement_has_file_1.json
+    └── property_improvement_has_inspection_1.json
+```
+
+**Key Differences from County Workflow:**
+
+- **No fact sheet generation**: Property Improvement data groups don't include fact sheet relationships
+- **Custom extraction**: Uses `property-improvement-extractor.js` instead of County mapping scripts
+- **HTML-based**: Extracts data from HTML content rather than structured CSV data
+- **Single script**: Runs one extraction script instead of multiple mapping scripts
+
+**Validation:**
+
+The output can be validated using:
+```bash
+elephant-cli validate property-improvement-output.zip
+```
+
+This ensures all files conform to the Property Improvement schema and relationships are properly structured.
 
 ## Build the Seed Bundle
 
