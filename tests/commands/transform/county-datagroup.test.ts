@@ -280,6 +280,123 @@ describe('createCountyDataGroup', () => {
     });
   });
 
+  describe('mailing address relationships', () => {
+    it('should include person_has_mailing_address when file contains person, mailing_address, and relationship', () => {
+      const relationshipFiles = [
+        'relationship_person_1_has_mailing_address.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.person_has_mailing_address).toEqual([
+        { '/': './relationship_person_1_has_mailing_address.json' },
+      ]);
+    });
+
+    it('should include company_has_mailing_address when file contains company, mailing_address, and relationship', () => {
+      const relationshipFiles = [
+        'relationship_company_has_mailing_address_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.company_has_mailing_address).toEqual([
+        { '/': './relationship_company_has_mailing_address_1.json' },
+      ]);
+    });
+
+    it('should handle multiple person_has_mailing_address relationships', () => {
+      const relationshipFiles = [
+        'relationship_person_1_has_mailing_address.json',
+        'relationship_person_2_has_mailing_address.json',
+        'relationship_person_3_has_mailing_address.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.person_has_mailing_address).toHaveLength(3);
+      expect(result.relationships.person_has_mailing_address).toEqual([
+        { '/': './relationship_person_1_has_mailing_address.json' },
+        { '/': './relationship_person_2_has_mailing_address.json' },
+        { '/': './relationship_person_3_has_mailing_address.json' },
+      ]);
+    });
+
+    it('should handle multiple company_has_mailing_address relationships', () => {
+      const relationshipFiles = [
+        'relationship_company_has_mailing_address_1.json',
+        'relationship_company_has_mailing_address_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.company_has_mailing_address).toHaveLength(2);
+      expect(result.relationships.company_has_mailing_address).toEqual([
+        { '/': './relationship_company_has_mailing_address_1.json' },
+        { '/': './relationship_company_has_mailing_address_2.json' },
+      ]);
+    });
+
+    it('should handle both person and company mailing address relationships together', () => {
+      const relationshipFiles = [
+        'relationship_person_1_has_mailing_address.json',
+        'relationship_person_2_has_mailing_address.json',
+        'relationship_company_has_mailing_address_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.person_has_mailing_address).toHaveLength(2);
+      expect(result.relationships.company_has_mailing_address).toHaveLength(1);
+    });
+
+    it('should handle case-insensitive matching for mailing address relationships', () => {
+      const relationshipFiles = [
+        'Relationship_Person_1_Has_Mailing_Address.json',
+        'RELATIONSHIP_COMPANY_HAS_MAILING_ADDRESS_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.person_has_mailing_address).toEqual([
+        { '/': './Relationship_Person_1_Has_Mailing_Address.json' },
+      ]);
+      expect(result.relationships.company_has_mailing_address).toEqual([
+        { '/': './RELATIONSHIP_COMPANY_HAS_MAILING_ADDRESS_1.json' },
+      ]);
+    });
+
+    it('should return person_has_mailing_address as an array, not a single object', () => {
+      const relationshipFiles = [
+        'relationship_person_1_has_mailing_address.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        Array.isArray(result.relationships.person_has_mailing_address)
+      ).toBe(true);
+      expect(result.relationships.person_has_mailing_address).toHaveLength(1);
+    });
+
+    it('should return company_has_mailing_address as an array, not a single object', () => {
+      const relationshipFiles = [
+        'relationship_company_has_mailing_address_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        Array.isArray(result.relationships.company_has_mailing_address)
+      ).toBe(true);
+      expect(result.relationships.company_has_mailing_address).toHaveLength(1);
+    });
+
+    it('should not include mailing address relationships when files are missing required keywords', () => {
+      const relationshipFiles = [
+        'relationship_person_1.json',
+        'relationship_company_1.json',
+        'mailing_address_only.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.person_has_mailing_address).toBeUndefined();
+      expect(result.relationships.company_has_mailing_address).toBeUndefined();
+    });
+  });
+
   describe('comprehensive relationship handling', () => {
     it('should handle a complete set of relationships from manatee example', () => {
       const relationshipFiles = [
@@ -293,6 +410,8 @@ describe('createCountyDataGroup', () => {
         'relationship_layout_layout.json',
         'relationship_layout_utility.json',
         'relationship_layout_structure.json',
+        'relationship_person_1_has_mailing_address.json',
+        'relationship_company_has_mailing_address_1.json',
       ];
 
       const result = createCountyDataGroup(relationshipFiles);
@@ -308,6 +427,8 @@ describe('createCountyDataGroup', () => {
       expect(result.relationships.layout_has_layout).toBeDefined();
       expect(result.relationships.layout_has_utility).toBeDefined();
       expect(result.relationships.layout_has_structure).toBeDefined();
+      expect(result.relationships.person_has_mailing_address).toHaveLength(1);
+      expect(result.relationships.company_has_mailing_address).toHaveLength(1);
     });
 
     it('should not include person_has_property or company_has_property relationships', () => {
