@@ -14,7 +14,7 @@ describe('Library Commands', () => {
         inputZip: 'test-input.zip',
         dataGroup: 'Property Improvement',
         scriptsZip: 'test-scripts.zip',
-        outputZip: 'test-output.zip'
+        outputZip: 'test-output.zip',
       };
 
       expect(options.dataGroup).toBe('Property Improvement');
@@ -24,13 +24,15 @@ describe('Library Commands', () => {
     });
 
     it('should pass dataGroup option to CLI implementation', async () => {
-      const { handleTransform } = await import('../../../src/commands/transform/index.js');
-      
+      const { handleTransform } = await import(
+        '../../../src/commands/transform/index.js'
+      );
+
       await transform({
         inputZip: 'test-input.zip',
         dataGroup: 'Property Improvement',
         scriptsZip: 'test-scripts.zip',
-        outputZip: 'test-output.zip'
+        outputZip: 'test-output.zip',
       });
 
       // Verify that handleTransform was called with dataGroup option
@@ -40,18 +42,20 @@ describe('Library Commands', () => {
           inputZip: 'test-input.zip',
           scriptsZip: 'test-scripts.zip',
           outputZip: expect.stringContaining('test-output.zip'),
-          silent: true
+          silent: true,
         })
       );
     });
 
     it('should work without dataGroup option (County mode)', async () => {
-      const { handleTransform } = await import('../../../src/commands/transform/index.js');
-      
+      const { handleTransform } = await import(
+        '../../../src/commands/transform/index.js'
+      );
+
       await transform({
         inputZip: 'test-input.zip',
         scriptsZip: 'test-scripts.zip',
-        outputZip: 'test-output.zip'
+        outputZip: 'test-output.zip',
       });
 
       // Verify that handleTransform was called without dataGroup (defaults to County)
@@ -60,7 +64,7 @@ describe('Library Commands', () => {
           inputZip: 'test-input.zip',
           scriptsZip: 'test-scripts.zip',
           outputZip: expect.stringContaining('test-output.zip'),
-          silent: true
+          silent: true,
         })
       );
     });

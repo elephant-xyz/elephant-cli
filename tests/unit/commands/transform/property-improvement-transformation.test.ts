@@ -993,7 +993,7 @@ describe('Property Improvement Data Group Transformation', () => {
   it('should support dataGroup option in library mode', async () => {
     // Test that the library function accepts dataGroup option without throwing
     const { transform } = await import('../../../../src/lib/commands.js');
-    
+
     // This should not throw an error even if the files don't exist
     // The important thing is that the dataGroup option is accepted
     const result = await transform({
