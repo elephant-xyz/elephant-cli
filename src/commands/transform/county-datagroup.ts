@@ -18,6 +18,7 @@ export interface Relationships {
   property_has_file?: IPLDRef[];
   property_has_structure?: IPLDRef;
   property_has_utility?: IPLDRef;
+  property_has_property_improvement?: IPLDRef[];
   sales_history_has_person?: IPLDRef[];
   sales_history_has_company?: IPLDRef[];
   deed_has_file?: IPLDRef[];
@@ -47,6 +48,7 @@ export function createCountyDataGroup(
   const propertyHasTax: IPLDRef[] = [];
   const propertyHasSalesHistory: IPLDRef[] = [];
   const propertyHasLayout: IPLDRef[] = [];
+  const propertyHasPropertyImprovement: IPLDRef[] = [];
   const salesHistoryHasPerson: IPLDRef[] = [];
   const salesHistoryHasCompany: IPLDRef[] = [];
   const deedHasFile: IPLDRef[] = [];
@@ -93,6 +95,10 @@ export function createCountyDataGroup(
     if (lower.includes('property_file')) {
       // Not assigned in the original loop, but present in the schema.
       propertyHasFile.push(ref);
+      continue;
+    }
+    if (lower.includes('property_improvement')) {
+      propertyHasPropertyImprovement.push(ref);
       continue;
     }
 
@@ -185,6 +191,9 @@ export function createCountyDataGroup(
       propertyHasFloodStormInformation;
   }
   if (propertyHasFile.length) relationships.property_has_file = propertyHasFile;
+  if (propertyHasPropertyImprovement.length)
+    relationships.property_has_property_improvement =
+      propertyHasPropertyImprovement;
   if (salesHistoryHasPerson.length) {
     relationships.sales_history_has_person = salesHistoryHasPerson;
   }
