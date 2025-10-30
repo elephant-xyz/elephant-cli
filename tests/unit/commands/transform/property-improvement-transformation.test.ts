@@ -989,4 +989,24 @@ describe('Property Improvement Data Group Transformation', () => {
 
     expect(validationFailed).toBe(false);
   });
+
+  it('should support dataGroup option in library mode', async () => {
+    // Test that the library function accepts dataGroup option without throwing
+    const { transform } = await import('../../../../src/lib/commands.js');
+    
+    // This should not throw an error even if the files don't exist
+    // The important thing is that the dataGroup option is accepted
+    const result = await transform({
+      dataGroup: 'Property Improvement',
+      inputZip: 'non-existent-input.zip',
+      scriptsZip: 'non-existent-scripts.zip',
+      outputZip: path.join(tempDir, 'output.zip'),
+    });
+
+    // The result should indicate failure due to missing files, but not due to invalid options
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error).not.toContain('dataGroup');
+    expect(result.error).not.toContain('Property Improvement');
+  });
 });

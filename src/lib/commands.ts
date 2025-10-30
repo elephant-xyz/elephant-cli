@@ -37,6 +37,7 @@ export interface TransformOptions {
   inputZip: string;
   legacyMode?: boolean;
   cwd?: string;
+  dataGroup?: string;
 }
 
 export interface TransformFailureDetail {
@@ -153,6 +154,7 @@ export async function transform(
     legacyMode: options.legacyMode || false,
     silent: true, // Enable silent mode for library usage
     cwd: options.cwd,
+    dataGroup: options.dataGroup,
   };
 
   try {
