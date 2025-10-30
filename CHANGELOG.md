@@ -1,3 +1,10 @@
+## [1.54.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.1...v1.54.2) (2025-10-30)
+
+
+### Bug Fixes
+
+* create property has property improvment relationship ([#210](https://github.com/elephant-xyz/elephant-cli/issues/210)) ([b3c8b37](https://github.com/elephant-xyz/elephant-cli/commit/b3c8b377d9a21cb734a36d6f86220e645858c8a9))
+
 ## [1.54.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.0...v1.54.1) (2025-10-29)
 
 
