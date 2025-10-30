@@ -280,9 +280,7 @@ describe('createCountyDataGroup', () => {
     });
 
     it('should include property_has_property_improvement when file contains property_improvement', () => {
-      const relationshipFiles = [
-        'relationship_property_improvement_1.json',
-      ];
+      const relationshipFiles = ['relationship_property_improvement_1.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
       expect(result.relationships.property_has_property_improvement).toEqual([
@@ -325,9 +323,7 @@ describe('createCountyDataGroup', () => {
     });
 
     it('should return property_has_property_improvement as an array, not a single object', () => {
-      const relationshipFiles = [
-        'relationship_property_improvement_1.json',
-      ];
+      const relationshipFiles = ['relationship_property_improvement_1.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
       expect(
