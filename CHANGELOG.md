@@ -1,3 +1,10 @@
+## [1.54.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.2...v1.54.3) (2025-10-30)
+
+
+### Bug Fixes
+
+* **transform:** adding missing properties to command ([#211](https://github.com/elephant-xyz/elephant-cli/issues/211)) ([6988c37](https://github.com/elephant-xyz/elephant-cli/commit/6988c377ff277ef5f843f382fddf9223c7c8af35))
+
 ## [1.54.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.1...v1.54.2) (2025-10-30)
 
 
