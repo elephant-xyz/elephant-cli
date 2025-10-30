@@ -278,6 +278,61 @@ describe('createCountyDataGroup', () => {
         { '/': './relationship_property_file_2.json' },
       ]);
     });
+
+    it('should include property_has_property_improvement when file contains property_improvement', () => {
+      const relationshipFiles = ['relationship_property_improvement_1.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.property_has_property_improvement).toEqual([
+        { '/': './relationship_property_improvement_1.json' },
+      ]);
+    });
+
+    it('should handle multiple property_has_property_improvement relationships', () => {
+      const relationshipFiles = [
+        'relationship_property_improvement_1.json',
+        'relationship_property_improvement_2.json',
+        'relationship_property_improvement_3.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        result.relationships.property_has_property_improvement
+      ).toHaveLength(3);
+      expect(result.relationships.property_has_property_improvement).toEqual([
+        { '/': './relationship_property_improvement_1.json' },
+        { '/': './relationship_property_improvement_2.json' },
+        { '/': './relationship_property_improvement_3.json' },
+      ]);
+    });
+
+    it('should handle case-insensitive matching for property_improvement relationships', () => {
+      const relationshipFiles = [
+        'Relationship_Property_Improvement_1.json',
+        'RELATIONSHIP_PROPERTY_IMPROVEMENT_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        result.relationships.property_has_property_improvement
+      ).toHaveLength(2);
+      expect(result.relationships.property_has_property_improvement).toEqual([
+        { '/': './Relationship_Property_Improvement_1.json' },
+        { '/': './RELATIONSHIP_PROPERTY_IMPROVEMENT_2.json' },
+      ]);
+    });
+
+    it('should return property_has_property_improvement as an array, not a single object', () => {
+      const relationshipFiles = ['relationship_property_improvement_1.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        Array.isArray(result.relationships.property_has_property_improvement)
+      ).toBe(true);
+      expect(
+        result.relationships.property_has_property_improvement
+      ).toHaveLength(1);
+    });
   });
 
   describe('mailing address relationships', () => {
