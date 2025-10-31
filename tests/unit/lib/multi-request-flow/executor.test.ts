@@ -248,6 +248,93 @@ describe('multi-request-flow/executor', () => {
       });
     });
 
+    it('URL-encodes special characters in multiValueQueryString', async () => {
+      const flow: MultiRequestFlow = {
+        requests: [
+          {
+            key: 'EncodingTest',
+            request: {
+              method: 'GET',
+              url: 'https://example.com/api',
+              multiValueQueryString: {
+                filter: ["contains(strap,'322530307S000B0015')"],
+                search: ['hello world'],
+                complex: ['a&b=c'],
+              },
+            },
+          },
+        ],
+      };
+
+      const mockResponse = { data: 'test' };
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => JSON.stringify(mockResponse),
+      } as Response);
+
+      const result = await executeMultiRequestFlow(flow, testRequestId);
+
+      // Verify the fetch URL has properly encoded query params
+      // Note: URLSearchParams encodes spaces as '+', parentheses, and single quotes
+      expect(fetch).toHaveBeenCalledWith(
+        'https://example.com/api?filter=contains%28strap%2C%27322530307S000B0015%27%29&search=hello+world&complex=a%26b%3Dc',
+        expect.any(Object)
+      );
+
+      // Verify source_http_request stores URL-encoded values using encodeURIComponent
+      // Note: encodeURIComponent does NOT encode parentheses or single quotes
+      const output = JSON.parse(result.content);
+      expect(
+        output.EncodingTest.source_http_request.multiValueQueryString
+      ).toEqual({
+        filter: ["contains(strap%2C'322530307S000B0015')"],
+        search: ['hello%20world'],
+        complex: ['a%26b%3Dc'],
+      });
+    });
+
+    it('URL-encodes query params extracted from URL', async () => {
+      const flow: MultiRequestFlow = {
+        requests: [
+          {
+            key: 'UrlEncodingTest',
+            request: {
+              method: 'GET',
+              url: "https://example.com/api?filter=contains(strap,'322530307S000B0015')&search=hello%20world",
+            },
+          },
+        ],
+      };
+
+      const mockResponse = { data: 'test' };
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => JSON.stringify(mockResponse),
+      } as Response);
+
+      const result = await executeMultiRequestFlow(flow, testRequestId);
+
+      // Verify source_http_request stores URL-encoded values even when extracted from URL
+      const output = JSON.parse(result.content);
+      expect(
+        output.UrlEncodingTest.source_http_request.multiValueQueryString
+      ).toEqual({
+        filter: ["contains(strap%2C'322530307S000B0015')"],
+        search: ['hello%20world'],
+      });
+
+      // URL should be normalized (query params moved to multiValueQueryString)
+      expect(output.UrlEncodingTest.source_http_request.url).toBe(
+        'https://example.com/api'
+      );
+    });
+
     it('parses HTML response as string when not valid JSON', async () => {
       const flow: MultiRequestFlow = {
         requests: [

@@ -82,10 +82,10 @@ async function executeRequest(
 
 /**
  * Normalizes an HTTP request by extracting query parameters from the URL
- * and placing them in the multiValueQueryString object.
+ * and placing them in the multiValueQueryString object with URL-encoded values.
  *
  * @param request - HTTP request definition
- * @returns Normalized request with query params in multiValueQueryString
+ * @returns Normalized request with URL-encoded query params in multiValueQueryString
  */
 function normalizeRequest(
   request: HttpRequestDefinition
@@ -112,19 +112,21 @@ function normalizeRequest(
 
   if (url.search) {
     for (const [key, value] of url.searchParams.entries()) {
+      const encodedValue = encodeURIComponent(value);
       if (!queryParams[key]) {
         queryParams[key] = [];
       }
-      queryParams[key].push(value);
+      queryParams[key].push(encodedValue);
     }
   }
 
   if (request.multiValueQueryString) {
     for (const [key, values] of Object.entries(request.multiValueQueryString)) {
+      const encodedValues = values.map((v) => encodeURIComponent(v));
       if (!queryParams[key]) {
         queryParams[key] = [];
       }
-      queryParams[key].push(...values);
+      queryParams[key].push(...encodedValues);
     }
   }
 
