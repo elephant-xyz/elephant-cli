@@ -46,6 +46,9 @@ pids
 # Optional eslint cache
 .eslintcache
 
+# Transformers model cache
+.cache/
+
 # Optional REPL history
 .node_repl_history
 
