@@ -1,0 +1,132 @@
+{
+  "company": [
+    {
+      "name": "RWG INVESTMENTS LLC"
+    }
+  ],
+  "property": [
+    {
+      "parcel_identifier": "15955960002",
+      "property_legal_description_text": "PARK SHORE UNIT 1 BLK 8 LOT 5 + OUT LOT B",
+      "property_type": "VacantLand",
+      "subdivision": "PARK SHORE UNIT 1"
+    }
+  ],
+  "address": [
+    {
+      "city_name": "NAPLES",
+      "county_name": "Collier",
+      "lot": "5",
+      "postal_code": "34103",
+      "range": "25",
+      "section": "16",
+      "state_code": "FL",
+      "street_name": "PARK SHORE",
+      "street_number": "623",
+      "street_suffix_type": "Dr",
+      "township": "49"
+    }
+  ],
+  "layout": [
+    {
+      "is_exterior": false,
+      "is_finished": true,
+      "space_index": 1,
+      "space_type": "Living Area"
+    }
+  ],
+  "sales_history": [
+    {
+      "ownership_transfer_date": "2023-07-05",
+      "purchase_price_amount": 1800000
+    },
+    {
+      "ownership_transfer_date": "1982-11-01",
+      "purchase_price_amount": 0
+    },
+    {
+      "ownership_transfer_date": "2003-07-03",
+      "purchase_price_amount": 490000
+    },
+    {
+      "ownership_transfer_date": "1972-05-01",
+      "purchase_price_amount": 0
+    },
+    {
+      "ownership_transfer_date": "2000-04-10",
+      "purchase_price_amount": 355000
+    },
+    {
+      "ownership_transfer_date": "1997-03-04",
+      "purchase_price_amount": 185000
+    }
+  ],
+  "tax": [
+    {
+      "monthly_tax_amount": 0,
+      "period_end_date": "2022-12-31",
+      "period_start_date": "2022-01-01",
+      "property_assessed_value_amount": 640659,
+      "property_building_amount": 168127,
+      "property_land_amount": 1781640,
+      "property_market_value_amount": 1949767,
+      "property_taxable_value_amount": 640659,
+      "tax_year": 2022,
+      "yearly_tax_amount": 0
+    },
+    {
+      "monthly_tax_amount": 0,
+      "period_end_date": "2023-12-31",
+      "period_start_date": "2023-01-01",
+      "property_assessed_value_amount": 659879,
+      "property_building_amount": 41684,
+      "property_land_amount": 2637600,
+      "property_market_value_amount": 2679284,
+      "property_taxable_value_amount": 659879,
+      "tax_year": 2023,
+      "yearly_tax_amount": 0
+    },
+    {
+      "monthly_tax_amount": 1786.66,
+      "period_end_date": "2024-12-31",
+      "period_start_date": "2024-01-01",
+      "property_assessed_value_amount": 2352000,
+      "property_building_amount": 0,
+      "property_land_amount": 2352000,
+      "property_market_value_amount": 2352000,
+      "property_taxable_value_amount": 2352000,
+      "tax_year": 2024,
+      "yearly_tax_amount": 21439.89
+    },
+    {
+      "monthly_tax_amount": 1647.35,
+      "period_end_date": "2025-12-31",
+      "period_start_date": "2025-01-01",
+      "property_assessed_value_amount": 2184000,
+      "property_building_amount": 0,
+      "property_land_amount": 2184000,
+      "property_market_value_amount": 2184000,
+      "property_taxable_value_amount": 2184000,
+      "tax_year": 2025,
+      "yearly_tax_amount": 19768.26
+    },
+    {
+      "monthly_tax_amount": 0,
+      "period_end_date": "2021-12-31",
+      "period_start_date": "2021-01-01",
+      "property_assessed_value_amount": 621999,
+      "property_building_amount": 54989,
+      "property_land_amount": 1158696,
+      "property_market_value_amount": 1213685,
+      "property_taxable_value_amount": 621999,
+      "tax_year": 2021,
+      "yearly_tax_amount": 0
+    }
+  ],
+  "utility": [
+    {
+      "solar_inverter_visible": false,
+      "solar_panel_present": false
+    }
+  ]
+}

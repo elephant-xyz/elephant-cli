@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { NEREntityExtractorService } from '../../src/services/ner-entity-extractor.service.js';
 import { EntityComparisonService } from '../../src/services/entity-comparison.service.js';
 import { TransformDataAggregatorService } from '../../src/services/transform-data-aggregator.service.js';
 import { cleanHtml } from '../../src/lib/common.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function stripHtml(html: string): string {
   return html
@@ -29,19 +34,19 @@ describe('Validate Completeness Integration Tests', () => {
 
   describe('Property 15955960002', () => {
     it('should extract entities from HTML and JSON, then compare', async () => {
-      const testDocsDir = path.join(
-        process.cwd(),
-        'tmp/nlp-testing-js/test_docs'
+      const fixturesDir = path.join(
+        __dirname,
+        '../fixtures/validate-completeness'
       );
 
       // Read HTML file
-      const htmlPath = path.join(testDocsDir, '15955960002.html');
+      const htmlPath = path.join(fixturesDir, '15955960002.html');
       const rawHtml = await fs.readFile(htmlPath, 'utf-8');
       const cleanedHtml = await cleanHtml(rawHtml);
       const htmlText = stripHtml(cleanedHtml);
 
       // Read JSON file
-      const jsonPath = path.join(testDocsDir, '15955960002.json');
+      const jsonPath = path.join(fixturesDir, '15955960002.json');
       const jsonContent = await fs.readFile(jsonPath, 'utf-8');
       const jsonData = JSON.parse(jsonContent);
 
@@ -152,19 +157,19 @@ describe('Validate Completeness Integration Tests', () => {
 
   describe('Property 82615002181', () => {
     it('should extract entities from HTML and JSON, then compare', async () => {
-      const testDocsDir = path.join(
-        process.cwd(),
-        'tmp/nlp-testing-js/test_docs'
+      const fixturesDir = path.join(
+        __dirname,
+        '../fixtures/validate-completeness'
       );
 
       // Read HTML file
-      const htmlPath = path.join(testDocsDir, '82615002181.html');
+      const htmlPath = path.join(fixturesDir, '82615002181.html');
       const rawHtml = await fs.readFile(htmlPath, 'utf-8');
       const cleanedHtml = await cleanHtml(rawHtml);
       const htmlText = stripHtml(cleanedHtml);
 
       // Read JSON file
-      const jsonPath = path.join(testDocsDir, '82615002181.json');
+      const jsonPath = path.join(fixturesDir, '82615002181.json');
       const jsonContent = await fs.readFile(jsonPath, 'utf-8');
       const jsonData = JSON.parse(jsonContent);
 
