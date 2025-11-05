@@ -19,6 +19,7 @@ import { registerTransformCommand } from './commands/transform/index.js';
 import { registerGenerateTransformCommand } from './commands/generate-transform/index.js';
 import { registerPrepareCommand } from './commands/prepare/index.js';
 import { createKeystoreCommand } from './commands/create-keystore.js';
+import { registerValidateCompletenessCommand } from './commands/validate-completeness/index.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +47,7 @@ registerFetchDataCommand(program);
 registerTransformCommand(program);
 registerGenerateTransformCommand(program);
 registerPrepareCommand(program);
+registerValidateCompletenessCommand(program);
 createKeystoreCommand(program);
 
 program.parse();
