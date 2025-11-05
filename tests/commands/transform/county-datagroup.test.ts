@@ -690,7 +690,9 @@ describe('createCountyDataGroup', () => {
       const relationshipFiles = ['relationship_layout_geometry_1.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(Array.isArray(result.relationships.layout_has_geometry)).toBe(true);
+      expect(Array.isArray(result.relationships.layout_has_geometry)).toBe(
+        true
+      );
       expect(result.relationships.layout_has_geometry).toHaveLength(1);
     });
 
@@ -701,8 +703,12 @@ describe('createCountyDataGroup', () => {
       ];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(Array.isArray(result.relationships.parcel_has_geometry)).toBe(false);
-      expect(Array.isArray(result.relationships.address_has_geometry)).toBe(false);
+      expect(Array.isArray(result.relationships.parcel_has_geometry)).toBe(
+        false
+      );
+      expect(Array.isArray(result.relationships.address_has_geometry)).toBe(
+        false
+      );
       expect(result.relationships.parcel_has_geometry).toEqual({
         '/': './relationship_parcel_geometry.json',
       });
