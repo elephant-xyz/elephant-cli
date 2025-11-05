@@ -102,8 +102,8 @@ export async function handleValidate(
 
   logger.technical(`Processing single property data from: ${actualInputDir}`);
   const workingDir = options.cwd || process.cwd();
-  const erorrCsvName = options.outputCsv || 'submit_errors.csv';
-  const errorCsvPath = path.resolve(workingDir, erorrCsvName);
+  const errorCsvName = options.outputCsv || 'submit_errors.csv';
+  const errorCsvPath = path.resolve(workingDir, errorCsvName);
   const warningCsvPath = path.resolve(workingDir, 'submit_warnings.csv');
   logger.technical(`Output CSV: ${errorCsvPath}`);
   logger.info('Note: Processing single property data only');
