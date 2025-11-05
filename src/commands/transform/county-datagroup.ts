@@ -98,15 +98,28 @@ export function createCountyDataGroup(
       propertyHasFloodStormInformation = ref;
       continue;
     }
-    if (lower.includes('parcel_geometry') || (lower.includes('parcel') && lower.includes('geometry') && !lower.includes('property'))) {
+    if (
+      lower.includes('parcel_geometry') ||
+      (lower.includes('parcel') &&
+        lower.includes('geometry') &&
+        !lower.includes('property'))
+    ) {
       parcelHasGeometry = ref;
       continue;
     }
-    if (lower.includes('address_geometry') || (lower.includes('address') && lower.includes('geometry'))) {
+    if (
+      lower.includes('address_geometry') ||
+      (lower.includes('address') && lower.includes('geometry'))
+    ) {
       addressHasGeometry = ref;
       continue;
     }
-    if (lower.includes('layout_geometry') || (lower.includes('layout') && lower.includes('geometry') && !lower.includes('property'))) {
+    if (
+      lower.includes('layout_geometry') ||
+      (lower.includes('layout') &&
+        lower.includes('geometry') &&
+        !lower.includes('property'))
+    ) {
       layoutHasGeometry.push(ref);
       continue;
     }
