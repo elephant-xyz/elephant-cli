@@ -19,6 +19,9 @@ export interface Relationships {
   property_has_structure?: IPLDRef;
   property_has_utility?: IPLDRef;
   property_has_property_improvement?: IPLDRef[];
+  parcel_has_geometry?: IPLDRef;
+  address_has_geometry?: IPLDRef;
+  layout_has_geometry?: IPLDRef[];
   sales_history_has_person?: IPLDRef[];
   sales_history_has_company?: IPLDRef[];
   deed_has_file?: IPLDRef[];
@@ -62,6 +65,9 @@ export function createCountyDataGroup(
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
   let propertyHasFloodStormInformation: IPLDRef | undefined;
+  let parcelHasGeometry: IPLDRef | undefined;
+  let addressHasGeometry: IPLDRef | undefined;
+  const layoutHasGeometry: IPLDRef[] = [];
 
   for (const file of relationshipFiles) {
     const lower = file.toLowerCase();
@@ -90,6 +96,18 @@ export function createCountyDataGroup(
     }
     if (lower.includes('property_flood_storm_information')) {
       propertyHasFloodStormInformation = ref;
+      continue;
+    }
+    if (lower.includes('parcel_geometry') || (lower.includes('parcel') && lower.includes('geometry') && !lower.includes('property'))) {
+      parcelHasGeometry = ref;
+      continue;
+    }
+    if (lower.includes('address_geometry') || (lower.includes('address') && lower.includes('geometry'))) {
+      addressHasGeometry = ref;
+      continue;
+    }
+    if (lower.includes('layout_geometry') || (lower.includes('layout') && lower.includes('geometry') && !lower.includes('property'))) {
+      layoutHasGeometry.push(ref);
       continue;
     }
     if (lower.includes('property_file')) {
@@ -189,6 +207,15 @@ export function createCountyDataGroup(
   if (propertyHasFloodStormInformation) {
     relationships.property_has_flood_storm_information =
       propertyHasFloodStormInformation;
+  }
+  if (parcelHasGeometry) {
+    relationships.parcel_has_geometry = parcelHasGeometry;
+  }
+  if (addressHasGeometry) {
+    relationships.address_has_geometry = addressHasGeometry;
+  }
+  if (layoutHasGeometry.length) {
+    relationships.layout_has_geometry = layoutHasGeometry;
   }
   if (propertyHasFile.length) relationships.property_has_file = propertyHasFile;
   if (propertyHasPropertyImprovement.length)

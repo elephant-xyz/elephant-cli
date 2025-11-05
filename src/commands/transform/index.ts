@@ -866,4 +866,14 @@ async function normalizeInputsForScripts(
       path.join(tempRoot, destName)
     );
   }
+  
+  // Copy CSV files to tempRoot so scripts can access them
+  const csvFiles = files.filter((f) => /\.csv$/i.test(f));
+  for (const csvFile of csvFiles) {
+    await fs.copyFile(
+      path.join(inputsDir, csvFile),
+      path.join(tempRoot, csvFile)
+    );
+    logger.debug(`Copied CSV file ${csvFile} to tempRoot for script access`);
+  }
 }

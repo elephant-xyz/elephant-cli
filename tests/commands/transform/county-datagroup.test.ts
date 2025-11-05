@@ -581,4 +581,192 @@ describe('createCountyDataGroup', () => {
       expect(Object.keys(result.relationships)).toHaveLength(0);
     });
   });
+
+  describe('geometry relationships', () => {
+    it('should include parcel_has_geometry when file contains parcel_geometry', () => {
+      const relationshipFiles = ['relationship_parcel_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toEqual({
+        '/': './relationship_parcel_geometry.json',
+      });
+    });
+
+    it('should include parcel_has_geometry when file contains parcel and geometry (but not property)', () => {
+      const relationshipFiles = ['relationship_parcel_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toEqual({
+        '/': './relationship_parcel_geometry.json',
+      });
+    });
+
+    it('should NOT include parcel_has_geometry when file contains property_geometry', () => {
+      const relationshipFiles = ['relationship_property_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toBeUndefined();
+    });
+
+    it('should include address_has_geometry when file contains address_geometry', () => {
+      const relationshipFiles = ['relationship_address_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.address_has_geometry).toEqual({
+        '/': './relationship_address_geometry.json',
+      });
+    });
+
+    it('should include address_has_geometry when file contains address and geometry', () => {
+      const relationshipFiles = ['relationship_address_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.address_has_geometry).toEqual({
+        '/': './relationship_address_geometry.json',
+      });
+    });
+
+    it('should include layout_has_geometry when file contains layout_geometry', () => {
+      const relationshipFiles = ['relationship_layout_geometry_1.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_geometry).toEqual([
+        { '/': './relationship_layout_geometry_1.json' },
+      ]);
+    });
+
+    it('should include layout_has_geometry when file contains layout and geometry (but not property)', () => {
+      const relationshipFiles = ['relationship_layout_geometry_1.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_geometry).toEqual([
+        { '/': './relationship_layout_geometry_1.json' },
+      ]);
+    });
+
+    it('should NOT include layout_has_geometry when file contains property_layout_geometry', () => {
+      const relationshipFiles = ['relationship_property_layout_geometry.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_geometry).toBeUndefined();
+    });
+
+    it('should handle multiple layout_has_geometry relationships', () => {
+      const relationshipFiles = [
+        'relationship_layout_geometry_1.json',
+        'relationship_layout_geometry_2.json',
+        'relationship_layout_geometry_3.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.layout_has_geometry).toHaveLength(3);
+      expect(result.relationships.layout_has_geometry).toEqual([
+        { '/': './relationship_layout_geometry_1.json' },
+        { '/': './relationship_layout_geometry_2.json' },
+        { '/': './relationship_layout_geometry_3.json' },
+      ]);
+    });
+
+    it('should handle case-insensitive matching for geometry relationships', () => {
+      const relationshipFiles = [
+        'Relationship_Parcel_Geometry.json',
+        'RELATIONSHIP_ADDRESS_GEOMETRY.json',
+        'relationship_Layout_Geometry_1.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toEqual({
+        '/': './Relationship_Parcel_Geometry.json',
+      });
+      expect(result.relationships.address_has_geometry).toEqual({
+        '/': './RELATIONSHIP_ADDRESS_GEOMETRY.json',
+      });
+      expect(result.relationships.layout_has_geometry).toEqual([
+        { '/': './relationship_Layout_Geometry_1.json' },
+      ]);
+    });
+
+    it('should return layout_has_geometry as an array, not a single object', () => {
+      const relationshipFiles = ['relationship_layout_geometry_1.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.layout_has_geometry)).toBe(true);
+      expect(result.relationships.layout_has_geometry).toHaveLength(1);
+    });
+
+    it('should return parcel_has_geometry and address_has_geometry as single objects, not arrays', () => {
+      const relationshipFiles = [
+        'relationship_parcel_geometry.json',
+        'relationship_address_geometry.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.parcel_has_geometry)).toBe(false);
+      expect(Array.isArray(result.relationships.address_has_geometry)).toBe(false);
+      expect(result.relationships.parcel_has_geometry).toEqual({
+        '/': './relationship_parcel_geometry.json',
+      });
+      expect(result.relationships.address_has_geometry).toEqual({
+        '/': './relationship_address_geometry.json',
+      });
+    });
+
+    it('should handle all three geometry relationships together', () => {
+      const relationshipFiles = [
+        'relationship_parcel_geometry.json',
+        'relationship_address_geometry.json',
+        'relationship_layout_geometry_1.json',
+        'relationship_layout_geometry_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toEqual({
+        '/': './relationship_parcel_geometry.json',
+      });
+      expect(result.relationships.address_has_geometry).toEqual({
+        '/': './relationship_address_geometry.json',
+      });
+      expect(result.relationships.layout_has_geometry).toHaveLength(2);
+      expect(result.relationships.layout_has_geometry).toEqual([
+        { '/': './relationship_layout_geometry_1.json' },
+        { '/': './relationship_layout_geometry_2.json' },
+      ]);
+    });
+
+    it('should not include geometry relationships when files are missing required keywords', () => {
+      const relationshipFiles = [
+        'parcel_only.json',
+        'address_only.json',
+        'layout_only.json',
+        'geometry_only.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toBeUndefined();
+      expect(result.relationships.address_has_geometry).toBeUndefined();
+      expect(result.relationships.layout_has_geometry).toBeUndefined();
+    });
+
+    it('should include geometry relationships in comprehensive test', () => {
+      const relationshipFiles = [
+        'relationship_property_address.json',
+        'relationship_property_sales_1.json',
+        'relationship_parcel_geometry.json',
+        'relationship_address_geometry.json',
+        'relationship_layout_geometry_1.json',
+        'relationship_layout_geometry_2.json',
+        'relationship_layout_layout.json',
+      ];
+
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.label).toBe('County');
+      expect(result.relationships.property_has_address).toBeDefined();
+      expect(result.relationships.property_has_sales_history).toHaveLength(1);
+      expect(result.relationships.parcel_has_geometry).toBeDefined();
+      expect(result.relationships.address_has_geometry).toBeDefined();
+      expect(result.relationships.layout_has_geometry).toHaveLength(2);
+      expect(result.relationships.layout_has_layout).toBeDefined();
+    });
+  });
 });
