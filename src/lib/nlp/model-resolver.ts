@@ -1,5 +1,5 @@
 import { env } from '@xenova/transformers';
-import { existsSync, statSync } from 'fs';
+import { statSync } from 'fs';
 import path from 'path';
 
 export interface ModelConfig {

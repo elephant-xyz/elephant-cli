@@ -1,5 +1,4 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 export const NER_MODELS = {
   MONEY_DATE: {
@@ -19,7 +18,9 @@ export function getModelCacheDir(): string {
   return cacheDir;
 }
 
-export function getLocalModelDir(modelType: 'MONEY_DATE' | 'PERSON_ORG_LOCATION'): string | undefined {
+export function getLocalModelDir(
+  modelType: 'MONEY_DATE' | 'PERSON_ORG_LOCATION'
+): string | undefined {
   const envVarMap = {
     MONEY_DATE: 'MONEYDATE_LOCAL',
     PERSON_ORG_LOCATION: 'PERORGLOCAL_LOCAL',
@@ -27,7 +28,9 @@ export function getLocalModelDir(modelType: 'MONEY_DATE' | 'PERSON_ORG_LOCATION'
   return process.env[envVarMap[modelType]];
 }
 
-export function getRemoteModelId(modelType: 'MONEY_DATE' | 'PERSON_ORG_LOCATION'): string {
+export function getRemoteModelId(
+  modelType: 'MONEY_DATE' | 'PERSON_ORG_LOCATION'
+): string {
   const model = NER_MODELS[modelType];
   return process.env[model.envVar] || model.remote;
 }
