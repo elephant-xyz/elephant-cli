@@ -1,3 +1,10 @@
+## [1.54.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.3...v1.54.4) (2025-11-05)
+
+
+### Bug Fixes
+
+* **transform:** to copy over csv file and take over new relashionship… ([#213](https://github.com/elephant-xyz/elephant-cli/issues/213)) ([3dba079](https://github.com/elephant-xyz/elephant-cli/commit/3dba0796ee868d205e344b71a53e855e383e60a3))
+
 ## [1.54.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.2...v1.54.3) (2025-10-30)
 
 

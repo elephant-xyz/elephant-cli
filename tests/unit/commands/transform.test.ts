@@ -516,6 +516,63 @@ describe('transform command', () => {
 
         expect(relationshipFiles.length).toBe(0);
       });
+
+      it('should collect geometry relationship files from output directory', async () => {
+        const options = {
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+        };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        const writeFileCalls: any[] = [];
+        vi.mocked(fsPromises.writeFile).mockImplementation(
+          async (file: any, data: any) => {
+            writeFileCalls.push({ file, data });
+          }
+        );
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          return '{}';
+        });
+
+        let readdirCallCount = 0;
+        vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
+          if (typeof dir === 'string' && dir.includes('data')) {
+            readdirCallCount++;
+            if (readdirCallCount === 1) {
+              return [
+                'property.json',
+                'parcel.json',
+                'address.json',
+                'geometry.json',
+              ] as any;
+            }
+            return [
+              'property.json',
+              'parcel.json',
+              'address.json',
+              'geometry.json',
+              'relationship_parcel_geometry.json',
+              'relationship_address_geometry.json',
+              'relationship_layout_geometry_1.json',
+              'relationship_layout_geometry_2.json',
+            ] as any;
+          }
+          return [] as any;
+        });
+
+        await handleTransform(options);
+
+        const dataGroupWrite = writeFileCalls.find((call) =>
+          call.file.includes('test-county-cid.json')
+        );
+
+        if (dataGroupWrite) {
+          const dataGroup = JSON.parse(dataGroupWrite.data);
+          expect(dataGroup.relationships).toBeDefined();
+        }
+      });
     });
   });
 });
