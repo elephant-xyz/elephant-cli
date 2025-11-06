@@ -64,7 +64,7 @@ describe('NEREntityExtractorService', () => {
     beforeEach(async () => {
       mockMoneyPipeline.mockResolvedValue([
         {
-          entity: 'B-QUANTITY',
+          entity: 'B-MONEY',
           word: '$',
           score: 0.95,
           index: 0,
@@ -72,7 +72,7 @@ describe('NEREntityExtractorService', () => {
           end: 1,
         },
         {
-          entity: 'I-QUANTITY',
+          entity: 'I-MONEY',
           word: '100',
           score: 0.95,
           index: 1,
@@ -259,7 +259,7 @@ describe('NEREntityExtractorService', () => {
     it('should remove duplicate entities', async () => {
       mockMoneyPipeline.mockResolvedValue([
         {
-          entity: 'B-QUANTITY',
+          entity: 'B-MONEY',
           word: '100',
           score: 0.95,
           index: 0,
@@ -267,7 +267,7 @@ describe('NEREntityExtractorService', () => {
           end: 3,
         },
         {
-          entity: 'B-QUANTITY',
+          entity: 'B-MONEY',
           word: '100',
           score: 0.95,
           index: 10,

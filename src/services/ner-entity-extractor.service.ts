@@ -95,7 +95,7 @@ function aggregateEntities(items: Token[]): RawEntity[] {
       continue;
     }
 
-    const isNumericType = type === 'QUANTITY' || type === 'CARDINAL';
+    const isNumericType = type === 'MONEY' || type === 'CARDINAL';
     const shouldIgnoreBeginning = (isNumericType && isContiguous) || isSubword;
     const shouldMerge =
       type === cur.type &&
@@ -185,7 +185,7 @@ function expandNumericEntities(
   return entities.map((entity) => {
     const { text, type } = entity;
 
-    if (type !== 'QUANTITY' && type !== 'CARDINAL') return entity;
+    if (type !== 'MONEY' && type !== 'CARDINAL') return entity;
 
     const isLikelyIncomplete = /^\d{1,4}$/.test(text.trim());
     if (!isLikelyIncomplete) return entity;
@@ -444,7 +444,7 @@ export class NEREntityExtractorService {
     const splitDates = splitConcatenatedDates(expandedEntities);
 
     const quantityAndCardinal = splitDates.filter(
-      (e) => e.type === 'QUANTITY' || e.type === 'CARDINAL'
+      (e) => e.type === 'MONEY' || e.type === 'CARDINAL'
     );
     const quantity = uniqByText(quantityAndCardinal);
 
