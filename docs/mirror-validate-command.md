@@ -1,8 +1,8 @@
-# Validate Completeness Command
+# Mirror Validate Command
 
 ## Overview
 
-The `validate-completeness` command validates the entity extraction completeness between raw data (from the `prepare` command) and transformed data (from the `transform` command). It uses Named Entity Recognition (NER) models to extract entities and compares them using various similarity metrics.
+The `mirror-validate` command validates the entity extraction completeness between raw data (from the `prepare` command) and transformed data (from the `transform` command). It uses Named Entity Recognition (NER) models to extract entities and compares them using various similarity metrics.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ The `validate-completeness` command validates the entity extraction completeness
 ### Basic Usage
 
 ```bash
-npx elephant-cli validate-completeness \
+npx elephant-cli mirror-validate \
   --prepare-zip path/to/prepare-output.zip \
   --transform-zip path/to/transform-output.zip
 ```
@@ -26,7 +26,7 @@ npx elephant-cli validate-completeness \
 ### With JSON Output
 
 ```bash
-npx elephant-cli validate-completeness \
+npx elephant-cli mirror-validate \
   --prepare-zip path/to/prepare-output.zip \
   --transform-zip path/to/transform-output.zip \
   --output completeness-report.json
@@ -110,7 +110,7 @@ The command is built on three core services:
 
 ## Entity Types
 
-### MONEY
+### QUANTITY
 - **Examples**: `100`, `50000`, `1234.56`
 - **Normalization**: Removes `$`, `€`, `£`, `¥` symbols, validates numeric format
 - **Filtering**: Excludes ranges (e.g., "100-200")
@@ -228,7 +228,7 @@ This gives more importance to:
 
 3. **Validate Completeness**
    ```bash
-   npx elephant-cli validate-completeness \
+   npx elephant-cli mirror-validate \
      --prepare-zip prepare-output.zip \
      --transform-zip transform-output.zip \
      --output report.json
@@ -263,19 +263,19 @@ The command prints a formatted report to the console with:
 ```json
 {
   "rawEntities": {
-    "MONEY": [{"value": "100", "confidence": 90.5}],
+    "QUANTITY": [{"value": "100", "confidence": 90.5}],
     "DATE": [{"value": "01/15/2024", "confidence": 88.2}],
     "ORGANIZATION": [{"value": "microsoft", "confidence": 92.1}],
     "LOCATION": [{"value": "seattle", "confidence": 85.3}]
   },
   "transformedEntities": {
-    "MONEY": [{"value": "100", "confidence": 93.2}],
+    "QUANTITY": [{"value": "100", "confidence": 93.2}],
     "DATE": [{"value": "01/15/2024", "confidence": 91.5}],
     "ORGANIZATION": [{"value": "microsoft", "confidence": 94.3}],
     "LOCATION": [{"value": "seattle", "confidence": 87.8}]
   },
   "comparison": {
-    "MONEY": {
+    "QUANTITY": {
       "cosineSimilarity": 0.952,
       "coverage": 1.0,
       "unmatchedFromA": [],
@@ -325,7 +325,7 @@ Run tests:
 npm test -- tests/services/ner-entity-extractor.service.test.ts
 npm test -- tests/services/entity-comparison.service.test.ts
 npm test -- tests/services/transform-data-aggregator.service.test.ts
-npm test -- tests/integration/validate-completeness.integration.test.ts
+npm test -- tests/integration/mirror-validate.integration.test.ts
 ```
 
 ## Troubleshooting

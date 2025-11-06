@@ -19,7 +19,7 @@ export interface EntityResult {
 }
 
 export interface ExtractedEntities {
-  MONEY: EntityResult[];
+  QUANTITY: EntityResult[];
   DATE: EntityResult[];
   ORGANIZATION: EntityResult[];
   LOCATION: EntityResult[];
@@ -95,7 +95,7 @@ function aggregateEntities(items: Token[]): RawEntity[] {
       continue;
     }
 
-    const isNumericType = type === 'MONEY' || type === 'CARDINAL';
+    const isNumericType = type === 'QUANTITY' || type === 'CARDINAL';
     const shouldIgnoreBeginning = (isNumericType && isContiguous) || isSubword;
     const shouldMerge =
       type === cur.type &&
@@ -185,7 +185,7 @@ function expandNumericEntities(
   return entities.map((entity) => {
     const { text, type } = entity;
 
-    if (type !== 'MONEY' && type !== 'CARDINAL') return entity;
+    if (type !== 'QUANTITY' && type !== 'CARDINAL') return entity;
 
     const isLikelyIncomplete = /^\d{1,4}$/.test(text.trim());
     if (!isLikelyIncomplete) return entity;
@@ -307,10 +307,10 @@ function normalizeDates(dateEntities: RawEntity[]): RawEntity[] {
   return result;
 }
 
-function normalizeMoney(moneyEntities: RawEntity[]): RawEntity[] {
+function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
   const result: RawEntity[] = [];
 
-  for (const entity of moneyEntities) {
+  for (const entity of quantityEntities) {
     const text = entity.text.trim();
 
     if (text.includes('-')) {
@@ -443,20 +443,20 @@ export class NEREntityExtractorService {
     const expandedEntities = expandNumericEntities(combinedEntities, text);
     const splitDates = splitConcatenatedDates(expandedEntities);
 
-    const moneyAndCardinal = splitDates.filter(
-      (e) => e.type === 'MONEY' || e.type === 'CARDINAL'
+    const quantityAndCardinal = splitDates.filter(
+      (e) => e.type === 'QUANTITY' || e.type === 'CARDINAL'
     );
-    const money = uniqByText(moneyAndCardinal);
+    const quantity = uniqByText(quantityAndCardinal);
 
     const dates = uniqByText(splitDates.filter((e) => e.type === 'DATE'));
     const orgs = uniqByText(splitDates.filter((e) => e.type === 'ORG'));
     const locations = uniqByText(splitDates.filter((e) => e.type === 'LOC'));
 
     const normalizedDates = normalizeDates(dates);
-    const normalizedMoney = normalizeMoney(money);
+    const normalizedQuantity = normalizeQuantity(quantity);
 
     return {
-      MONEY: normalizedMoney.map((e) => ({
+      QUANTITY: normalizedQuantity.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
       })),

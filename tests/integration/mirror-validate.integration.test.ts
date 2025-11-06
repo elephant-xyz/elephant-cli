@@ -20,7 +20,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-describe('Validate Completeness Integration Tests', () => {
+describe('Mirror Validate Integration Tests', () => {
   let extractor: NEREntityExtractorService;
   let comparisonService: EntityComparisonService;
   let aggregator: TransformDataAggregatorService;
@@ -34,10 +34,7 @@ describe('Validate Completeness Integration Tests', () => {
 
   describe('Property 15955960002', () => {
     it('should extract entities from HTML and JSON, then compare', async () => {
-      const fixturesDir = path.join(
-        __dirname,
-        '../fixtures/validate-completeness'
-      );
+      const fixturesDir = path.join(__dirname, '../fixtures/mirror-validate');
 
       // Read HTML file
       const htmlPath = path.join(fixturesDir, '15955960002.html');
@@ -62,7 +59,7 @@ describe('Validate Completeness Integration Tests', () => {
       console.log('Extracting entities from HTML...');
       const htmlEntities = await extractor.extractEntities(htmlText);
       console.log('HTML entities:', {
-        money: htmlEntities.MONEY.length,
+        quantity: htmlEntities.QUANTITY.length,
         date: htmlEntities.DATE.length,
         org: htmlEntities.ORGANIZATION.length,
         loc: htmlEntities.LOCATION.length,
@@ -72,7 +69,7 @@ describe('Validate Completeness Integration Tests', () => {
       console.log('Extracting entities from JSON...');
       const jsonEntities = await extractor.extractEntities(jsonText);
       console.log('JSON entities:', {
-        money: jsonEntities.MONEY.length,
+        quantity: jsonEntities.QUANTITY.length,
         date: jsonEntities.DATE.length,
         org: jsonEntities.ORGANIZATION.length,
         loc: jsonEntities.LOCATION.length,
@@ -80,13 +77,13 @@ describe('Validate Completeness Integration Tests', () => {
 
       // Both should have extracted some entities
       const totalHtmlEntities =
-        htmlEntities.MONEY.length +
+        htmlEntities.QUANTITY.length +
         htmlEntities.DATE.length +
         htmlEntities.ORGANIZATION.length +
         htmlEntities.LOCATION.length;
 
       const totalJsonEntities =
-        jsonEntities.MONEY.length +
+        jsonEntities.QUANTITY.length +
         jsonEntities.DATE.length +
         jsonEntities.ORGANIZATION.length +
         jsonEntities.LOCATION.length;
@@ -101,8 +98,8 @@ describe('Validate Completeness Integration Tests', () => {
       );
 
       console.log('Comparison results:', {
-        moneyCosineSim: comparison.MONEY.cosineSimilarity.toFixed(2),
-        moneyCoverage: (comparison.MONEY.coverage * 100).toFixed(1) + '%',
+        quantityCosineSim: comparison.QUANTITY.cosineSimilarity.toFixed(2),
+        quantityCoverage: (comparison.QUANTITY.coverage * 100).toFixed(1) + '%',
         dateCosineSim: comparison.DATE.cosineSimilarity.toFixed(2),
         dateCoverage: (comparison.DATE.coverage * 100).toFixed(1) + '%',
         orgCosineSim: comparison.ORGANIZATION.cosineSimilarity.toFixed(2),
@@ -114,10 +111,10 @@ describe('Validate Completeness Integration Tests', () => {
       });
 
       // Comparison should produce valid metrics
-      expect(comparison.MONEY.cosineSimilarity).toBeGreaterThanOrEqual(0);
-      expect(comparison.MONEY.cosineSimilarity).toBeLessThanOrEqual(1);
-      expect(comparison.MONEY.coverage).toBeGreaterThanOrEqual(0);
-      expect(comparison.MONEY.coverage).toBeLessThanOrEqual(1);
+      expect(comparison.QUANTITY.cosineSimilarity).toBeGreaterThanOrEqual(0);
+      expect(comparison.QUANTITY.cosineSimilarity).toBeLessThanOrEqual(1);
+      expect(comparison.QUANTITY.coverage).toBeGreaterThanOrEqual(0);
+      expect(comparison.QUANTITY.coverage).toBeLessThanOrEqual(1);
 
       expect(comparison.DATE.cosineSimilarity).toBeGreaterThanOrEqual(0);
       expect(comparison.DATE.cosineSimilarity).toBeLessThanOrEqual(1);
@@ -128,16 +125,16 @@ describe('Validate Completeness Integration Tests', () => {
       expect(comparison.globalCompleteness).toBeLessThanOrEqual(1);
 
       // Log sample entities for inspection
-      if (htmlEntities.MONEY.length > 0) {
+      if (htmlEntities.QUANTITY.length > 0) {
         console.log(
           'Sample HTML money entities:',
-          htmlEntities.MONEY.slice(0, 5)
+          htmlEntities.QUANTITY.slice(0, 5)
         );
       }
-      if (jsonEntities.MONEY.length > 0) {
+      if (jsonEntities.QUANTITY.length > 0) {
         console.log(
           'Sample JSON money entities:',
-          jsonEntities.MONEY.slice(0, 5)
+          jsonEntities.QUANTITY.slice(0, 5)
         );
       }
       if (htmlEntities.DATE.length > 0) {
@@ -157,10 +154,7 @@ describe('Validate Completeness Integration Tests', () => {
 
   describe('Property 82615002181', () => {
     it('should extract entities from HTML and JSON, then compare', async () => {
-      const fixturesDir = path.join(
-        __dirname,
-        '../fixtures/validate-completeness'
-      );
+      const fixturesDir = path.join(__dirname, '../fixtures/mirror-validate');
 
       // Read HTML file
       const htmlPath = path.join(fixturesDir, '82615002181.html');
@@ -185,7 +179,7 @@ describe('Validate Completeness Integration Tests', () => {
       console.log('Extracting entities from HTML...');
       const htmlEntities = await extractor.extractEntities(htmlText);
       console.log('HTML entities:', {
-        money: htmlEntities.MONEY.length,
+        quantity: htmlEntities.QUANTITY.length,
         date: htmlEntities.DATE.length,
         org: htmlEntities.ORGANIZATION.length,
         loc: htmlEntities.LOCATION.length,
@@ -195,7 +189,7 @@ describe('Validate Completeness Integration Tests', () => {
       console.log('Extracting entities from JSON...');
       const jsonEntities = await extractor.extractEntities(jsonText);
       console.log('JSON entities:', {
-        money: jsonEntities.MONEY.length,
+        quantity: jsonEntities.QUANTITY.length,
         date: jsonEntities.DATE.length,
         org: jsonEntities.ORGANIZATION.length,
         loc: jsonEntities.LOCATION.length,
@@ -203,13 +197,13 @@ describe('Validate Completeness Integration Tests', () => {
 
       // Both should have extracted some entities
       const totalHtmlEntities =
-        htmlEntities.MONEY.length +
+        htmlEntities.QUANTITY.length +
         htmlEntities.DATE.length +
         htmlEntities.ORGANIZATION.length +
         htmlEntities.LOCATION.length;
 
       const totalJsonEntities =
-        jsonEntities.MONEY.length +
+        jsonEntities.QUANTITY.length +
         jsonEntities.DATE.length +
         jsonEntities.ORGANIZATION.length +
         jsonEntities.LOCATION.length;
@@ -224,8 +218,8 @@ describe('Validate Completeness Integration Tests', () => {
       );
 
       console.log('Comparison results:', {
-        moneyCosineSim: comparison.MONEY.cosineSimilarity.toFixed(2),
-        moneyCoverage: (comparison.MONEY.coverage * 100).toFixed(1) + '%',
+        quantityCosineSim: comparison.QUANTITY.cosineSimilarity.toFixed(2),
+        quantityCoverage: (comparison.QUANTITY.coverage * 100).toFixed(1) + '%',
         dateCosineSim: comparison.DATE.cosineSimilarity.toFixed(2),
         dateCoverage: (comparison.DATE.coverage * 100).toFixed(1) + '%',
         orgCosineSim: comparison.ORGANIZATION.cosineSimilarity.toFixed(2),
@@ -237,10 +231,10 @@ describe('Validate Completeness Integration Tests', () => {
       });
 
       // Comparison should produce valid metrics
-      expect(comparison.MONEY.cosineSimilarity).toBeGreaterThanOrEqual(0);
-      expect(comparison.MONEY.cosineSimilarity).toBeLessThanOrEqual(1);
-      expect(comparison.MONEY.coverage).toBeGreaterThanOrEqual(0);
-      expect(comparison.MONEY.coverage).toBeLessThanOrEqual(1);
+      expect(comparison.QUANTITY.cosineSimilarity).toBeGreaterThanOrEqual(0);
+      expect(comparison.QUANTITY.cosineSimilarity).toBeLessThanOrEqual(1);
+      expect(comparison.QUANTITY.coverage).toBeGreaterThanOrEqual(0);
+      expect(comparison.QUANTITY.coverage).toBeLessThanOrEqual(1);
 
       expect(comparison.DATE.cosineSimilarity).toBeGreaterThanOrEqual(0);
       expect(comparison.DATE.cosineSimilarity).toBeLessThanOrEqual(1);
@@ -251,16 +245,16 @@ describe('Validate Completeness Integration Tests', () => {
       expect(comparison.globalCompleteness).toBeLessThanOrEqual(1);
 
       // Log sample entities for inspection
-      if (htmlEntities.MONEY.length > 0) {
+      if (htmlEntities.QUANTITY.length > 0) {
         console.log(
           'Sample HTML money entities:',
-          htmlEntities.MONEY.slice(0, 5)
+          htmlEntities.QUANTITY.slice(0, 5)
         );
       }
-      if (jsonEntities.MONEY.length > 0) {
+      if (jsonEntities.QUANTITY.length > 0) {
         console.log(
           'Sample JSON money entities:',
-          jsonEntities.MONEY.slice(0, 5)
+          jsonEntities.QUANTITY.slice(0, 5)
         );
       }
       if (htmlEntities.DATE.length > 0) {

@@ -22,7 +22,7 @@ export interface EntityTypeComparison {
 }
 
 export interface ComparisonResult {
-  MONEY: EntityTypeComparison;
+  QUANTITY: EntityTypeComparison;
   DATE: EntityTypeComparison;
   ORGANIZATION: EntityTypeComparison;
   LOCATION: EntityTypeComparison;
@@ -187,7 +187,7 @@ function cosineSimilarityFromMap(
 }
 
 export class EntityComparisonService {
-  compareMoney(
+  compareQuantity(
     entitiesA: EntityResult[],
     entitiesB: EntityResult[],
     tolerance = 0.01
@@ -363,7 +363,10 @@ export class EntityComparisonService {
     entitiesA: ExtractedEntities,
     entitiesB: ExtractedEntities
   ): ComparisonResult {
-    const moneyComparison = this.compareMoney(entitiesA.MONEY, entitiesB.MONEY);
+    const quantityComparison = this.compareQuantity(
+      entitiesA.QUANTITY,
+      entitiesB.QUANTITY
+    );
     const dateComparison = this.compareDate(entitiesA.DATE, entitiesB.DATE);
     const orgComparison = this.compareText(
       entitiesA.ORGANIZATION,
@@ -375,7 +378,7 @@ export class EntityComparisonService {
     );
 
     const categories = [
-      { comparison: moneyComparison, label: 'MONEY' },
+      { comparison: quantityComparison, label: 'QUANTITY' },
       { comparison: dateComparison, label: 'DATE' },
       { comparison: orgComparison, label: 'ORGANIZATION' },
       { comparison: locComparison, label: 'LOCATION' },
@@ -395,7 +398,7 @@ export class EntityComparisonService {
       totalWeight > 0 ? totalWeightedCoverage / totalWeight : 0;
 
     return {
-      MONEY: moneyComparison,
+      QUANTITY: quantityComparison,
       DATE: dateComparison,
       ORGANIZATION: orgComparison,
       LOCATION: locComparison,

@@ -64,7 +64,7 @@ describe('NEREntityExtractorService', () => {
     beforeEach(async () => {
       mockMoneyPipeline.mockResolvedValue([
         {
-          entity: 'B-MONEY',
+          entity: 'B-QUANTITY',
           word: '$',
           score: 0.95,
           index: 0,
@@ -72,7 +72,7 @@ describe('NEREntityExtractorService', () => {
           end: 1,
         },
         {
-          entity: 'I-MONEY',
+          entity: 'I-QUANTITY',
           word: '100',
           score: 0.95,
           index: 1,
@@ -146,9 +146,9 @@ describe('NEREntityExtractorService', () => {
 
       const result = await service.extractEntities('Test $100 and other data');
 
-      expect(result.MONEY).toHaveLength(1);
-      expect(result.MONEY[0].value).toBe('100');
-      expect(result.MONEY[0].confidence).toBeGreaterThan(0);
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('100');
+      expect(result.QUANTITY[0].confidence).toBeGreaterThan(0);
     });
 
     it('should extract and normalize date entities', async () => {
@@ -186,7 +186,7 @@ describe('NEREntityExtractorService', () => {
 
       const result = await service.extractEntities('');
 
-      expect(result.MONEY).toHaveLength(0);
+      expect(result.QUANTITY).toHaveLength(0);
       expect(result.DATE).toHaveLength(0);
       expect(result.ORGANIZATION).toHaveLength(0);
       expect(result.LOCATION).toHaveLength(0);
@@ -259,7 +259,7 @@ describe('NEREntityExtractorService', () => {
     it('should remove duplicate entities', async () => {
       mockMoneyPipeline.mockResolvedValue([
         {
-          entity: 'B-MONEY',
+          entity: 'B-QUANTITY',
           word: '100',
           score: 0.95,
           index: 0,
@@ -267,7 +267,7 @@ describe('NEREntityExtractorService', () => {
           end: 3,
         },
         {
-          entity: 'B-MONEY',
+          entity: 'B-QUANTITY',
           word: '100',
           score: 0.95,
           index: 10,
@@ -278,7 +278,7 @@ describe('NEREntityExtractorService', () => {
 
       const result = await service.extractEntities('100 and 100');
 
-      expect(result.MONEY).toHaveLength(1);
+      expect(result.QUANTITY).toHaveLength(1);
     });
 
     it('should expand incomplete numbers', async () => {
@@ -295,13 +295,13 @@ describe('NEREntityExtractorService', () => {
 
       const result = await service.extractEntities('1,234 dollars');
 
-      expect(result.MONEY.length).toBeGreaterThanOrEqual(0);
+      expect(result.QUANTITY.length).toBeGreaterThanOrEqual(0);
     });
 
     it('should filter money entities with dashes', async () => {
       mockMoneyPipeline.mockResolvedValue([
         {
-          entity: 'B-MONEY',
+          entity: 'B-QUANTITY',
           word: '100',
           score: 0.95,
           index: 0,
@@ -309,7 +309,7 @@ describe('NEREntityExtractorService', () => {
           end: 3,
         },
         {
-          entity: 'I-MONEY',
+          entity: 'I-QUANTITY',
           word: '-',
           score: 0.95,
           index: 1,
@@ -317,7 +317,7 @@ describe('NEREntityExtractorService', () => {
           end: 4,
         },
         {
-          entity: 'I-MONEY',
+          entity: 'I-QUANTITY',
           word: '200',
           score: 0.95,
           index: 2,
@@ -328,7 +328,7 @@ describe('NEREntityExtractorService', () => {
 
       const result = await service.extractEntities('100-200');
 
-      expect(result.MONEY).toHaveLength(0);
+      expect(result.QUANTITY).toHaveLength(0);
     });
 
     it('should convert organizations to lowercase', async () => {

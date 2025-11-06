@@ -12,7 +12,7 @@ describe('EntityComparisonService', () => {
     service = new EntityComparisonService();
   });
 
-  describe('compareMoney', () => {
+  describe('compareQuantity', () => {
     it('should calculate coverage for exact matches', () => {
       const entitiesA: EntityResult[] = [
         { value: '100', confidence: 90 },
@@ -23,7 +23,7 @@ describe('EntityComparisonService', () => {
         { value: '200', confidence: 88 },
       ];
 
-      const result = service.compareMoney(entitiesA, entitiesB);
+      const result = service.compareQuantity(entitiesA, entitiesB);
 
       expect(result.coverage).toBe(1.0);
       expect(result.unmatchedFromA).toHaveLength(0);
@@ -40,7 +40,7 @@ describe('EntityComparisonService', () => {
         { value: '200', confidence: 88 },
       ];
 
-      const result = service.compareMoney(entitiesA, entitiesB);
+      const result = service.compareQuantity(entitiesA, entitiesB);
 
       expect(result.coverage).toBeCloseTo(0.667, 2);
       expect(result.unmatchedFromA).toContain('300');
@@ -50,7 +50,7 @@ describe('EntityComparisonService', () => {
       const entitiesA: EntityResult[] = [{ value: '100.00', confidence: 90 }];
       const entitiesB: EntityResult[] = [{ value: '100.01', confidence: 92 }];
 
-      const result = service.compareMoney(entitiesA, entitiesB, 0.02);
+      const result = service.compareQuantity(entitiesA, entitiesB, 0.02);
 
       expect(result.coverage).toBe(1.0);
     });
@@ -65,14 +65,14 @@ describe('EntityComparisonService', () => {
         { value: '250', confidence: 88 },
       ];
 
-      const result = service.compareMoney(entitiesA, entitiesB);
+      const result = service.compareQuantity(entitiesA, entitiesB);
 
       expect(result.cosineSimilarity).toBeGreaterThanOrEqual(0);
       expect(result.cosineSimilarity).toBeLessThanOrEqual(1);
     });
 
     it('should handle empty lists', () => {
-      const result = service.compareMoney([], []);
+      const result = service.compareQuantity([], []);
 
       expect(result.coverage).toBe(0);
       expect(result.cosineSimilarity).toBe(0);
@@ -85,7 +85,7 @@ describe('EntityComparisonService', () => {
       ];
       const entitiesB: EntityResult[] = [{ value: '100', confidence: 95 }];
 
-      const result = service.compareMoney(entitiesA, entitiesB);
+      const result = service.compareQuantity(entitiesA, entitiesB);
 
       expect(result.statsA.count).toBe(2);
       expect(result.statsA.avgConfidence).toBe(85);
@@ -253,14 +253,14 @@ describe('EntityComparisonService', () => {
   describe('compareEntities', () => {
     it('should compare all entity types', () => {
       const entitiesA: ExtractedEntities = {
-        MONEY: [{ value: '100', confidence: 90 }],
+        QUANTITY: [{ value: '100', confidence: 90 }],
         DATE: [{ value: '01/15/2024', confidence: 85 }],
         ORGANIZATION: [{ value: 'microsoft', confidence: 92 }],
         LOCATION: [{ value: 'seattle', confidence: 88 }],
       };
 
       const entitiesB: ExtractedEntities = {
-        MONEY: [{ value: '100', confidence: 95 }],
+        QUANTITY: [{ value: '100', confidence: 95 }],
         DATE: [{ value: '01/15/2024', confidence: 90 }],
         ORGANIZATION: [{ value: 'microsoft', confidence: 94 }],
         LOCATION: [{ value: 'seattle', confidence: 91 }],
@@ -268,7 +268,7 @@ describe('EntityComparisonService', () => {
 
       const result = service.compareEntities(entitiesA, entitiesB);
 
-      expect(result.MONEY).toBeDefined();
+      expect(result.QUANTITY).toBeDefined();
       expect(result.DATE).toBeDefined();
       expect(result.ORGANIZATION).toBeDefined();
       expect(result.LOCATION).toBeDefined();
@@ -277,7 +277,7 @@ describe('EntityComparisonService', () => {
 
     it('should calculate global completeness score', () => {
       const entitiesA: ExtractedEntities = {
-        MONEY: [
+        QUANTITY: [
           { value: '100', confidence: 90 },
           { value: '200', confidence: 85 },
         ],
@@ -287,7 +287,7 @@ describe('EntityComparisonService', () => {
       };
 
       const entitiesB: ExtractedEntities = {
-        MONEY: [{ value: '100', confidence: 95 }],
+        QUANTITY: [{ value: '100', confidence: 95 }],
         DATE: [{ value: '01/15/2024', confidence: 90 }],
         ORGANIZATION: [{ value: 'microsoft', confidence: 94 }],
         LOCATION: [{ value: 'seattle', confidence: 91 }],
@@ -301,7 +301,7 @@ describe('EntityComparisonService', () => {
 
     it('should weight categories by count and confidence', () => {
       const highConfidenceA: ExtractedEntities = {
-        MONEY: [
+        QUANTITY: [
           { value: '100', confidence: 100 },
           { value: '200', confidence: 100 },
           { value: '300', confidence: 100 },
@@ -312,7 +312,7 @@ describe('EntityComparisonService', () => {
       };
 
       const highConfidenceB: ExtractedEntities = {
-        MONEY: [
+        QUANTITY: [
           { value: '100', confidence: 100 },
           { value: '200', confidence: 100 },
         ],
@@ -322,7 +322,7 @@ describe('EntityComparisonService', () => {
       };
 
       const lowConfidenceA: ExtractedEntities = {
-        MONEY: [
+        QUANTITY: [
           { value: '100', confidence: 50 },
           { value: '200', confidence: 50 },
           { value: '300', confidence: 50 },
@@ -333,7 +333,7 @@ describe('EntityComparisonService', () => {
       };
 
       const lowConfidenceB: ExtractedEntities = {
-        MONEY: [
+        QUANTITY: [
           { value: '100', confidence: 50 },
           { value: '200', confidence: 50 },
         ],
@@ -355,7 +355,7 @@ describe('EntityComparisonService', () => {
 
     it('should handle empty entity sets', () => {
       const emptyEntities: ExtractedEntities = {
-        MONEY: [],
+        QUANTITY: [],
         DATE: [],
         ORGANIZATION: [],
         LOCATION: [],

@@ -10,7 +10,7 @@ import { TransformDataAggregatorService } from '../../services/transform-data-ag
 import { cleanHtml } from '../../lib/common.js';
 import type { ComparisonResult } from '../../services/entity-comparison.service.js';
 
-interface ValidateCompletenessOptions {
+interface MirrorValidateOptions {
   prepareZip: string;
   transformZip: string;
   output?: string;
@@ -62,12 +62,10 @@ async function extractSourceData(prepareDir: string): Promise<string> {
   }
 }
 
-async function validateCompleteness(
-  options: ValidateCompletenessOptions
-): Promise<void> {
+async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
   const { prepareZip, transformZip, output } = options;
 
-  console.log(chalk.blue('\n=== Entity Completeness Validation ===\n'));
+  console.log(chalk.blue('\n=== Mirror Validation ===\n'));
 
   let prepareTempDir: string | null = null;
   let transformTempDir: string | null = null;
@@ -109,7 +107,7 @@ async function validateCompleteness(
 
     console.log(
       chalk.green(
-        `    ✓ Extracted ${rawEntities.MONEY.length} money, ${rawEntities.DATE.length} dates, ` +
+        `    ✓ Extracted ${rawEntities.QUANTITY.length} quantities, ${rawEntities.DATE.length} dates, ` +
           `${rawEntities.ORGANIZATION.length} orgs, ${rawEntities.LOCATION.length} locations`
       )
     );
@@ -131,7 +129,7 @@ async function validateCompleteness(
 
     console.log(
       chalk.green(
-        `    ✓ Extracted ${transformedEntities.MONEY.length} money, ${transformedEntities.DATE.length} dates, ` +
+        `    ✓ Extracted ${transformedEntities.QUANTITY.length} quantities, ${transformedEntities.DATE.length} dates, ` +
           `${transformedEntities.ORGANIZATION.length} orgs, ${transformedEntities.LOCATION.length} locations`
       )
     );
@@ -154,13 +152,13 @@ async function validateCompleteness(
         summary: {
           globalCompleteness: comparison.globalCompleteness,
           rawStats: {
-            money: rawEntities.MONEY.length,
+            quantity: rawEntities.QUANTITY.length,
             date: rawEntities.DATE.length,
             organization: rawEntities.ORGANIZATION.length,
             location: rawEntities.LOCATION.length,
           },
           transformedStats: {
-            money: transformedEntities.MONEY.length,
+            quantity: transformedEntities.QUANTITY.length,
             date: transformedEntities.DATE.length,
             organization: transformedEntities.ORGANIZATION.length,
             location: transformedEntities.LOCATION.length,
@@ -190,7 +188,7 @@ function printComparisonReport(comparison: ComparisonResult): void {
   console.log('='.repeat(70));
 
   const categories = [
-    { key: 'MONEY', label: '💵 Money', data: comparison.MONEY },
+    { key: 'QUANTITY', label: '💵 Quantity', data: comparison.QUANTITY },
     { key: 'DATE', label: '📅 Date', data: comparison.DATE },
     {
       key: 'ORGANIZATION',
@@ -256,11 +254,11 @@ function printComparisonReport(comparison: ComparisonResult): void {
   console.log('='.repeat(70) + '\n');
 }
 
-export function registerValidateCompletenessCommand(program: Command): void {
+export function registerMirrorValidateCommand(program: Command): void {
   program
-    .command('validate-completeness')
+    .command('mirror-validate')
     .description(
-      'Validate entity completeness between raw and transformed data'
+      'Validate entity completeness between raw and transformed data using mirror validation'
     )
     .requiredOption(
       '--prepare-zip <path>',
@@ -276,7 +274,7 @@ export function registerValidateCompletenessCommand(program: Command): void {
     )
     .action(async (options) => {
       try {
-        await validateCompleteness(options);
+        await mirrorValidate(options);
       } catch (error) {
         console.error(
           chalk.red('\n❌ Error:'),
