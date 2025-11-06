@@ -7,6 +7,7 @@ import { NEREntityExtractorService } from '../../src/services/ner-entity-extract
 import { EntityComparisonService } from '../../src/services/entity-comparison.service.js';
 import { TransformDataAggregatorService } from '../../src/services/transform-data-aggregator.service.js';
 import { cleanHtml } from '../../src/lib/common.js';
+import { removeStaticParts } from '../../src/utils/static-parts-filter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -270,5 +271,56 @@ describe('Mirror Validate Integration Tests', () => {
         );
       }
     }, 60000); // 1 minute timeout for extraction
+  });
+
+  describe('Static Parts Filtering', () => {
+    it('should reduce entity count when filtering static parts', async () => {
+      const html = `
+        <html>
+          <body>
+            <header id="static-header">
+              <nav>
+                <div>The listing price is $100,000 and the property tax is $2,500 annually.</div>
+                <div>This website was last updated on 01/01/2024 at 3:00 PM.</div>
+                <div>Contact us at Seattle office for more information.</div>
+              </nav>
+            </header>
+            <main>
+              <div>The property is valued at $250,000 based on recent appraisal.</div>
+              <div>The sale was completed on 03/15/2024 with the closing on 03/20/2024.</div>
+              <div>Located in downtown Seattle near Microsoft headquarters.</div>
+            </main>
+          </body>
+        </html>
+      `;
+
+      const cleanedHtml = await cleanHtml(html);
+      const textWithoutFilter = stripHtml(cleanedHtml);
+
+      const filteredHtml = removeStaticParts(cleanedHtml, ['#static-header']);
+      const textWithFilter = stripHtml(filteredHtml);
+
+      const entitiesWithoutFilter =
+        await extractor.extractEntities(textWithoutFilter);
+      const entitiesWithFilter =
+        await extractor.extractEntities(textWithFilter);
+
+      // With filter, we should have fewer entities (header content removed)
+      const totalWithoutFilter =
+        entitiesWithoutFilter.QUANTITY.length +
+        entitiesWithoutFilter.DATE.length +
+        entitiesWithoutFilter.ORGANIZATION.length +
+        entitiesWithoutFilter.LOCATION.length;
+      const totalWithFilter =
+        entitiesWithFilter.QUANTITY.length +
+        entitiesWithFilter.DATE.length +
+        entitiesWithFilter.ORGANIZATION.length +
+        entitiesWithFilter.LOCATION.length;
+
+      expect(totalWithFilter).toBeLessThan(totalWithoutFilter);
+
+      // Verify main content entities are still present
+      expect(totalWithFilter).toBeGreaterThan(0);
+    });
   });
 });
