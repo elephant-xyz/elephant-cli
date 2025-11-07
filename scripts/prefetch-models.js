@@ -14,6 +14,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Get package root directory (scripts/ is one level below package root)
+const packageRoot = path.resolve(__dirname, '..');
+
 // Check if we should skip prefetch
 if (process.env.NO_PREFETCH === '1') {
   console.log('[INFO] Skipping model prefetch (NO_PREFETCH=1)');
@@ -26,8 +29,8 @@ const MODELS = {
   PERSON_ORG_LOCATION: process.env.MODEL_PER_ORG_LOC || 'Xenova/bert-base-NER-uncased',
 };
 
-// Set cache directory
-const cacheDir = process.env.TRANSFORMERSJS_CACHE_DIR || path.join(process.cwd(), '.cache', 'transformers');
+// Set cache directory - always use package directory, not cwd
+const cacheDir = process.env.TRANSFORMERSJS_CACHE_DIR || path.join(packageRoot, '.cache', 'transformers');
 env.cacheDir = cacheDir;
 env.allowRemoteModels = true;
 

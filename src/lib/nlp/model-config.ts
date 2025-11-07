@@ -1,4 +1,5 @@
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 export const NER_MODELS = {
   MONEY_DATE: {
@@ -11,10 +12,20 @@ export const NER_MODELS = {
   },
 } as const;
 
+function getPackageRoot(): string {
+  const currentFileUrl = import.meta.url;
+  const currentFilePath = fileURLToPath(currentFileUrl);
+  const currentDir = path.dirname(currentFilePath);
+
+  // From dist/lib/nlp/model-config.js, go up 3 levels to package root
+  // dist/lib/nlp -> dist/lib -> dist -> package-root
+  return path.resolve(currentDir, '..', '..', '..');
+}
+
 export function getModelCacheDir(): string {
   const cacheDir =
     process.env.TRANSFORMERSJS_CACHE_DIR ||
-    path.join(process.cwd(), '.cache', 'transformers');
+    path.join(getPackageRoot(), '.cache', 'transformers');
   return cacheDir;
 }
 
