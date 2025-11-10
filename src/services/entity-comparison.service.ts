@@ -27,6 +27,7 @@ export interface ComparisonResult {
   ORGANIZATION: EntityTypeComparison;
   LOCATION: EntityTypeComparison;
   globalCompleteness: number;
+  globalCosineSimilarity: number;
 }
 
 function jaroWinkler(s1: string, s2: string): number {
@@ -101,31 +102,49 @@ function cosineSimilarityFromHistogram(
 }
 
 function buildLogHistogram(
-  values: number[],
+  entities: EntityResult[],
   numBins = 20
 ): Map<number, number> {
-  if (values.length === 0) return new Map();
+  if (entities.length === 0) return new Map();
 
+  const hist = new Map<number, number>();
+  let confSum = 0;
+
+  const values = entities.map((e) => parseFloat(e.value));
   const logVals = values.map((v) => Math.log10(Math.max(v, 1)));
   const minLog = Math.min(...logVals);
   const maxLog = Math.max(...logVals);
   const binWidth = maxLog > minLog ? (maxLog - minLog) / numBins : 1;
 
-  const hist = new Map<number, number>();
+  for (let i = 0; i < entities.length; i++) {
+    const conf = entities[i].confidence / 100; // Convert percentage to decimal
+    if (conf <= 0) continue;
 
-  for (const lv of logVals) {
+    const lv = logVals[i];
     const bin = Math.floor((lv - minLog) / binWidth);
-    hist.set(bin, (hist.get(bin) || 0) + 1);
+    hist.set(bin, (hist.get(bin) || 0) + conf);
+    confSum += conf;
+  }
+
+  // Normalize by total confidence
+  if (confSum > 0) {
+    for (const [bin, count] of hist.entries()) {
+      hist.set(bin, count / confSum);
+    }
   }
 
   return hist;
 }
 
-function buildDateFeatureVector(dates: string[]): Map<string, number> {
+function buildDateFeatureVector(entities: EntityResult[]): Map<string, number> {
   const features = new Map<string, number>();
+  let confSum = 0;
 
-  for (const dateStr of dates) {
-    const parsed = dayjs(dateStr, 'MM/DD/YYYY', true);
+  for (const entity of entities) {
+    const conf = entity.confidence / 100; // Convert percentage to decimal
+    if (conf <= 0) continue;
+
+    const parsed = dayjs(entity.value, 'MM/DD/YYYY', true);
     if (!parsed.isValid()) continue;
 
     const year = parsed.year();
@@ -133,32 +152,60 @@ function buildDateFeatureVector(dates: string[]): Map<string, number> {
     const day = parsed.date();
 
     const yearKey = `year_${year}`;
-    features.set(yearKey, (features.get(yearKey) || 0) + 1);
+    features.set(yearKey, (features.get(yearKey) || 0) + conf);
 
     const monthSin = Math.sin((2 * Math.PI * month) / 12);
     const monthCos = Math.cos((2 * Math.PI * month) / 12);
-    features.set('month_sin', (features.get('month_sin') || 0) + monthSin);
-    features.set('month_cos', (features.get('month_cos') || 0) + monthCos);
+    features.set(
+      'month_sin',
+      (features.get('month_sin') || 0) + monthSin * conf
+    );
+    features.set(
+      'month_cos',
+      (features.get('month_cos') || 0) + monthCos * conf
+    );
 
     const daySin = Math.sin((2 * Math.PI * day) / 31);
     const dayCos = Math.cos((2 * Math.PI * day) / 31);
-    features.set('day_sin', (features.get('day_sin') || 0) + daySin);
-    features.set('day_cos', (features.get('day_cos') || 0) + dayCos);
+    features.set('day_sin', (features.get('day_sin') || 0) + daySin * conf);
+    features.set('day_cos', (features.get('day_cos') || 0) + dayCos * conf);
+
+    confSum += conf;
+  }
+
+  // Normalize by total confidence
+  if (confSum > 0) {
+    for (const [key, value] of features.entries()) {
+      features.set(key, value / confSum);
+    }
   }
 
   return features;
 }
 
-function buildBagOfTokens(texts: string[]): Map<string, number> {
+function buildBagOfTokens(entities: EntityResult[]): Map<string, number> {
   const bag = new Map<string, number>();
+  let confSum = 0;
 
-  for (const text of texts) {
-    const tokens = text
+  for (const entity of entities) {
+    const conf = entity.confidence / 100; // Convert percentage to decimal
+    if (conf <= 0) continue;
+
+    const tokens = entity.value
       .toLowerCase()
       .split(/\s+/)
       .filter((t) => t.length > 0);
+
     for (const token of tokens) {
-      bag.set(token, (bag.get(token) || 0) + 1);
+      bag.set(token, (bag.get(token) || 0) + conf);
+    }
+    confSum += conf;
+  }
+
+  // Normalize by total confidence
+  if (confSum > 0) {
+    for (const [token, count] of bag.entries()) {
+      bag.set(token, count / confSum);
     }
   }
 
@@ -192,12 +239,11 @@ export class EntityComparisonService {
     entitiesB: EntityResult[],
     tolerance = 0.01
   ): EntityTypeComparison {
-    const valuesA = entitiesA.map((e) => parseFloat(e.value));
-    const valuesB = entitiesB.map((e) => parseFloat(e.value));
-
-    const histA = buildLogHistogram(valuesA);
-    const histB = buildLogHistogram(valuesB);
+    const histA = buildLogHistogram(entitiesA);
+    const histB = buildLogHistogram(entitiesB);
     const cosineSimilarity = cosineSimilarityFromHistogram(histA, histB);
+
+    const valuesB = entitiesB.map((e) => parseFloat(e.value));
 
     const matched: string[] = [];
     const unmatched: string[] = [];
@@ -246,13 +292,11 @@ export class EntityComparisonService {
     entitiesB: EntityResult[],
     dayTolerance = 0
   ): EntityTypeComparison {
-    const datesA = entitiesA.map((e) => e.value);
-    const datesB = entitiesB.map((e) => e.value);
-
-    const featuresA = buildDateFeatureVector(datesA);
-    const featuresB = buildDateFeatureVector(datesB);
+    const featuresA = buildDateFeatureVector(entitiesA);
+    const featuresB = buildDateFeatureVector(entitiesB);
     const cosineSimilarity = cosineSimilarityFromMap(featuresA, featuresB);
 
+    const datesB = entitiesB.map((e) => e.value);
     const parsedB = datesB
       .map((d) => dayjs(d, 'MM/DD/YYYY', true))
       .filter((d) => d.isValid());
@@ -310,11 +354,8 @@ export class EntityComparisonService {
     entitiesB: EntityResult[],
     similarityThreshold = 0.88
   ): EntityTypeComparison {
-    const textsA = entitiesA.map((e) => e.value);
-    const textsB = entitiesB.map((e) => e.value);
-
-    const bagA = buildBagOfTokens(textsA);
-    const bagB = buildBagOfTokens(textsB);
+    const bagA = buildBagOfTokens(entitiesA);
+    const bagB = buildBagOfTokens(entitiesB);
     const cosineSimilarity = cosineSimilarityFromMap(bagA, bagB);
 
     const matched: string[] = [];
@@ -385,17 +426,33 @@ export class EntityComparisonService {
     ];
 
     let totalWeightedCoverage = 0;
-    let totalWeight = 0;
+    let totalWeightForCoverage = 0;
+    let totalWeightedCosineSimilarity = 0;
+    let totalCountForCosine = 0;
 
     for (const cat of categories) {
-      const weight =
+      // Weight for coverage: count × confidence
+      const weightForCoverage =
         cat.comparison.statsA.count * cat.comparison.statsA.avgConfidence;
-      totalWeightedCoverage += cat.comparison.coverage * weight;
-      totalWeight += weight;
+      totalWeightedCoverage += cat.comparison.coverage * weightForCoverage;
+      totalWeightForCoverage += weightForCoverage;
+
+      // Weight for cosine similarity: count only (confidence already in cosine)
+      const countWeight = cat.comparison.statsA.count;
+      totalWeightedCosineSimilarity +=
+        cat.comparison.cosineSimilarity * countWeight;
+      totalCountForCosine += countWeight;
     }
 
     const globalCompleteness =
-      totalWeight > 0 ? totalWeightedCoverage / totalWeight : 0;
+      totalWeightForCoverage > 0
+        ? totalWeightedCoverage / totalWeightForCoverage
+        : 0;
+
+    const globalCosineSimilarity =
+      totalCountForCosine > 0
+        ? totalWeightedCosineSimilarity / totalCountForCosine
+        : 0;
 
     return {
       QUANTITY: quantityComparison,
@@ -403,6 +460,7 @@ export class EntityComparisonService {
       ORGANIZATION: orgComparison,
       LOCATION: locComparison,
       globalCompleteness,
+      globalCosineSimilarity,
     };
   }
 }

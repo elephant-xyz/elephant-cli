@@ -188,6 +188,7 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
         comparison,
         summary: {
           globalCompleteness: comparison.globalCompleteness,
+          globalCosineSimilarity: comparison.globalCosineSimilarity,
           rawStats: {
             quantity: rawEntities.QUANTITY.length,
             date: rawEntities.DATE.length,
@@ -284,9 +285,22 @@ function printComparisonReport(comparison: ComparisonResult): void {
         ? chalk.yellow
         : chalk.red;
 
+  const similarityColor =
+    comparison.globalCosineSimilarity >= 0.9
+      ? chalk.green
+      : comparison.globalCosineSimilarity >= 0.7
+        ? chalk.yellow
+        : chalk.red;
+
   console.log(
     chalk.bold('\n🎯 Global Completeness Score: ') +
       completenessColor(`${(comparison.globalCompleteness * 100).toFixed(1)}%`)
+  );
+  console.log(
+    chalk.bold('📊 Global Cosine Similarity: ') +
+      similarityColor(
+        `${(comparison.globalCosineSimilarity * 100).toFixed(1)}%`
+      )
   );
   console.log('='.repeat(70) + '\n');
 }
