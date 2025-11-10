@@ -1,4 +1,6 @@
 import path from 'path';
+import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
 import {
   handleTransform,
   TransformCommandOptions,
@@ -17,6 +19,17 @@ import {
   handleGenerateTransform,
   type GenerateTransformCommandOptions,
 } from '../commands/generate-transform/index.js';
+import { NEREntityExtractorService } from '../services/ner-entity-extractor.service.js';
+import { EntityComparisonService } from '../services/entity-comparison.service.js';
+import { TransformDataAggregatorService } from '../services/transform-data-aggregator.service.js';
+import { cleanHtml } from './common.js';
+import { extractZipToTemp } from '../utils/zip.js';
+import {
+  parseStaticPartsCsv,
+  removeStaticParts,
+} from '../utils/static-parts-filter.js';
+import type { ExtractedEntities } from '../services/ner-entity-extractor.service.js';
+import type { ComparisonResult } from '../services/entity-comparison.service.js';
 
 // Generate-transform function interface
 export type GenerateTransformOptions = Omit<
@@ -375,5 +388,208 @@ export async function submitToContract(
       totalItemsSubmitted: 0,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+// Mirror-validate function interface
+export interface MirrorValidateOptions {
+  prepareZip: string;
+  transformZip: string;
+  staticParts?: string;
+  cwd?: string;
+}
+
+export interface MirrorValidateResult {
+  success: boolean;
+  rawEntities: ExtractedEntities;
+  transformedEntities: ExtractedEntities;
+  comparison: ComparisonResult;
+  globalCompleteness: number;
+  globalCosineSimilarity: number;
+  error?: string;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function extractSourceData(
+  prepareDir: string,
+  staticSelectors: string[] = []
+): Promise<string> {
+  const files = await fs.readdir(prepareDir, { withFileTypes: true });
+  const fileNames = files.filter((f) => f.isFile()).map((f) => f.name);
+
+  const htmlFile =
+    fileNames.find((f) => /\.html?$/i.test(f)) ||
+    fileNames.find(
+      (f) =>
+        /\.json$/i.test(f) &&
+        f !== 'address.json' &&
+        f !== 'parcel.json' &&
+        f !== 'unnormalized_address.json' &&
+        f !== 'property_seed.json'
+    );
+
+  if (!htmlFile) {
+    throw new Error('No source HTML or JSON file found in prepare output');
+  }
+
+  const filePath = path.join(prepareDir, htmlFile);
+  const rawContent = await fs.readFile(filePath, 'utf-8');
+
+  if (/\.html?$/i.test(htmlFile)) {
+    let cleaned = await cleanHtml(rawContent);
+
+    if (staticSelectors.length > 0) {
+      cleaned = removeStaticParts(cleaned, staticSelectors);
+    }
+
+    return stripHtml(cleaned);
+  }
+
+  try {
+    const json = JSON.parse(rawContent);
+    const aggregator = new TransformDataAggregatorService();
+    const parts = aggregator.jsonToText(json);
+    return parts.join('. ').replace(/\.\./g, '.').replace(/\s+/g, ' ').trim();
+  } catch {
+    return stripHtml(rawContent);
+  }
+}
+
+// Mirror-validate function wrapper
+export async function mirrorValidate(
+  options: MirrorValidateOptions
+): Promise<MirrorValidateResult> {
+  let prepareTempDir: string | null = null;
+  let transformTempDir: string | null = null;
+
+  try {
+    // Parse static parts CSV if provided
+    let staticSelectors: string[] = [];
+    if (options.staticParts) {
+      staticSelectors = await parseStaticPartsCsv(options.staticParts);
+    }
+
+    // Extract prepare output
+    const prepareTempRoot = await fs.mkdtemp(
+      path.join(tmpdir(), 'elephant-validate-prepare-')
+    );
+    prepareTempDir = prepareTempRoot;
+    await extractZipToTemp(options.prepareZip, prepareTempRoot);
+
+    // Extract transform output
+    const transformTempRoot = await fs.mkdtemp(
+      path.join(tmpdir(), 'elephant-validate-transform-')
+    );
+    transformTempDir = transformTempRoot;
+    await extractZipToTemp(options.transformZip, transformTempRoot);
+
+    const transformDataDir = path.join(transformTempRoot, 'data');
+    const transformDataDirExists = await fs
+      .stat(transformDataDir)
+      .then((s) => s.isDirectory())
+      .catch(() => false);
+
+    const transformDir = transformDataDirExists
+      ? transformDataDir
+      : transformTempRoot;
+
+    // Extract entities from raw data
+    const rawText = await extractSourceData(prepareTempRoot, staticSelectors);
+
+    const extractor = new NEREntityExtractorService();
+    await extractor.initialize();
+
+    const rawEntities = await extractor.extractEntities(rawText);
+
+    // Extract entities from transformed data
+    const aggregator = new TransformDataAggregatorService();
+    const aggregatedData =
+      await aggregator.aggregateTransformOutput(transformDir);
+    const transformedText =
+      aggregator.convertAggregatedDataToText(aggregatedData);
+
+    const transformedEntities =
+      await extractor.extractEntities(transformedText);
+
+    // Compare entities
+    const comparisonService = new EntityComparisonService();
+    const comparison = comparisonService.compareEntities(
+      rawEntities,
+      transformedEntities
+    );
+
+    return {
+      success: true,
+      rawEntities,
+      transformedEntities,
+      comparison,
+      globalCompleteness: comparison.globalCompleteness,
+      globalCosineSimilarity: comparison.globalCosineSimilarity,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      rawEntities: { QUANTITY: [], DATE: [], ORGANIZATION: [], LOCATION: [] },
+      transformedEntities: {
+        QUANTITY: [],
+        DATE: [],
+        ORGANIZATION: [],
+        LOCATION: [],
+      },
+      comparison: {
+        QUANTITY: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        DATE: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        ORGANIZATION: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        LOCATION: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        globalCompleteness: 0,
+        globalCosineSimilarity: 0,
+      },
+      globalCompleteness: 0,
+      globalCosineSimilarity: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (prepareTempDir) {
+      await fs
+        .rm(prepareTempDir, { recursive: true, force: true })
+        .catch(() => {});
+    }
+    if (transformTempDir) {
+      await fs
+        .rm(transformTempDir, { recursive: true, force: true })
+        .catch(() => {});
+    }
   }
 }
