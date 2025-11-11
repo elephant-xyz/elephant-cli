@@ -446,7 +446,7 @@ export class NEREntityExtractorService {
     const quantityAndCardinal = splitDates.filter(
       (e) => e.type === 'MONEY' || e.type === 'CARDINAL'
     );
-    const quantity = uniqByText(quantityAndCardinal);
+    const quantity = quantityAndCardinal;
 
     const dates = uniqByText(splitDates.filter((e) => e.type === 'DATE'));
     const orgs = uniqByText(splitDates.filter((e) => e.type === 'ORG'));
