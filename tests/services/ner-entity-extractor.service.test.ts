@@ -284,7 +284,7 @@ describe('NEREntityExtractorService', () => {
       expect(result.DATE.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should keep duplicate numeric values (not deduplicated)', async () => {
+    it('should deduplicate identical numeric values after normalization', async () => {
       // Create a fresh service instance to avoid beforeEach pollution
       const freshService = new NEREntityExtractorService();
       const freshMockMoney = vi.fn();
@@ -321,13 +321,9 @@ describe('NEREntityExtractorService', () => {
       await freshService.initialize();
       const result = await freshService.extractEntities('100 and 100');
 
-      // We expect at least 2 entities (the two "100" values should not be deduplicated)
-      // Note: The actual count may be higher due to text chunking or other processing
-      expect(result.QUANTITY.length).toBeGreaterThanOrEqual(2);
-      // Verify both "100" values are present
-      const values = result.QUANTITY.map((e) => e.value);
-      const count100 = values.filter((v) => v === '100').length;
-      expect(count100).toBeGreaterThanOrEqual(2);
+      // After normalization, duplicate "100" values should be deduplicated to one entry
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('100');
     });
 
     it('should NOT remove different numeric values even if one is substring of another', async () => {
@@ -376,6 +372,240 @@ describe('NEREntityExtractorService', () => {
       const count8500 = values.filter((v) => v === '8500').length;
       expect(count85000).toBeGreaterThanOrEqual(1);
       expect(count8500).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should normalize numeric values: "0000" becomes "0"', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '0000',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 4,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('0000');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('0');
+    });
+
+    it('should normalize numeric values: "25" stays "25"', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '25',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 2,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('25');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('25');
+    });
+
+    it('should normalize numeric values: "8.29" preserves decimals', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '8.29',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 4,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('8.29');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('8.29');
+    });
+
+    it('should deduplicate equivalent numeric values: "25", "25.0", "25.00"', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '25',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 2,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '25.0',
+          score: 0.95,
+          index: 10,
+          start: 10,
+          end: 14,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '25.00',
+          score: 0.95,
+          index: 20,
+          start: 20,
+          end: 25,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities(
+        '25 and 25.0 and 25.00'
+      );
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('25');
+    });
+
+    it('should deduplicate equivalent numeric values: "0", "0.0", "0000"', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '0',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 1,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '0.0',
+          score: 0.95,
+          index: 10,
+          start: 10,
+          end: 13,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '0000',
+          score: 0.95,
+          index: 20,
+          start: 20,
+          end: 24,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('0 and 0.0 and 0000');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('0');
+    });
+
+    it('should handle currency symbols during normalization', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$100',
+          score: 0.95,
+          index: 0,
+          start: 0,
+          end: 4,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '$100.00',
+          score: 0.95,
+          index: 10,
+          start: 10,
+          end: 17,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('$100 and $100.00');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('100');
     });
 
     it('should expand incomplete numbers', async () => {

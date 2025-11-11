@@ -307,8 +307,20 @@ function normalizeDates(dateEntities: RawEntity[]): RawEntity[] {
   return result;
 }
 
+function normalizeNumericValue(value: string): string | null {
+  const cleaned = value.replace(/[$€£¥,]/g, '').trim();
+  const num = parseFloat(cleaned);
+
+  if (isNaN(num) || !isFinite(num)) {
+    return null;
+  }
+
+  return num.toString();
+}
+
 function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
   const result: RawEntity[] = [];
+  const seen = new Set<string>();
 
   for (const entity of quantityEntities) {
     const text = entity.text.trim();
@@ -321,23 +333,29 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
 
     if (parts.length > 1) {
       for (const part of parts) {
-        const cleaned = part.replace(/[$€£¥,]/g, '');
+        const normalized = normalizeNumericValue(part);
 
-        if (/^\d+(?:\.\d+)?$/.test(cleaned)) {
-          result.push({
-            ...entity,
-            text: cleaned,
-          });
+        if (normalized !== null) {
+          if (!seen.has(normalized)) {
+            seen.add(normalized);
+            result.push({
+              ...entity,
+              text: normalized,
+            });
+          }
         }
       }
     } else {
-      const cleaned = text.replace(/[$€£¥,]/g, '');
+      const normalized = normalizeNumericValue(text);
 
-      if (/^\d+(?:\.\d+)?$/.test(cleaned)) {
-        result.push({
-          ...entity,
-          text: cleaned,
-        });
+      if (normalized !== null) {
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          result.push({
+            ...entity,
+            text: normalized,
+          });
+        }
       }
     }
   }
