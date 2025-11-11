@@ -587,18 +587,18 @@ describe('createCountyDataGroup', () => {
       const relationshipFiles = ['relationship_parcel_geometry.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.parcel_has_geometry).toEqual({
-        '/': './relationship_parcel_geometry.json',
-      });
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './relationship_parcel_geometry.json' },
+      ]);
     });
 
     it('should include parcel_has_geometry when file contains parcel and geometry (but not property)', () => {
       const relationshipFiles = ['relationship_parcel_geometry.json'];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.parcel_has_geometry).toEqual({
-        '/': './relationship_parcel_geometry.json',
-      });
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './relationship_parcel_geometry.json' },
+      ]);
     });
 
     it('should NOT include parcel_has_geometry when file contains property_geometry', () => {
@@ -675,9 +675,9 @@ describe('createCountyDataGroup', () => {
       ];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.parcel_has_geometry).toEqual({
-        '/': './Relationship_Parcel_Geometry.json',
-      });
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './Relationship_Parcel_Geometry.json' },
+      ]);
       expect(result.relationships.address_has_geometry).toEqual({
         '/': './RELATIONSHIP_ADDRESS_GEOMETRY.json',
       });
@@ -696,7 +696,7 @@ describe('createCountyDataGroup', () => {
       expect(result.relationships.layout_has_geometry).toHaveLength(1);
     });
 
-    it('should return parcel_has_geometry and address_has_geometry as single objects, not arrays', () => {
+    it('should return parcel_has_geometry as an array and address_has_geometry as a single object', () => {
       const relationshipFiles = [
         'relationship_parcel_geometry.json',
         'relationship_address_geometry.json',
@@ -704,14 +704,14 @@ describe('createCountyDataGroup', () => {
       const result = createCountyDataGroup(relationshipFiles);
 
       expect(Array.isArray(result.relationships.parcel_has_geometry)).toBe(
-        false
+        true
       );
       expect(Array.isArray(result.relationships.address_has_geometry)).toBe(
         false
       );
-      expect(result.relationships.parcel_has_geometry).toEqual({
-        '/': './relationship_parcel_geometry.json',
-      });
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './relationship_parcel_geometry.json' },
+      ]);
       expect(result.relationships.address_has_geometry).toEqual({
         '/': './relationship_address_geometry.json',
       });
@@ -726,9 +726,9 @@ describe('createCountyDataGroup', () => {
       ];
       const result = createCountyDataGroup(relationshipFiles);
 
-      expect(result.relationships.parcel_has_geometry).toEqual({
-        '/': './relationship_parcel_geometry.json',
-      });
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './relationship_parcel_geometry.json' },
+      ]);
       expect(result.relationships.address_has_geometry).toEqual({
         '/': './relationship_address_geometry.json',
       });
@@ -736,6 +736,22 @@ describe('createCountyDataGroup', () => {
       expect(result.relationships.layout_has_geometry).toEqual([
         { '/': './relationship_layout_geometry_1.json' },
         { '/': './relationship_layout_geometry_2.json' },
+      ]);
+    });
+
+    it('should handle multiple parcel_has_geometry relationships', () => {
+      const relationshipFiles = [
+        'relationship_parcel_geometry_1.json',
+        'relationship_parcel_geometry_2.json',
+        'relationship_parcel_geometry_3.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.parcel_has_geometry).toHaveLength(3);
+      expect(result.relationships.parcel_has_geometry).toEqual([
+        { '/': './relationship_parcel_geometry_1.json' },
+        { '/': './relationship_parcel_geometry_2.json' },
+        { '/': './relationship_parcel_geometry_3.json' },
       ]);
     });
 
