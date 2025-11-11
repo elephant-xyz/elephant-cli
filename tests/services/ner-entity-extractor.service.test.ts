@@ -608,6 +608,56 @@ describe('NEREntityExtractorService', () => {
       expect(result.QUANTITY[0].value).toBe('100');
     });
 
+    it('should select maximum confidence when deduplicating', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '100',
+          score: 0.97,
+          index: 0,
+          start: 0,
+          end: 3,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '100',
+          score: 0.971,
+          index: 10,
+          start: 10,
+          end: 13,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '100',
+          score: 0.972,
+          index: 20,
+          start: 20,
+          end: 23,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('100 and 100 and 100');
+
+      // Should deduplicate to one entry with maximum confidence
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('100');
+      expect(result.QUANTITY[0].confidence).toBeCloseTo(97.2, 1);
+    });
+
     it('should expand incomplete numbers', async () => {
       mockMoneyPipeline.mockResolvedValue([
         {

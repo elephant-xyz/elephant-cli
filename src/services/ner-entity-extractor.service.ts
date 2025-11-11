@@ -319,8 +319,7 @@ function normalizeNumericValue(value: string): string | null {
 }
 
 function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
-  const result: RawEntity[] = [];
-  const seen = new Set<string>();
+  const valueMap = new Map<string, RawEntity>();
 
   for (const entity of quantityEntities) {
     const text = entity.text.trim();
@@ -336,9 +335,9 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
         const normalized = normalizeNumericValue(part);
 
         if (normalized !== null) {
-          if (!seen.has(normalized)) {
-            seen.add(normalized);
-            result.push({
+          const existing = valueMap.get(normalized);
+          if (!existing || entity.score > existing.score) {
+            valueMap.set(normalized, {
               ...entity,
               text: normalized,
             });
@@ -349,9 +348,9 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
       const normalized = normalizeNumericValue(text);
 
       if (normalized !== null) {
-        if (!seen.has(normalized)) {
-          seen.add(normalized);
-          result.push({
+        const existing = valueMap.get(normalized);
+        if (!existing || entity.score > existing.score) {
+          valueMap.set(normalized, {
             ...entity,
             text: normalized,
           });
@@ -360,7 +359,7 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
     }
   }
 
-  return result;
+  return Array.from(valueMap.values());
 }
 
 async function runInChunks(
