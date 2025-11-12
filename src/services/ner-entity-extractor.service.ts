@@ -49,6 +49,114 @@ function normalizeEntityLabel(lbl: string): string {
   return (lbl || '').replace(/^B-/, '').replace(/^I-/, '');
 }
 
+function calculatePositions(entities: RawEntity[], text: string): RawEntity[] {
+  const result: RawEntity[] = [];
+  const textLines = text.split('\n');
+
+  for (const entity of entities) {
+    // If entity already has valid positions, keep them
+    if (entity.start !== undefined && entity.end !== undefined) {
+      result.push(entity);
+      continue;
+    }
+
+    const entityText = entity.text;
+    let bestMatch: { lineIdx: number; position: number; score: number } | null =
+      null;
+    let currentPos = 0;
+
+    // Find ALL potential matches and score them
+    for (let lineIdx = 0; lineIdx < textLines.length; lineIdx++) {
+      const line = textLines[lineIdx];
+      const lowerLine = line.toLowerCase();
+      const lowerEntity = entityText.toLowerCase();
+
+      // Check for exact match (best score)
+      let position = line.indexOf(entityText);
+      if (position !== -1) {
+        const score = calculateMatchScore(line, entityText, position);
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { lineIdx, position: currentPos + position, score };
+        }
+      }
+
+      // Check for case-insensitive match
+      position = lowerLine.indexOf(lowerEntity);
+      if (position !== -1) {
+        const score = calculateMatchScore(line, entityText, position);
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { lineIdx, position: currentPos + position, score };
+        }
+      }
+
+      currentPos += line.length + 1; // +1 for newline
+    }
+
+    if (bestMatch) {
+      result.push({
+        ...entity,
+        start: bestMatch.position,
+        end: bestMatch.position + entityText.length,
+      });
+
+      // Debug: log position mapping for numbers
+      if (/^\d+$/.test(entityText)) {
+        console.log(
+          `[POS] Entity "${entityText}" → line ${bestMatch.lineIdx} (pos ${bestMatch.position}, score ${bestMatch.score}): "${textLines[bestMatch.lineIdx].substring(0, 50)}..."`
+        );
+      }
+    } else {
+      // Keep entity without position - will be marked as unknown source
+      result.push(entity);
+      console.warn(
+        `[NER] Could not find position for entity "${entityText}" in text`
+      );
+    }
+  }
+
+  return result;
+}
+
+// Calculate match score to find the best match
+// Higher score = better match
+function calculateMatchScore(
+  line: string,
+  entityText: string,
+  position: number
+): number {
+  let score = 0;
+
+  // Base score for finding the entity
+  score += 1;
+
+  // Bonus if entity takes up most of the line (more specific)
+  const lineLength = line.trim().length;
+  const entityLength = entityText.length;
+  const ratio = entityLength / lineLength;
+  if (ratio > 0.5)
+    score += 10; // Entity is >50% of line
+  else if (ratio > 0.3) score += 5; // Entity is >30% of line
+
+  // Bonus if line is short (more specific context)
+  if (lineLength < 20) score += 3;
+
+  // Bonus for exact case match
+  if (line.includes(entityText)) score += 2;
+
+  // Check character before entity (word boundary)
+  if (position === 0 || /[\s,.\-:;!?()[\]{}]/.test(line[position - 1])) {
+    score += 5;
+  }
+
+  // Check character after entity (word boundary)
+  const endPos = position + entityText.length;
+  if (endPos === line.length || /[\s,.\-:;!?()[\]{}]/.test(line[endPos])) {
+    score += 5;
+  }
+
+  return score;
+}
+
 function aggregateEntities(items: Token[]): RawEntity[] {
   if (!items || items.length === 0) return [];
 
@@ -491,26 +599,32 @@ export class NEREntityExtractorService {
     const normalizedDates = normalizeDates(dates);
     const normalizedQuantity = normalizeQuantity(quantity);
 
+    // Calculate positions for all entities by searching in original text
+    const quantityWithPos = calculatePositions(normalizedQuantity, text);
+    const datesWithPos = calculatePositions(normalizedDates, text);
+    const orgsWithPos = calculatePositions(orgs, text);
+    const locationsWithPos = calculatePositions(locations, text);
+
     return {
-      QUANTITY: normalizedQuantity.map((e) => ({
+      QUANTITY: quantityWithPos.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
         start: e.start,
         end: e.end,
       })),
-      DATE: normalizedDates.map((e) => ({
+      DATE: datesWithPos.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
         start: e.start,
         end: e.end,
       })),
-      ORGANIZATION: orgs.map((e) => ({
+      ORGANIZATION: orgsWithPos.map((e) => ({
         value: e.text.toLowerCase(),
         confidence: parseFloat((e.score * 100).toFixed(1)),
         start: e.start,
         end: e.end,
       })),
-      LOCATION: locations.map((e) => ({
+      LOCATION: locationsWithPos.map((e) => ({
         value: e.text.toLowerCase(),
         confidence: parseFloat((e.score * 100).toFixed(1)),
         start: e.start,

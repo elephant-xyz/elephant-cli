@@ -100,7 +100,7 @@ describe('html-source-extractor', () => {
       expect(result.formattedText).not.toContain('color: red');
     });
 
-    it('should aggregate text from multiple text nodes within an element', () => {
+    it('should extract separate text nodes from elements with mixed content', () => {
       const html = `
         <html>
           <body>
@@ -111,8 +111,15 @@ describe('html-source-extractor', () => {
 
       const result = extractTextWithSources(html);
 
-      expect(result.sourceMap).toHaveLength(1);
-      expect(result.sourceMap[0].text).toBe('Part one part two part three');
+      // Now extracts each text node separately
+      expect(result.sourceMap).toHaveLength(3);
+      expect(result.sourceMap.map((s) => s.text)).toContain('Part one');
+      expect(result.sourceMap.map((s) => s.text)).toContain('part two');
+      expect(result.sourceMap.map((s) => s.text)).toContain('part three');
+
+      // Should have specific selectors for each
+      expect(result.sourceMap[0].source).toContain('p');
+      expect(result.sourceMap[1].source).toContain('span');
     });
 
     it('should handle nested elements correctly', () => {
@@ -199,7 +206,7 @@ describe('html-source-extractor', () => {
       expect(result.formattedText).toBe('');
     });
 
-    it('should normalize whitespace in text', () => {
+    it('should preserve original text content', () => {
       const html = `
         <html>
           <body>
@@ -210,7 +217,10 @@ describe('html-source-extractor', () => {
 
       const result = extractTextWithSources(html);
 
-      expect(result.sourceMap[0].text).toBe('Text with multiple spaces');
+      // Text is trimmed but internal whitespace is preserved
+      expect(result.sourceMap[0].text).toBe(
+        'Text   with    multiple     spaces'
+      );
     });
 
     it('should handle real-world HTML structure', () => {

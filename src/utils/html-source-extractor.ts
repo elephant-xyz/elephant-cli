@@ -58,25 +58,6 @@ function generateCssSelector(element: Element, $: cheerio.CheerioAPI): string {
   return path.join(' > ');
 }
 
-function extractTextFromElement(element: Element): string {
-  const texts: string[] = [];
-
-  function collectText(node: AnyNode) {
-    if (node.type === 'text') {
-      const text = (node as Text).data.trim();
-      if (text.length > 0) {
-        texts.push(text);
-      }
-    } else if (node.type === 'tag') {
-      const children = (node as Element).children || [];
-      children.forEach((child: AnyNode) => collectText(child));
-    }
-  }
-
-  collectText(element);
-  return texts.join(' ').replace(/\s+/g, ' ').trim();
-}
-
 export function extractTextWithSources(html: string): {
   formattedText: string;
   sourceMap: TextWithSource[];
@@ -91,57 +72,44 @@ export function extractTextWithSources(html: string): {
   // Remove script, style, and noscript tags
   $('script, style, noscript').remove();
 
-  // Find all elements with text content
-  function processElement(element: Element) {
-    const text = extractTextFromElement(element);
+  // Recursively process all text nodes
+  function processNode(node: AnyNode) {
+    if (node.type === 'text') {
+      const textNode = node as Text;
+      const text = textNode.data.trim();
 
-    if (text.length > 2) {
-      const selector = generateCssSelector(element, $);
-      sourceMap.push({
-        text,
-        source: selector,
-        lineIndex,
-      });
-      lineIndex++;
-    }
+      if (text.length > 2) {
+        const parent = textNode.parent;
+        if (parent && parent.type === 'tag') {
+          const parentElement = parent as Element;
+          const selector = generateCssSelector(parentElement, $);
 
-    // Only process children if this element didn't have direct text
-    const hasDirectText = $(element)
-      .contents()
-      .toArray()
-      .some(
-        (node) => node.type === 'text' && (node as Text).data.trim().length > 0
-      );
-
-    if (!hasDirectText) {
-      $(element)
-        .children()
-        .each((_, child) => {
-          if (child.type === 'tag') {
-            processElement(child as Element);
-          }
-        });
+          sourceMap.push({
+            text,
+            source: selector,
+            lineIndex,
+          });
+          lineIndex++;
+        }
+      }
+    } else if (node.type === 'tag') {
+      const element = node as Element;
+      const children = element.children || [];
+      children.forEach((child: AnyNode) => processNode(child));
     }
   }
 
   // Start from body, or root if no body
   const body = $('body')[0];
   if (body && body.type === 'tag') {
-    $(body)
-      .children()
-      .each((_, child) => {
-        if (child.type === 'tag') {
-          processElement(child as Element);
-        }
-      });
+    const children = (body as Element).children || [];
+    children.forEach((child: AnyNode) => processNode(child));
   } else {
-    $.root()
-      .children()
-      .each((_, child) => {
-        if (child.type === 'tag') {
-          processElement(child as Element);
-        }
-      });
+    const root = $.root()[0];
+    if (root) {
+      const children = (root as any).children || [];
+      children.forEach((child: AnyNode) => processNode(child));
+    }
   }
 
   // Format text with newlines

@@ -6,38 +6,43 @@ export interface EntityWithSource {
   source: string;
 }
 
-function findLineIndexForPosition(
-  text: string,
-  position: number
-): number | null {
+function findSourceForPosition(
+  position: number,
+  sourceMap: TextWithSource[]
+): TextWithSource | null {
   if (position === undefined || position === null) {
     return null;
   }
 
-  let lineIndex = 0;
+  // Build cumulative positions from sourceMap to find which entry contains this position
+  let cumulativePos = 0;
 
-  for (let i = 0; i < text.length; i++) {
-    if (i === position) {
-      return lineIndex;
+  for (const entry of sourceMap) {
+    const textLength = entry.text.length;
+    const entryStart = cumulativePos;
+    const entryEnd = cumulativePos + textLength;
+
+    // Check if position falls within this entry
+    if (position >= entryStart && position < entryEnd) {
+      return entry;
     }
 
-    if (text[i] === '\n') {
-      lineIndex++;
-    }
+    // Add 1 for the newline character between entries
+    cumulativePos = entryEnd + 1;
   }
 
-  // If position is at or after the end of the text
-  if (position >= text.length) {
-    return lineIndex;
+  // If position is at or after the end, return last entry
+  if (sourceMap.length > 0 && position >= cumulativePos - 1) {
+    return sourceMap[sourceMap.length - 1];
   }
 
-  return lineIndex;
+  return null;
 }
 
 export function mapEntitiesToSources(
   entities: EntityResult[],
   sourceMap: TextWithSource[],
-  formattedText: string
+  _formattedText: string
 ): EntityWithSource[] {
   const result: EntityWithSource[] = [];
 
@@ -51,20 +56,7 @@ export function mapEntitiesToSources(
       continue;
     }
 
-    const lineIndex = findLineIndexForPosition(formattedText, entity.start);
-
-    if (lineIndex === null) {
-      result.push({
-        value: entity.value,
-        source: 'unknown',
-      });
-      continue;
-    }
-
-    // Find the source entry for this line
-    const sourceEntry = sourceMap.find(
-      (entry) => entry.lineIndex === lineIndex
-    );
+    const sourceEntry = findSourceForPosition(entity.start, sourceMap);
 
     if (sourceEntry) {
       result.push({

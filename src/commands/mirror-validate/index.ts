@@ -258,6 +258,17 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     console.log(
       chalk.gray('[6/6] Adding source information to unmatched entities...')
     );
+
+    // DEBUG: Log source map sample
+    console.log(chalk.cyan('\n[DEBUG] Source map sample (lines 15-30):'));
+    rawData.sourceMap.slice(15, 30).forEach((entry) => {
+      console.log(
+        chalk.gray(
+          `  Line ${entry.lineIndex}: "${entry.text.substring(0, 40)}..." → ${entry.source.substring(0, 60)}`
+        )
+      );
+    });
+
     comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
 
     console.log(chalk.gray('[7/6] Generating report...\n'));

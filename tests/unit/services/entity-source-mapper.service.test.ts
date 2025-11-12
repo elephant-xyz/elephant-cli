@@ -127,22 +127,26 @@ describe('entity-source-mapper', () => {
       expect(result[0]).toEqual({ value: 'something', source: 'div' });
     });
 
-    it('should return unknown source when line index not found in sourceMap', () => {
+    it('should map using cumulative positions when sourceMap has gaps', () => {
       const formattedText = 'Line 1\nLine 2\nLine 3';
       const sourceMap: TextWithSource[] = [
         { text: 'Line 1', source: 'div.line1', lineIndex: 0 },
-        // Missing line index 1
+        // Missing line index 1 - this happens when HTML extractor filters short text
         { text: 'Line 3', source: 'div.line3', lineIndex: 2 },
       ];
 
       const entities: EntityResult[] = [
-        { value: 'Line', confidence: 90, start: 7, end: 11 }, // On line 1
+        { value: 'Line', confidence: 90, start: 7, end: 11 }, // Position 7 in formatted text
       ];
 
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ value: 'Line', source: 'unknown' });
+      // With cumulative position mapping:
+      // Entry 0: "Line 1" (6 chars) covers positions 0-5, cumulative pos after = 7
+      // Entry 1: "Line 3" (6 chars) starts at cumulative position 7
+      // So position 7 maps to the second sourceMap entry
+      expect(result[0]).toEqual({ value: 'Line', source: 'div.line3' });
     });
 
     it('should handle empty entities array', () => {
