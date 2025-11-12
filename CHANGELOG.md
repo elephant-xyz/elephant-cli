@@ -1,3 +1,10 @@
+## [1.54.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.4...v1.54.5) (2025-11-12)
+
+
+### Bug Fixes
+
+* parcel_geomtry relationship is an array ([#214](https://github.com/elephant-xyz/elephant-cli/issues/214)) ([a141f92](https://github.com/elephant-xyz/elephant-cli/commit/a141f92d1622f44febb22a0c8ef0a41c55bc453a))
+
 ## [1.54.4](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.3...v1.54.4) (2025-11-05)
 
 
