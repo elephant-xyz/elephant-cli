@@ -16,6 +16,8 @@ const MAX_CHARS = 1000;
 export interface EntityResult {
   value: string;
   confidence: number;
+  start?: number;
+  end?: number;
 }
 
 export interface ExtractedEntities {
@@ -29,6 +31,8 @@ interface RawEntity {
   text: string;
   type: string;
   score: number;
+  start?: number;
+  end?: number;
 }
 
 interface Token {
@@ -63,6 +67,8 @@ function aggregateEntities(items: Token[]): RawEntity[] {
         text: t.word || '',
         type: t.entity_group || '',
         score: t.score || 0,
+        start: t.start !== null && t.start !== undefined ? t.start : undefined,
+        end: t.end !== null && t.end !== undefined ? t.end : undefined,
       }));
   }
 
@@ -72,6 +78,8 @@ function aggregateEntities(items: Token[]): RawEntity[] {
     type: string;
     scoreSum: number;
     count: number;
+    start?: number;
+    end?: number;
   } | null = null;
   let lastIndex = -1;
 
@@ -90,6 +98,8 @@ function aggregateEntities(items: Token[]): RawEntity[] {
         type,
         scoreSum: t.score ?? 0,
         count: 1,
+        start: t.start !== null && t.start !== undefined ? t.start : undefined,
+        end: t.end !== null && t.end !== undefined ? t.end : undefined,
       };
       lastIndex = t.index ?? -1;
       continue;
@@ -107,18 +117,25 @@ function aggregateEntities(items: Token[]): RawEntity[] {
       cur.text += sep + clean(t.word || '');
       cur.scoreSum += t.score ?? 0;
       cur.count += 1;
+      if (t.end !== null && t.end !== undefined) {
+        cur.end = t.end;
+      }
       lastIndex = t.index ?? -1;
     } else {
       out.push({
         text: cur.text,
         type: cur.type,
         score: cur.scoreSum / cur.count,
+        start: cur.start,
+        end: cur.end,
       });
       cur = {
         text: clean(t.word || ''),
         type,
         scoreSum: t.score ?? 0,
         count: 1,
+        start: t.start !== null && t.start !== undefined ? t.start : undefined,
+        end: t.end !== null && t.end !== undefined ? t.end : undefined,
       };
       lastIndex = t.index ?? -1;
     }
@@ -129,6 +146,8 @@ function aggregateEntities(items: Token[]): RawEntity[] {
       text: cur.text,
       type: cur.type,
       score: cur.scoreSum / cur.count,
+      start: cur.start,
+      end: cur.end,
     });
   }
 
@@ -476,18 +495,26 @@ export class NEREntityExtractorService {
       QUANTITY: normalizedQuantity.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
+        start: e.start,
+        end: e.end,
       })),
       DATE: normalizedDates.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
+        start: e.start,
+        end: e.end,
       })),
       ORGANIZATION: orgs.map((e) => ({
         value: e.text.toLowerCase(),
         confidence: parseFloat((e.score * 100).toFixed(1)),
+        start: e.start,
+        end: e.end,
       })),
       LOCATION: locations.map((e) => ({
         value: e.text.toLowerCase(),
         confidence: parseFloat((e.score * 100).toFixed(1)),
+        start: e.start,
+        end: e.end,
       })),
     };
   }

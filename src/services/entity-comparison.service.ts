@@ -7,10 +7,15 @@ import type {
 
 dayjs.extend(customParseFormat);
 
+export interface EntityWithSource {
+  value: string;
+  source: string;
+}
+
 export interface EntityTypeComparison {
   cosineSimilarity: number;
   coverage: number;
-  unmatchedFromA: string[];
+  unmatchedFromA: string[] | EntityWithSource[];
   statsA: {
     count: number;
     avgConfidence: number;

@@ -231,6 +231,52 @@ describe('NEREntityExtractorService', () => {
       ).resolves.toBeDefined();
     });
 
+    it('should preserve position information in extracted entities', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$',
+          score: 0.95,
+          index: 0,
+          start: 10,
+          end: 11,
+        },
+        {
+          entity: 'I-MONEY',
+          word: '500',
+          score: 0.95,
+          index: 1,
+          start: 11,
+          end: 14,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities(
+        'Price is $500 for this item'
+      );
+
+      expect(result.QUANTITY.length).toBeGreaterThanOrEqual(1);
+      const entity = result.QUANTITY[0];
+      expect(entity.start).toBeDefined();
+      expect(entity.end).toBeDefined();
+      expect(entity.start).toBe(10);
+      expect(entity.end).toBe(14);
+    });
+
     it('should handle long text by chunking', async () => {
       const longText = 'a'.repeat(2000);
       mockMoneyPipeline.mockResolvedValue([]);

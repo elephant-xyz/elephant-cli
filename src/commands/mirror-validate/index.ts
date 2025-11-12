@@ -13,6 +13,10 @@ import {
   removeStaticParts,
 } from '../../utils/static-parts-filter.js';
 import type { ComparisonResult } from '../../services/entity-comparison.service.js';
+import * as htmlSourceExtractor from '../../utils/html-source-extractor.js';
+import * as jsonSourceExtractor from '../../utils/json-source-extractor.js';
+import { mapEntitiesToSources } from '../../services/entity-source-mapper.service.js';
+import type { TextWithSource } from '../../utils/html-source-extractor.js';
 
 interface MirrorValidateOptions {
   prepareZip: string;
@@ -21,19 +25,54 @@ interface MirrorValidateOptions {
   staticParts?: string;
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function addSourcesToUnmatched(
+  comparison: ComparisonResult,
+  rawData: { formattedText: string; sourceMap: TextWithSource[] },
+  rawEntities: import('../../services/ner-entity-extractor.service.js').ExtractedEntities
+): ComparisonResult {
+  const categories = ['QUANTITY', 'DATE', 'ORGANIZATION', 'LOCATION'] as const;
+
+  for (const category of categories) {
+    const categoryComparison = comparison[category];
+    const categoryEntities = rawEntities[category];
+
+    if (
+      Array.isArray(categoryComparison.unmatchedFromA) &&
+      categoryComparison.unmatchedFromA.length > 0
+    ) {
+      const unmatchedWithSources = categoryComparison.unmatchedFromA.map(
+        (value) => {
+          // Handle both string and EntityWithSource
+          const valueStr = typeof value === 'string' ? value : value.value;
+
+          // Find the entity with this value
+          const entity = categoryEntities.find((e) => e.value === valueStr);
+
+          if (!entity) {
+            return { value: valueStr, source: 'unknown' };
+          }
+
+          const entityWithSource = mapEntitiesToSources(
+            [entity],
+            rawData.sourceMap,
+            rawData.formattedText
+          )[0];
+
+          return entityWithSource || { value: valueStr, source: 'unknown' };
+        }
+      );
+
+      categoryComparison.unmatchedFromA = unmatchedWithSources;
+    }
+  }
+
+  return comparison;
 }
 
 async function extractSourceData(
   prepareDir: string,
   staticSelectors: string[] = []
-): Promise<string> {
+): Promise<{ formattedText: string; sourceMap: TextWithSource[] }> {
   const files = await fs.readdir(prepareDir, { withFileTypes: true });
   const fileNames = files.filter((f) => f.isFile()).map((f) => f.name);
 
@@ -63,16 +102,22 @@ async function extractSourceData(
       cleaned = removeStaticParts(cleaned, staticSelectors);
     }
 
-    return stripHtml(cleaned);
+    return htmlSourceExtractor.extractTextWithSources(cleaned);
   }
 
   try {
     const json = JSON.parse(rawContent);
-    const aggregator = new TransformDataAggregatorService();
-    const parts = aggregator.jsonToText(json);
-    return parts.join('. ').replace(/\.\./g, '.').replace(/\s+/g, ' ').trim();
+    return jsonSourceExtractor.extractTextWithSources(json);
   } catch {
-    return stripHtml(rawContent);
+    // Fallback: treat as plain text with unknown source
+    const text = rawContent
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      formattedText: text,
+      sourceMap: [{ text, source: 'unknown', lineIndex: 0 }],
+    };
   }
 }
 
@@ -133,14 +178,31 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
         )
       );
     }
-    const rawText = await extractSourceData(prepareTempRoot, staticSelectors);
+    const rawData = await extractSourceData(prepareTempRoot, staticSelectors);
+
+    // DEBUG: Log the final text passed to NER model for raw data
+    console.log(chalk.cyan('\n[DEBUG] Raw text passed to NER model:'));
+    console.log(chalk.gray('─'.repeat(70)));
+    const rawTextPreview =
+      rawData.formattedText.length > 3000
+        ? rawData.formattedText.substring(0, 1500) +
+          '\n\n...[TRUNCATED]...\n\n' +
+          rawData.formattedText.substring(rawData.formattedText.length - 1500)
+        : rawData.formattedText;
+    console.log(rawTextPreview);
+    console.log(chalk.gray('─'.repeat(70)));
+    console.log(
+      chalk.cyan(
+        `[DEBUG] Total length: ${rawData.formattedText.length} characters\n`
+      )
+    );
 
     console.log(chalk.gray('    Loading NER models...'));
     const extractor = new NEREntityExtractorService();
     await extractor.initialize();
 
     console.log(chalk.gray('    Running entity extraction on raw data...'));
-    const rawEntities = await extractor.extractEntities(rawText);
+    const rawEntities = await extractor.extractEntities(rawData.formattedText);
 
     console.log(
       chalk.green(
@@ -158,6 +220,21 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     const transformedText =
       aggregator.convertAggregatedDataToText(aggregatedData);
 
+    // DEBUG: Log the final text passed to NER model for transformed data
+    console.log(chalk.cyan('\n[DEBUG] Transformed text passed to NER model:'));
+    console.log(chalk.gray('─'.repeat(70)));
+    const transformedTextPreview =
+      transformedText.length > 3000
+        ? transformedText.substring(0, 1500) +
+          '\n\n...[TRUNCATED]...\n\n' +
+          transformedText.substring(transformedText.length - 1500)
+        : transformedText;
+    console.log(transformedTextPreview);
+    console.log(chalk.gray('─'.repeat(70)));
+    console.log(
+      chalk.cyan(`[DEBUG] Total length: ${transformedText.length} characters\n`)
+    );
+
     console.log(
       chalk.gray('    Running entity extraction on transformed data...')
     );
@@ -173,12 +250,17 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
 
     console.log(chalk.gray('[5/6] Comparing entities...'));
     const comparisonService = new EntityComparisonService();
-    const comparison = comparisonService.compareEntities(
+    let comparison = comparisonService.compareEntities(
       rawEntities,
       transformedEntities
     );
 
-    console.log(chalk.gray('[6/6] Generating report...\n'));
+    console.log(
+      chalk.gray('[6/6] Adding source information to unmatched entities...')
+    );
+    comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
+
+    console.log(chalk.gray('[7/6] Generating report...\n'));
     printComparisonReport(comparison);
 
     if (output) {
@@ -267,7 +349,12 @@ function printComparisonReport(comparison: ComparisonResult): void {
         `\n  ⚠️  Unmatched entities (${cat.data.unmatchedFromA.length}):`
       );
       cat.data.unmatchedFromA.slice(0, 5).forEach((entity) => {
-        console.log(chalk.yellow(`    • ${entity}`));
+        if (typeof entity === 'string') {
+          console.log(chalk.yellow(`    • ${entity}`));
+        } else {
+          console.log(chalk.yellow(`    • ${entity.value}`));
+          console.log(chalk.gray(`      Source: ${entity.source}`));
+        }
       });
       if (cat.data.unmatchedFromA.length > 5) {
         console.log(
