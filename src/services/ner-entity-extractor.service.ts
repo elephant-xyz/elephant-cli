@@ -446,6 +446,13 @@ function normalizeNumericValue(value: string): string | null {
   return num.toString();
 }
 
+function filterByConfidence(
+  entities: RawEntity[],
+  threshold = 0.5
+): RawEntity[] {
+  return entities.filter((entity) => entity.score >= threshold);
+}
+
 function filterOrganizations(orgEntities: RawEntity[]): RawEntity[] {
   return orgEntities.filter((entity) => {
     const text = entity.text.trim();
@@ -606,15 +613,21 @@ export class NEREntityExtractorService {
     const orgs = uniqByText(splitDates.filter((e) => e.type === 'ORG'));
     const locations = uniqByText(splitDates.filter((e) => e.type === 'LOC'));
 
-    const normalizedDates = normalizeDates(dates);
-    const normalizedQuantity = normalizeQuantity(quantity);
-    const filteredOrgs = filterOrganizations(orgs);
+    // Apply confidence threshold filter to all entity types
+    const confidentQuantity = filterByConfidence(quantity);
+    const confidentDates = filterByConfidence(dates);
+    const confidentOrgs = filterByConfidence(orgs);
+    const confidentLocations = filterByConfidence(locations);
+
+    const normalizedDates = normalizeDates(confidentDates);
+    const normalizedQuantity = normalizeQuantity(confidentQuantity);
+    const filteredOrgs = filterOrganizations(confidentOrgs);
 
     // Calculate positions for all entities by searching in original text
     const quantityWithPos = calculatePositions(normalizedQuantity, text);
     const datesWithPos = calculatePositions(normalizedDates, text);
     const orgsWithPos = calculatePositions(filteredOrgs, text);
-    const locationsWithPos = calculatePositions(locations, text);
+    const locationsWithPos = calculatePositions(confidentLocations, text);
 
     return {
       QUANTITY: quantityWithPos.map((e) => ({

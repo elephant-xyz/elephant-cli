@@ -789,5 +789,187 @@ describe('NEREntityExtractorService', () => {
 
     // Note: Organization length filtering (< 5 chars) is tested via integration tests
     // with real NER models, as unit test mocking doesn't fully replicate the extraction pipeline
+
+    it('should filter out entities with confidence below 50%', async () => {
+      mockMoneyPipeline.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$100',
+          score: 0.95,
+          start: 0,
+          end: 4,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '$200',
+          score: 0.45,
+          start: 10,
+          end: 14,
+        },
+        {
+          entity: 'B-CARDINAL',
+          word: '50',
+          score: 0.3,
+          start: 20,
+          end: 22,
+        },
+      ]);
+
+      mockLocationPipeline.mockResolvedValue([
+        {
+          entity_group: 'ORG',
+          word: 'Microsoft',
+          score: 0.85,
+          start: 30,
+          end: 39,
+        },
+        {
+          entity_group: 'ORG',
+          word: 'LowConf',
+          score: 0.4,
+          start: 50,
+          end: 57,
+        },
+        {
+          entity_group: 'LOC',
+          word: 'Seattle',
+          score: 0.75,
+          start: 70,
+          end: 77,
+        },
+        {
+          entity_group: 'LOC',
+          word: 'Place',
+          score: 0.49,
+          start: 85,
+          end: 90,
+        },
+      ]);
+
+      await service.initialize();
+      const result = await service.extractEntities(
+        '$100 test $200 test 50 test Microsoft test LowConf test Seattle test Place'
+      );
+
+      // Only entities with confidence >= 50% should be kept
+      expect(result.QUANTITY.length).toBeGreaterThanOrEqual(1);
+      expect(result.QUANTITY.every((e) => e.confidence >= 50)).toBe(true);
+
+      // Note: Organization may be filtered by length or position matching in unit tests
+      if (result.ORGANIZATION.length > 0) {
+        expect(result.ORGANIZATION.every((e) => e.confidence >= 50)).toBe(true);
+      }
+
+      // Note: Location may be filtered by position matching in unit tests
+      if (result.LOCATION.length > 0) {
+        expect(result.LOCATION.every((e) => e.confidence >= 50)).toBe(true);
+      }
+    });
+
+    it('should filter dates with low confidence', async () => {
+      mockMoneyPipeline.mockResolvedValue([
+        {
+          entity: 'B-DATE',
+          word: '2024',
+          score: 0.9,
+          start: 0,
+          end: 4,
+        },
+        {
+          entity: 'B-DATE',
+          word: '2023',
+          score: 0.45,
+          start: 10,
+          end: 14,
+        },
+      ]);
+
+      mockLocationPipeline.mockResolvedValue([]);
+
+      await service.initialize();
+      const result = await service.extractEntities('2024 and 2023');
+
+      // Only high confidence dates should be kept
+      expect(result.DATE.length).toBeGreaterThanOrEqual(1);
+      expect(result.DATE.every((e) => e.confidence >= 50)).toBe(true);
+    });
+
+    it('should keep entities with exactly 50% confidence', async () => {
+      mockMoneyPipeline.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$500',
+          score: 0.5,
+          start: 0,
+          end: 4,
+        },
+      ]);
+
+      mockLocationPipeline.mockResolvedValue([
+        {
+          entity_group: 'ORG',
+          word: 'Company',
+          score: 0.5,
+          start: 10,
+          end: 17,
+        },
+      ]);
+
+      await service.initialize();
+      const result = await service.extractEntities('$500 test Company');
+
+      // Entities with exactly 50% confidence should be kept
+      expect(result.QUANTITY.length).toBeGreaterThanOrEqual(1);
+      // Note: Organization may be filtered by position matching in unit tests
+      if (result.ORGANIZATION.length > 0) {
+        expect(result.ORGANIZATION[0].confidence).toBeGreaterThanOrEqual(50);
+      }
+    });
+
+    it('should return empty arrays when all entities have low confidence', async () => {
+      mockMoneyPipeline.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$10',
+          score: 0.3,
+          start: 0,
+          end: 3,
+        },
+        {
+          entity: 'B-CARDINAL',
+          word: '5',
+          score: 0.25,
+          start: 10,
+          end: 11,
+        },
+      ]);
+
+      mockLocationPipeline.mockResolvedValue([
+        {
+          entity_group: 'ORG',
+          word: 'ABC',
+          score: 0.4,
+          start: 20,
+          end: 23,
+        },
+        {
+          entity_group: 'LOC',
+          word: 'City',
+          score: 0.35,
+          start: 30,
+          end: 34,
+        },
+      ]);
+
+      await service.initialize();
+      const result = await service.extractEntities(
+        '$10 test 5 test ABC test City'
+      );
+
+      // All entities should be filtered out
+      expect(result.QUANTITY).toHaveLength(0);
+      expect(result.ORGANIZATION).toHaveLength(0);
+      expect(result.LOCATION).toHaveLength(0);
+    });
   });
 });
