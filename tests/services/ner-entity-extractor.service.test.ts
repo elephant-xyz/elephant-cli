@@ -786,5 +786,8 @@ describe('NEREntityExtractorService', () => {
 
       expect(result.ORGANIZATION.length).toBeLessThanOrEqual(1);
     });
+
+    // Note: Organization length filtering (< 5 chars) is tested via integration tests
+    // with real NER models, as unit test mocking doesn't fully replicate the extraction pipeline
   });
 });

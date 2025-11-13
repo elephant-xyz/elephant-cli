@@ -33,6 +33,7 @@ interface RawEntity {
   score: number;
   start?: number;
   end?: number;
+  originalText?: string;
 }
 
 interface Token {
@@ -60,7 +61,7 @@ function calculatePositions(entities: RawEntity[], text: string): RawEntity[] {
       continue;
     }
 
-    const entityText = entity.text;
+    const entityText = entity.originalText || entity.text;
     let bestMatch: { lineIdx: number; position: number; score: number } | null =
       null;
     let currentPos = 0;
@@ -106,10 +107,9 @@ function calculatePositions(entities: RawEntity[], text: string): RawEntity[] {
         );
       }
     } else {
-      // Keep entity without position - will be marked as unknown source
-      result.push(entity);
+      // Skip entities without positions - they are NER false positives
       console.warn(
-        `[NER] Could not find position for entity "${entityText}" in text`
+        `[NER] Skipping entity "${entityText}" - not found in source text (likely NER false positive)`
       );
     }
   }
@@ -427,6 +427,7 @@ function normalizeDates(dateEntities: RawEntity[]): RawEntity[] {
       result.push({
         ...entity,
         text: parsedDate,
+        originalText: text,
       });
     }
   }
@@ -443,6 +444,13 @@ function normalizeNumericValue(value: string): string | null {
   }
 
   return num.toString();
+}
+
+function filterOrganizations(orgEntities: RawEntity[]): RawEntity[] {
+  return orgEntities.filter((entity) => {
+    const text = entity.text.trim();
+    return text.length >= 5;
+  });
 }
 
 function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
@@ -467,6 +475,7 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
             valueMap.set(normalized, {
               ...entity,
               text: normalized,
+              originalText: part,
             });
           }
         }
@@ -480,6 +489,7 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
           valueMap.set(normalized, {
             ...entity,
             text: normalized,
+            originalText: text,
           });
         }
       }
@@ -598,11 +608,12 @@ export class NEREntityExtractorService {
 
     const normalizedDates = normalizeDates(dates);
     const normalizedQuantity = normalizeQuantity(quantity);
+    const filteredOrgs = filterOrganizations(orgs);
 
     // Calculate positions for all entities by searching in original text
     const quantityWithPos = calculatePositions(normalizedQuantity, text);
     const datesWithPos = calculatePositions(normalizedDates, text);
-    const orgsWithPos = calculatePositions(orgs, text);
+    const orgsWithPos = calculatePositions(filteredOrgs, text);
     const locationsWithPos = calculatePositions(locations, text);
 
     return {
