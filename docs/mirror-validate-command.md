@@ -90,20 +90,23 @@ The command is built on three core services:
 
 **Comparison Algorithms:**
 
-#### Money Entities
-- **Cosine Similarity**: Log-histogram distribution comparison
+#### Quantity Entities
+- **Cosine Similarity**: Log-histogram distribution comparison (weighted by confidence)
 - **Coverage**: Exact number matching with tolerance (default 0.01)
+- **Use case**: Monetary values, acreage, square footage, counts
 
 #### Date Entities
-- **Cosine Similarity**: Feature vector (year, month sin/cos, day sin/cos)
+- **Cosine Similarity**: Feature vector (year, month sin/cos, day sin/cos) weighted by confidence
 - **Coverage**: Exact date matching with day tolerance (default 0)
+- **Use case**: Transaction dates, assessment dates, construction dates
 
 #### Organization/Location Entities
-- **Cosine Similarity**: Bag-of-tokens comparison
+- **Cosine Similarity**: Bag-of-tokens comparison (weighted by confidence)
 - **Coverage**: Jaro-Winkler fuzzy matching (threshold 0.88)
+- **Use case**: Owner names, company names, city names, addresses
 
 **Key Methods:**
-- `compareMoney(entitiesA, entitiesB, tolerance)`: Returns `EntityTypeComparison`
+- `compareQuantity(entitiesA, entitiesB, tolerance)`: Returns `EntityTypeComparison`
 - `compareDate(entitiesA, entitiesB, dayTolerance)`: Returns `EntityTypeComparison`
 - `compareText(entitiesA, entitiesB, similarityThreshold)`: Returns `EntityTypeComparison`
 - `compareEntities(entitiesA, entitiesB)`: Returns `ComparisonResult`
@@ -209,42 +212,27 @@ This gives more importance to:
 
 ### Example 1: High Completeness
 
+Console output:
 ```
-💵 Money
-  Raw data:         15 entities (avg confidence: 92.3%)
-  Transformed data: 14 entities (avg confidence: 94.1%)
-
-  Cosine Similarity: 95.2%
-  Coverage:          93.3%
-
-📅 Date
-  Raw data:         8 entities (avg confidence: 88.5%)
-  Transformed data: 8 entities (avg confidence: 91.2%)
-
-  Cosine Similarity: 98.1%
-  Coverage:          100.0%
-
 🎯 Global Completeness Score: 95.8%
+📊 Global Cosine Similarity: 93.2%
+
+✓ Report saved to: report.json
 ```
+
+This indicates excellent data preservation with 95.8% of raw entities successfully transferred to transformed data, and high distributional similarity (93.2%) between the datasets.
 
 ### Example 2: Low Completeness
 
+Console output:
 ```
-💵 Money
-  Raw data:         20 entities (avg confidence: 85.2%)
-  Transformed data: 12 entities (avg confidence: 90.1%)
-
-  Cosine Similarity: 72.4%
-  Coverage:          60.0%
-
-  ⚠️  Unmatched entities (8):
-    • 50000
-    • 125000
-    • 3500
-    ... and 5 more
-
 🎯 Global Completeness Score: 68.3%
+📊 Global Cosine Similarity: 72.4%
+
+✓ Report saved to: report.json
 ```
+
+This indicates significant data loss. Review the detailed JSON report to identify which entity categories are missing data and inspect the `unmatchedFromA` arrays to see specific entities that weren't transferred. The source CSS selectors will help locate the missing data in the raw HTML.
 
 ## Integration with Workflow
 
@@ -290,14 +278,23 @@ This gives more importance to:
 
 ### Console Output
 
-The command prints a formatted report to the console with:
-- Progress indicators for each step
-- Entity counts per extraction
-- Comparison metrics per entity type
-- Color-coded coverage scores (green ≥90%, yellow ≥70%, red <70%)
-- Sample of unmatched entities (up to 5 per type)
+The command prints a minimal report to the console with only essential metrics:
+
+```
+🎯 Global Completeness Score: 95.8%
+📊 Global Cosine Similarity: 93.2%
+
+✓ Report saved to: completeness-report.json
+```
+
+Scores are color-coded for quick assessment:
+- **Green** (≥90%): Excellent data completeness
+- **Yellow** (≥70%): Good completeness with minor gaps
+- **Red** (<70%): Significant data loss, requires investigation
 
 ### JSON Output (--output flag)
+
+The detailed JSON report contains complete entity data and comparison metrics:
 
 ```json
 {
@@ -317,25 +314,32 @@ The command prints a formatted report to the console with:
     "QUANTITY": {
       "cosineSimilarity": 0.952,
       "coverage": 1.0,
-      "unmatchedFromA": [],
+      "unmatchedFromA": [
+        {
+          "value": "50000",
+          "source": "div.property-details > table > tr:nth-child(5) > td.value"
+        }
+      ],
       "statsA": {"count": 1, "avgConfidence": 90.5},
       "statsB": {"count": 1, "avgConfidence": 93.2}
     },
     "DATE": { ... },
     "ORGANIZATION": { ... },
     "LOCATION": { ... },
-    "globalCompleteness": 0.958
+    "globalCompleteness": 0.958,
+    "globalCosineSimilarity": 0.932
   },
   "summary": {
     "globalCompleteness": 0.958,
+    "globalCosineSimilarity": 0.932,
     "rawStats": {
-      "money": 1,
+      "quantity": 1,
       "date": 1,
       "organization": 1,
       "location": 1
     },
     "transformedStats": {
-      "money": 1,
+      "quantity": 1,
       "date": 1,
       "organization": 1,
       "location": 1
@@ -343,6 +347,12 @@ The command prints a formatted report to the console with:
   }
 }
 ```
+
+**Key Features:**
+- **Entity arrays**: Only contain `value` and `confidence` fields (position data is excluded from output)
+- **Source mapping**: Unmatched entities include `source` field with CSS selector showing where the entity was found in the raw HTML
+- **Comparison metrics**: Per-category and global scores for completeness and similarity
+- **Summary statistics**: Quick overview of entity counts and average confidence scores
 
 ## Performance
 
@@ -407,7 +417,6 @@ Potential improvements:
 
 ## References
 
-- **NER Models Documentation**: [docs/nlp-models-setup.md](./nlp-models-setup.md)
 - **Transformers.js**: [Documentation](https://huggingface.co/docs/transformers.js)
 - **dayjs**: [Documentation](https://day.js.org/)
 - **Jaro-Winkler**: [Wikipedia](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance)
