@@ -71,7 +71,7 @@
     "form-data": "^4.0.0",
     "ipfs-unixfs": "^11.2.1",
     "ipfs-unixfs-importer": "^15.4.0",
-    "jsdom": "^27.1.0",
+    "jsdom": "^22.1.0",
     "langchain": "^0.3.31",
     "multiformats": "^13.3.6",
     "openai": "^5.12.2",
