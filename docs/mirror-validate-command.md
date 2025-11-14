@@ -236,35 +236,47 @@ This indicates significant data loss. Review the detailed JSON report to identif
 
 ## Integration with Workflow
 
-### Typical Workflow
+The `mirror-validate` command uses outputs from the `prepare` and `transform` commands as its inputs:
 
-1. **Prepare Raw Data**
-   ```bash
-   npx elephant-cli prepare \
-     --url "https://example.com/property.html" \
-     --address-zip seed-data.zip \
-     --output-zip prepare-output.zip
-   ```
+- **`--prepare-zip`**: Output ZIP from the `prepare` command (contains raw HTML/JSON)
+- **`--transform-zip`**: Output ZIP from the `transform` command (contains structured JSON data)
 
-2. **Transform Data**
-   ```bash
-   npx elephant-cli transform \
-     --input-zip prepare-output.zip \
-     --output-zip transform-output.zip
-   ```
+### Basic Validation
 
-3. **Validate Completeness**
-   ```bash
-   npx elephant-cli mirror-validate \
-     --prepare-zip prepare-output.zip \
-     --transform-zip transform-output.zip \
-     --output report.json
-   ```
+```bash
+npx elephant-cli mirror-validate \
+  --prepare-zip prepare-output.zip \
+  --transform-zip transform-output.zip \
+  --output report.json
+```
 
-4. **Review Report**
-   - Check global completeness score
-   - Review unmatched entities
-   - Identify data quality issues
+### With Static Parts Filtering (Recommended)
+
+For better accuracy, first identify boilerplate content using `identify-static-parts`:
+
+```bash
+# Step 1: Identify static DOM elements
+npx elephant-cli identify-static-parts \
+  --input-zip prepare-output.zip \
+  --output static-parts.csv
+
+# Step 2: Run validation with filtering
+npx elephant-cli mirror-validate \
+  --prepare-zip prepare-output.zip \
+  --transform-zip transform-output.zip \
+  --static-parts static-parts.csv \
+  --output report.json
+```
+
+### Reviewing Results
+
+After running the command:
+
+1. Check the console output for global completeness and similarity scores
+2. Open the JSON report to review detailed entity comparisons
+3. For unmatched entities, use the `source` CSS selectors to locate missing data in raw HTML
+4. Update transformation scripts to capture missing entities
+5. Re-run validation to verify improvements
 
 ### When to Use
 
