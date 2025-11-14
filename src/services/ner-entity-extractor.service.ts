@@ -99,18 +99,6 @@ function calculatePositions(entities: RawEntity[], text: string): RawEntity[] {
         start: bestMatch.position,
         end: bestMatch.position + entityText.length,
       });
-
-      // Debug: log position mapping for numbers
-      if (/^\d+$/.test(entityText)) {
-        console.log(
-          `[POS] Entity "${entityText}" → line ${bestMatch.lineIdx} (pos ${bestMatch.position}, score ${bestMatch.score}): "${textLines[bestMatch.lineIdx].substring(0, 50)}..."`
-        );
-      }
-    } else {
-      // Skip entities without positions - they are NER false positives
-      console.warn(
-        `[NER] Skipping entity "${entityText}" - not found in source text (likely NER false positive)`
-      );
     }
   }
 

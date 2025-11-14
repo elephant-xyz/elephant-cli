@@ -4,7 +4,10 @@ import path from 'path';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
 import { extractZipToTemp } from '../../utils/zip.js';
-import { NEREntityExtractorService } from '../../services/ner-entity-extractor.service.js';
+import {
+  NEREntityExtractorService,
+  type EntityResult,
+} from '../../services/ner-entity-extractor.service.js';
 import { EntityComparisonService } from '../../services/entity-comparison.service.js';
 import { TransformDataAggregatorService } from '../../services/transform-data-aggregator.service.js';
 import { cleanHtml } from '../../lib/common.js';
@@ -124,8 +127,6 @@ async function extractSourceData(
 async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
   const { prepareZip, transformZip, output, staticParts } = options;
 
-  console.log(chalk.blue('\n=== Mirror Validation ===\n'));
-
   let prepareTempDir: string | null = null;
   let transformTempDir: string | null = null;
 
@@ -133,25 +134,14 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     // Parse static parts CSV if provided
     let staticSelectors: string[] = [];
     if (staticParts) {
-      console.log(chalk.gray('[1/7] Loading static parts selectors...'));
       staticSelectors = await parseStaticPartsCsv(staticParts);
-      console.log(
-        chalk.green(`    ✓ Loaded ${staticSelectors.length} selectors`)
-      );
     }
 
-    const step1 = staticParts ? 2 : 1;
-    const step2 = staticParts ? 3 : 2;
-    const step3 = staticParts ? 4 : 3;
-
-    console.log(chalk.gray(`[${step1}/6] Extracting prepare output...`));
     const prepareTempRoot = await fs.mkdtemp(
       path.join(tmpdir(), 'elephant-validate-prepare-')
     );
     prepareTempDir = prepareTempRoot;
     await extractZipToTemp(prepareZip, prepareTempRoot);
-
-    console.log(chalk.gray(`[${step2}/6] Extracting transform output...`));
     const transformTempRoot = await fs.mkdtemp(
       path.join(tmpdir(), 'elephant-validate-transform-')
     );
@@ -168,116 +158,50 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
       ? transformDataDir
       : transformTempRoot;
 
-    console.log(
-      chalk.gray(`[${step3}/6] Extracting entities from raw data...`)
-    );
-    if (staticSelectors.length > 0) {
-      console.log(
-        chalk.gray(
-          `    Filtering out ${staticSelectors.length} static DOM parts...`
-        )
-      );
-    }
     const rawData = await extractSourceData(prepareTempRoot, staticSelectors);
 
-    // DEBUG: Log the final text passed to NER model for raw data
-    console.log(chalk.cyan('\n[DEBUG] Raw text passed to NER model:'));
-    console.log(chalk.gray('─'.repeat(70)));
-    const rawTextPreview =
-      rawData.formattedText.length > 3000
-        ? rawData.formattedText.substring(0, 1500) +
-          '\n\n...[TRUNCATED]...\n\n' +
-          rawData.formattedText.substring(rawData.formattedText.length - 1500)
-        : rawData.formattedText;
-    console.log(rawTextPreview);
-    console.log(chalk.gray('─'.repeat(70)));
-    console.log(
-      chalk.cyan(
-        `[DEBUG] Total length: ${rawData.formattedText.length} characters\n`
-      )
-    );
-
-    console.log(chalk.gray('    Loading NER models...'));
     const extractor = new NEREntityExtractorService();
     await extractor.initialize();
 
-    console.log(chalk.gray('    Running entity extraction on raw data...'));
     const rawEntities = await extractor.extractEntities(rawData.formattedText);
 
-    console.log(
-      chalk.green(
-        `    ✓ Extracted ${rawEntities.QUANTITY.length} quantities, ${rawEntities.DATE.length} dates, ` +
-          `${rawEntities.ORGANIZATION.length} orgs, ${rawEntities.LOCATION.length} locations`
-      )
-    );
-
-    console.log(
-      chalk.gray('[4/6] Extracting entities from transformed data...')
-    );
     const aggregator = new TransformDataAggregatorService();
     const aggregatedData =
       await aggregator.aggregateTransformOutput(transformDir);
     const transformedText =
       aggregator.convertAggregatedDataToText(aggregatedData);
 
-    // DEBUG: Log the final text passed to NER model for transformed data
-    console.log(chalk.cyan('\n[DEBUG] Transformed text passed to NER model:'));
-    console.log(chalk.gray('─'.repeat(70)));
-    const transformedTextPreview =
-      transformedText.length > 3000
-        ? transformedText.substring(0, 1500) +
-          '\n\n...[TRUNCATED]...\n\n' +
-          transformedText.substring(transformedText.length - 1500)
-        : transformedText;
-    console.log(transformedTextPreview);
-    console.log(chalk.gray('─'.repeat(70)));
-    console.log(
-      chalk.cyan(`[DEBUG] Total length: ${transformedText.length} characters\n`)
-    );
-
-    console.log(
-      chalk.gray('    Running entity extraction on transformed data...')
-    );
     const transformedEntities =
       await extractor.extractEntities(transformedText);
 
-    console.log(
-      chalk.green(
-        `    ✓ Extracted ${transformedEntities.QUANTITY.length} quantities, ${transformedEntities.DATE.length} dates, ` +
-          `${transformedEntities.ORGANIZATION.length} orgs, ${transformedEntities.LOCATION.length} locations`
-      )
-    );
-
-    console.log(chalk.gray('[5/6] Comparing entities...'));
     const comparisonService = new EntityComparisonService();
     let comparison = comparisonService.compareEntities(
       rawEntities,
       transformedEntities
     );
 
-    console.log(
-      chalk.gray('[6/6] Adding source information to unmatched entities...')
-    );
-
-    // DEBUG: Log source map sample
-    console.log(chalk.cyan('\n[DEBUG] Source map sample (lines 15-30):'));
-    rawData.sourceMap.slice(15, 30).forEach((entry) => {
-      console.log(
-        chalk.gray(
-          `  Line ${entry.lineIndex}: "${entry.text.substring(0, 40)}..." → ${entry.source.substring(0, 60)}`
-        )
-      );
-    });
-
     comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
 
-    console.log(chalk.gray('[7/6] Generating report...\n'));
     printComparisonReport(comparison);
 
     if (output) {
+      // Strip start/end fields from entities for the report
+      const stripPositions = (entities: EntityResult[]) =>
+        entities.map(({ value, confidence }) => ({ value, confidence }));
+
       const report = {
-        rawEntities,
-        transformedEntities,
+        rawEntities: {
+          QUANTITY: stripPositions(rawEntities.QUANTITY),
+          DATE: stripPositions(rawEntities.DATE),
+          ORGANIZATION: stripPositions(rawEntities.ORGANIZATION),
+          LOCATION: stripPositions(rawEntities.LOCATION),
+        },
+        transformedEntities: {
+          QUANTITY: stripPositions(transformedEntities.QUANTITY),
+          DATE: stripPositions(transformedEntities.DATE),
+          ORGANIZATION: stripPositions(transformedEntities.ORGANIZATION),
+          LOCATION: stripPositions(transformedEntities.LOCATION),
+        },
         comparison,
         summary: {
           globalCompleteness: comparison.globalCompleteness,
@@ -315,67 +239,6 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
 }
 
 function printComparisonReport(comparison: ComparisonResult): void {
-  console.log(chalk.bold('\n📊 COMPLETENESS ANALYSIS\n'));
-  console.log('='.repeat(70));
-
-  const categories = [
-    { key: 'QUANTITY', label: '💵 Quantity', data: comparison.QUANTITY },
-    { key: 'DATE', label: '📅 Date', data: comparison.DATE },
-    {
-      key: 'ORGANIZATION',
-      label: '🏢 Organization',
-      data: comparison.ORGANIZATION,
-    },
-    { key: 'LOCATION', label: '📍 Location', data: comparison.LOCATION },
-  ];
-
-  for (const cat of categories) {
-    console.log(`\n${chalk.bold(cat.label)}`);
-    console.log('-'.repeat(70));
-
-    console.log(
-      `  Raw data:         ${cat.data.statsA.count} entities (avg confidence: ${cat.data.statsA.avgConfidence.toFixed(1)}%)`
-    );
-    console.log(
-      `  Transformed data: ${cat.data.statsB.count} entities (avg confidence: ${cat.data.statsB.avgConfidence.toFixed(1)}%)`
-    );
-
-    console.log(
-      `\n  Cosine Similarity: ${(cat.data.cosineSimilarity * 100).toFixed(1)}%`
-    );
-
-    const coverageColor =
-      cat.data.coverage >= 0.9
-        ? chalk.green
-        : cat.data.coverage >= 0.7
-          ? chalk.yellow
-          : chalk.red;
-
-    console.log(
-      `  Coverage:          ${coverageColor((cat.data.coverage * 100).toFixed(1) + '%')}`
-    );
-
-    if (cat.data.unmatchedFromA.length > 0) {
-      console.log(
-        `\n  ⚠️  Unmatched entities (${cat.data.unmatchedFromA.length}):`
-      );
-      cat.data.unmatchedFromA.slice(0, 5).forEach((entity) => {
-        if (typeof entity === 'string') {
-          console.log(chalk.yellow(`    • ${entity}`));
-        } else {
-          console.log(chalk.yellow(`    • ${entity.value}`));
-          console.log(chalk.gray(`      Source: ${entity.source}`));
-        }
-      });
-      if (cat.data.unmatchedFromA.length > 5) {
-        console.log(
-          chalk.gray(`    ... and ${cat.data.unmatchedFromA.length - 5} more`)
-        );
-      }
-    }
-  }
-
-  console.log('\n' + '='.repeat(70));
   const completenessColor =
     comparison.globalCompleteness >= 0.9
       ? chalk.green
@@ -400,7 +263,6 @@ function printComparisonReport(comparison: ComparisonResult): void {
         `${(comparison.globalCosineSimilarity * 100).toFixed(1)}%`
       )
   );
-  console.log('='.repeat(70) + '\n');
 }
 
 export function registerMirrorValidateCommand(program: Command): void {
