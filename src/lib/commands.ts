@@ -19,7 +19,10 @@ import {
   handleGenerateTransform,
   type GenerateTransformCommandOptions,
 } from '../commands/generate-transform/index.js';
-import { NEREntityExtractorService } from '../services/ner-entity-extractor.service.js';
+import {
+  NEREntityExtractorService,
+  type EntityResult,
+} from '../services/ner-entity-extractor.service.js';
 import { EntityComparisonService } from '../services/entity-comparison.service.js';
 import { TransformDataAggregatorService } from '../services/transform-data-aggregator.service.js';
 import { cleanHtml } from './common.js';
@@ -30,6 +33,10 @@ import {
 } from '../utils/static-parts-filter.js';
 import type { ExtractedEntities } from '../services/ner-entity-extractor.service.js';
 import type { ComparisonResult } from '../services/entity-comparison.service.js';
+import * as htmlSourceExtractor from '../utils/html-source-extractor.js';
+import * as jsonSourceExtractor from '../utils/json-source-extractor.js';
+import { mapEntitiesToSources } from '../services/entity-source-mapper.service.js';
+import type { TextWithSource } from '../utils/html-source-extractor.js';
 
 // Generate-transform function interface
 export type GenerateTransformOptions = Omit<
@@ -399,29 +406,73 @@ export interface MirrorValidateOptions {
   cwd?: string;
 }
 
+export interface EntityWithoutPosition {
+  value: string;
+  confidence: number;
+}
+
+export interface EntitiesWithoutPositions {
+  QUANTITY: EntityWithoutPosition[];
+  DATE: EntityWithoutPosition[];
+  ORGANIZATION: EntityWithoutPosition[];
+  LOCATION: EntityWithoutPosition[];
+}
+
 export interface MirrorValidateResult {
   success: boolean;
-  rawEntities: ExtractedEntities;
-  transformedEntities: ExtractedEntities;
+  rawEntities: EntitiesWithoutPositions;
+  transformedEntities: EntitiesWithoutPositions;
   comparison: ComparisonResult;
   globalCompleteness: number;
   globalCosineSimilarity: number;
   error?: string;
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function addSourcesToUnmatched(
+  comparison: ComparisonResult,
+  rawData: { formattedText: string; sourceMap: TextWithSource[] },
+  rawEntities: ExtractedEntities
+): ComparisonResult {
+  const categories = ['QUANTITY', 'DATE', 'ORGANIZATION', 'LOCATION'] as const;
+
+  for (const category of categories) {
+    const categoryComparison = comparison[category];
+    const categoryEntities = rawEntities[category];
+
+    if (
+      Array.isArray(categoryComparison.unmatchedFromA) &&
+      categoryComparison.unmatchedFromA.length > 0
+    ) {
+      const unmatchedWithSources = categoryComparison.unmatchedFromA.map(
+        (value) => {
+          const valueStr = typeof value === 'string' ? value : value.value;
+          const entity = categoryEntities.find((e) => e.value === valueStr);
+
+          if (!entity) {
+            return { value: valueStr, source: 'unknown' };
+          }
+
+          const entityWithSource = mapEntitiesToSources(
+            [entity],
+            rawData.sourceMap,
+            rawData.formattedText
+          )[0];
+
+          return entityWithSource || { value: valueStr, source: 'unknown' };
+        }
+      );
+
+      categoryComparison.unmatchedFromA = unmatchedWithSources;
+    }
+  }
+
+  return comparison;
 }
 
 async function extractSourceData(
   prepareDir: string,
   staticSelectors: string[] = []
-): Promise<string> {
+): Promise<{ formattedText: string; sourceMap: TextWithSource[] }> {
   const files = await fs.readdir(prepareDir, { withFileTypes: true });
   const fileNames = files.filter((f) => f.isFile()).map((f) => f.name);
 
@@ -450,16 +501,21 @@ async function extractSourceData(
       cleaned = removeStaticParts(cleaned, staticSelectors);
     }
 
-    return stripHtml(cleaned);
+    return htmlSourceExtractor.extractTextWithSources(cleaned);
   }
 
   try {
     const json = JSON.parse(rawContent);
-    const aggregator = new TransformDataAggregatorService();
-    const parts = aggregator.jsonToText(json);
-    return parts.join('. ').replace(/\.\./g, '.').replace(/\s+/g, ' ').trim();
+    return jsonSourceExtractor.extractTextWithSources(json);
   } catch {
-    return stripHtml(rawContent);
+    const text = rawContent
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      formattedText: text,
+      sourceMap: [{ text, source: 'unknown', lineIndex: 0 }],
+    };
   }
 }
 
@@ -501,13 +557,13 @@ export async function mirrorValidate(
       ? transformDataDir
       : transformTempRoot;
 
-    // Extract entities from raw data
-    const rawText = await extractSourceData(prepareTempRoot, staticSelectors);
+    // Extract entities from raw data with source mapping
+    const rawData = await extractSourceData(prepareTempRoot, staticSelectors);
 
     const extractor = new NEREntityExtractorService();
     await extractor.initialize();
 
-    const rawEntities = await extractor.extractEntities(rawText);
+    const rawEntities = await extractor.extractEntities(rawData.formattedText);
 
     // Extract entities from transformed data
     const aggregator = new TransformDataAggregatorService();
@@ -521,15 +577,32 @@ export async function mirrorValidate(
 
     // Compare entities
     const comparisonService = new EntityComparisonService();
-    const comparison = comparisonService.compareEntities(
+    let comparison = comparisonService.compareEntities(
       rawEntities,
       transformedEntities
     );
 
+    // Add source information to unmatched entities
+    comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
+
+    // Strip start/end fields from entities
+    const stripPositions = (entities: EntityResult[]) =>
+      entities.map(({ value, confidence }) => ({ value, confidence }));
+
     return {
       success: true,
-      rawEntities,
-      transformedEntities,
+      rawEntities: {
+        QUANTITY: stripPositions(rawEntities.QUANTITY),
+        DATE: stripPositions(rawEntities.DATE),
+        ORGANIZATION: stripPositions(rawEntities.ORGANIZATION),
+        LOCATION: stripPositions(rawEntities.LOCATION),
+      },
+      transformedEntities: {
+        QUANTITY: stripPositions(transformedEntities.QUANTITY),
+        DATE: stripPositions(transformedEntities.DATE),
+        ORGANIZATION: stripPositions(transformedEntities.ORGANIZATION),
+        LOCATION: stripPositions(transformedEntities.LOCATION),
+      },
       comparison,
       globalCompleteness: comparison.globalCompleteness,
       globalCosineSimilarity: comparison.globalCosineSimilarity,

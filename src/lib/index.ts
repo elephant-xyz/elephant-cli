@@ -25,6 +25,8 @@ export type {
   SubmitToContractResult,
   MirrorValidateOptions,
   MirrorValidateResult,
+  EntityWithoutPosition,
+  EntitiesWithoutPositions,
 } from './commands.js';
 
 export type { PrepareOptions } from './types.js';
