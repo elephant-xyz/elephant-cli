@@ -10,6 +10,7 @@ dayjs.extend(customParseFormat);
 export interface EntityWithSource {
   value: string;
   source: string;
+  confidence: number;
 }
 
 export interface EntityTypeComparison {

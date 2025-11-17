@@ -23,9 +23,21 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(3);
-      expect(result[0]).toEqual({ value: 'First', source: '#first' });
-      expect(result[1]).toEqual({ value: 'Second', source: '#second' });
-      expect(result[2]).toEqual({ value: 'Third', source: '#third' });
+      expect(result[0]).toEqual({
+        value: 'First',
+        source: '#first',
+        confidence: 90,
+      });
+      expect(result[1]).toEqual({
+        value: 'Second',
+        source: '#second',
+        confidence: 90,
+      });
+      expect(result[2]).toEqual({
+        value: 'Third',
+        source: '#third',
+        confidence: 90,
+      });
     });
 
     it('should handle entity at the beginning of text', () => {
@@ -46,7 +58,11 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ value: 'Microsoft', source: 'div.company' });
+      expect(result[0]).toEqual({
+        value: 'Microsoft',
+        source: 'div.company',
+        confidence: 95,
+      });
     });
 
     it('should handle entity in the middle of a line', () => {
@@ -68,7 +84,11 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ value: 'Microsoft', source: 'p.info' });
+      expect(result[0]).toEqual({
+        value: 'Microsoft',
+        source: 'p.info',
+        confidence: 95,
+      });
     });
 
     it('should handle entities on different lines', () => {
@@ -90,8 +110,16 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ value: '450000', source: 'div.price' });
-      expect(result[1]).toEqual({ value: 'Austin', source: 'div.location' });
+      expect(result[0]).toEqual({
+        value: '450000',
+        source: 'div.price',
+        confidence: 90,
+      });
+      expect(result[1]).toEqual({
+        value: 'Austin',
+        source: 'div.location',
+        confidence: 85,
+      });
     });
 
     it('should return unknown source when entity has no position', () => {
@@ -107,7 +135,11 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ value: 'text', source: 'unknown' });
+      expect(result[0]).toEqual({
+        value: 'text',
+        source: 'unknown',
+        confidence: 90,
+      });
     });
 
     it('should return unknown source when position is beyond text length', () => {
@@ -124,7 +156,11 @@ describe('entity-source-mapper', () => {
 
       expect(result).toHaveLength(1);
       // Position beyond text length still maps to last line (line 0)
-      expect(result[0]).toEqual({ value: 'something', source: 'div' });
+      expect(result[0]).toEqual({
+        value: 'something',
+        source: 'div',
+        confidence: 90,
+      });
     });
 
     it('should map using cumulative positions when sourceMap has gaps', () => {
@@ -146,7 +182,11 @@ describe('entity-source-mapper', () => {
       // Entry 0: "Line 1" (6 chars) covers positions 0-5, cumulative pos after = 7
       // Entry 1: "Line 3" (6 chars) starts at cumulative position 7
       // So position 7 maps to the second sourceMap entry
-      expect(result[0]).toEqual({ value: 'Line', source: 'div.line3' });
+      expect(result[0]).toEqual({
+        value: 'Line',
+        source: 'div.line3',
+        confidence: 90,
+      });
     });
 
     it('should handle empty entities array', () => {
@@ -183,8 +223,13 @@ describe('entity-source-mapper', () => {
       expect(result[0]).toEqual({
         value: 'Microsoft',
         source: 'p.companies',
+        confidence: 95,
       });
-      expect(result[1]).toEqual({ value: 'Google', source: 'p.companies' });
+      expect(result[1]).toEqual({
+        value: 'Google',
+        source: 'p.companies',
+        confidence: 93,
+      });
     });
 
     it('should handle entity at line boundary', () => {
@@ -201,7 +246,11 @@ describe('entity-source-mapper', () => {
       const result = mapEntitiesToSources(entities, sourceMap, formattedText);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({ value: 'Start', source: 'div.second' });
+      expect(result[0]).toEqual({
+        value: 'Start',
+        source: 'div.second',
+        confidence: 90,
+      });
     });
 
     it('should handle real-world scenario with property data', () => {
@@ -227,10 +276,23 @@ describe('entity-source-mapper', () => {
       expect(result[0]).toEqual({
         value: '123 Main Street',
         source: 'h1.address',
+        confidence: 95,
       });
-      expect(result[1]).toEqual({ value: '450000', source: 'div.price' });
-      expect(result[2]).toEqual({ value: '1985', source: 'span.year' });
-      expect(result[3]).toEqual({ value: 'Austin', source: 'p.location' });
+      expect(result[1]).toEqual({
+        value: '450000',
+        source: 'div.price',
+        confidence: 92,
+      });
+      expect(result[2]).toEqual({
+        value: '1985',
+        source: 'span.year',
+        confidence: 98,
+      });
+      expect(result[3]).toEqual({
+        value: 'Austin',
+        source: 'p.location',
+        confidence: 90,
+      });
     });
 
     it('should handle JSONPath sources', () => {
@@ -260,8 +322,13 @@ describe('entity-source-mapper', () => {
       expect(result[0]).toEqual({
         value: '123 Main Street',
         source: '$.property_address',
+        confidence: 95,
       });
-      expect(result[1]).toEqual({ value: '450000', source: '$.sale_price' });
+      expect(result[1]).toEqual({
+        value: '450000',
+        source: '$.sale_price',
+        confidence: 92,
+      });
     });
   });
 });

@@ -449,7 +449,7 @@ function addSourcesToUnmatched(
           const entity = categoryEntities.find((e) => e.value === valueStr);
 
           if (!entity) {
-            return { value: valueStr, source: 'unknown' };
+            return { value: valueStr, source: 'unknown', confidence: 0 };
           }
 
           const entityWithSource = mapEntitiesToSources(
@@ -458,7 +458,13 @@ function addSourcesToUnmatched(
             rawData.formattedText
           )[0];
 
-          return entityWithSource || { value: valueStr, source: 'unknown' };
+          return (
+            entityWithSource || {
+              value: valueStr,
+              source: 'unknown',
+              confidence: entity.confidence,
+            }
+          );
         }
       );
 

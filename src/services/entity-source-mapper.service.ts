@@ -4,6 +4,7 @@ import type { TextWithSource } from '../utils/html-source-extractor.js';
 export interface EntityWithSource {
   value: string;
   source: string;
+  confidence: number;
 }
 
 function findSourceForPosition(
@@ -52,6 +53,7 @@ export function mapEntitiesToSources(
       result.push({
         value: entity.value,
         source: 'unknown',
+        confidence: entity.confidence,
       });
       continue;
     }
@@ -62,11 +64,13 @@ export function mapEntitiesToSources(
       result.push({
         value: entity.value,
         source: sourceEntry.source,
+        confidence: entity.confidence,
       });
     } else {
       result.push({
         value: entity.value,
         source: 'unknown',
+        confidence: entity.confidence,
       });
     }
   }
