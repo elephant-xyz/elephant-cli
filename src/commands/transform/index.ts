@@ -11,6 +11,7 @@ import { runScriptsPipeline } from './script-runner.js';
 import { extractZipToTemp } from '../../utils/zip.js';
 import { createCountyDataGroup } from './county-datagroup.js';
 import { createPropertyImprovementDataGroup as createPropertyImprovementDataGroupFromModule } from './property-improvement-datagroup.js';
+import { createPhotoDataGroup } from './photo-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
 import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
@@ -20,9 +21,11 @@ import {
   parseMultiValueQueryString,
   SourceHttpRequest,
 } from './sourceHttpRequest.js';
+import { IPFSFetcherService } from '../../services/ipfs-fetcher.service.js';
 
 const INPUT_DIR = 'input';
 const OUTPUT_DIR = 'data';
+const FACT_SHEET_CID_FILENAME = 'fact_sheet_cid.txt';
 
 export interface TransformCommandOptions {
   outputZip?: string;
@@ -32,7 +35,14 @@ export interface TransformCommandOptions {
   silent?: boolean;
   cwd?: string;
   dataGroup?: string;
+  factSheetCid?: string;
+  enableFactSheetCidInput?: boolean;
   [key: string]: any;
+}
+
+interface FactSheetCidOverlay {
+  baseDir: string;
+  files: ReadonlyArray<string>;
 }
 
 interface SeedRow {
@@ -103,6 +113,15 @@ export function registerTransformCommand(program: Command) {
       '--data-group <string>',
       'Specify data group type to create (e.g., "Property Improvement")',
       undefined
+    )
+    .option(
+      '--fact-sheet-cid <string>',
+      'Fetch additional classes from CID before fact sheet generation'
+    )
+    .option(
+      '--enable-fact-sheet-cid-input',
+      `Read fact sheet CID from input bundle (${FACT_SHEET_CID_FILENAME})`,
+      false
     )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
@@ -191,6 +210,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
     await normalizeInputsForScripts(path.join(tempRoot, INPUT_DIR), tempRoot);
 
     let isSeedMode = false;
+    const factSheetOverlays: FactSheetCidOverlay[] = [];
     if (resolvedScriptsZip) {
       logger.info('Extracting scripts to tempdir...');
       const scriptsDir = await extractZipToTemp(
@@ -201,10 +221,18 @@ async function handleScriptsMode(options: TransformCommandOptions) {
 
       // Determine data group type and creation function
       let dataGroupType = 'County';
-      let createDataGroupFunction = createCountyDataGroup;
+      let createDataGroupFunction: (
+        relationshipFiles: readonly string[]
+      ) => any = createCountyDataGroup;
+      let scriptNames: string[] | undefined;
 
       if (options.dataGroup) {
         const dataGroupLower = options.dataGroup.toLowerCase();
+        if (dataGroupLower === 'photo') {
+          dataGroupType = 'Photo';
+          createDataGroupFunction = createPhotoDataGroup;
+          scriptNames = ['photo-transform.js'];
+        }
         if (
           dataGroupLower === 'property improvement' ||
           dataGroupLower === 'property_improvement'
@@ -250,12 +278,25 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         scriptsDir,
         tempRoot,
         dataGroupType,
-        createDataGroupFunction
+        createDataGroupFunction,
+        scriptNames
       );
     } else {
       logger.info('Processing seed data group...');
       await handleSeedTransform(tempRoot);
       isSeedMode = true;
+    }
+
+    const factSheetCid = await determineFactSheetCid(options, tempRoot);
+    if (factSheetCid) {
+      const overlay = await mergeFactSheetCidData(
+        tempRoot,
+        factSheetCid,
+        cleanup
+      );
+      if (overlay) {
+        factSheetOverlays.push(overlay);
+      }
     }
 
     if (!isSeedMode) {
@@ -264,7 +305,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         !options.dataGroup ||
         options.dataGroup.toLowerCase() !== 'property improvement'
       ) {
-        await generateFactSheet(tempRoot);
+        await generateFactSheet(tempRoot, factSheetOverlays);
       }
     }
     const zip = new AdmZip();
@@ -299,10 +340,34 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   }
 }
 
-async function generateFactSheet(tempRoot: string) {
+async function generateFactSheet(
+  tempRoot: string,
+  overlays: ReadonlyArray<FactSheetCidOverlay> = []
+) {
   const outputPath = path.join(tempRoot, OUTPUT_DIR);
   const htmlOutputDir = path.join(tmpdir(), 'generated-htmls');
-  await generateHTMLFiles(tempRoot, htmlOutputDir);
+  const factSheetInputDir = await fs.mkdtemp(
+    path.join(tmpdir(), 'fact-sheet-input-')
+  );
+
+  await fs.cp(tempRoot, factSheetInputDir, { recursive: true });
+
+  for (const overlay of overlays) {
+    for (const relativePath of overlay.files) {
+      const sourcePath = path.join(overlay.baseDir, relativePath);
+      if (!existsSync(sourcePath)) {
+        continue;
+      }
+      const destinationPath = path.join(factSheetInputDir, relativePath);
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+      if (existsSync(destinationPath)) {
+        continue;
+      }
+      await fs.copyFile(sourcePath, destinationPath);
+    }
+  }
+
+  await generateHTMLFiles(factSheetInputDir, htmlOutputDir);
   const htmlEntries = await fs.readdir(htmlOutputDir, {
     withFileTypes: true,
   });
@@ -323,6 +388,8 @@ async function generateFactSheet(tempRoot: string) {
       logger.debug(`Copied directory ${entry.name} to property directory`);
     }
   }
+
+  await fs.rm(factSheetInputDir, { recursive: true, force: true });
 
   const schemaManifestService = new SchemaManifestService();
   const schemaCacheService = new SchemaCacheService();
@@ -348,6 +415,269 @@ async function moveDirectory(src: string, dest: string): Promise<void> {
       await fs.rename(srcPath, destPath);
     }
   }
+}
+
+function normalizeLinkTarget(link: string): string | null {
+  const trimmed = link.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.includes('://')) {
+    return null;
+  }
+  if (trimmed.startsWith('#')) {
+    return null;
+  }
+  if (trimmed.startsWith('../')) {
+    return null;
+  }
+  if (trimmed.startsWith('./')) {
+    return trimmed.slice(2);
+  }
+  if (trimmed.startsWith('/')) {
+    return trimmed.slice(1);
+  }
+  return trimmed;
+}
+
+function extractLinkTargets(value: unknown): string[] {
+  const result: string[] = [];
+  const stack: unknown[] = [value];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (current === null || current === undefined) {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        stack.push(item);
+      }
+      continue;
+    }
+    if (typeof current === 'object') {
+      const record = current as Record<string, unknown>;
+      const candidate = record['/'];
+      if (typeof candidate === 'string' && Object.keys(record).length === 1) {
+        result.push(candidate);
+        continue;
+      }
+      for (const item of Object.values(record)) {
+        stack.push(item);
+      }
+    }
+  }
+
+  return result;
+}
+
+async function collectFactSheetCidFiles(
+  rootDir: string
+): Promise<{ files: Set<string>; missing: Set<string> }> {
+  const directoryEntries = await fs.readdir(rootDir, { withFileTypes: true });
+  const datagroupFiles: string[] = [];
+
+  for (const entry of directoryEntries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) {
+      continue;
+    }
+
+    try {
+      const raw = await fs.readFile(path.join(rootDir, entry.name), 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (SchemaManifestService.isDataGroupRootFile(parsed)) {
+        datagroupFiles.push(entry.name);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      logger.debug(
+        `Skipping ${entry.name} while discovering datagroup files: ${message}`
+      );
+    }
+  }
+
+  const startFiles =
+    datagroupFiles.length > 0
+      ? datagroupFiles
+      : directoryEntries
+          .filter((entry) => entry.isFile())
+          .map((entry) => entry.name);
+
+  const pending: string[] = [...startFiles];
+  const discovered = new Set<string>();
+  const missing = new Set<string>();
+
+  while (pending.length) {
+    const candidate = pending.pop();
+    if (!candidate) {
+      continue;
+    }
+    if (discovered.has(candidate) || missing.has(candidate)) {
+      continue;
+    }
+    const candidatePath = path.join(rootDir, candidate);
+    if (!existsSync(candidatePath)) {
+      missing.add(candidate);
+      continue;
+    }
+
+    discovered.add(candidate);
+
+    if (!candidate.endsWith('.json')) {
+      continue;
+    }
+
+    let parsedJson: unknown;
+    try {
+      const raw = await fs.readFile(candidatePath, 'utf-8');
+      parsedJson = JSON.parse(raw);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      logger.debug(
+        `Skipping traversal for ${candidate}: ${message}`
+      );
+      continue;
+    }
+
+    const targets = extractLinkTargets(parsedJson);
+    for (const target of targets) {
+      const normalized = normalizeLinkTarget(target);
+      if (!normalized) {
+        continue;
+      }
+      pending.push(normalized);
+    }
+  }
+
+  return { files: discovered, missing };
+}
+
+async function determineFactSheetCid(
+  options: TransformCommandOptions,
+  tempRoot: string
+): Promise<string | null> {
+  const inline = options.factSheetCid?.trim();
+  if (inline) {
+    logger.info('Using fact sheet CID provided via command flag');
+    return inline;
+  }
+
+  if (!options.enableFactSheetCidInput) {
+    return null;
+  }
+
+  const fromInput = await readFactSheetCidFromInput(tempRoot);
+  if (fromInput) {
+    logger.info(
+      `Using fact sheet CID from input bundle (${FACT_SHEET_CID_FILENAME})`
+    );
+  }
+  return fromInput;
+}
+
+async function readFactSheetCidFromInput(
+  tempRoot: string
+): Promise<string | null> {
+  const cidPath = path.join(tempRoot, INPUT_DIR, FACT_SHEET_CID_FILENAME);
+  try {
+    const raw = await fs.readFile(cidPath, 'utf-8');
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      logger.warn(
+        `Fact sheet CID file ${FACT_SHEET_CID_FILENAME} is empty, ignoring`
+      );
+      return null;
+    }
+    return trimmed;
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code !== 'ENOENT') {
+      logger.warn(
+        `Failed to read fact sheet CID file ${FACT_SHEET_CID_FILENAME}: ${err.message}`
+      );
+      return null;
+    }
+    logger.debug(
+      `Fact sheet CID file ${FACT_SHEET_CID_FILENAME} not found in input bundle`
+    );
+    return null;
+  }
+}
+
+async function mergeFactSheetCidData(
+  tempRoot: string,
+  cid: string,
+  cleanup: Array<() => Promise<void>>
+): Promise<FactSheetCidOverlay | null> {
+  const trimmedCid = cid.trim();
+  if (!trimmedCid) {
+    return null;
+  }
+
+  logger.info(`Fetching CID ${trimmedCid} for fact sheet enrichment`);
+  const cidBaseDir = await fs.mkdtemp(path.join(tempRoot, 'fact-sheet-cid-'));
+
+  cleanup.push(async () => {
+    await fs.rm(cidBaseDir, { recursive: true, force: true });
+  });
+
+  const ipfsFetcher = new IPFSFetcherService();
+  const fetchedDir = await ipfsFetcher.fetchData(trimmedCid, cidBaseDir);
+
+  const { files, missing } = await collectFactSheetCidFiles(fetchedDir);
+  if (!files.size) {
+    logger.warn(
+      `No files discovered while traversing CID ${trimmedCid} for fact sheet enrichment`
+    );
+    return null;
+  }
+
+  const overlayBaseDir = path.join(
+    tempRoot,
+    'fact-sheet-cid-overlay',
+    trimmedCid
+  );
+  await fs.mkdir(overlayBaseDir, { recursive: true });
+
+  for (const relativePath of files) {
+    const sourcePath = path.join(fetchedDir, relativePath);
+    if (!existsSync(sourcePath)) {
+      logger.warn(
+        `Skipping missing reference ${relativePath} while merging CID ${trimmedCid}`
+      );
+      continue;
+    }
+
+    const destinationPath = path.join(overlayBaseDir, relativePath);
+    await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+    if (existsSync(destinationPath)) {
+      logger.debug(
+        `Skipping existing file ${relativePath} in overlay for CID ${trimmedCid}`
+      );
+      continue;
+    }
+
+    await fs.copyFile(sourcePath, destinationPath);
+    logger.debug(
+      `Prepared ${relativePath} from CID ${trimmedCid} for fact sheet generation`
+    );
+  }
+
+  if (missing.size) {
+    logger.warn(
+      `CID ${trimmedCid} referenced ${missing.size} missing file(s): ${Array.from(
+        missing
+      ).join(', ')}`
+    );
+  }
+
+  logger.info(
+    `Prepared ${files.size} file(s) from CID ${trimmedCid} for fact sheet generation`
+  );
+
+  return { baseDir: overlayBaseDir, files: Array.from(files) };
 }
 async function handleSeedTransform(tempRoot: string) {
   const seedCsv = await fs.readFile(
@@ -576,7 +906,8 @@ async function handleDataGroupTransform(
   scriptsDir: string,
   tempRoot: string,
   dataGroupType: string,
-  createDataGroupFunction: (relationshipFiles: readonly string[]) => any
+  createDataGroupFunction: (relationshipFiles: readonly string[]) => any,
+  scriptNames?: readonly string[]
 ) {
   if (dataGroupType === 'Property Improvement') {
     // For Property Improvement, we already ran the extraction script
@@ -630,7 +961,11 @@ async function handleDataGroupTransform(
 
   // For County and other data groups, run the normal scripts pipeline
   logger.info('Running generated scripts pipeline...');
-  await runScriptsPipeline(scriptsDir, tempRoot);
+  await runScriptsPipeline(
+    scriptsDir,
+    tempRoot,
+    scriptNames ? [...scriptNames] : undefined
+  );
 
   const newJsonRelPaths = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
   if (newJsonRelPaths.length === 0) {
