@@ -111,6 +111,7 @@ describe('validate-and-upload with image support', () => {
         {
           path: '/relationships/0/ipfs_url',
           message: 'must be a valid IPFS URI',
+          value: './images/product1.jpg',
         },
       ]),
       resolveData: vi.fn().mockImplementation((data) => Promise.resolve(data)),
@@ -408,6 +409,13 @@ describe('validate-and-upload with image support', () => {
         },
       ],
     });
+    mockJsonValidatorService.getErrorMessages = vi.fn().mockReturnValue([
+      {
+        path: '/relationships/0/ipfs_url',
+        message: 'must be a valid IPFS URI',
+        value: './non-existent-image.jpg',
+      },
+    ]);
 
     // Mock IPLD converter to throw error for missing file
     mockIpldConverterService.hasIPLDLinks = vi.fn().mockReturnValue(true);
@@ -469,6 +477,7 @@ describe('validate-and-upload with image support', () => {
       expect.objectContaining({
         errorMessage: 'must be a valid IPFS URI',
         errorPath: '/relationships/0/ipfs_url',
+        currentValue: './non-existent-image.jpg',
       })
     );
 

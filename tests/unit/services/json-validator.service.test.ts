@@ -358,11 +358,13 @@ describe('JsonValidatorService', () => {
     });
 
     it('should handle empty errors', () => {
-      const errorMessages = jsonValidator.getErrorMessages([]);
-      expect(errorMessages[0]).toEqual({
-        path: 'root',
-        message: 'Unknown validation error',
-      });
+    const errorMessages = jsonValidator.getErrorMessages([]);
+    expect(errorMessages[0]).toMatchObject({
+      path: 'root',
+      message: 'Unknown validation error',
+      value: '',
+    });
+    expect(errorMessages[0].displayPath).toBeUndefined();
     });
   });
 
