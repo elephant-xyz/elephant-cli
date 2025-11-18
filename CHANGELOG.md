@@ -1,3 +1,10 @@
+## [1.54.6](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.5...v1.54.6) (2025-11-18)
+
+
+### Bug Fixes
+
+* **validate:** aggregating error and make it more readable ([#216](https://github.com/elephant-xyz/elephant-cli/issues/216)) ([219b0f3](https://github.com/elephant-xyz/elephant-cli/commit/219b0f318955aea430dde65528844a09101fc323))
+
 ## [1.54.5](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.4...v1.54.5) (2025-11-12)
 
 
