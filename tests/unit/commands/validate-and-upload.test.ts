@@ -404,7 +404,7 @@ describe('ValidateAndUploadCommand', () => {
       .mockResolvedValueOnce({ valid: true });
 
     vi.mocked(mockJsonValidatorService.getErrorMessages).mockReturnValue([
-      { path: 'instance.field', message: 'is required' },
+      { path: 'instance.field', message: 'is required', value: '' },
     ]);
 
     const serviceOverrides = {
@@ -422,9 +422,10 @@ describe('ValidateAndUploadCommand', () => {
 
     expect(mockCsvReporterService.logError).toHaveBeenCalledWith(
       expect.objectContaining({
-        propertyCid: 'property1',
+        propertyCid: '',
         errorPath: 'instance.field',
         errorMessage: 'is required',
+        currentValue: '',
       })
     );
 
