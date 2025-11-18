@@ -341,7 +341,9 @@ describe('handleValidate', () => {
     });
     mockJsonValidatorService.getErrorMessages = vi
       .fn()
-      .mockReturnValue([{ path: '/label', message: 'Label is required' }]);
+      .mockReturnValue([
+        { path: '/label', message: 'Label is required', value: '' },
+      ]);
     mockCsvReporterService.getErrorCount = vi.fn().mockReturnValue(2);
     mockProgressTracker.getMetrics = vi.fn().mockReturnValue({
       startTime: Date.now(),
@@ -369,6 +371,8 @@ describe('handleValidate', () => {
       expect.objectContaining({
         errorMessage: 'Label is required',
         errorPath: '/label',
+        currentValue: '',
+        propertyCid: '',
       })
     );
     expect(mockProgressTracker.increment).toHaveBeenCalledWith('errors');

@@ -15,6 +15,7 @@ export interface ValidationError {
   keyword: string;
   params: any;
   data: any;
+  sourcePath?: string;
 }
 
 export interface ValidationResult {
@@ -208,6 +209,7 @@ export class JsonValidatorService {
       );
 
       // Resolve CID pointers in data if present, but only where schema allows it
+      const pointerOrigins = new Map<string, string>();
       if (skipCIDResolution) {
         resolvedData = data;
       } else {
@@ -215,7 +217,11 @@ export class JsonValidatorService {
           data,
           currentFilePath,
           resolvedSchema,
-          cidAllowedMap
+          cidAllowedMap,
+          '',
+          pointerOrigins,
+          '',
+          undefined
         );
       }
 
@@ -235,7 +241,11 @@ export class JsonValidatorService {
         return { valid: true };
       } else {
         // Transform AJV errors to our format
-        const errors = this.transformErrors(validator.errors || []);
+        const errors = this.transformErrors(
+          validator.errors || [],
+          resolvedData,
+          pointerOrigins
+        );
         return { valid: false, errors };
       }
     } catch (error) {
@@ -433,8 +443,16 @@ export class JsonValidatorService {
     currentFilePath?: string,
     schema?: any,
     cidAllowedMap?: Map<string, boolean>,
-    currentPath: string = ''
+    currentPath: string = '',
+    pointerOrigins?: Map<string, string>,
+    currentPointer: string = '',
+    currentOrigin?: string
   ): Promise<any> {
+    const pointerKey = currentPointer || '/';
+    if (pointerOrigins && currentOrigin) {
+      pointerOrigins.set(pointerKey, currentOrigin);
+    }
+
     if (!data || typeof data !== 'object' || data === null) {
       return data;
     }
@@ -494,7 +512,10 @@ export class JsonValidatorService {
             currentFilePath,
             schema,
             cidAllowedMap,
-            currentPath
+            currentPath,
+            pointerOrigins,
+            currentPointer,
+            currentOrigin
           );
         } catch (error) {
           throw new Error(
@@ -545,12 +566,21 @@ export class JsonValidatorService {
         } catch {
           return fileContent;
         }
+
+        const normalizedSource = this.normalizeSourceDisplayPath(
+          pointerValue,
+          filePath
+        );
+
         return await this.resolveCIDPointers(
           parsed,
-          currentFilePath,
+          filePath,
           schema,
           cidAllowedMap,
-          currentPath
+          currentPath,
+          pointerOrigins,
+          currentPointer,
+          normalizedSource
         );
       }
     }
@@ -559,15 +589,19 @@ export class JsonValidatorService {
     if (Array.isArray(data)) {
       const itemSchema = schema && schema.items ? schema.items : undefined;
       const arrayResults = await Promise.all(
-        data.map((item, _index) => {
+        data.map((item, index) => {
           try {
             const itemPath = currentPath ? `${currentPath}[]` : '[]';
+            const itemPointer = `${currentPointer}/${index}`;
             return this.resolveCIDPointers(
               item,
               currentFilePath,
               itemSchema,
               cidAllowedMap,
-              itemPath
+              itemPath,
+              pointerOrigins,
+              itemPointer,
+              currentOrigin
             );
           } catch (error) {
             throw new Error(`Failed to resolve CID pointer in array: ${error}`);
@@ -580,6 +614,14 @@ export class JsonValidatorService {
     // Recursively resolve CID pointers in objects
     const resolved: any = {};
     for (const key in data) {
+      if (!Object.prototype.hasOwnProperty.call(data, key)) {
+        continue;
+      }
+
+      const propertyPointer = `${currentPointer}/${this.escapeJsonPointerSegment(
+        key
+      )}`;
+
       if (typeof data[key] === 'object' && data[key] !== null) {
         let propertySchema =
           schema && schema.properties && schema.properties[key]
@@ -607,9 +649,15 @@ export class JsonValidatorService {
           currentFilePath,
           propertySchema,
           cidAllowedMap,
-          propertyPath
+          propertyPath,
+          pointerOrigins,
+          propertyPointer,
+          currentOrigin
         );
       } else {
+        if (pointerOrigins && currentOrigin) {
+          pointerOrigins.set(propertyPointer, currentOrigin);
+        }
         resolved[key] = data[key];
       }
     }
@@ -645,14 +693,25 @@ export class JsonValidatorService {
   /**
    * Transform AJV errors to our format
    */
-  private transformErrors(ajvErrors: ErrorObject[]): ValidationError[] {
-    return ajvErrors.map((error) => ({
-      path: error.instancePath || '/',
-      message: this.enhanceErrorMessage(error),
-      keyword: error.keyword,
-      params: error.params,
-      data: error.data,
-    }));
+  private transformErrors(
+    ajvErrors: ErrorObject[],
+    rootData: unknown,
+    pointerOrigins?: Map<string, string>
+  ): ValidationError[] {
+    return ajvErrors.map((error) => {
+      const instancePath = error.instancePath || '/';
+      return {
+        path: instancePath,
+        message: this.enhanceErrorMessage(error),
+        keyword: error.keyword,
+        params: error.params,
+        data: this.getDataAtPointer(rootData, error.instancePath || ''),
+        sourcePath:
+          pointerOrigins?.get(instancePath) ??
+          pointerOrigins?.get('/') ??
+          undefined,
+      };
+    });
   }
 
   /**
@@ -729,11 +788,20 @@ export class JsonValidatorService {
   /**
    * Get a human-readable error message from validation errors
    */
-  getErrorMessages(
-    errors: ValidationError[]
-  ): Array<{ path: string; message: string }> {
+  getErrorMessages(errors: ValidationError[]): Array<{
+    path: string;
+    message: string;
+    value: string;
+    displayPath?: string;
+  }> {
     if (!errors || errors.length === 0) {
-      return [{ path: 'root', message: 'Unknown validation error' }];
+      return [
+        {
+          path: 'root',
+          message: 'Unknown validation error',
+          value: '',
+        },
+      ];
     }
 
     return errors.map((error) => {
@@ -753,8 +821,176 @@ export class JsonValidatorService {
           : `Value ${dataValue} is not a valid CID or file path.`;
       }
 
-      return { path, message, data };
+      let value = '';
+      if (error.keyword === 'required') {
+        value = '';
+      } else if (error.keyword === 'additionalProperties') {
+        value = '';
+      } else {
+        value = this.formatErrorValue(data);
+      }
+      const pointerSegments = path.split('/').filter(Boolean);
+      const decodedSegments = pointerSegments.map((segment) =>
+        this.decodePointerSegment(segment)
+      );
+
+      const sourcePath = error.sourcePath;
+      const useFriendlyPath =
+        sourcePath && this.shouldUseFriendlySourcePath(sourcePath);
+
+      let propertySegments: string[] = [];
+      if (
+        decodedSegments.length >= 4 &&
+        decodedSegments[0] === 'relationships'
+      ) {
+        const sideIndex = decodedSegments.findIndex(
+          (segment) => segment === 'from' || segment === 'to'
+        );
+        if (sideIndex >= 0) {
+          propertySegments = decodedSegments.slice(sideIndex + 1);
+        }
+      }
+
+      let displayPath: string | undefined;
+      if (useFriendlyPath) {
+        displayPath =
+          propertySegments.length > 0
+            ? `${sourcePath}/${propertySegments.join('/')}`
+            : sourcePath;
+      }
+
+      if (!displayPath && propertySegments.length > 0) {
+        displayPath = propertySegments.join('/');
+      }
+
+      if (!displayPath && error.keyword === 'required' && error.params) {
+        const missingProperty = (error.params as Record<string, unknown>)
+          .missingProperty;
+        if (typeof missingProperty === 'string') {
+          displayPath = missingProperty;
+        }
+      }
+
+      if (
+        !displayPath &&
+        error.keyword === 'additionalProperties' &&
+        error.params
+      ) {
+        const additionalProperty = (error.params as Record<string, unknown>)
+          .additionalProperty;
+        if (typeof additionalProperty === 'string') {
+          displayPath = additionalProperty;
+        }
+      }
+
+      if (sourcePath && !useFriendlyPath) {
+        displayPath = sourcePath;
+      }
+
+      return {
+        path,
+        message,
+        value,
+        displayPath,
+      };
     });
+  }
+
+  private formatErrorValue(value: unknown): string {
+    if (value === undefined) {
+      return '';
+    }
+    if (value === null) {
+      return 'null';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      Object.keys(value).length === 1 &&
+      Object.prototype.hasOwnProperty.call(value, '/')
+    ) {
+      const pointerValue = (value as { '/': unknown })['/'];
+      return typeof pointerValue === 'string'
+        ? pointerValue
+        : this.formatErrorValue(pointerValue);
+    }
+    const serialized = JSON.stringify(value);
+    if (!serialized) {
+      return '';
+    }
+    const trimmed =
+      serialized.length > 500 ? `${serialized.slice(0, 497)}...` : serialized;
+    return trimmed;
+  }
+
+  private escapeJsonPointerSegment(segment: string): string {
+    return segment.replace(/~/g, '~0').replace(/\//g, '~1');
+  }
+
+  private normalizeSourceDisplayPath(
+    pointerValue: string,
+    absolutePath: string
+  ): string {
+    if (pointerValue.startsWith('./')) {
+      return pointerValue.slice(2);
+    }
+
+    if (this.baseDirectory) {
+      const relative = path.relative(this.baseDirectory, absolutePath);
+      if (relative && !relative.startsWith('..')) {
+        return relative.replace(/\\/g, '/');
+      }
+    }
+
+    return absolutePath.replace(/\\/g, '/');
+  }
+
+  private shouldUseFriendlySourcePath(sourcePath: string): boolean {
+    return sourcePath.endsWith('.json');
+  }
+
+  private getDataAtPointer(data: unknown, pointer: string): unknown {
+    if (!pointer || pointer === '/') {
+      return data;
+    }
+    const segments = pointer
+      .split('/')
+      .slice(1)
+      .map((segment) => this.decodePointerSegment(segment));
+    let current: unknown = data;
+    for (const segment of segments) {
+      if (current === null || current === undefined) {
+        return undefined;
+      }
+      if (Array.isArray(current)) {
+        const index = Number(segment);
+        if (Number.isNaN(index) || index < 0 || index >= current.length) {
+          return undefined;
+        }
+        current = current[index];
+        continue;
+      }
+      if (typeof current === 'object') {
+        const record = current as Record<string, unknown>;
+        if (!Object.prototype.hasOwnProperty.call(record, segment)) {
+          return undefined;
+        }
+        current = record[segment];
+        continue;
+      }
+      return undefined;
+    }
+    return current;
+  }
+
+  private decodePointerSegment(segment: string): string {
+    return segment.replace(/~1/g, '/').replace(/~0/g, '~');
   }
 
   /**

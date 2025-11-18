@@ -1101,19 +1101,50 @@ async function processFileAndGetUploadPromise(
     );
 
     if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
+      const errorMessages: Array<{
+        path: string;
+        message: string;
+        value: string;
+        displayPath?: string;
+      }> = services.jsonValidatorService.getErrorMessages(
+        validationResult.errors || []
+      );
 
       for (const errorInfo of errorMessages) {
+        const friendlyPath = errorInfo.displayPath ?? errorInfo.path;
+        const propertyDirNameLocal = path.basename(
+          path.dirname(fileEntry.filePath)
+        );
+        let filePathForCsv = fileEntry.filePath;
+        try {
+          const defaultFilePath = `${propertyDirNameLocal}/${path.basename(
+            fileEntry.filePath
+          )}`;
+          filePathForCsv =
+            errorInfo.displayPath && propertyDirNameLocal
+              ? `${propertyDirNameLocal}/${errorInfo.displayPath.split('/')[0]}`
+              : defaultFilePath;
+        } catch {
+          filePathForCsv = fileEntry.filePath;
+        }
+        let propertyCidForCsv = fileEntry.propertyCid;
+        try {
+          propertyCidForCsv =
+            !fileEntry.propertyCid ||
+            fileEntry.propertyCid === propertyDirNameLocal ||
+            fileEntry.propertyCid.startsWith('SEED_PENDING:')
+              ? ''
+              : fileEntry.propertyCid;
+        } catch {
+          propertyCidForCsv = fileEntry.propertyCid ?? '';
+        }
         await services.csvReporterService.logError({
-          propertyCid: fileEntry.propertyCid,
+          propertyCid: propertyCidForCsv,
           dataGroupCid: fileEntry.dataGroupCid,
-          filePath: fileEntry.filePath,
-          errorPath: errorInfo.path,
+          filePath: filePathForCsv,
+          errorPath: friendlyPath,
           errorMessage: errorInfo.message,
-          currentValue: '',
+          currentValue: errorInfo.value,
           timestamp: new Date().toISOString(),
         });
       }
