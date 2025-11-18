@@ -620,9 +620,7 @@ async function validateFile(
 
       for (const errorInfo of errorMessages) {
         const friendlyPath = errorInfo.displayPath ?? errorInfo.path;
-        const directoryForCsv = path.basename(
-          path.dirname(fileEntry.filePath)
-        );
+        const directoryForCsv = path.basename(path.dirname(fileEntry.filePath));
         const fileBase = errorInfo.displayPath
           ? errorInfo.displayPath.split('/')[0]
           : path.basename(fileEntry.filePath);

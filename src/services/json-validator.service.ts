@@ -707,7 +707,9 @@ export class JsonValidatorService {
         params: error.params,
         data: this.getDataAtPointer(rootData, error.instancePath || ''),
         sourcePath:
-          pointerOrigins?.get(instancePath) ?? pointerOrigins?.get('/') ?? undefined,
+          pointerOrigins?.get(instancePath) ??
+          pointerOrigins?.get('/') ??
+          undefined,
       };
     });
   }
@@ -786,9 +788,7 @@ export class JsonValidatorService {
   /**
    * Get a human-readable error message from validation errors
    */
-  getErrorMessages(
-    errors: ValidationError[]
-  ): Array<{
+  getErrorMessages(errors: ValidationError[]): Array<{
     path: string;
     message: string;
     value: string;
@@ -924,9 +924,8 @@ export class JsonValidatorService {
     if (!serialized) {
       return '';
     }
-    const trimmed = serialized.length > 500
-      ? `${serialized.slice(0, 497)}...`
-      : serialized;
+    const trimmed =
+      serialized.length > 500 ? `${serialized.slice(0, 497)}...` : serialized;
     return trimmed;
   }
 

@@ -339,9 +339,11 @@ describe('handleValidate', () => {
       valid: false,
       errors: [{ message: 'Invalid data' }],
     });
-    mockJsonValidatorService.getErrorMessages = vi.fn().mockReturnValue([
-      { path: '/label', message: 'Label is required', value: '' },
-    ]);
+    mockJsonValidatorService.getErrorMessages = vi
+      .fn()
+      .mockReturnValue([
+        { path: '/label', message: 'Label is required', value: '' },
+      ]);
     mockCsvReporterService.getErrorCount = vi.fn().mockReturnValue(2);
     mockProgressTracker.getMetrics = vi.fn().mockReturnValue({
       startTime: Date.now(),
