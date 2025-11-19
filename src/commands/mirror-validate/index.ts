@@ -169,7 +169,10 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     const extractor = new NEREntityExtractorService();
     await extractor.initialize();
 
-    const rawEntities = await extractor.extractEntities(rawData.formattedText);
+    const rawEntitiesWithRaw = await extractor.extractEntitiesWithRaw(
+      rawData.formattedText
+    );
+    const rawEntities = rawEntitiesWithRaw.processed;
 
     const aggregator = new TransformDataAggregatorService();
     const aggregatedData =
@@ -177,8 +180,9 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     const transformedText =
       aggregator.convertAggregatedDataToText(aggregatedData);
 
-    const transformedEntities =
-      await extractor.extractEntities(transformedText);
+    const transformedEntitiesWithRaw =
+      await extractor.extractEntitiesWithRaw(transformedText);
+    const transformedEntities = transformedEntitiesWithRaw.processed;
 
     const comparisonService = new EntityComparisonService();
     let comparison = comparisonService.compareEntities(
@@ -195,7 +199,7 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
       const stripPositions = (entities: EntityResult[]) =>
         entities.map(({ value, confidence }) => ({ value, confidence }));
 
-      const report = {
+      const report: Record<string, unknown> = {
         rawEntities: {
           QUANTITY: stripPositions(rawEntities.QUANTITY),
           DATE: stripPositions(rawEntities.DATE),
@@ -226,6 +230,13 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
           },
         },
       };
+
+      if (process.env.DEBUG_RAW_NER) {
+        report.rawModelRecognized = {
+          rawEntities: rawEntitiesWithRaw.raw,
+          transformedEntities: transformedEntitiesWithRaw.raw,
+        };
+      }
 
       await fs.writeFile(output, JSON.stringify(report, null, 2), 'utf-8');
       console.log(chalk.green(`\n✓ Report saved to: ${output}\n`));

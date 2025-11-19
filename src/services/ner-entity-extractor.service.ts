@@ -27,6 +27,18 @@ export interface ExtractedEntities {
   LOCATION: EntityResult[];
 }
 
+export interface ExtractedEntitiesWithRaw {
+  processed: ExtractedEntities;
+  raw: {
+    moneyPipeline: Token[];
+    locationPipeline: Token[];
+    aggregated: {
+      money: RawEntity[];
+      location: RawEntity[];
+    };
+  };
+}
+
 interface RawEntity {
   text: string;
   type: string;
@@ -187,6 +199,7 @@ function aggregateEntities(items: Token[]): RawEntity[] {
     const isContiguous =
       typeof t.index === 'number' && t.index === lastIndex + 1;
     const isBeginning = t.entity?.startsWith('B-');
+    const isContinuation = t.entity?.startsWith('I-');
 
     if (!cur) {
       cur = {
@@ -202,14 +215,30 @@ function aggregateEntities(items: Token[]): RawEntity[] {
     }
 
     const isNumericType = type === 'MONEY' || type === 'CARDINAL';
+    const curIsNumericType = cur.type === 'MONEY' || cur.type === 'CARDINAL';
+    const indexGap =
+      typeof t.index === 'number' && typeof lastIndex === 'number'
+        ? t.index - lastIndex
+        : Infinity;
+    const hasSmallGap = indexGap >= 1 && indexGap <= 3;
+
     const shouldIgnoreBeginning = (isNumericType && isContiguous) || isSubword;
+    const shouldMergeNumericWithGap =
+      isNumericType &&
+      curIsNumericType &&
+      type === cur.type &&
+      isContinuation &&
+      hasSmallGap;
+
     const shouldMerge =
       type === cur.type &&
-      (isContiguous || isSubword) &&
-      (!isBeginning || shouldIgnoreBeginning);
+      (((isContiguous || isSubword) &&
+        (!isBeginning || shouldIgnoreBeginning)) ||
+        shouldMergeNumericWithGap);
 
     if (shouldMerge) {
-      const sep = isSubword ? '' : ' ';
+      const isNumericMerge = isNumericType && curIsNumericType;
+      const sep = isSubword || isNumericMerge ? '' : ' ';
       cur.text += sep + clean(t.word || '');
       cur.scoreSum += t.score ?? 0;
       cur.count += 1;
@@ -458,35 +487,16 @@ function normalizeQuantity(quantityEntities: RawEntity[]): RawEntity[] {
       continue;
     }
 
-    const parts = text.split(/\s+/);
+    const normalized = normalizeNumericValue(text);
 
-    if (parts.length > 1) {
-      for (const part of parts) {
-        const normalized = normalizeNumericValue(part);
-
-        if (normalized !== null) {
-          const existing = valueMap.get(normalized);
-          if (!existing || entity.score > existing.score) {
-            valueMap.set(normalized, {
-              ...entity,
-              text: normalized,
-              originalText: part,
-            });
-          }
-        }
-      }
-    } else {
-      const normalized = normalizeNumericValue(text);
-
-      if (normalized !== null) {
-        const existing = valueMap.get(normalized);
-        if (!existing || entity.score > existing.score) {
-          valueMap.set(normalized, {
-            ...entity,
-            text: normalized,
-            originalText: text,
-          });
-        }
+    if (normalized !== null) {
+      const existing = valueMap.get(normalized);
+      if (!existing || entity.score > existing.score) {
+        valueMap.set(normalized, {
+          ...entity,
+          text: normalized,
+          originalText: text,
+        });
       }
     }
   }
@@ -567,6 +577,13 @@ export class NEREntityExtractorService {
   }
 
   async extractEntities(text: string): Promise<ExtractedEntities> {
+    const result = await this.extractEntitiesWithRaw(text);
+    return result.processed;
+  }
+
+  async extractEntitiesWithRaw(
+    text: string
+  ): Promise<ExtractedEntitiesWithRaw> {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -617,7 +634,7 @@ export class NEREntityExtractorService {
     const orgsWithPos = calculatePositions(filteredOrgs, text);
     const locationsWithPos = calculatePositions(confidentLocations, text);
 
-    return {
+    const processed = {
       QUANTITY: quantityWithPos.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
@@ -642,6 +659,18 @@ export class NEREntityExtractorService {
         start: e.start,
         end: e.end,
       })),
+    };
+
+    return {
+      processed,
+      raw: {
+        moneyPipeline: rawMoney,
+        locationPipeline: rawLocation,
+        aggregated: {
+          money: entitiesMoney,
+          location: entitiesLocation,
+        },
+      },
     };
   }
 }
