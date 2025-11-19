@@ -971,5 +971,297 @@ describe('NEREntityExtractorService', () => {
       expect(result.ORGANIZATION).toHaveLength(0);
       expect(result.LOCATION).toHaveLength(0);
     });
+
+    it('should aggregate numeric entities with index gaps (B-MONEY, I-MONEY with non-contiguous indices)', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Simulating: "39" + "##3" + (gap at index 132) + "164"
+      // This should aggregate to "393164" (no spaces)
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '39',
+          score: 0.586,
+          index: 130,
+          start: null,
+          end: null,
+        },
+        {
+          entity: 'I-MONEY',
+          word: '##3',
+          score: 0.868,
+          index: 131,
+          start: null,
+          end: null,
+        },
+        {
+          entity: 'I-MONEY',
+          word: '164',
+          score: 0.574,
+          index: 133, // Gap here: index 132 is missing
+          start: null,
+          end: null,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('text 393164 text');
+
+      // Should aggregate to single value without spaces
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('393164');
+    });
+
+    it('should aggregate numeric entities without adding spaces for non-subword gaps', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Multiple I-MONEY tokens with small gaps should merge without spaces
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '12',
+          score: 0.9,
+          index: 0,
+          start: null,
+          end: null,
+        },
+        {
+          entity: 'I-MONEY',
+          word: '34',
+          score: 0.9,
+          index: 2, // Gap of 1
+          start: null,
+          end: null,
+        },
+        {
+          entity: 'I-MONEY',
+          word: '56',
+          score: 0.9,
+          index: 4, // Gap of 1
+          start: null,
+          end: null,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('text 123456 text');
+
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('123456');
+    });
+
+    it('should deduplicate overlapping numeric entities by position (keep longest)', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Three overlapping entities with large index gaps to prevent aggregation
+      // "6600", "906", "6600906" at same position
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '6600',
+          score: 0.822,
+          index: 0,
+          start: 0,
+          end: 4,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '906',
+          score: 0.636,
+          index: 100,
+          start: 4,
+          end: 7,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '6600906',
+          score: 0.991,
+          index: 200,
+          start: 0,
+          end: 7,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('6600906');
+
+      // Should keep only the longest overlapping entity
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('6600906');
+      expect(result.QUANTITY[0].confidence).toBeCloseTo(99.1, 1);
+    });
+
+    it('should keep non-overlapping numeric entities even if one is substring of another', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Three different values at different positions: "$65", "$650", "$6500"
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '$65',
+          score: 0.9,
+          index: 0,
+          start: 0,
+          end: 3,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '$650',
+          score: 0.9,
+          index: 10,
+          start: 20,
+          end: 24,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '$6500',
+          score: 0.9,
+          index: 20,
+          start: 40,
+          end: 45,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities(
+        '$65 in one place, $650 in another, $6500 elsewhere'
+      );
+
+      // All three should be kept (non-overlapping positions)
+      const values = result.QUANTITY.map((e) => e.value);
+      expect(values).toContain('65');
+      expect(values).toContain('650');
+      expect(values).toContain('6500');
+      expect(result.QUANTITY.length).toBe(3);
+    });
+
+    it('should select longer entity when two entities overlap at same position', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Two overlapping entities at same start position with large index gap
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '100',
+          score: 0.8,
+          index: 0,
+          start: 0,
+          end: 3,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '100000',
+          score: 0.85,
+          index: 100,
+          start: 0,
+          end: 6,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('100000');
+
+      // Should keep the longer one
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('100000');
+    });
+
+    it('should select higher confidence when entities have same length and overlap', async () => {
+      const freshService = new NEREntityExtractorService();
+      const freshMockMoney = vi.fn();
+      const freshMockLocation = vi.fn();
+
+      const { pipeline } = await import('@xenova/transformers');
+      vi.mocked(pipeline).mockImplementation(async (task, modelId) => {
+        if (modelId === 'test-model') {
+          return freshMockMoney as unknown as ReturnType<typeof pipeline>;
+        }
+        return freshMockLocation as unknown as ReturnType<typeof pipeline>;
+      });
+
+      // Same length, different confidence, overlapping with large index gap
+      freshMockMoney.mockResolvedValue([
+        {
+          entity: 'B-MONEY',
+          word: '500',
+          score: 0.75,
+          index: 0,
+          start: 0,
+          end: 3,
+        },
+        {
+          entity: 'B-MONEY',
+          word: '500',
+          score: 0.95,
+          index: 100,
+          start: 0,
+          end: 3,
+        },
+      ]);
+      freshMockLocation.mockResolvedValue([]);
+
+      await freshService.initialize();
+      const result = await freshService.extractEntities('500');
+
+      // Should keep higher confidence
+      expect(result.QUANTITY).toHaveLength(1);
+      expect(result.QUANTITY[0].value).toBe('500');
+      expect(result.QUANTITY[0].confidence).toBeCloseTo(95, 1);
+    });
   });
 });
