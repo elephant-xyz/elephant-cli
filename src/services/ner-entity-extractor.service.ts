@@ -522,7 +522,7 @@ function normalizeNumericValue(value: string): string | null {
 
 function filterByConfidence(
   entities: RawEntity[],
-  threshold = 0.5
+  threshold = 0.6
 ): RawEntity[] {
   return entities.filter((entity) => entity.score >= threshold);
 }

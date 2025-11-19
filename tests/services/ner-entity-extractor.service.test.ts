@@ -899,7 +899,7 @@ describe('NEREntityExtractorService', () => {
         {
           entity: 'B-MONEY',
           word: '$500',
-          score: 0.5,
+          score: 0.6,
           start: 0,
           end: 4,
         },
@@ -909,7 +909,7 @@ describe('NEREntityExtractorService', () => {
         {
           entity_group: 'ORG',
           word: 'Company',
-          score: 0.5,
+          score: 0.6,
           start: 10,
           end: 17,
         },
