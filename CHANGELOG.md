@@ -1,3 +1,10 @@
+## [1.54.7](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.6...v1.54.7) (2025-11-19)
+
+
+### Bug Fixes
+
+* dump zod-to-json-schema version ([#217](https://github.com/elephant-xyz/elephant-cli/issues/217)) ([149c922](https://github.com/elephant-xyz/elephant-cli/commit/149c92203e6ad416774471358e0420a56814e3a9))
+
 ## [1.54.6](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.5...v1.54.6) (2025-11-18)
 
 
