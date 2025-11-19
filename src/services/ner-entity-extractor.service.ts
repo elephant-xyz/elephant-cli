@@ -322,6 +322,63 @@ function uniqByText(arr: RawEntity[]): RawEntity[] {
   return out;
 }
 
+function deduplicateByPosition(arr: RawEntity[]): RawEntity[] {
+  const out: RawEntity[] = [];
+
+  for (const candidate of arr) {
+    if (
+      candidate.start === undefined ||
+      candidate.end === undefined ||
+      !candidate.text
+    ) {
+      out.push(candidate);
+      continue;
+    }
+
+    const candidateStart = candidate.start!;
+    const candidateEnd = candidate.end!;
+
+    const overlaps = arr.filter((other) => {
+      if (other === candidate) return false;
+      if (other.start === undefined || other.end === undefined || !other.text) {
+        return false;
+      }
+
+      const otherStart = other.start;
+      const otherEnd = other.end;
+
+      const hasOverlap =
+        (otherStart >= candidateStart && otherStart < candidateEnd) ||
+        (otherEnd > candidateStart && otherEnd <= candidateEnd) ||
+        (otherStart <= candidateStart && otherEnd >= candidateEnd);
+
+      return hasOverlap;
+    });
+
+    if (overlaps.length === 0) {
+      out.push(candidate);
+      continue;
+    }
+
+    const allOverlapping = [candidate, ...overlaps];
+    const best = allOverlapping.reduce((prev, curr) => {
+      const prevLength = prev.text.length;
+      const currLength = curr.text.length;
+
+      if (currLength > prevLength) return curr;
+      if (currLength < prevLength) return prev;
+
+      return curr.score > prev.score ? curr : prev;
+    });
+
+    if (best === candidate && !out.some((e) => e === best)) {
+      out.push(candidate);
+    }
+  }
+
+  return out;
+}
+
 function expandNumericEntities(
   entities: RawEntity[],
   originalText: string
@@ -634,8 +691,11 @@ export class NEREntityExtractorService {
     const orgsWithPos = calculatePositions(filteredOrgs, text);
     const locationsWithPos = calculatePositions(confidentLocations, text);
 
+    // Deduplicate quantities by position (remove overlapping substrings)
+    const dedupedQuantity = deduplicateByPosition(quantityWithPos);
+
     const processed = {
-      QUANTITY: quantityWithPos.map((e) => ({
+      QUANTITY: dedupedQuantity.map((e) => ({
         value: e.text,
         confidence: parseFloat((e.score * 100).toFixed(1)),
         start: e.start,
