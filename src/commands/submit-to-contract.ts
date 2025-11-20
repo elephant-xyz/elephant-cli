@@ -81,14 +81,18 @@ function parseGasParameter(
 ): string | number | undefined {
   if (value === undefined) return undefined;
 
-  if (value !== 'auto' && (isNaN(parseFloat(value)) || !isFinite(value))) {
-    const errorMsg = `Error: Invalid ${paramName}. Must be a number or "auto".`;
-    logger.error(errorMsg);
-    console.error(errorMsg);
-    process.exit(1);
+  if (value !== 'auto') {
+    const parsed = parseFloat(value);
+    if (isNaN(parsed) || !isFinite(parsed)) {
+      const errorMsg = `Error: Invalid ${paramName}. Must be a number or "auto".`;
+      logger.error(errorMsg);
+      console.error(errorMsg);
+      process.exit(1);
+    }
+    return parsed;
   }
 
-  return value === 'auto' ? 'auto' : parseFloat(value);
+  return 'auto';
 }
 
 export function registerSubmitToContractCommand(program: Command) {
