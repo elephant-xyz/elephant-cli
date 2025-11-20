@@ -31,6 +31,8 @@ export interface SubmitToContractCommandOptions {
   csvFile: string;
   transactionBatchSize?: number;
   gasPrice: string | number;
+  maxFeePerGas?: string | number;
+  maxPriorityFeePerGas?: string | number;
   dryRun: boolean;
   unsignedTransactionsJson?: string;
   fromAddress?: string;
@@ -67,6 +69,32 @@ interface TransactionRecord {
   status: string;
 }
 
+/**
+ * Helper function to parse and validate gas-related parameters
+ * @param value - The parameter value from CLI options
+ * @param paramName - The name of the parameter (for error messages)
+ * @returns Parsed value as 'auto' or number, or undefined
+ */
+function parseGasParameter(
+  value: string | undefined,
+  paramName: string
+): string | number | undefined {
+  if (value === undefined) return undefined;
+
+  if (value !== 'auto') {
+    const parsed = parseFloat(value);
+    if (isNaN(parsed) || !isFinite(parsed)) {
+      const errorMsg = `Error: Invalid ${paramName}. Must be a number or "auto".`;
+      logger.error(errorMsg);
+      console.error(errorMsg);
+      process.exit(1);
+    }
+    return parsed;
+  }
+
+  return 'auto';
+}
+
 export function registerSubmitToContractCommand(program: Command) {
   program
     .command('submit-to-contract <csvFile>')
@@ -97,8 +125,16 @@ export function registerSubmitToContractCommand(program: Command) {
     )
     .option(
       '--gas-price <value>',
-      "Gas price in Gwei ('auto' or a number, default: 30)",
+      "Gas price in Gwei ('auto' or a number, default: 30) - LEGACY, prefer --max-fee-per-gas",
       '30'
+    )
+    .option(
+      '--max-fee-per-gas <value>',
+      "EIP-1559: Maximum fee per gas in Gwei ('auto' or a number) - takes precedence over --gas-price"
+    )
+    .option(
+      '--max-priority-fee-per-gas <value>',
+      "EIP-1559: Maximum priority fee (tip) per gas in Gwei ('auto' or a number)"
     )
     .option(
       '--dry-run',
@@ -142,6 +178,25 @@ export function registerSubmitToContractCommand(program: Command) {
 
       const gasPrice =
         options.gasPrice === 'auto' ? 'auto' : parseFloat(options.gasPrice);
+
+      // Parse and validate EIP-1559 parameters (backward compatible)
+      const maxFeePerGas = parseGasParameter(
+        options.maxFeePerGas,
+        'max-fee-per-gas'
+      );
+      const maxPriorityFeePerGas = parseGasParameter(
+        options.maxPriorityFeePerGas,
+        'max-priority-fee-per-gas'
+      );
+
+      // Validate that maxPriorityFeePerGas requires maxFeePerGas
+      if (maxPriorityFeePerGas !== undefined && maxFeePerGas === undefined) {
+        const errorMsg =
+          'Error: --max-priority-fee-per-gas can only be used with --max-fee-per-gas.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
 
       // Validate unsigned transactions JSON option
       if (options.unsignedTransactionsJson && !options.dryRun) {
@@ -233,6 +288,8 @@ export function registerSubmitToContractCommand(program: Command) {
         ...options,
         csvFile: path.resolve(workingDir, csvFile),
         gasPrice,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         unsignedTransactionsJson: options.unsignedTransactionsJson
           ? path.resolve(workingDir, options.unsignedTransactionsJson)
           : undefined,
@@ -492,7 +549,9 @@ export async function handleSubmitToContract(
           options.contractAddress,
           wallet?.privateKey || '',
           config,
-          options.gasPrice
+          options.gasPrice,
+          options.maxFeePerGas,
+          options.maxPriorityFeePerGas
         ));
   const csvReporterService =
     serviceOverrides.csvReporterService ??

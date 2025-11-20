@@ -1,3 +1,10 @@
+# [1.55.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.7...v1.55.0) (2025-11-20)
+
+
+### Features
+
+* **submit:** implement gas price for independant oracles ([#218](https://github.com/elephant-xyz/elephant-cli/issues/218)) ([fcf45d1](https://github.com/elephant-xyz/elephant-cli/commit/fcf45d1d08c138d3763942970135b85d4b8f4583))
+
 ## [1.54.7](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.6...v1.54.7) (2025-11-19)
 
 

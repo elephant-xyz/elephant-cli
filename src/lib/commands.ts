@@ -137,6 +137,8 @@ export interface SubmitToContractOptions {
   contractAddress?: string;
   transactionBatchSize?: number;
   gasPrice?: string | number;
+  maxFeePerGas?: string | number;
+  maxPriorityFeePerGas?: string | number;
   dryRun?: boolean;
   unsignedTransactionsJson?: string;
   fromAddress?: string;
@@ -348,6 +350,11 @@ export async function submitToContract(
 ): Promise<SubmitToContractResult> {
   try {
     const workingDir = options.cwd || process.cwd();
+
+    // Backward compatibility: if maxFeePerGas/maxPriorityFeePerGas are provided, use them
+    // Otherwise fall back to gasPrice (legacy mode)
+    const gasPrice = options.gasPrice || 30;
+
     const submitOptions: SubmitToContractCommandOptions = {
       csvFile: options.csvFile,
       rpcUrl:
@@ -357,7 +364,9 @@ export async function submitToContract(
         process.env.SUBMIT_CONTRACT_ADDRESS ||
         '0x525E59e4DE2B51f52B9e30745a513E407652AB7c',
       transactionBatchSize: options.transactionBatchSize || 200,
-      gasPrice: options.gasPrice || 30,
+      gasPrice,
+      maxFeePerGas: options.maxFeePerGas,
+      maxPriorityFeePerGas: options.maxPriorityFeePerGas,
       dryRun: options.dryRun || false,
       unsignedTransactionsJson: options.unsignedTransactionsJson,
       fromAddress: options.fromAddress,
