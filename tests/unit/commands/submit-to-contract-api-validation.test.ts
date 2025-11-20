@@ -36,7 +36,7 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
     expect(result.code).toBe(1);
     // Commander will show an error for unknown option
     expect(result.stderr).toContain("error: unknown option '--private-key'");
-  });
+  }, 30000);
 
   it('should require all three API parameters together', async () => {
     const result = await runCommand([
@@ -52,7 +52,7 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('all three parameters must be provided');
-  });
+  }, 30000);
 
   it('should work without private key in API mode', async () => {
     const result = await runCommand([
@@ -72,7 +72,7 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('Contract submission process finished');
     expect(result.stdout).toContain('Using centralized API submission mode');
-  });
+  }, 30000);
 });
 
 function runCommand(

@@ -1,4 +1,6 @@
 import path from 'path';
+import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
 import {
   handleTransform,
   TransformCommandOptions,
@@ -17,6 +19,24 @@ import {
   handleGenerateTransform,
   type GenerateTransformCommandOptions,
 } from '../commands/generate-transform/index.js';
+import {
+  NEREntityExtractorService,
+  type EntityResult,
+} from '../services/ner-entity-extractor.service.js';
+import { EntityComparisonService } from '../services/entity-comparison.service.js';
+import { TransformDataAggregatorService } from '../services/transform-data-aggregator.service.js';
+import { cleanHtml } from './common.js';
+import { extractZipToTemp } from '../utils/zip.js';
+import {
+  parseStaticPartsCsv,
+  removeStaticParts,
+} from '../utils/static-parts-filter.js';
+import type { ExtractedEntities } from '../services/ner-entity-extractor.service.js';
+import type { ComparisonResult } from '../services/entity-comparison.service.js';
+import * as htmlSourceExtractor from '../utils/html-source-extractor.js';
+import * as jsonSourceExtractor from '../utils/json-source-extractor.js';
+import { mapEntitiesToSources } from '../services/entity-source-mapper.service.js';
+import type { TextWithSource } from '../utils/html-source-extractor.js';
 
 // Generate-transform function interface
 export type GenerateTransformOptions = Omit<
@@ -384,5 +404,280 @@ export async function submitToContract(
       totalItemsSubmitted: 0,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+// Mirror-validate function interface
+export interface MirrorValidateOptions {
+  prepareZip: string;
+  transformZip: string;
+  staticParts?: string;
+  cwd?: string;
+}
+
+export interface EntityWithoutPosition {
+  value: string;
+  confidence: number;
+}
+
+export interface EntitiesWithoutPositions {
+  QUANTITY: EntityWithoutPosition[];
+  DATE: EntityWithoutPosition[];
+  ORGANIZATION: EntityWithoutPosition[];
+  LOCATION: EntityWithoutPosition[];
+}
+
+export interface MirrorValidateResult {
+  success: boolean;
+  rawEntities: EntitiesWithoutPositions;
+  transformedEntities: EntitiesWithoutPositions;
+  comparison: ComparisonResult;
+  globalCompleteness: number;
+  globalCosineSimilarity: number;
+  error?: string;
+}
+
+function addSourcesToUnmatched(
+  comparison: ComparisonResult,
+  rawData: { formattedText: string; sourceMap: TextWithSource[] },
+  rawEntities: ExtractedEntities
+): ComparisonResult {
+  const categories = ['QUANTITY', 'DATE', 'ORGANIZATION', 'LOCATION'] as const;
+
+  for (const category of categories) {
+    const categoryComparison = comparison[category];
+    const categoryEntities = rawEntities[category];
+
+    if (
+      Array.isArray(categoryComparison.unmatchedFromA) &&
+      categoryComparison.unmatchedFromA.length > 0
+    ) {
+      const unmatchedWithSources = categoryComparison.unmatchedFromA.map(
+        (value) => {
+          const valueStr = typeof value === 'string' ? value : value.value;
+          const entity = categoryEntities.find((e) => e.value === valueStr);
+
+          if (!entity) {
+            return { value: valueStr, source: 'unknown', confidence: 0 };
+          }
+
+          const entityWithSource = mapEntitiesToSources(
+            [entity],
+            rawData.sourceMap,
+            rawData.formattedText
+          )[0];
+
+          return (
+            entityWithSource || {
+              value: valueStr,
+              source: 'unknown',
+              confidence: entity.confidence,
+            }
+          );
+        }
+      );
+
+      categoryComparison.unmatchedFromA = unmatchedWithSources;
+    }
+  }
+
+  return comparison;
+}
+
+async function extractSourceData(
+  prepareDir: string,
+  staticSelectors: string[] = []
+): Promise<{ formattedText: string; sourceMap: TextWithSource[] }> {
+  const files = await fs.readdir(prepareDir, { withFileTypes: true });
+  const fileNames = files.filter((f) => f.isFile()).map((f) => f.name);
+
+  const htmlFile =
+    fileNames.find((f) => /\.html?$/i.test(f)) ||
+    fileNames.find(
+      (f) =>
+        /\.json$/i.test(f) &&
+        f !== 'address.json' &&
+        f !== 'parcel.json' &&
+        f !== 'unnormalized_address.json' &&
+        f !== 'property_seed.json'
+    );
+
+  if (!htmlFile) {
+    throw new Error('No source HTML or JSON file found in prepare output');
+  }
+
+  const filePath = path.join(prepareDir, htmlFile);
+  const rawContent = await fs.readFile(filePath, 'utf-8');
+
+  if (/\.html?$/i.test(htmlFile)) {
+    let cleaned = await cleanHtml(rawContent);
+
+    if (staticSelectors.length > 0) {
+      cleaned = removeStaticParts(cleaned, staticSelectors);
+    }
+
+    return htmlSourceExtractor.extractTextWithSources(cleaned);
+  }
+
+  try {
+    const json = JSON.parse(rawContent);
+    return jsonSourceExtractor.extractTextWithSources(json);
+  } catch {
+    const text = rawContent
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      formattedText: text,
+      sourceMap: [{ text, source: 'unknown', lineIndex: 0 }],
+    };
+  }
+}
+
+// Mirror-validate function wrapper
+export async function mirrorValidate(
+  options: MirrorValidateOptions
+): Promise<MirrorValidateResult> {
+  let prepareTempDir: string | null = null;
+  let transformTempDir: string | null = null;
+
+  try {
+    // Parse static parts CSV if provided
+    let staticSelectors: string[] = [];
+    if (options.staticParts) {
+      staticSelectors = await parseStaticPartsCsv(options.staticParts);
+    }
+
+    // Extract prepare output
+    const prepareTempRoot = await fs.mkdtemp(
+      path.join(tmpdir(), 'elephant-validate-prepare-')
+    );
+    prepareTempDir = prepareTempRoot;
+    await extractZipToTemp(options.prepareZip, prepareTempRoot);
+
+    // Extract transform output
+    const transformTempRoot = await fs.mkdtemp(
+      path.join(tmpdir(), 'elephant-validate-transform-')
+    );
+    transformTempDir = transformTempRoot;
+    await extractZipToTemp(options.transformZip, transformTempRoot);
+
+    const transformDataDir = path.join(transformTempRoot, 'data');
+    const transformDataDirExists = await fs
+      .stat(transformDataDir)
+      .then((s) => s.isDirectory())
+      .catch(() => false);
+
+    const transformDir = transformDataDirExists
+      ? transformDataDir
+      : transformTempRoot;
+
+    // Extract entities from raw data with source mapping
+    const rawData = await extractSourceData(prepareTempRoot, staticSelectors);
+
+    const extractor = new NEREntityExtractorService();
+    await extractor.initialize();
+
+    const rawEntities = await extractor.extractEntities(rawData.formattedText);
+
+    // Extract entities from transformed data
+    const aggregator = new TransformDataAggregatorService();
+    const aggregatedData =
+      await aggregator.aggregateTransformOutput(transformDir);
+    const transformedText =
+      aggregator.convertAggregatedDataToText(aggregatedData);
+
+    const transformedEntities =
+      await extractor.extractEntities(transformedText);
+
+    // Compare entities
+    const comparisonService = new EntityComparisonService();
+    let comparison = comparisonService.compareEntities(
+      rawEntities,
+      transformedEntities
+    );
+
+    // Add source information to unmatched entities
+    comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
+
+    // Strip start/end fields from entities
+    const stripPositions = (entities: EntityResult[]) =>
+      entities.map(({ value, confidence }) => ({ value, confidence }));
+
+    return {
+      success: true,
+      rawEntities: {
+        QUANTITY: stripPositions(rawEntities.QUANTITY),
+        DATE: stripPositions(rawEntities.DATE),
+        ORGANIZATION: stripPositions(rawEntities.ORGANIZATION),
+        LOCATION: stripPositions(rawEntities.LOCATION),
+      },
+      transformedEntities: {
+        QUANTITY: stripPositions(transformedEntities.QUANTITY),
+        DATE: stripPositions(transformedEntities.DATE),
+        ORGANIZATION: stripPositions(transformedEntities.ORGANIZATION),
+        LOCATION: stripPositions(transformedEntities.LOCATION),
+      },
+      comparison,
+      globalCompleteness: comparison.globalCompleteness,
+      globalCosineSimilarity: comparison.globalCosineSimilarity,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      rawEntities: { QUANTITY: [], DATE: [], ORGANIZATION: [], LOCATION: [] },
+      transformedEntities: {
+        QUANTITY: [],
+        DATE: [],
+        ORGANIZATION: [],
+        LOCATION: [],
+      },
+      comparison: {
+        QUANTITY: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        DATE: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        ORGANIZATION: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        LOCATION: {
+          cosineSimilarity: 0,
+          coverage: 0,
+          unmatchedFromA: [],
+          statsA: { count: 0, avgConfidence: 0 },
+          statsB: { count: 0, avgConfidence: 0 },
+        },
+        globalCompleteness: 0,
+        globalCosineSimilarity: 0,
+      },
+      globalCompleteness: 0,
+      globalCosineSimilarity: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    if (prepareTempDir) {
+      await fs
+        .rm(prepareTempDir, { recursive: true, force: true })
+        .catch(() => {});
+    }
+    if (transformTempDir) {
+      await fs
+        .rm(transformTempDir, { recursive: true, force: true })
+        .catch(() => {});
+    }
   }
 }

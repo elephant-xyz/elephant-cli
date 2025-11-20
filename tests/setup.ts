@@ -1,6 +1,9 @@
 // Vitest setup file for test configuration
 import { vi, afterEach } from 'vitest';
 
+// Skip update checks during tests
+process.env.ELEPHANT_SKIP_UPDATE_CHECK = '1';
+
 // Mock console methods to avoid cluttering test output
 // Preserve original console for uncaught error logging
 const originalConsole = global.console;

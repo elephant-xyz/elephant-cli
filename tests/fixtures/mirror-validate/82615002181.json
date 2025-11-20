@@ -1,0 +1,130 @@
+{
+  "person": [
+    {
+      "first_name": "Marie",
+      "last_name": "Weissenberger"
+    },
+    {
+      "first_name": "Erich",
+      "last_name": "Weissenberger"
+    }
+  ],
+  "property": [
+    {
+      "area_under_air": "1760",
+      "livable_floor_area": "1760",
+      "parcel_identifier": "82615002181",
+      "property_legal_description_text": "WILLOW BROOK IN PELICAN BAY A CONDOMINIUM UNIT 1505",
+      "property_structure_built_year": 1988,
+      "property_type": "Condominium",
+      "subdivision": "WILLOW BROOK IN PELICAN BAY A CONDOMINIUM",
+      "total_area": "1760"
+    }
+  ],
+  "address": [
+    {
+      "city_name": "NAPLES",
+      "county_name": "Collier",
+      "postal_code": "34108",
+      "range": "25",
+      "section": "4",
+      "state_code": "FL",
+      "street_name": "WILLOWBROOK",
+      "street_number": "765",
+      "street_suffix_type": "Dr",
+      "township": "49"
+    }
+  ],
+  "layout": [
+    {
+      "area_under_air_sq_ft": 1760,
+      "is_exterior": false,
+      "is_finished": true,
+      "livable_area_sq_ft": 1760,
+      "space_index": 1,
+      "space_type": "Living Area"
+    }
+  ],
+  "sales_history": [
+    {
+      "ownership_transfer_date": "2012-03-28",
+      "purchase_price_amount": 305000
+    },
+    {
+      "ownership_transfer_date": "1989-01-01",
+      "purchase_price_amount": 146900
+    },
+    {
+      "ownership_transfer_date": "1998-02-04",
+      "purchase_price_amount": 172500
+    }
+  ],
+  "tax": [
+    {
+      "monthly_tax_amount": 441.95,
+      "period_end_date": "2021-12-31",
+      "period_start_date": "2021-01-01",
+      "property_assessed_value_amount": 388725,
+      "property_building_amount": 388725,
+      "property_land_amount": 0,
+      "property_market_value_amount": 388725,
+      "property_taxable_value_amount": 388725,
+      "tax_year": 2021,
+      "yearly_tax_amount": 5303.43
+    },
+    {
+      "monthly_tax_amount": 569.47,
+      "period_end_date": "2024-12-31",
+      "period_start_date": "2024-01-01",
+      "property_assessed_value_amount": 653380,
+      "property_building_amount": 653380,
+      "property_land_amount": 0,
+      "property_market_value_amount": 653380,
+      "property_taxable_value_amount": 517394,
+      "tax_year": 2024,
+      "yearly_tax_amount": 6833.63
+    },
+    {
+      "monthly_tax_amount": 521.64,
+      "period_end_date": "2022-12-31",
+      "period_start_date": "2022-01-01",
+      "property_assessed_value_amount": 572225,
+      "property_building_amount": 572225,
+      "property_land_amount": 0,
+      "property_market_value_amount": 572225,
+      "property_taxable_value_amount": 427598,
+      "tax_year": 2022,
+      "yearly_tax_amount": 6259.7
+    },
+    {
+      "monthly_tax_amount": 485.8,
+      "period_end_date": "2025-12-31",
+      "period_start_date": "2025-01-01",
+      "property_assessed_value_amount": 656380,
+      "property_building_amount": 656380,
+      "property_land_amount": 0,
+      "property_market_value_amount": 656380,
+      "property_taxable_value_amount": 569133,
+      "tax_year": 2025,
+      "yearly_tax_amount": 5829.54
+    },
+    {
+      "monthly_tax_amount": 573.39,
+      "period_end_date": "2023-12-31",
+      "period_start_date": "2023-01-01",
+      "property_assessed_value_amount": 712915,
+      "property_building_amount": 712915,
+      "property_land_amount": 0,
+      "property_market_value_amount": 712915,
+      "property_taxable_value_amount": 470358,
+      "tax_year": 2023,
+      "yearly_tax_amount": 6880.66
+    }
+  ],
+  "utility": [
+    {
+      "solar_inverter_visible": false,
+      "solar_panel_present": false
+    }
+  ]
+}
