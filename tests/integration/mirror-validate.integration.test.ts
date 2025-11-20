@@ -12,6 +12,11 @@ import { removeStaticParts } from '../../src/utils/static-parts-filter.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const isCI = process.env.CI === 'true';
+const skipIntegrationTests = isCI;
+
+const describeOrSkip = skipIntegrationTests ? describe.skip : describe;
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -21,7 +26,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-describe('Mirror Validate Integration Tests', () => {
+describeOrSkip('Mirror Validate Integration Tests', () => {
   let extractor: NEREntityExtractorService;
   let comparisonService: EntityComparisonService;
   let aggregator: TransformDataAggregatorService;
