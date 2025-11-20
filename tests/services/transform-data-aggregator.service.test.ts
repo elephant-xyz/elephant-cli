@@ -92,8 +92,10 @@ describe('TransformDataAggregatorService', () => {
   describe('convertAggregatedDataToText', () => {
     it('should convert aggregated data to single text', () => {
       const aggregated = {
-        property: [{ address: 'Main St', value: '100000' }],
-        owner: [{ name: 'John Doe' }],
+        County: {
+          property: [{ address: 'Main St', value: '100000' }],
+          owner: [{ name: 'John Doe' }],
+        },
       };
 
       const result = service.convertAggregatedDataToText(aggregated);
@@ -105,7 +107,9 @@ describe('TransformDataAggregatorService', () => {
 
     it('should join sentences with periods', () => {
       const aggregated = {
-        data: [{ field1: 'value1', field2: 'value2' }],
+        County: {
+          data: [{ field1: 'value1', field2: 'value2' }],
+        },
       };
 
       const result = service.convertAggregatedDataToText(aggregated);
@@ -115,7 +119,9 @@ describe('TransformDataAggregatorService', () => {
 
     it('should normalize multiple periods', () => {
       const aggregated = {
-        data: [{ field: 'value.' }],
+        County: {
+          data: [{ field: 'value.' }],
+        },
       };
 
       const result = service.convertAggregatedDataToText(aggregated);
@@ -125,17 +131,35 @@ describe('TransformDataAggregatorService', () => {
 
     it('should normalize whitespace', () => {
       const aggregated = {
-        data: [{ field: 'value  with   spaces' }],
+        County: {
+          data: [{ field: 'value  with   spaces' }],
+        },
       };
 
       const result = service.convertAggregatedDataToText(aggregated);
 
       expect(result).not.toMatch(/\s{2,}/);
     });
+
+    it('should handle multiple datagroups', () => {
+      const aggregated = {
+        County: {
+          property: [{ address: 'Main St' }],
+        },
+        City: {
+          building: [{ name: 'Tower' }],
+        },
+      };
+
+      const result = service.convertAggregatedDataToText(aggregated);
+
+      expect(result).toContain('Main St');
+      expect(result).toContain('Tower');
+    });
   });
 
   describe('aggregateTransformOutput', () => {
-    it('should aggregate relationship files', async () => {
+    it('should aggregate relationship files from datagroup root', async () => {
       await fs.writeFile(
         path.join(tempDir, 'property.json'),
         JSON.stringify({ address: '123 Main St', value: 100000 })
@@ -154,12 +178,25 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreitest123.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(result.property).toBeDefined();
-      expect(result.owner).toBeDefined();
-      expect(result.property).toHaveLength(1);
-      expect(result.owner).toHaveLength(1);
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toBeDefined();
+      expect(result.County.owner).toBeDefined();
+      expect(result.County.property).toHaveLength(1);
+      expect(result.County.owner).toHaveLength(1);
     });
 
     it('should parse relationship labels correctly', async () => {
@@ -181,10 +218,23 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreitest456.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_address: {
+              '/': './relationship_property_has_address.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(result.property).toBeDefined();
-      expect(result.address).toBeDefined();
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toBeDefined();
+      expect(result.County.address).toBeDefined();
     });
 
     it('should handle "of" relationships', async () => {
@@ -206,10 +256,23 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreitest789.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            owner_of_property: {
+              '/': './relationship_owner_of_property.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(result.property).toBeDefined();
-      expect(result.owner).toBeDefined();
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toBeDefined();
+      expect(result.County.owner).toBeDefined();
     });
 
     it('should clean objects by removing internal fields', async () => {
@@ -235,9 +298,21 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreiclean.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            person_has_data: {
+              '/': './relationship_person_has_data.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      const personData = result.person?.[0];
+      const personData = result.County?.person?.[0];
       expect(personData).toBeDefined();
       expect(personData).not.toHaveProperty('source_http_request');
       expect(personData).not.toHaveProperty('request_identifier');
@@ -262,9 +337,22 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreifact.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            data_has_fact_sheet: {
+              '/': './relationship_data_has_fact_sheet.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(Object.keys(result)).toHaveLength(0);
+      expect(result.County).toBeDefined();
+      expect(Object.keys(result.County)).toHaveLength(0);
     });
 
     it('should handle array of relationships', async () => {
@@ -297,9 +385,22 @@ describe('TransformDataAggregatorService', () => {
         ])
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreiarray.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            owner_has_property: {
+              '/': './relationship_owner_has_property.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(result.property).toHaveLength(2);
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toHaveLength(2);
     });
 
     it('should handle swap direction option', async () => {
@@ -321,6 +422,18 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreiswap.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner.json',
+            },
+          },
+        })
+      );
+
       const normalResult = await service.aggregateTransformOutput(
         tempDir,
         false
@@ -330,10 +443,12 @@ describe('TransformDataAggregatorService', () => {
         true
       );
 
-      expect(normalResult.property).toBeDefined();
-      expect(normalResult.owner).toBeDefined();
-      expect(swappedResult.property).toBeDefined();
-      expect(swappedResult.owner).toBeDefined();
+      expect(normalResult.County).toBeDefined();
+      expect(normalResult.County.property).toBeDefined();
+      expect(normalResult.County.owner).toBeDefined();
+      expect(swappedResult.County).toBeDefined();
+      expect(swappedResult.County.property).toBeDefined();
+      expect(swappedResult.County.owner).toBeDefined();
     });
 
     it('should avoid duplicate objects', async () => {
@@ -366,10 +481,23 @@ describe('TransformDataAggregatorService', () => {
         ])
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreidup.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(result.property).toHaveLength(1);
-      expect(result.owner).toHaveLength(2);
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toHaveLength(1);
+      expect(result.County.owner).toHaveLength(2);
     });
 
     it('should handle missing files gracefully', async () => {
@@ -381,13 +509,25 @@ describe('TransformDataAggregatorService', () => {
         })
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreimissing.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      // Should create entries but with empty objects
-      expect(result.property).toBeDefined();
-      expect(result.owner).toBeDefined();
-      expect(result.property[0]).toEqual({});
-      expect(result.owner[0]).toEqual({});
+      expect(result.County).toBeDefined();
+      expect(result.County.property).toBeDefined();
+      expect(result.County.owner).toBeDefined();
+      expect(result.County.property[0]).toEqual({});
+      expect(result.County.owner[0]).toEqual({});
     });
 
     it('should handle invalid JSON gracefully', async () => {
@@ -396,15 +536,137 @@ describe('TransformDataAggregatorService', () => {
         'invalid json content'
       );
 
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreiinvalid.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            data_has_other: {
+              '/': './relationship_invalid.json',
+            },
+          },
+        })
+      );
+
       const result = await service.aggregateTransformOutput(tempDir);
 
-      expect(Object.keys(result)).toHaveLength(0);
+      expect(result.County).toBeDefined();
+      expect(Object.keys(result.County)).toHaveLength(0);
     });
 
     it('should skip non-json files', async () => {
       await fs.writeFile(
         path.join(tempDir, 'readme.txt'),
         'This is a text file'
+      );
+
+      const result = await service.aggregateTransformOutput(tempDir);
+
+      expect(Object.keys(result)).toHaveLength(0);
+    });
+
+    it('should handle multiple datagroups', async () => {
+      await fs.writeFile(
+        path.join(tempDir, 'property1.json'),
+        JSON.stringify({ address: 'County Address' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'property2.json'),
+        JSON.stringify({ address: 'City Address' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'owner1.json'),
+        JSON.stringify({ name: 'County Owner' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'owner2.json'),
+        JSON.stringify({ name: 'City Owner' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'relationship_property_has_owner_1.json'),
+        JSON.stringify({
+          from: { '/': './property1.json' },
+          to: { '/': './owner1.json' },
+        })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'relationship_property_has_owner_2.json'),
+        JSON.stringify({
+          from: { '/': './property2.json' },
+          to: { '/': './owner2.json' },
+        })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreicounty.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner_1.json',
+            },
+          },
+        })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'bafkreicity.json'),
+        JSON.stringify({
+          label: 'City',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner_2.json',
+            },
+          },
+        })
+      );
+
+      const result = await service.aggregateTransformOutput(tempDir);
+
+      expect(result.County).toBeDefined();
+      expect(result.City).toBeDefined();
+      expect(result.County.property).toHaveLength(1);
+      expect(result.County.owner).toHaveLength(1);
+      expect(result.City.property).toHaveLength(1);
+      expect(result.City.owner).toHaveLength(1);
+      expect(result.County.property[0].address).toBe('County Address');
+      expect(result.City.property[0].address).toBe('City Address');
+    });
+
+    it('should only process files starting with bafkrei', async () => {
+      await fs.writeFile(
+        path.join(tempDir, 'property.json'),
+        JSON.stringify({ address: 'Main St' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'owner.json'),
+        JSON.stringify({ name: 'Owner' })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'relationship_property_has_owner.json'),
+        JSON.stringify({
+          from: { '/': './property.json' },
+          to: { '/': './owner.json' },
+        })
+      );
+
+      await fs.writeFile(
+        path.join(tempDir, 'not_a_datagroup.json'),
+        JSON.stringify({
+          label: 'County',
+          relationships: {
+            property_has_owner: {
+              '/': './relationship_property_has_owner.json',
+            },
+          },
+        })
       );
 
       const result = await service.aggregateTransformOutput(tempDir);
