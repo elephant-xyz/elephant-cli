@@ -31,6 +31,8 @@ export interface SubmitToContractCommandOptions {
   csvFile: string;
   transactionBatchSize?: number;
   gasPrice: string | number;
+  maxFeePerGas?: string | number;
+  maxPriorityFeePerGas?: string | number;
   dryRun: boolean;
   unsignedTransactionsJson?: string;
   fromAddress?: string;
@@ -97,8 +99,16 @@ export function registerSubmitToContractCommand(program: Command) {
     )
     .option(
       '--gas-price <value>',
-      "Gas price in Gwei ('auto' or a number, default: 30)",
+      "Gas price in Gwei ('auto' or a number, default: 30) - LEGACY, prefer --max-fee-per-gas",
       '30'
+    )
+    .option(
+      '--max-fee-per-gas <value>',
+      "EIP-1559: Maximum fee per gas in Gwei ('auto' or a number) - takes precedence over --gas-price"
+    )
+    .option(
+      '--max-priority-fee-per-gas <value>',
+      "EIP-1559: Maximum priority fee (tip) per gas in Gwei ('auto' or a number)"
     )
     .option(
       '--dry-run',
@@ -142,6 +152,46 @@ export function registerSubmitToContractCommand(program: Command) {
 
       const gasPrice =
         options.gasPrice === 'auto' ? 'auto' : parseFloat(options.gasPrice);
+
+      // Parse and validate EIP-1559 parameters (backward compatible)
+      let maxFeePerGas: string | number | undefined;
+      let maxPriorityFeePerGas: string | number | undefined;
+
+      if (options.maxFeePerGas !== undefined) {
+        if (
+          options.maxFeePerGas !== 'auto' &&
+          (isNaN(parseFloat(options.maxFeePerGas)) ||
+            !isFinite(options.maxFeePerGas))
+        ) {
+          const errorMsg =
+            'Error: Invalid max-fee-per-gas. Must be a number or "auto".';
+          logger.error(errorMsg);
+          console.error(errorMsg);
+          process.exit(1);
+        }
+        maxFeePerGas =
+          options.maxFeePerGas === 'auto'
+            ? 'auto'
+            : parseFloat(options.maxFeePerGas);
+      }
+
+      if (options.maxPriorityFeePerGas !== undefined) {
+        if (
+          options.maxPriorityFeePerGas !== 'auto' &&
+          (isNaN(parseFloat(options.maxPriorityFeePerGas)) ||
+            !isFinite(options.maxPriorityFeePerGas))
+        ) {
+          const errorMsg =
+            'Error: Invalid max-priority-fee-per-gas. Must be a number or "auto".';
+          logger.error(errorMsg);
+          console.error(errorMsg);
+          process.exit(1);
+        }
+        maxPriorityFeePerGas =
+          options.maxPriorityFeePerGas === 'auto'
+            ? 'auto'
+            : parseFloat(options.maxPriorityFeePerGas);
+      }
 
       // Validate unsigned transactions JSON option
       if (options.unsignedTransactionsJson && !options.dryRun) {
@@ -233,6 +283,8 @@ export function registerSubmitToContractCommand(program: Command) {
         ...options,
         csvFile: path.resolve(workingDir, csvFile),
         gasPrice,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         unsignedTransactionsJson: options.unsignedTransactionsJson
           ? path.resolve(workingDir, options.unsignedTransactionsJson)
           : undefined,
@@ -492,7 +544,9 @@ export async function handleSubmitToContract(
           options.contractAddress,
           wallet?.privateKey || '',
           config,
-          options.gasPrice
+          options.gasPrice,
+          options.maxFeePerGas,
+          options.maxPriorityFeePerGas
         ));
   const csvReporterService =
     serviceOverrides.csvReporterService ??
