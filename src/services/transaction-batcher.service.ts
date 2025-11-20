@@ -23,13 +23,17 @@ export class TransactionBatcherService {
   private config: SubmitConfig;
   private nonce: number | undefined;
   private gasPrice: string | number;
+  private maxFeePerGas?: string | number;
+  private maxPriorityFeePerGas?: string | number;
 
   constructor(
     rpcUrl: string,
     submitContractAddress: string,
     privateKey: string,
     configOverrides: Partial<SubmitConfig> = {},
-    gasPrice: string | number = 'auto'
+    gasPrice: string | number = 'auto',
+    maxFeePerGas?: string | number,
+    maxPriorityFeePerGas?: string | number
   ) {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     this.wallet = new Wallet(privateKey, provider);
@@ -40,6 +44,8 @@ export class TransactionBatcherService {
     );
     this.config = { ...DEFAULT_SUBMIT_CONFIG, ...configOverrides };
     this.gasPrice = gasPrice;
+    this.maxFeePerGas = maxFeePerGas;
+    this.maxPriorityFeePerGas = maxPriorityFeePerGas;
 
     logger.technical(
       `TransactionBatcherService initialized for address: ${this.wallet.address}`
@@ -47,7 +53,20 @@ export class TransactionBatcherService {
     logger.technical(
       `Interacting with submit contract at: ${submitContractAddress}`
     );
-    logger.technical(`Gas price setting: ${this.gasPrice}`);
+
+    // Log gas pricing configuration
+    if (this.maxFeePerGas !== undefined) {
+      logger.technical(
+        `EIP-1559 maxFeePerGas: ${this.maxFeePerGas}${this.maxFeePerGas === 'auto' ? '' : ' Gwei'}`
+      );
+      if (this.maxPriorityFeePerGas !== undefined) {
+        logger.technical(
+          `EIP-1559 maxPriorityFeePerGas: ${this.maxPriorityFeePerGas}${this.maxPriorityFeePerGas === 'auto' ? '' : ' Gwei'}`
+        );
+      }
+    } else {
+      logger.technical(`Gas price setting (legacy): ${this.gasPrice}`);
+    }
   }
 
   /**
@@ -173,12 +192,58 @@ export class TransactionBatcherService {
             estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)), // Add 20% buffer
         };
 
-        if (this.gasPrice !== 'auto') {
+        // Gas pricing strategy (backward compatible):
+        // 1. If EIP-1559 params are provided, use them (Type 2 transaction)
+        // 2. Otherwise, use legacy gasPrice (Type 0 transaction)
+        // 3. If gasPrice is 'auto', let provider determine pricing
+        if (this.maxFeePerGas !== undefined) {
+          // EIP-1559 transaction (Type 2)
+          if (this.maxFeePerGas !== 'auto') {
+            txOptions.maxFeePerGas = ethers.parseUnits(
+              this.maxFeePerGas.toString(),
+              'gwei'
+            );
+            logger.info(
+              `Using EIP-1559 maxFeePerGas: ${this.maxFeePerGas} Gwei`
+            );
+          }
+
+          if (
+            this.maxPriorityFeePerGas !== undefined &&
+            this.maxPriorityFeePerGas !== 'auto'
+          ) {
+            txOptions.maxPriorityFeePerGas = ethers.parseUnits(
+              this.maxPriorityFeePerGas.toString(),
+              'gwei'
+            );
+            logger.info(
+              `Using EIP-1559 maxPriorityFeePerGas: ${this.maxPriorityFeePerGas} Gwei`
+            );
+          }
+
+          if (
+            this.maxFeePerGas === 'auto' ||
+            this.maxPriorityFeePerGas === 'auto'
+          ) {
+            const autoParams = [
+              this.maxFeePerGas === 'auto' ? 'maxFeePerGas' : null,
+              this.maxPriorityFeePerGas === 'auto'
+                ? 'maxPriorityFeePerGas'
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ');
+            logger.info(
+              `Using automatic EIP-1559 fee data from provider for: ${autoParams}`
+            );
+          }
+        } else if (this.gasPrice !== 'auto') {
+          // Legacy transaction (Type 0)
           txOptions.gasPrice = ethers.parseUnits(
             this.gasPrice.toString(),
             'gwei'
           );
-          logger.info(`Using fixed gas price: ${this.gasPrice} Gwei`);
+          logger.info(`Using legacy gas price: ${this.gasPrice} Gwei`);
         } else {
           logger.info('Using automatic gas price from provider.');
         }

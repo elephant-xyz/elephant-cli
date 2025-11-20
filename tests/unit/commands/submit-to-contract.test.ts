@@ -185,7 +185,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       optionsWithGasPrice.contractAddress,
       '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From the mocked wallet
       expect.any(Object),
-      50
+      50,
+      undefined,
+      undefined
     );
   });
 
@@ -203,7 +205,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
       optionsWithAutoGas.contractAddress,
       '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From the mocked wallet
       expect.any(Object),
-      'auto'
+      'auto',
+      undefined,
+      undefined
     );
   });
 
@@ -575,7 +579,9 @@ bafkreiac4j3s4xhz2ej6qcz6w2xjrcqyhqpmlc5u6l4jy4yk7vfqktkvr4,bafkreiac4j3s4xhz2ej
         normalOptions.contractAddress,
         '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890', // From mocked wallet
         expect.any(Object),
-        normalOptions.gasPrice
+        normalOptions.gasPrice,
+        undefined,
+        undefined
       );
     });
 
