@@ -69,6 +69,28 @@ interface TransactionRecord {
   status: string;
 }
 
+/**
+ * Helper function to parse and validate gas-related parameters
+ * @param value - The parameter value from CLI options
+ * @param paramName - The name of the parameter (for error messages)
+ * @returns Parsed value as 'auto' or number, or undefined
+ */
+function parseGasParameter(
+  value: string | undefined,
+  paramName: string
+): string | number | undefined {
+  if (value === undefined) return undefined;
+
+  if (value !== 'auto' && (isNaN(parseFloat(value)) || !isFinite(value))) {
+    const errorMsg = `Error: Invalid ${paramName}. Must be a number or "auto".`;
+    logger.error(errorMsg);
+    console.error(errorMsg);
+    process.exit(1);
+  }
+
+  return value === 'auto' ? 'auto' : parseFloat(value);
+}
+
 export function registerSubmitToContractCommand(program: Command) {
   program
     .command('submit-to-contract <csvFile>')
@@ -154,43 +176,22 @@ export function registerSubmitToContractCommand(program: Command) {
         options.gasPrice === 'auto' ? 'auto' : parseFloat(options.gasPrice);
 
       // Parse and validate EIP-1559 parameters (backward compatible)
-      let maxFeePerGas: string | number | undefined;
-      let maxPriorityFeePerGas: string | number | undefined;
+      const maxFeePerGas = parseGasParameter(
+        options.maxFeePerGas,
+        'max-fee-per-gas'
+      );
+      const maxPriorityFeePerGas = parseGasParameter(
+        options.maxPriorityFeePerGas,
+        'max-priority-fee-per-gas'
+      );
 
-      if (options.maxFeePerGas !== undefined) {
-        if (
-          options.maxFeePerGas !== 'auto' &&
-          (isNaN(parseFloat(options.maxFeePerGas)) ||
-            !isFinite(options.maxFeePerGas))
-        ) {
-          const errorMsg =
-            'Error: Invalid max-fee-per-gas. Must be a number or "auto".';
-          logger.error(errorMsg);
-          console.error(errorMsg);
-          process.exit(1);
-        }
-        maxFeePerGas =
-          options.maxFeePerGas === 'auto'
-            ? 'auto'
-            : parseFloat(options.maxFeePerGas);
-      }
-
-      if (options.maxPriorityFeePerGas !== undefined) {
-        if (
-          options.maxPriorityFeePerGas !== 'auto' &&
-          (isNaN(parseFloat(options.maxPriorityFeePerGas)) ||
-            !isFinite(options.maxPriorityFeePerGas))
-        ) {
-          const errorMsg =
-            'Error: Invalid max-priority-fee-per-gas. Must be a number or "auto".';
-          logger.error(errorMsg);
-          console.error(errorMsg);
-          process.exit(1);
-        }
-        maxPriorityFeePerGas =
-          options.maxPriorityFeePerGas === 'auto'
-            ? 'auto'
-            : parseFloat(options.maxPriorityFeePerGas);
+      // Validate that maxPriorityFeePerGas requires maxFeePerGas
+      if (maxPriorityFeePerGas !== undefined && maxFeePerGas === undefined) {
+        const errorMsg =
+          'Error: --max-priority-fee-per-gas can only be used with --max-fee-per-gas.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
       }
 
       // Validate unsigned transactions JSON option

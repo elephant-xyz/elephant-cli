@@ -56,9 +56,13 @@ export class TransactionBatcherService {
 
     // Log gas pricing configuration
     if (this.maxFeePerGas !== undefined) {
-      logger.technical(`EIP-1559 maxFeePerGas: ${this.maxFeePerGas} Gwei`);
+      logger.technical(
+        `EIP-1559 maxFeePerGas: ${this.maxFeePerGas}${this.maxFeePerGas === 'auto' ? '' : ' Gwei'}`
+      );
       if (this.maxPriorityFeePerGas !== undefined) {
-        logger.technical(`EIP-1559 maxPriorityFeePerGas: ${this.maxPriorityFeePerGas} Gwei`);
+        logger.technical(
+          `EIP-1559 maxPriorityFeePerGas: ${this.maxPriorityFeePerGas}${this.maxPriorityFeePerGas === 'auto' ? '' : ' Gwei'}`
+        );
       }
     } else {
       logger.technical(`Gas price setting (legacy): ${this.gasPrice}`);
@@ -199,10 +203,15 @@ export class TransactionBatcherService {
               this.maxFeePerGas.toString(),
               'gwei'
             );
-            logger.info(`Using EIP-1559 maxFeePerGas: ${this.maxFeePerGas} Gwei`);
+            logger.info(
+              `Using EIP-1559 maxFeePerGas: ${this.maxFeePerGas} Gwei`
+            );
           }
 
-          if (this.maxPriorityFeePerGas !== undefined && this.maxPriorityFeePerGas !== 'auto') {
+          if (
+            this.maxPriorityFeePerGas !== undefined &&
+            this.maxPriorityFeePerGas !== 'auto'
+          ) {
             txOptions.maxPriorityFeePerGas = ethers.parseUnits(
               this.maxPriorityFeePerGas.toString(),
               'gwei'
@@ -212,8 +221,21 @@ export class TransactionBatcherService {
             );
           }
 
-          if (this.maxFeePerGas === 'auto' || this.maxPriorityFeePerGas === 'auto') {
-            logger.info('Using automatic EIP-1559 fee data from provider.');
+          if (
+            this.maxFeePerGas === 'auto' ||
+            this.maxPriorityFeePerGas === 'auto'
+          ) {
+            const autoParams = [
+              this.maxFeePerGas === 'auto' ? 'maxFeePerGas' : null,
+              this.maxPriorityFeePerGas === 'auto'
+                ? 'maxPriorityFeePerGas'
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ');
+            logger.info(
+              `Using automatic EIP-1559 fee data from provider for: ${autoParams}`
+            );
           }
         } else if (this.gasPrice !== 'auto') {
           // Legacy transaction (Type 0)
