@@ -729,9 +729,9 @@ describe('handleValidate', () => {
     ).toBeTruthy();
     expect(mockProgressTracker.increase).toHaveBeenCalledWith('errors', 1);
     expect(
-      vi.mocked(logger.warn).mock.calls.some((call) =>
-        call[0].includes('unused data JSON file')
-      )
+      vi
+        .mocked(logger.warn)
+        .mock.calls.some((call) => call[0].includes('unused data JSON file'))
     ).toBe(true);
 
     readFileMock.mockImplementation(() => Promise.resolve(defaultRead));
