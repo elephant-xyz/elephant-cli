@@ -242,6 +242,7 @@ describe('handleValidate', () => {
       start: vi.fn(),
       stop: vi.fn(),
       increment: vi.fn(),
+      increase: vi.fn(),
       setPhase: vi.fn(),
       getMetrics: vi.fn().mockReturnValue({
         startTime: Date.now(),
@@ -641,6 +642,99 @@ describe('handleValidate', () => {
     );
     expect(mockCsvReporterService.finalize).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should log unused data JSON files while skipping relationship files', async () => {
+    const datagroupFile = 'bafkdatagroup.json';
+    const unusedDataFile = 'unused_data.json';
+    const unusedRelationshipFile = 'unused_relationship.json';
+
+    vi.mocked(fsPromises.readdir).mockResolvedValue([
+      {
+        name: datagroupFile,
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: unusedDataFile,
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+      {
+        name: unusedRelationshipFile,
+        isDirectory: () => false,
+        isFile: () => true,
+      },
+    ] as any);
+
+    vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
+      allFiles: [
+        {
+          propertyCid: 'property-dir',
+          dataGroupCid: 'bafkdatagroup',
+          filePath: `/tmp/extracted/property-dir/${datagroupFile}`,
+        },
+      ],
+      validFilesCount: 1,
+      descriptiveFilesCount: 0,
+      hasSeedFile: false,
+      propertyCid: 'property-dir',
+      schemaCids: new Set(['bafkdatagroup']),
+    });
+
+    const readFileMock = vi.mocked(fsPromises.readFile);
+    const defaultRead = JSON.stringify({ label: 'test', relationships: {} });
+    readFileMock.mockImplementation(async (filePath: any) => {
+      if (typeof filePath === 'string') {
+        if (filePath.endsWith(datagroupFile)) {
+          return JSON.stringify({ label: 'County', relationships: {} });
+        }
+        if (filePath.endsWith(unusedRelationshipFile)) {
+          return JSON.stringify({
+            from: { '/': './property.json' },
+            to: { '/': './parcel.json' },
+          });
+        }
+        if (filePath.endsWith(unusedDataFile)) {
+          return JSON.stringify({ some: 'value' });
+        }
+      }
+      return defaultRead;
+    });
+
+    const options: ValidateCommandOptions = {
+      input: '/test/input.zip',
+    };
+
+    await handleValidate(options, {
+      fileScannerService: mockFileScannerService as FileScannerService,
+      schemaCacheService: mockSchemaCacheService as SchemaCacheService,
+      jsonValidatorService: mockJsonValidatorService as JsonValidatorService,
+      csvReporterService: mockCsvReporterService as CsvReporterService,
+      progressTracker: mockProgressTracker as SimpleProgress,
+      ipfsServiceForSchemas: mockIpfsService as IPFSService,
+    });
+
+    const loggedErrors = mockCsvReporterService.logError as vi.Mock;
+    const loggedPaths = loggedErrors.mock.calls.map((call) => call[0].filePath);
+
+    expect(loggedPaths).toContain('property-dir/unused_data.json');
+    expect(
+      loggedPaths.some((path) => path.includes('unused_relationship.json'))
+    ).toBe(false);
+    expect(
+      loggedErrors.mock.calls.find((call) =>
+        call[0].errorMessage.includes('Unused data JSON file detected')
+      )
+    ).toBeTruthy();
+    expect(mockProgressTracker.increase).toHaveBeenCalledWith('errors', 1);
+    expect(
+      vi.mocked(logger.warn).mock.calls.some((call) =>
+        call[0].includes('unused data JSON file')
+      )
+    ).toBe(true);
+
+    readFileMock.mockImplementation(() => Promise.resolve(defaultRead));
   });
 
   it('should handle critical errors during validation', async () => {

@@ -221,10 +221,6 @@ export async function handleValidate(
       throw error;
     }
 
-    logger.success(
-      `Found ${jsonFiles.length} JSON files in property directory`
-    );
-
     // Scan the single property directory using the new approach
     const scanResult = await scanSinglePropertyDirectoryV2(
       actualInputDir,
@@ -233,6 +229,98 @@ export async function handleValidate(
     );
     const { allFiles, validFilesCount, descriptiveFilesCount, schemaCids } =
       scanResult;
+
+    const datagroupNames = new Set(
+      allFiles.map((entry) => path.basename(entry.filePath))
+    );
+    const jsonNames = new Set(jsonFiles.map((entry) => entry.name));
+    const linkedNames = new Set<string>();
+
+    for (const entry of allFiles) {
+      try {
+        const fileText = await fsPromises.readFile(entry.filePath, 'utf-8');
+        const parsed = JSON.parse(fileText) as {
+          relationships?: Record<string, unknown>;
+        };
+        const relations = parsed.relationships;
+        if (!relations) {
+          continue;
+        }
+        const relationValues = Object.values(relations);
+        for (const relationValue of relationValues) {
+          const targets = Array.isArray(relationValue)
+            ? relationValue
+            : [relationValue];
+          for (const target of targets) {
+            if (!target || typeof target !== 'object') {
+              continue;
+            }
+            const ref = (target as Record<string, unknown>)['/'];
+            if (typeof ref !== 'string') {
+              continue;
+            }
+            if (!ref.startsWith('./')) {
+              continue;
+            }
+            const name = ref.substring(2);
+            linkedNames.add(name);
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `Failed to inspect datagroup file ${entry.filePath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    const usedNames = new Set<string>();
+    for (const name of linkedNames) {
+      if (!jsonNames.has(name)) {
+        continue;
+      }
+      usedNames.add(name);
+      const linkedPath = path.join(actualInputDir, name);
+      let linkedJson: {
+        from?: { '/': string };
+        to?: { '/': string };
+      } | null = null;
+      try {
+        const linkedText = await fsPromises.readFile(linkedPath, 'utf-8');
+        linkedJson = JSON.parse(linkedText) as {
+          from?: { '/': string };
+          to?: { '/': string };
+        };
+      } catch (error) {
+        logger.warn(
+          `Failed to inspect relationship file ${linkedPath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        continue;
+      }
+      const fromRef = linkedJson.from?.['/'];
+      if (typeof fromRef === 'string' && fromRef.startsWith('./')) {
+        usedNames.add(fromRef.substring(2));
+      }
+      const toRef = linkedJson.to?.['/'];
+      if (typeof toRef === 'string' && toRef.startsWith('./')) {
+        usedNames.add(toRef.substring(2));
+      }
+    }
+
+    const unusedFiles: string[] = [];
+    for (const entry of jsonFiles) {
+      const name = entry.name;
+      if (datagroupNames.has(name)) {
+        continue;
+      }
+      if (usedNames.has(name)) {
+        continue;
+      }
+      unusedFiles.push(name);
+    }
 
     logger.info('Counting files to validate...');
     const totalFiles = validFilesCount;
@@ -254,6 +342,77 @@ export async function handleValidate(
     }
 
     progressTracker.start();
+
+    const skipUnusedFiles = new Set([
+      'parcel.json',
+      'property_seed.json',
+      'unnormalized_address.json',
+    ]);
+
+    const unusedDataFiles: string[] = [];
+
+    for (const fileName of unusedFiles) {
+      if (skipUnusedFiles.has(fileName)) {
+        logger.debug(
+          `Skipping unused-file check for ${fileName} (allowed seed artifact)`
+        );
+        continue;
+      }
+
+      const absolutePath = path.join(actualInputDir, fileName);
+      let treatAsRelationship = false;
+
+      try {
+        const fileContent = await fsPromises.readFile(absolutePath, 'utf-8');
+        const parsed = JSON.parse(fileContent);
+        const fromRef = parsed?.from?.['/'];
+        const toRef = parsed?.to?.['/'];
+        if (
+          typeof fromRef === 'string' &&
+          typeof toRef === 'string' &&
+          fromRef.startsWith('./') &&
+          toRef.startsWith('./')
+        ) {
+          treatAsRelationship = true;
+        }
+      } catch (error) {
+        logger.warn(
+          `Could not determine file type for ${fileName}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
+      if (treatAsRelationship) {
+        logger.debug(
+          `Skipping unused relationship file ${fileName} (not currently enforced)`
+        );
+        continue;
+      }
+
+      const errorMessage = `Unused data JSON file detected: ${fileName} is not referenced by any relationship included in the datagroup.`;
+
+      await csvReporterService.logError({
+        propertyCid: '',
+        dataGroupCid: '',
+        filePath: formatFilePathForReport(absolutePath),
+        errorPath: 'root',
+        errorMessage,
+        currentValue: '',
+        timestamp: new Date().toISOString(),
+      });
+
+      unusedDataFiles.push(fileName);
+    }
+
+    if (unusedDataFiles.length > 0) {
+      progressTracker.increase('errors', unusedDataFiles.length);
+      logger.warn(
+        `Detected ${unusedDataFiles.length} unused data JSON file${
+          unusedDataFiles.length === 1 ? '' : 's'
+        } not connected through any referenced relationship`
+      );
+    }
 
     // Phase 1: Pre-fetching Schemas (skip for descriptive file names)
     progressTracker.setPhase('Pre-fetching Schemas', 1);
@@ -412,9 +571,11 @@ export async function handleValidate(
       );
       console.log(`  Files skipped:          ${finalMetrics.skipped || 0}`);
       console.log(`  Validation errors:      ${finalMetrics.errors || 0}`);
-      console.log(
-        `  Successfully validated: ${finalMetrics.processed - finalMetrics.errors || 0}`
+      const successfulCount = Math.max(
+        0,
+        (finalMetrics.processed || 0) - (finalMetrics.errors || 0)
       );
+      console.log(`  Successfully validated: ${successfulCount}`);
 
       const totalHandled =
         (finalMetrics.skipped || 0) +
