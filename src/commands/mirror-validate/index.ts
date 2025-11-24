@@ -20,6 +20,8 @@ import * as htmlSourceExtractor from '../../utils/html-source-extractor.js';
 import * as jsonSourceExtractor from '../../utils/json-source-extractor.js';
 import { mapEntitiesToSources } from '../../services/entity-source-mapper.service.js';
 import type { TextWithSource } from '../../utils/html-source-extractor.js';
+import { ManualEntityMatcherService } from '../../services/manual-entity-matcher.service.js';
+import { extractLeafValues } from '../../utils/json-leaf-extractor.js';
 
 interface MirrorValidateOptions {
   prepareZip: string;
@@ -191,6 +193,15 @@ async function mirrorValidate(options: MirrorValidateOptions): Promise<void> {
     );
 
     comparison = addSourcesToUnmatched(comparison, rawData, rawEntities);
+
+    // Manual matching: try to find unmatched entities in transformed data leaf values
+    const transformedLeafValues = extractLeafValues(aggregatedData);
+    const manualMatcher = new ManualEntityMatcherService();
+    comparison = manualMatcher.matchUnmatchedEntities(
+      comparison,
+      rawEntities,
+      transformedLeafValues
+    );
 
     printComparisonReport(comparison);
 
