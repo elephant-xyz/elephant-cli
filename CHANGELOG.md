@@ -1,3 +1,10 @@
+## [1.55.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.0...v1.55.1) (2025-11-24)
+
+
+### Bug Fixes
+
+* **validate:** throw errors when there are unused which are not referenced in Merkle relashionship file ([#219](https://github.com/elephant-xyz/elephant-cli/issues/219)) ([967d058](https://github.com/elephant-xyz/elephant-cli/commit/967d0587bf487a8ff8b4abb46a6ab83a7f728bf5))
+
 # [1.55.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.54.7...v1.55.0) (2025-11-20)
 
 
