@@ -745,10 +745,9 @@ async function validateFile(
     );
 
     if (!validationResult.valid) {
-      const errorMessages: Array<{ path: string; message: string }> =
-        services.jsonValidatorService.getErrorMessages(
-          validationResult.errors || []
-        );
+      const errorMessages = services.jsonValidatorService.getErrorMessages(
+        validationResult.errors || []
+      );
 
       for (const errorInfo of errorMessages) {
         await services.csvReporterService.logError({
@@ -757,7 +756,7 @@ async function validateFile(
           filePath: fileEntry.filePath,
           errorPath: errorInfo.path,
           errorMessage: errorInfo.message,
-          currentValue: '',
+          currentValue: formatCurrentValue(errorInfo.data),
           timestamp: new Date().toISOString(),
         });
       }
@@ -788,6 +787,19 @@ async function validateFile(
 
 function formatFilePathForReport(filePath: string): string {
   return filePath;
+}
+
+function formatCurrentValue(data: unknown): string {
+  if (data === undefined) {
+    return '';
+  }
+  if (data === null) {
+    return 'null';
+  }
+  if (typeof data === 'object') {
+    return JSON.stringify(data);
+  }
+  return String(data);
 }
 
 const TYPE_ERROR_PATTERN = /^must be (null|object|array)$/;

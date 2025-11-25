@@ -33,6 +33,7 @@ export class JsonValidatorService {
     this.schemaCacheService = schemaCacheService;
     this.ajv = new Ajv({
       allErrors: true,
+      verbose: true, // Include data values in error objects
       loadSchema: this.loadSchemaFromCID.bind(this),
       strict: false, // Allow draft-07 schemas
       validateSchema: false, // Don't validate the schema itself
@@ -731,9 +732,11 @@ export class JsonValidatorService {
    */
   getErrorMessages(
     errors: ValidationError[]
-  ): Array<{ path: string; message: string }> {
+  ): Array<{ path: string; message: string; data: unknown }> {
     if (!errors || errors.length === 0) {
-      return [{ path: 'root', message: 'Unknown validation error' }];
+      return [
+        { path: 'root', message: 'Unknown validation error', data: undefined },
+      ];
     }
 
     return errors.map((error) => {
