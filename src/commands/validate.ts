@@ -518,7 +518,12 @@ export async function handleValidate(
       throw new Error(`CSV Finalization failed: ${errMsg}`);
     }
 
-    const finalMetrics = progressTracker
+    // Post-process the error CSV to filter and deduplicate errors
+    const postProcessedErrorCount = await postProcessErrorCsv(
+      config.errorCsvPath
+    );
+
+    const baseMetrics = progressTracker
       ? progressTracker.getMetrics()
       : {
           startTime: Date.now(),
@@ -527,6 +532,11 @@ export async function handleValidate(
           skipped: 0,
           total: totalFiles,
         };
+
+    const finalMetrics = {
+      ...baseMetrics,
+      errors: postProcessedErrorCount,
+    };
 
     if (!options.silent) {
       console.log(chalk.green('\n✅ Validation process finished\n'));
@@ -774,4 +784,196 @@ async function validateFile(
     });
     services.progressTracker.increment('errors');
   }
+}
+
+function formatFilePathForReport(filePath: string): string {
+  return filePath;
+}
+
+const TYPE_ERROR_PATTERN = /^must be (null|object|array)$/;
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function escapeCsvValue(value: string): string {
+  const escaped = value.replace(/"/g, '""');
+  if (
+    escaped.includes(',') ||
+    escaped.includes('\n') ||
+    escaped.includes('"')
+  ) {
+    return `"${escaped}"`;
+  }
+  return escaped;
+}
+
+async function postProcessErrorCsv(csvPath: string): Promise<number> {
+  const content = await fsPromises.readFile(csvPath, 'utf-8');
+  const lines = content.split('\n');
+
+  if (lines.length <= 1) {
+    return 0;
+  }
+
+  const header = lines[0];
+  const dataLines = lines.slice(1).filter((line) => line.trim() !== '');
+
+  // Parse and filter rows
+  type RowType = {
+    original: string;
+    propertyCid: string;
+    dataGroupCid: string;
+    filePath: string;
+    errorPath: string;
+    errorMessage: string;
+    currentValue: string;
+    timestamp: string;
+  };
+
+  const rows: RowType[] = [];
+  const addressErrorFiles = new Set<string>();
+
+  for (const line of dataLines) {
+    const fields = parseCsvLine(line);
+    if (fields.length < 7) {
+      continue;
+    }
+
+    const [
+      propertyCid,
+      dataGroupCid,
+      filePath,
+      errorPath,
+      errorMessage,
+      currentValue,
+      timestamp,
+    ] = fields;
+
+    // Filter out anyOf/oneOf type errors
+    if (TYPE_ERROR_PATTERN.test(errorMessage)) {
+      continue;
+    }
+
+    // Track files with address anyOf errors to consolidate them (before filtering)
+    const isAddressAnyOfError =
+      errorPath.includes('property_has_address') &&
+      errorMessage === 'must match a schema in anyOf';
+    if (isAddressAnyOfError) {
+      addressErrorFiles.add(filePath);
+    }
+
+    // Filter out generic anyOf schema matching errors (not useful to users)
+    if (errorMessage === 'must match a schema in anyOf') {
+      continue;
+    }
+
+    rows.push({
+      original: line,
+      propertyCid,
+      dataGroupCid,
+      filePath,
+      errorPath,
+      errorMessage,
+      currentValue,
+      timestamp,
+    });
+  }
+
+  // Filter out all address-related errors for files that have address anyOf errors
+  // and replace with a single consolidated error
+  const addressConsolidatedRows: RowType[] = [];
+  const nonAddressRows: RowType[] = [];
+
+  for (const row of rows) {
+    const isAddressRelatedError =
+      row.errorPath.includes('property_has_address') ||
+      row.errorPath.includes('address_has_fact_sheet');
+
+    if (addressErrorFiles.has(row.filePath) && isAddressRelatedError) {
+      // Check if we already have a consolidated error for this file
+      const hasConsolidated = addressConsolidatedRows.some(
+        (r) => r.filePath === row.filePath
+      );
+      if (!hasConsolidated) {
+        addressConsolidatedRows.push({
+          ...row,
+          errorPath: '/relationships/property_has_address',
+          errorMessage:
+            'Address should provide either unnormalized_address or normalized version distributed to other fields',
+        });
+      }
+    } else {
+      nonAddressRows.push(row);
+    }
+  }
+
+  const filteredRows = [...nonAddressRows, ...addressConsolidatedRows];
+
+  // Deduplicate by errorMessage + lastPathSegment
+  // Prefer paths without has_fact_sheet
+  const dedupeMap = new Map<string, RowType>();
+
+  for (const row of filteredRows) {
+    const pathParts = row.errorPath.split('/').filter((p) => p !== '');
+    const lastSegment =
+      pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'root';
+    const key = `${row.errorMessage}::${lastSegment}`;
+
+    const existing = dedupeMap.get(key);
+    if (!existing) {
+      dedupeMap.set(key, row);
+      continue;
+    }
+
+    // Prefer paths without has_fact_sheet
+    const existingHasFactSheet = existing.errorPath.includes('has_fact_sheet');
+    const currentHasFactSheet = row.errorPath.includes('has_fact_sheet');
+
+    if (existingHasFactSheet && !currentHasFactSheet) {
+      dedupeMap.set(key, row);
+    }
+  }
+
+  // Write deduplicated results
+  const dedupedRows = Array.from(dedupeMap.values());
+  const outputLines = [header];
+
+  for (const row of dedupedRows) {
+    const csvLine = [
+      escapeCsvValue(row.propertyCid),
+      escapeCsvValue(row.dataGroupCid),
+      escapeCsvValue(row.filePath),
+      escapeCsvValue(row.errorPath),
+      escapeCsvValue(row.errorMessage),
+      escapeCsvValue(row.currentValue),
+      escapeCsvValue(row.timestamp),
+    ].join(',');
+    outputLines.push(csvLine);
+  }
+
+  await fsPromises.writeFile(csvPath, outputLines.join('\n') + '\n');
+
+  return dedupedRows.length;
 }
