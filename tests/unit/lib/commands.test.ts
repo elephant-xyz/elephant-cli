@@ -1,5 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { transform, TransformOptions } from '../../../src/lib/commands.js';
+
+// Mock NER service to avoid loading native modules
+vi.mock('../../../src/services/ner-entity-extractor.service.js', () => ({
+  NEREntityExtractorService: vi.fn().mockImplementation(() => ({
+    initialize: vi.fn().mockResolvedValue(undefined),
+    extractEntities: vi.fn().mockResolvedValue({
+      QUANTITY: [],
+      DATE: [],
+      ORGANIZATION: [],
+      LOCATION: [],
+    }),
+  })),
+}));
 
 // Mock the transform handler to avoid actual execution
 vi.mock('../../../src/commands/transform/index.js', () => ({

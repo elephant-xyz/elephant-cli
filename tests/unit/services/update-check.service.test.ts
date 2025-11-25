@@ -25,6 +25,8 @@ describe('update-check.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...ORIGINAL_ENV };
+    // Remove the skip flag for these tests since they specifically test update checking
+    delete process.env.ELEPHANT_SKIP_UPDATE_CHECK;
 
     tmpHome = path.join(
       process.cwd(),

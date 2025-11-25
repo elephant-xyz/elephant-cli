@@ -759,7 +759,67 @@ Complete these steps for each property, track generated artifacts, and retain ke
 
 ## Utility Commands
 
-These helpers support cross-checking hashes, translating identifiers, and auditing previously submitted payloads.
+These helpers support cross-checking hashes, translating identifiers, auditing previously submitted payloads, validating data completeness, and optimizing extraction accuracy.
+
+### Validate Entity Completeness
+
+Verify that your transformation scripts preserve all critical data from the source HTML/JSON:
+
+```bash
+elephant-cli mirror-validate \
+  --prepare-zip prepare-output.zip \
+  --transform-zip transform-output.zip \
+  --output completeness-report.json
+```
+
+**What it does**
+
+- Extracts entities (quantities, dates, organizations, locations) from both raw and transformed data using NER models
+- Compares entity sets to calculate completeness and similarity scores
+- Identifies missing data with CSS selectors pointing to source locations
+- Generates detailed JSON report with unmatched entities
+
+**When to use**
+
+- Quality assurance after generating new transformation scripts
+- Debugging data loss issues in transformations
+- Monitoring data quality across multiple counties
+- Compliance documentation for data completeness audits
+
+See [Mirror Validate Command Documentation](./docs/mirror-validate-command.md) for detailed usage, configuration options, and workflow integration.
+
+### Identify Static Parts
+
+Improve validation accuracy by filtering out boilerplate HTML that appears across all properties:
+
+```bash
+# Analyze multiple HTML files to find static DOM elements
+elephant-cli identify-static-parts \
+  --input-zip properties.zip \
+  --output static-parts.csv
+
+# Use the results to improve mirror-validate accuracy
+elephant-cli mirror-validate \
+  --prepare-zip prepare-output.zip \
+  --transform-zip transform-output.zip \
+  --static-parts static-parts.csv \
+  --output report.json
+```
+
+**What it does**
+
+- Analyzes multiple HTML files to detect identical DOM elements (navigation, headers, footers)
+- Generates CSS selectors for static/boilerplate content
+- Outputs a CSV file for use with `mirror-validate`
+- Reduces false negatives by excluding template content from entity comparison
+
+**When to use**
+
+- Before running `mirror-validate` on counties with heavy navigation/UI elements
+- When completeness scores are artificially low due to template content
+- To focus validation on property-specific data only
+
+See [Identify Static Parts Command Documentation](./docs/identify-static-parts-command.md) for algorithm details and examples.
 
 ### Convert Hex Hashes to CID
 

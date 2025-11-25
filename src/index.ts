@@ -19,6 +19,8 @@ import { registerTransformCommand } from './commands/transform/index.js';
 import { registerGenerateTransformCommand } from './commands/generate-transform/index.js';
 import { registerPrepareCommand } from './commands/prepare/index.js';
 import { createKeystoreCommand } from './commands/create-keystore.js';
+import { registerMirrorValidateCommand } from './commands/mirror-validate/index.js';
+import { registerIdentifyStaticPartsCommand } from './commands/identify-static-parts/index.js';
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +48,8 @@ registerFetchDataCommand(program);
 registerTransformCommand(program);
 registerGenerateTransformCommand(program);
 registerPrepareCommand(program);
+registerMirrorValidateCommand(program);
+registerIdentifyStaticPartsCommand(program);
 createKeystoreCommand(program);
 
 program.parse();

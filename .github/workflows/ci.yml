@@ -87,12 +87,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native dependencies
+        run: npm rebuild onnxruntime-node
+
       - name: Build project
         run: npm run build
 
       - name: Run tests with coverage
         env:
           RPC_URL: ${{ secrets.RPC_URL }}
+          CI: true
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
