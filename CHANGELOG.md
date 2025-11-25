@@ -1,3 +1,10 @@
+## [1.55.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.1...v1.55.2) (2025-11-25)
+
+
+### Bug Fixes
+
+* validation de-duplication and currentValue ([#221](https://github.com/elephant-xyz/elephant-cli/issues/221)) ([f8d5111](https://github.com/elephant-xyz/elephant-cli/commit/f8d511190c79b2f2a7d528e46c57432730f74a38))
+
 ## [1.55.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.0...v1.55.1) (2025-11-24)
 
 
