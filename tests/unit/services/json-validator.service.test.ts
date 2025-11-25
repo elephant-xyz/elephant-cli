@@ -359,12 +359,51 @@ describe('JsonValidatorService', () => {
 
     it('should handle empty errors', () => {
       const errorMessages = jsonValidator.getErrorMessages([]);
-      expect(errorMessages[0]).toMatchObject({
+      expect(errorMessages[0]).toEqual({
         path: 'root',
         message: 'Unknown validation error',
-        value: '',
+        data: undefined,
       });
-      expect(errorMessages[0].displayPath).toBeUndefined();
+    });
+
+    it('should include data property in error messages', async () => {
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          age: { type: 'number' },
+        },
+      };
+
+      const data = { age: 'not-a-number' };
+      const result = await jsonValidator.validate(data, schema);
+      const errorMessages = jsonValidator.getErrorMessages(result.errors || []);
+
+      expect(errorMessages[0]).toHaveProperty('path');
+      expect(errorMessages[0]).toHaveProperty('message');
+      expect(errorMessages[0]).toHaveProperty('data');
+      expect(errorMessages[0].data).toBe('not-a-number');
+    });
+
+    it('should return simple error format without displayPath', async () => {
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: {
+          email: { type: 'string', format: 'email' },
+        },
+      };
+
+      const data = { email: 'invalid-email' };
+      const result = await jsonValidator.validate(data, schema);
+      const errorMessages = jsonValidator.getErrorMessages(result.errors || []);
+
+      // New simplified format only has path, message, data
+      expect(Object.keys(errorMessages[0])).toEqual([
+        'path',
+        'message',
+        'data',
+      ]);
+      expect(errorMessages[0]).not.toHaveProperty('value');
+      expect(errorMessages[0]).not.toHaveProperty('displayPath');
     });
   });
 

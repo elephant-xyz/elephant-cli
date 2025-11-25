@@ -7,26 +7,18 @@ import {
   ReportSummary,
 } from '../types/submit.types.js';
 
-interface CsvReporterServiceOptions {
-  pathFormatter?: (filePath: string) => string;
-}
-
 export class CsvReporterService {
   private errorStream: WriteStream | null = null;
   private warningStream: WriteStream | null = null;
   private errorCount = 0;
   private warningCount = 0;
   private startTime: Date;
-  private readonly options: CsvReporterServiceOptions;
-  private readonly seenErrorKeys = new Set<string>();
 
   constructor(
     private errorCsvPath: string,
-    private warningCsvPath: string,
-    options: CsvReporterServiceOptions = {}
+    private warningCsvPath: string
   ) {
     this.startTime = new Date();
-    this.options = options;
   }
 
   async initialize(): Promise<void> {
@@ -63,23 +55,9 @@ export class CsvReporterService {
       throw new Error('CSV reporter not initialized. Call initialize() first.');
     }
 
-    const formattedFilePath = this.formatFilePath(entry.filePath);
-    const dedupeKey = [
-      entry.propertyCid,
-      entry.dataGroupCid,
-      formattedFilePath,
-      entry.errorPath,
-      entry.errorMessage,
-      entry.currentValue,
-    ].join('|');
-    if (this.seenErrorKeys.has(dedupeKey)) {
-      return;
-    }
-    this.seenErrorKeys.add(dedupeKey);
-
     const escapedErrorPath = this.escapeCsvValue(entry.errorPath);
     const escapedErrorMessage = this.escapeCsvValue(entry.errorMessage);
-    const escapedFilePath = this.escapeCsvValue(formattedFilePath);
+    const escapedFilePath = this.escapeCsvValue(entry.filePath);
     const escapedCurrentValue = this.escapeCsvValue(entry.currentValue);
 
     const csvLine = `${entry.propertyCid},${entry.dataGroupCid},${escapedFilePath},${escapedErrorPath},${escapedErrorMessage},${escapedCurrentValue},${entry.timestamp}\n`;
@@ -191,17 +169,5 @@ export class CsvReporterService {
 
   getWarningCount(): number {
     return this.warningCount;
-  }
-
-  private formatFilePath(filePath: string): string {
-    if (!this.options.pathFormatter) {
-      return filePath;
-    }
-    try {
-      const formatted = this.options.pathFormatter(filePath);
-      return formatted || filePath;
-    } catch {
-      return filePath;
-    }
   }
 }
