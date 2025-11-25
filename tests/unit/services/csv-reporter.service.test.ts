@@ -194,59 +194,6 @@ describe('CsvReporterService', () => {
       expect(csvReporter.getErrorCount()).toBe(2);
     });
 
-    it('should skip duplicate error entries with identical details', async () => {
-      const duplicateEntry: ErrorEntry = {
-        propertyCid: 'dupProperty',
-        dataGroupCid: 'dupGroup',
-        filePath: '/path/to/duplicate.json',
-        errorPath: 'root',
-        errorMessage: 'Duplicate error',
-        currentValue: '',
-        timestamp: '2023-01-01T00:00:00.000Z',
-      };
-
-      await csvReporter.logError(duplicateEntry);
-      await csvReporter.logError(duplicateEntry);
-
-      const content = await readFile(errorCsvPath, 'utf-8');
-      const lines = content.trim().split('\n');
-
-      expect(lines).toHaveLength(2);
-      expect(csvReporter.getErrorCount()).toBe(1);
-    });
-
-    it('should apply path formatter when provided', async () => {
-      const formattedErrorPath = join(tempDir, 'formatted-errors.csv');
-      const formattedWarningPath = join(tempDir, 'formatted-warnings.csv');
-      const formattedReporter = new CsvReporterService(
-        formattedErrorPath,
-        formattedWarningPath,
-        {
-          pathFormatter: (filePath) => `display/${filePath.split('/').pop()}`,
-        }
-      );
-
-      await formattedReporter.initialize();
-
-      const entry: ErrorEntry = {
-        propertyCid: 'formattedProperty',
-        dataGroupCid: 'formattedGroup',
-        filePath: '/absolute/path/to/file.json',
-        errorPath: 'data.value',
-        errorMessage: 'Formatted path error',
-        currentValue: '',
-        timestamp: '2023-01-01T00:00:00.000Z',
-      };
-
-      await formattedReporter.logError(entry);
-
-      const content = await readFile(formattedErrorPath, 'utf-8');
-      const lines = content.trim().split('\n');
-
-      expect(lines[1]).toContain('display/file.json');
-      await formattedReporter.finalize();
-    });
-
     it('should throw error if not initialized', async () => {
       const uninitializedReporter = new CsvReporterService(
         '/tmp/test.csv',

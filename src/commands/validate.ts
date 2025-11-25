@@ -69,29 +69,6 @@ export interface ValidateServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
-function normalizeFilePathForReport(
-  absolutePath: string,
-  actualInputDir: string,
-  normalizedPropertyDir: string
-): string {
-  if (!absolutePath) {
-    return absolutePath;
-  }
-  const normalizedAbsolute = absolutePath.split(path.sep).join('/');
-  if (!normalizedPropertyDir) {
-    return normalizedAbsolute;
-  }
-  const relativePath = path.relative(actualInputDir, absolutePath);
-  if (!relativePath || relativePath.startsWith('..')) {
-    return normalizedAbsolute;
-  }
-  const normalizedRelative = relativePath.split(path.sep).join('/');
-  if (!normalizedRelative) {
-    return normalizedPropertyDir;
-  }
-  return `${normalizedPropertyDir}/${normalizedRelative}`;
-}
-
 export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
@@ -125,16 +102,6 @@ export async function handleValidate(
 
   logger.technical(`Processing single property data from: ${actualInputDir}`);
   const workingDir = options.cwd || process.cwd();
-  const propertyDirName = path.basename(actualInputDir);
-  const normalizedPropertyDir = propertyDirName
-    ? propertyDirName.split(path.sep).join('/')
-    : '';
-  const formatFilePathForReport = (absolutePath: string) =>
-    normalizeFilePathForReport(
-      absolutePath,
-      actualInputDir,
-      normalizedPropertyDir
-    );
   const erorrCsvName = options.outputCsv || 'submit_errors.csv';
   const errorCsvPath = path.resolve(workingDir, erorrCsvName);
   const warningCsvPath = path.resolve(workingDir, 'submit_warnings.csv');
@@ -173,10 +140,7 @@ export async function handleValidate(
     if (!csvReporterServiceInstance) {
       csvReporterServiceInstance = new CsvReporterService(
         config.errorCsvPath,
-        config.warningCsvPath,
-        {
-          pathFormatter: formatFilePathForReport,
-        }
+        config.warningCsvPath
       );
     }
     // Assign to the const that the rest of the try block uses
@@ -222,6 +186,7 @@ export async function handleValidate(
     }
 
     // Scan the single property directory using the new approach
+    const propertyDirName = path.basename(actualInputDir);
     const scanResult = await scanSinglePropertyDirectoryV2(
       actualInputDir,
       propertyDirName,
@@ -770,39 +735,19 @@ async function validateFile(
     );
 
     if (!validationResult.valid) {
-      const errorMessages: Array<{
-        path: string;
-        message: string;
-        value: string;
-        displayPath?: string;
-      }> = services.jsonValidatorService.getErrorMessages(
-        validationResult.errors || []
-      );
+      const errorMessages: Array<{ path: string; message: string }> =
+        services.jsonValidatorService.getErrorMessages(
+          validationResult.errors || []
+        );
 
       for (const errorInfo of errorMessages) {
-        const friendlyPath = errorInfo.displayPath ?? errorInfo.path;
-        const directoryForCsv = path.basename(path.dirname(fileEntry.filePath));
-        const fileBase = errorInfo.displayPath
-          ? errorInfo.displayPath.split('/')[0]
-          : path.basename(fileEntry.filePath);
-        const filePathForCsv = directoryForCsv
-          ? `${directoryForCsv}/${fileBase}`
-          : fileBase;
-
-        const propertyCidForCsv =
-          !fileEntry.propertyCid ||
-          fileEntry.propertyCid === directoryForCsv ||
-          fileEntry.propertyCid.startsWith('SEED_PENDING:')
-            ? ''
-            : fileEntry.propertyCid;
-
         await services.csvReporterService.logError({
-          propertyCid: propertyCidForCsv,
+          propertyCid: fileEntry.propertyCid,
           dataGroupCid: fileEntry.dataGroupCid,
-          filePath: filePathForCsv,
-          errorPath: friendlyPath,
+          filePath: fileEntry.filePath,
+          errorPath: errorInfo.path,
           errorMessage: errorInfo.message,
-          currentValue: errorInfo.value,
+          currentValue: '',
           timestamp: new Date().toISOString(),
         });
       }

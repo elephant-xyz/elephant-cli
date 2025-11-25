@@ -282,12 +282,10 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
 
       expect(result.valid).toBe(false);
       const errorMessages = jsonValidator.getErrorMessages(result.errors!);
-      expect(errorMessages[0]).toMatchObject({
+      expect(errorMessages[0]).toEqual({
         path: '/user/email',
         message: 'must be a valid email address',
-        value: 'invalid-email',
       });
-      expect(errorMessages[0].displayPath).toBeUndefined();
     });
 
     it('should handle array validation error paths', async () => {
@@ -308,12 +306,10 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
 
       expect(result.valid).toBe(false);
       const errorMessages = jsonValidator.getErrorMessages(result.errors!);
-      expect(errorMessages[0]).toMatchObject({
+      expect(errorMessages[0]).toEqual({
         path: '/1/email',
         message: 'must be a valid email address',
-        value: 'invalid-email',
       });
-      expect(errorMessages[0].displayPath).toBeUndefined();
     });
   });
 
