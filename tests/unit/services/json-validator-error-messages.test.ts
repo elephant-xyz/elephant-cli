@@ -285,6 +285,7 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
       expect(errorMessages[0]).toEqual({
         path: '/user/email',
         message: 'must be a valid email address',
+        data: 'invalid-email',
       });
     });
 
@@ -309,6 +310,7 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
       expect(errorMessages[0]).toEqual({
         path: '/1/email',
         message: 'must be a valid email address',
+        data: 'invalid-email',
       });
     });
   });

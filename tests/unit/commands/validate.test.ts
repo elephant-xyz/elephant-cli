@@ -257,9 +257,14 @@ describe('handleValidate', () => {
       downloadFile: vi.fn(),
     };
 
-    // Mock fs.promises.readFile
-    vi.spyOn(fsPromises, 'readFile').mockResolvedValue(
-      JSON.stringify({ label: 'test', relationships: {} })
+    // Mock fs.promises.readFile - return CSV for error files, JSON for data files
+    vi.spyOn(fsPromises, 'readFile').mockImplementation(
+      async (filePath: any) => {
+        if (typeof filePath === 'string' && filePath.endsWith('_errors.csv')) {
+          return 'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n';
+        }
+        return JSON.stringify({ label: 'test', relationships: {} });
+      }
     );
 
     // Mock scanSinglePropertyDirectoryV2 to return test data
@@ -342,7 +347,9 @@ describe('handleValidate', () => {
     });
     mockJsonValidatorService.getErrorMessages = vi
       .fn()
-      .mockReturnValue([{ path: '/label', message: 'Label is required' }]);
+      .mockReturnValue([
+        { path: '/label', message: 'Label is required', data: null },
+      ]);
     mockCsvReporterService.getErrorCount = vi.fn().mockReturnValue(2);
     mockProgressTracker.getMetrics = vi.fn().mockReturnValue({
       startTime: Date.now(),
@@ -351,6 +358,16 @@ describe('handleValidate', () => {
       skipped: 0,
       total: 2,
     });
+
+    // Mock CSV with actual errors for postProcessErrorCsv
+    vi.spyOn(fsPromises, 'readFile').mockImplementation(
+      async (filePath: any) => {
+        if (typeof filePath === 'string' && filePath.endsWith('_errors.csv')) {
+          return 'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\nprop1,dg1,file1,/label,Label is required,null,2024-01-01\nprop2,dg2,file2,/label,Label is required,null,2024-01-01\n';
+        }
+        return JSON.stringify({ label: 'test', relationships: {} });
+      }
+    );
 
     const options: ValidateCommandOptions = {
       input: '/test/input.zip',
@@ -471,6 +488,11 @@ describe('handleValidate', () => {
       // Subsequent calls succeed (but shouldn't be called due to skip)
       return Promise.resolve({ valid: true });
     });
+    mockJsonValidatorService.getErrorMessages = vi
+      .fn()
+      .mockReturnValue([
+        { path: '/seed', message: 'Invalid seed', data: null },
+      ]);
 
     mockProgressTracker.getMetrics = vi
       .fn()
@@ -483,6 +505,16 @@ describe('handleValidate', () => {
         skipped: 1,
         total: 2,
       });
+
+    // Mock CSV with actual errors for postProcessErrorCsv
+    vi.spyOn(fsPromises, 'readFile').mockImplementation(
+      async (filePath: any) => {
+        if (typeof filePath === 'string' && filePath.endsWith('_errors.csv')) {
+          return 'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\nprop1,seed,file1,/seed,Invalid seed,null,2024-01-01\n';
+        }
+        return JSON.stringify({ label: 'test', relationships: {} });
+      }
+    );
 
     const options: ValidateCommandOptions = {
       input: '/test/input.zip',
@@ -537,8 +569,14 @@ describe('handleValidate', () => {
   });
 
   it('should handle file read errors', async () => {
-    vi.spyOn(fsPromises, 'readFile').mockRejectedValue(
-      new Error('File not found')
+    // Mock readFile to fail for data files but return empty CSV for error files
+    vi.spyOn(fsPromises, 'readFile').mockImplementation(
+      async (filePath: any) => {
+        if (typeof filePath === 'string' && filePath.endsWith('_errors.csv')) {
+          return 'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n';
+        }
+        throw new Error('File not found');
+      }
     );
 
     const options: ValidateCommandOptions = {
@@ -682,6 +720,10 @@ describe('handleValidate', () => {
     const defaultRead = JSON.stringify({ label: 'test', relationships: {} });
     readFileMock.mockImplementation(async (filePath: any) => {
       if (typeof filePath === 'string') {
+        // Return empty CSV for error files
+        if (filePath.endsWith('_errors.csv')) {
+          return 'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n';
+        }
         if (filePath.endsWith(datagroupFile)) {
           return JSON.stringify({ label: 'County', relationships: {} });
         }
@@ -714,7 +756,8 @@ describe('handleValidate', () => {
     const loggedErrors = mockCsvReporterService.logError as vi.Mock;
     const loggedPaths = loggedErrors.mock.calls.map((call) => call[0].filePath);
 
-    expect(loggedPaths).toContain('property-dir/unused_data.json');
+    // The path includes the full extracted path
+    expect(loggedPaths.some((p) => p.includes('unused_data.json'))).toBe(true);
     expect(
       loggedPaths.some((path) => path.includes('unused_relationship.json'))
     ).toBe(false);
