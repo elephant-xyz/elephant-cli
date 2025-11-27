@@ -10,9 +10,9 @@ vi.mock('../../../src/lib/common.js', async () => {
   const actual = await vi.importActual('../../../src/lib/common.js');
   return {
     ...actual,
-    createBrowserPage: vi.fn().mockRejectedValue(
-      new Error('Browser launch failed (mocked for test)')
-    ),
+    createBrowserPage: vi
+      .fn()
+      .mockRejectedValue(new Error('Browser launch failed (mocked for test)')),
   };
 });
 
