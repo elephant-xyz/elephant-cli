@@ -5,6 +5,17 @@ import os from 'os';
 import AdmZip from 'adm-zip';
 import { prepare } from '../../../src/lib/prepare.js';
 
+// Mock createBrowserPage to fail immediately to avoid browser launch timeouts
+vi.mock('../../../src/lib/common.js', async () => {
+  const actual = await vi.importActual('../../../src/lib/common.js');
+  return {
+    ...actual,
+    createBrowserPage: vi.fn().mockRejectedValue(
+      new Error('Browser launch failed (mocked for test)')
+    ),
+  };
+});
+
 describe('Prepare Command - Input CSV Support', () => {
   let tempDir: string;
   let csvPath: string;
@@ -304,16 +315,16 @@ describe('Prepare Command - Input CSV Support', () => {
         'utf-8'
       );
 
-      // Note: This will fail without actual browser, but validates the flow logic
-      // In real tests, we'd mock Puppeteer
+      // Note: Browser is mocked at module level to fail immediately
+      // This validates the flow logic without actually launching a browser
       await expect(
         prepare('', outputZipPath, {
           inputCsv: csvPath,
           browserFlowFile: browserFlowPath,
           headless: true,
         })
-      ).rejects.toThrow(); // Will fail trying to launch browser
-    }, 30000); // 30 second timeout
+      ).rejects.toThrow(); // Will fail trying to launch browser (mocked)
+    }, 10000); // 10 second timeout (reduced since browser is mocked)
 
     it('should extract URL from browser workflow', async () => {
       // Test the extractUrlFromWorkflow function logic

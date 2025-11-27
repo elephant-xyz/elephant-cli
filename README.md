@@ -815,6 +815,69 @@ elephant-cli cid-to-hex bafkreicfajrgq6qicnclpbg4qolyhm6co74fcwrkm7n6dyx4qw5bpjv
 | `-v, --validate` | Print confirmation that the CID input is valid before conversion. | `false` |
 | `-q, --quiet`    | Suppress labels and emit just the hex string.                     | `false` |
 
+### Check Gas Price
+
+```bash
+elephant-cli check-gas-price
+```
+
+Or with a custom RPC URL:
+
+```bash
+elephant-cli check-gas-price --rpc-url https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY
+```
+
+**What it does**
+
+- Fetches current gas prices from the blockchain network.
+- Displays both legacy (Type 0) and EIP-1559 (Type 2) transaction gas prices.
+- Shows the current block number and base fee information.
+
+**Inputs**
+
+- None required. Optionally provide an RPC URL.
+
+**Output**
+
+```
+🐘 Elephant Network CLI - Check Gas Price
+
+📊 Current Gas Prices
+
+Block Number: 79589165
+
+Legacy (Type 0) Transaction:
+  Gas Price: 25.285523905 Gwei
+
+EIP-1559 (Type 2) Transaction:
+  Max Fee Per Gas: 26.068348884 Gwei
+  Max Priority Fee (Tip): 25.789395847 Gwei
+  Base Fee Per Gas: 0.281338954 Gwei
+
+✅ Gas price check complete
+```
+
+**Options**
+
+| Option                | Description                                                      | Default                    |
+| --------------------- | ---------------------------------------------------------------- | -------------------------- |
+| `--rpc-url <url>`     | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`  |
+
+**Use as Library**
+
+You can also use this function programmatically in your code:
+
+```typescript
+import { checkGasPrice } from '@elephant-xyz/cli/lib';
+
+const gasPriceInfo = await checkGasPrice({
+  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
+});
+
+console.log(gasPriceInfo.legacy?.gasPrice); // "25.285523905"
+console.log(gasPriceInfo.eip1559?.maxFeePerGas); // "26.068348884"
+```
+
 ### Fetch Data from IPFS or Transactions
 
 ```bash
