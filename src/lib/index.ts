@@ -6,6 +6,7 @@ export { hash } from './commands.js';
 export { upload } from './commands.js';
 export { submitToContract } from './commands.js';
 export { checkGasPrice } from './commands.js';
+export { checkTransactionStatus } from './commands.js';
 export { prepare } from './prepare.js';
 
 // Export types
@@ -25,9 +26,17 @@ export type {
   SubmitToContractResult,
   CheckGasPriceOptions,
   CheckGasPriceResult,
+  CheckTransactionStatusOptions,
+  CheckTransactionStatusResult,
 } from './commands.js';
 
 export type { PrepareOptions } from './types.js';
 
 // Export gas price types
 export type { GasPriceInfo } from '../services/gas-price.service.js';
+
+// Export transaction status types
+export type {
+  TransactionRecord,
+  TransactionStatusResult,
+} from '../services/transaction-status-checker.service.js';
