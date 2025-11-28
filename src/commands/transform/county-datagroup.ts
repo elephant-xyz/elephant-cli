@@ -65,6 +65,8 @@ export function createCountyDataGroup(
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
   let propertyHasFloodStormInformation: IPLDRef | undefined;
+  let propertyHasUtility: IPLDRef | undefined;
+  let propertyHasStructure: IPLDRef | undefined;
   const parcelHasGeometry: IPLDRef[] = [];
   let addressHasGeometry: IPLDRef | undefined;
   const layoutHasGeometry: IPLDRef[] = [];
@@ -96,6 +98,20 @@ export function createCountyDataGroup(
     }
     if (lower.includes('property_flood_storm_information')) {
       propertyHasFloodStormInformation = ref;
+      continue;
+    }
+    if (
+      lower.includes('property_has_utility') ||
+      lower.includes('property_utility')
+    ) {
+      propertyHasUtility = ref;
+      continue;
+    }
+    if (
+      lower.includes('property_has_structure') ||
+      lower.includes('property_structure')
+    ) {
+      propertyHasStructure = ref;
       continue;
     }
     if (
@@ -231,6 +247,10 @@ export function createCountyDataGroup(
     relationships.layout_has_geometry = layoutHasGeometry;
   }
   if (propertyHasFile.length) relationships.property_has_file = propertyHasFile;
+  if (propertyHasStructure)
+    relationships.property_has_structure = propertyHasStructure;
+  if (propertyHasUtility)
+    relationships.property_has_utility = propertyHasUtility;
   if (propertyHasPropertyImprovement.length)
     relationships.property_has_property_improvement =
       propertyHasPropertyImprovement;
