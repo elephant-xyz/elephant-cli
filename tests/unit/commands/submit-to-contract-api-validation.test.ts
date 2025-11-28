@@ -38,25 +38,21 @@ QmProperty1,QmDataGroup1,QmData1,/path/to/file1.json,2024-01-01T00:00:00Z`;
     expect(result.stderr).toContain("error: unknown option '--private-key'");
   });
 
-  it(
-    'should require all three API parameters together',
-    async () => {
-      const result = await runCommand([
-        'submit-to-contract',
-        csvPath,
-        '--domain',
-        'oracles.staircaseapi.com',
-        '--api-key',
-        'test-api-key',
-        // Missing oracle-key-id
-        '--dry-run',
-      ]);
+  it('should require all three API parameters together', async () => {
+    const result = await runCommand([
+      'submit-to-contract',
+      csvPath,
+      '--domain',
+      'oracles.staircaseapi.com',
+      '--api-key',
+      'test-api-key',
+      // Missing oracle-key-id
+      '--dry-run',
+    ]);
 
-      expect(result.code).toBe(1);
-      expect(result.stderr).toContain('all three parameters must be provided');
-    },
-    30000
-  );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('all three parameters must be provided');
+  }, 30000);
 
   it('should work without private key in API mode', async () => {
     const result = await runCommand([
