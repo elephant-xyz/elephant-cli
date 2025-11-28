@@ -1,3 +1,10 @@
+# [1.56.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.3...v1.56.0) (2025-11-28)
+
+
+### Features
+
+* **check-gas-price:** add new check gas price service ([#222](https://github.com/elephant-xyz/elephant-cli/issues/222)) ([d2188b8](https://github.com/elephant-xyz/elephant-cli/commit/d2188b847545eb53b889f4173c20b7f8521c6c5e))
+
 ## [1.55.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.2...v1.55.3) (2025-11-28)
 
 
