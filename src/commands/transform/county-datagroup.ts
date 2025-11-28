@@ -100,11 +100,17 @@ export function createCountyDataGroup(
       propertyHasFloodStormInformation = ref;
       continue;
     }
-    if (lower.includes('property_has_utility') || lower.includes('property_utility')) {
+    if (
+      lower.includes('property_has_utility') ||
+      lower.includes('property_utility')
+    ) {
       propertyHasUtility = ref;
       continue;
     }
-    if (lower.includes('property_has_structure') || lower.includes('property_structure')) {
+    if (
+      lower.includes('property_has_structure') ||
+      lower.includes('property_structure')
+    ) {
       propertyHasStructure = ref;
       continue;
     }
