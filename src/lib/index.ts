@@ -5,6 +5,7 @@ export { validate } from './commands.js';
 export { hash } from './commands.js';
 export { upload } from './commands.js';
 export { submitToContract } from './commands.js';
+export { checkGasPrice } from './commands.js';
 export { prepare } from './prepare.js';
 
 // Export types
@@ -22,6 +23,11 @@ export type {
   UploadResult,
   SubmitToContractOptions,
   SubmitToContractResult,
+  CheckGasPriceOptions,
+  CheckGasPriceResult,
 } from './commands.js';
 
 export type { PrepareOptions } from './types.js';
+
+// Export gas price types
+export type { GasPriceInfo } from '../services/gas-price.service.js';

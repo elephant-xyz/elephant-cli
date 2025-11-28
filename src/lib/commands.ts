@@ -17,6 +17,11 @@ import {
   handleGenerateTransform,
   type GenerateTransformCommandOptions,
 } from '../commands/generate-transform/index.js';
+import {
+  GasPriceService,
+  type GasPriceInfo,
+} from '../services/gas-price.service.js';
+import { DEFAULT_RPC_URL } from '../config/constants.js';
 
 // Generate-transform function interface
 export type GenerateTransformOptions = Omit<
@@ -385,4 +390,19 @@ export async function submitToContract(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+// Gas price function wrapper
+export interface CheckGasPriceOptions {
+  rpcUrl?: string;
+}
+
+export type CheckGasPriceResult = GasPriceInfo;
+
+export async function checkGasPrice(
+  options: CheckGasPriceOptions = {}
+): Promise<CheckGasPriceResult> {
+  const rpcUrl = options.rpcUrl || process.env.RPC_URL || DEFAULT_RPC_URL;
+  const service = new GasPriceService(rpcUrl);
+  return await service.getGasPrice();
 }

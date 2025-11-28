@@ -11,6 +11,7 @@ import { registerValidateAndUploadCommand } from './commands/validate-and-upload
 import { registerSubmitToContractCommand } from './commands/submit-to-contract.js';
 import { registerFetchDataCommand } from './commands/fetch-data.js';
 import { registerCheckTransactionStatusCommand } from './commands/check-transaction-status.js';
+import { registerCheckGasPriceCommand } from './commands/check-gas-price.js';
 import { registerHexToCidCommand } from './commands/hex-to-cid.js';
 import { registerCidToHexCommand } from './commands/cid-to-hex.js';
 import { registerHashCommand } from './commands/hash.js';
@@ -38,6 +39,7 @@ registerValidateCommand(program);
 registerValidateAndUploadCommand(program);
 registerSubmitToContractCommand(program);
 registerCheckTransactionStatusCommand(program);
+registerCheckGasPriceCommand(program);
 registerHexToCidCommand(program);
 registerCidToHexCommand(program);
 registerHashCommand(program);
