@@ -1,3 +1,10 @@
+## [1.55.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.2...v1.55.3) (2025-11-28)
+
+
+### Bug Fixes
+
+* add property has utility and structure back ([#223](https://github.com/elephant-xyz/elephant-cli/issues/223)) ([a70f5af](https://github.com/elephant-xyz/elephant-cli/commit/a70f5af56d3e630c97f376eaba824201fb2bd1c8))
+
 ## [1.55.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.1...v1.55.2) (2025-11-25)
 
 
