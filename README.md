@@ -878,6 +878,77 @@ console.log(gasPriceInfo.legacy?.gasPrice); // "25.285523905"
 console.log(gasPriceInfo.eip1559?.maxFeePerGas); // "26.068348884"
 ```
 
+### Check Transaction Status
+
+```bash
+elephant-cli check-transaction-status transaction-ids.csv
+```
+
+Or with custom options:
+
+```bash
+elephant-cli check-transaction-status transaction-ids.csv \
+  --rpc-url https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY \
+  --output-csv checked-transactions.csv \
+  --max-concurrent 20
+```
+
+**What it does**
+
+- Reads transaction hashes from a CSV file.
+- Checks the status of each transaction on the blockchain (success, failed, pending, or not found).
+- Writes results to a new CSV file with status, block number, gas used, and any errors.
+
+**Inputs**
+
+- CSV file with headers: `transactionHash`, `batchIndex`, `itemCount`, `timestamp`, `status` (optional columns are allowed).
+
+**Output**
+
+```
+transaction-status-checked-20240101120000.csv
+transactionHash,batchIndex,itemCount,timestamp,status,blockNumber,gasUsed,checkTimestamp,error
+0x123...,0,1,2024-01-01T00:00:00Z,success,12345,100000,2024-01-01T12:00:00Z,
+0x456...,1,1,2024-01-01T00:00:00Z,pending,,,2024-01-01T12:00:00Z,
+```
+
+**Options**
+
+| Option                    | Description                                                      | Default                                    |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| `--rpc-url <url>`         | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`                  |
+| `--output-csv <path>`     | Output CSV file path.                                            | `transaction-status-checked-{timestamp}.csv` |
+| `--max-concurrent <num>`  | Maximum concurrent status checks.                                | `10`                                       |
+
+**Use as Library**
+
+You can also use this function programmatically in your code:
+
+```typescript
+import { checkTransactionStatus } from '@elephant-xyz/cli/lib';
+
+// Check a single transaction
+const result = await checkTransactionStatus({
+  transactionHashes: '0x123...',
+  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
+});
+
+console.log(result[0].status); // "success", "failed", "pending", or "not found"
+console.log(result[0].blockNumber); // 12345 (if mined)
+console.log(result[0].gasUsed); // "100000" (if mined)
+
+// Check multiple transactions
+const results = await checkTransactionStatus({
+  transactionHashes: ['0x111...', '0x222...', '0x333...'],
+  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
+  maxConcurrent: 20,
+});
+
+results.forEach((tx) => {
+  console.log(`${tx.transactionHash}: ${tx.status}`);
+});
+```
+
 ### Fetch Data from IPFS or Transactions
 
 ```bash
