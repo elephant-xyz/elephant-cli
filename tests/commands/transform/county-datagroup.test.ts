@@ -754,6 +754,105 @@ describe('createCountyDataGroup', () => {
       ]);
       expect(result.relationships.tax_has_tax_jurisdiction).toBeUndefined();
     });
+
+    it('should include tax_jurisdiction_has_fact_sheet when file contains jurisdiction and fact_sheet', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_to_fact_sheet.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_jurisdiction_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_jurisdiction_to_fact_sheet.json' },
+      ]);
+    });
+
+    it('should include tax_exemption_has_fact_sheet when file contains exemption and fact_sheet', () => {
+      const relationshipFiles = [
+        'relationship_tax_exemption_to_fact_sheet.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_exemption_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_exemption_to_fact_sheet.json' },
+      ]);
+    });
+
+    it('should handle multiple tax_jurisdiction_has_fact_sheet relationships', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_1_to_fact_sheet.json',
+        'relationship_tax_jurisdiction_2_to_fact_sheet.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_jurisdiction_has_fact_sheet).toHaveLength(
+        2
+      );
+      expect(result.relationships.tax_jurisdiction_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_jurisdiction_1_to_fact_sheet.json' },
+        { '/': './relationship_tax_jurisdiction_2_to_fact_sheet.json' },
+      ]);
+    });
+
+    it('should handle multiple tax_exemption_has_fact_sheet relationships', () => {
+      const relationshipFiles = [
+        'relationship_tax_exemption_1_to_fact_sheet.json',
+        'relationship_tax_exemption_2_to_fact_sheet.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_exemption_has_fact_sheet).toHaveLength(2);
+      expect(result.relationships.tax_exemption_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_exemption_1_to_fact_sheet.json' },
+        { '/': './relationship_tax_exemption_2_to_fact_sheet.json' },
+      ]);
+    });
+
+    it('should prioritize fact_sheet relationships over entity relationships', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_to_fact_sheet.json',
+        'relationship_tax_jurisdiction.json',
+        'relationship_tax_exemption_to_fact_sheet.json',
+        'relationship_tax_exemption.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      // Fact sheet relationships
+      expect(result.relationships.tax_jurisdiction_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_jurisdiction_to_fact_sheet.json' },
+      ]);
+      expect(result.relationships.tax_exemption_has_fact_sheet).toEqual([
+        { '/': './relationship_tax_exemption_to_fact_sheet.json' },
+      ]);
+
+      // Entity relationships
+      expect(result.relationships.tax_has_tax_jurisdiction).toEqual([
+        { '/': './relationship_tax_jurisdiction.json' },
+      ]);
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_tax_exemption.json' },
+      ]);
+    });
+
+    it('should handle all tax relationships including fact_sheet together', () => {
+      const relationshipFiles = [
+        'relationship_property_tax_2024.json',
+        'relationship_tax_jurisdiction_1.json',
+        'relationship_tax_exemption_1.json',
+        'relationship_tax_jurisdiction_to_fact_sheet.json',
+        'relationship_tax_exemption_to_fact_sheet.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.property_has_tax).toHaveLength(1);
+      expect(result.relationships.tax_has_tax_jurisdiction).toHaveLength(1);
+      expect(
+        result.relationships.tax_jurisdiction_has_tax_exemption
+      ).toHaveLength(1);
+      expect(result.relationships.tax_jurisdiction_has_fact_sheet).toHaveLength(
+        1
+      );
+      expect(result.relationships.tax_exemption_has_fact_sheet).toHaveLength(1);
+    });
   });
 
   describe('geometry relationships', () => {
