@@ -1,3 +1,10 @@
+## [1.56.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.0...v1.56.1) (2025-12-02)
+
+
+### Bug Fixes
+
+* add tax ecemption and jurisdiction relationship ([#226](https://github.com/elephant-xyz/elephant-cli/issues/226)) ([01d30c8](https://github.com/elephant-xyz/elephant-cli/commit/01d30c8d7341dbc3fbd923b76f443f472916bb61))
+
 # [1.56.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.55.3...v1.56.0) (2025-11-28)
 
 
