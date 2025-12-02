@@ -29,6 +29,8 @@ export interface Relationships {
   layout_has_layout?: IPLDRef[];
   layout_has_utility?: IPLDRef[];
   layout_has_structure?: IPLDRef[];
+  tax_has_tax_jurisdiction?: IPLDRef[];
+  tax_jurisdiction_has_tax_exemption?: IPLDRef[];
 }
 
 export interface CountyData {
@@ -61,6 +63,8 @@ export function createCountyDataGroup(
   const layoutHasLayout: IPLDRef[] = [];
   const layoutHasUtility: IPLDRef[] = [];
   const layoutHasStructure: IPLDRef[] = [];
+  const taxHasTaxJurisdiction: IPLDRef[] = [];
+  const taxJurisdictionHasTaxExemption: IPLDRef[] = [];
 
   let propertyHasAddress: IPLDRef | undefined;
   let propertyHasLot: IPLDRef | undefined;
@@ -84,7 +88,22 @@ export function createCountyDataGroup(
       propertyHasLot = ref;
       continue;
     }
-    if (lower.includes('property_tax')) {
+    // Tax exemption relationships (check exemption first, before jurisdiction)
+    if (lower.includes('exemption')) {
+      taxJurisdictionHasTaxExemption.push(ref);
+      continue;
+    }
+    // Tax jurisdiction relationships
+    if (lower.includes('tax') && lower.includes('jurisdiction')) {
+      taxHasTaxJurisdiction.push(ref);
+      continue;
+    }
+    // property_has_tax - exclude files with jurisdiction or exemption keywords
+    if (
+      lower.includes('property_tax') &&
+      !lower.includes('jurisdiction') &&
+      !lower.includes('exemption')
+    ) {
       propertyHasTax.push(ref);
       continue;
     }
@@ -271,6 +290,11 @@ export function createCountyDataGroup(
     relationships.layout_has_utility = layoutHasUtility;
   if (layoutHasStructure.length)
     relationships.layout_has_structure = layoutHasStructure;
+  if (taxHasTaxJurisdiction.length)
+    relationships.tax_has_tax_jurisdiction = taxHasTaxJurisdiction;
+  if (taxJurisdictionHasTaxExemption.length)
+    relationships.tax_jurisdiction_has_tax_exemption =
+      taxJurisdictionHasTaxExemption;
 
   return {
     label: 'County',
