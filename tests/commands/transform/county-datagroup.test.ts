@@ -582,6 +582,180 @@ describe('createCountyDataGroup', () => {
     });
   });
 
+  describe('tax jurisdiction and exemption relationships', () => {
+    it('should include tax_has_tax_jurisdiction when file contains tax and jurisdiction', () => {
+      const relationshipFiles = ['relationship_tax_jurisdiction.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_has_tax_jurisdiction).toEqual([
+        { '/': './relationship_tax_jurisdiction.json' },
+      ]);
+    });
+
+    it('should include tax_jurisdiction_has_tax_exemption when file contains exemption', () => {
+      const relationshipFiles = ['relationship_tax_exemption.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_tax_exemption.json' },
+      ]);
+    });
+
+    it('should include tax_jurisdiction_has_tax_exemption when file contains jurisdiction and exemption', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_exemption.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_tax_jurisdiction_exemption.json' },
+      ]);
+    });
+
+    it('should include tax_jurisdiction_has_tax_exemption when file contains property, jurisdiction, and exemption', () => {
+      const relationshipFiles = [
+        'relationship_property_tax_jurisdiction_exemption.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_property_tax_jurisdiction_exemption.json' },
+      ]);
+      // Should NOT be in property_has_tax
+      expect(result.relationships.property_has_tax).toBeUndefined();
+    });
+
+    it('should NOT include files with jurisdiction in property_has_tax', () => {
+      const relationshipFiles = [
+        'relationship_property_tax_2024.json',
+        'relationship_property_tax_jurisdiction.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.property_has_tax).toEqual([
+        { '/': './relationship_property_tax_2024.json' },
+      ]);
+      expect(result.relationships.tax_has_tax_jurisdiction).toEqual([
+        { '/': './relationship_property_tax_jurisdiction.json' },
+      ]);
+    });
+
+    it('should NOT include files with exemption in property_has_tax', () => {
+      const relationshipFiles = [
+        'relationship_property_tax_2024.json',
+        'relationship_property_tax_exemption.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.property_has_tax).toEqual([
+        { '/': './relationship_property_tax_2024.json' },
+      ]);
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_property_tax_exemption.json' },
+      ]);
+    });
+
+    it('should handle multiple tax_has_tax_jurisdiction relationships', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_1.json',
+        'relationship_tax_jurisdiction_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_has_tax_jurisdiction).toHaveLength(2);
+      expect(result.relationships.tax_has_tax_jurisdiction).toEqual([
+        { '/': './relationship_tax_jurisdiction_1.json' },
+        { '/': './relationship_tax_jurisdiction_2.json' },
+      ]);
+    });
+
+    it('should handle multiple tax_jurisdiction_has_tax_exemption relationships', () => {
+      const relationshipFiles = [
+        'relationship_tax_exemption_1.json',
+        'relationship_tax_exemption_2.json',
+        'relationship_exemption_3.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        result.relationships.tax_jurisdiction_has_tax_exemption
+      ).toHaveLength(3);
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_tax_exemption_1.json' },
+        { '/': './relationship_tax_exemption_2.json' },
+        { '/': './relationship_exemption_3.json' },
+      ]);
+    });
+
+    it('should handle case-insensitive matching for tax relationships', () => {
+      const relationshipFiles = [
+        'Relationship_Tax_Jurisdiction.json',
+        'RELATIONSHIP_TAX_EXEMPTION.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.tax_has_tax_jurisdiction).toEqual([
+        { '/': './Relationship_Tax_Jurisdiction.json' },
+      ]);
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './RELATIONSHIP_TAX_EXEMPTION.json' },
+      ]);
+    });
+
+    it('should return tax_has_tax_jurisdiction as an array', () => {
+      const relationshipFiles = ['relationship_tax_jurisdiction.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(Array.isArray(result.relationships.tax_has_tax_jurisdiction)).toBe(
+        true
+      );
+      expect(result.relationships.tax_has_tax_jurisdiction).toHaveLength(1);
+    });
+
+    it('should return tax_jurisdiction_has_tax_exemption as an array', () => {
+      const relationshipFiles = ['relationship_tax_exemption.json'];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(
+        Array.isArray(result.relationships.tax_jurisdiction_has_tax_exemption)
+      ).toBe(true);
+      expect(
+        result.relationships.tax_jurisdiction_has_tax_exemption
+      ).toHaveLength(1);
+    });
+
+    it('should handle all tax relationship types together', () => {
+      const relationshipFiles = [
+        'relationship_property_tax_2024.json',
+        'relationship_property_tax_2025.json',
+        'relationship_tax_jurisdiction_1.json',
+        'relationship_tax_jurisdiction_2.json',
+        'relationship_tax_exemption_1.json',
+        'relationship_tax_exemption_2.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      expect(result.relationships.property_has_tax).toHaveLength(2);
+      expect(result.relationships.tax_has_tax_jurisdiction).toHaveLength(2);
+      expect(
+        result.relationships.tax_jurisdiction_has_tax_exemption
+      ).toHaveLength(2);
+    });
+
+    it('should prioritize exemption over jurisdiction when both are present', () => {
+      const relationshipFiles = [
+        'relationship_tax_jurisdiction_exemption.json',
+      ];
+      const result = createCountyDataGroup(relationshipFiles);
+
+      // Should be in exemption, not jurisdiction
+      expect(result.relationships.tax_jurisdiction_has_tax_exemption).toEqual([
+        { '/': './relationship_tax_jurisdiction_exemption.json' },
+      ]);
+      expect(result.relationships.tax_has_tax_jurisdiction).toBeUndefined();
+    });
+  });
+
   describe('geometry relationships', () => {
     it('should include parcel_has_geometry when file contains parcel_geometry', () => {
       const relationshipFiles = ['relationship_parcel_geometry.json'];
