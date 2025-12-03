@@ -1,3 +1,10 @@
+## [1.56.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.2...v1.56.3) (2025-12-03)
+
+
+### Bug Fixes
+
+* shouldn't create property exemption and jurisdiction relation ([#228](https://github.com/elephant-xyz/elephant-cli/issues/228)) ([af0d040](https://github.com/elephant-xyz/elephant-cli/commit/af0d0400c86df4bb6f3da2b49e49e1685cabd5a7))
+
 ## [1.56.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.1...v1.56.2) (2025-12-02)
 
 
