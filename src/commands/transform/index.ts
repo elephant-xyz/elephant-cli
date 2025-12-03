@@ -789,6 +789,10 @@ async function handleDataGroupTransform(
         // Skip creating property to mailing_address relationships
         return;
       }
+      if (rel.includes('exemption') || rel.includes('jurisdiction')) {
+        // Skip creating property to exemption/jurisdiction relationships
+        return;
+      }
       const relFileName = `relationship_property_${rel}`;
       const relData = {
         from: { '/': `./property.json` },
