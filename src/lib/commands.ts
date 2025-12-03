@@ -21,6 +21,11 @@ import {
   GasPriceService,
   type GasPriceInfo,
 } from '../services/gas-price.service.js';
+import {
+  TransactionStatusCheckerService,
+  type TransactionRecord,
+  type TransactionStatusResult,
+} from '../services/transaction-status-checker.service.js';
 import { DEFAULT_RPC_URL } from '../config/constants.js';
 
 // Generate-transform function interface
@@ -405,4 +410,35 @@ export async function checkGasPrice(
   const rpcUrl = options.rpcUrl || process.env.RPC_URL || DEFAULT_RPC_URL;
   const service = new GasPriceService(rpcUrl);
   return await service.getGasPrice();
+}
+
+// Check transaction status function wrapper
+export interface CheckTransactionStatusOptions {
+  transactionHashes: string | string[];
+  rpcUrl?: string;
+  maxConcurrent?: number;
+}
+
+export type CheckTransactionStatusResult = TransactionStatusResult[];
+
+export async function checkTransactionStatus(
+  options: CheckTransactionStatusOptions
+): Promise<CheckTransactionStatusResult> {
+  const rpcUrl = options.rpcUrl || process.env.RPC_URL || DEFAULT_RPC_URL;
+  const maxConcurrent = options.maxConcurrent || 10;
+
+  const hashes = Array.isArray(options.transactionHashes)
+    ? options.transactionHashes
+    : [options.transactionHashes];
+
+  const transactions: TransactionRecord[] = hashes.map((hash, index) => ({
+    transactionHash: hash,
+    batchIndex: index,
+    itemCount: 1,
+    timestamp: new Date().toISOString(),
+    status: 'pending',
+  }));
+
+  const service = new TransactionStatusCheckerService(rpcUrl, maxConcurrent);
+  return await service.checkTransactionStatuses(transactions);
 }

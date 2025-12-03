@@ -168,6 +168,7 @@ describe('Seed Transformation and Validation', () => {
 
     // Run validation on the transformed data using CLI command
     let validationFailed = false;
+    let validationError: string | undefined;
 
     try {
       execSync(`node dist/index.js validate "${outputZip}"`, {
@@ -175,11 +176,19 @@ describe('Seed Transformation and Validation', () => {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-    } catch {
+    } catch (error: any) {
       validationFailed = true;
+      validationError =
+        error?.stderr?.toString() ||
+        error?.stdout?.toString() ||
+        error?.message ||
+        String(error);
     }
 
     // Validation should pass now that longitude and latitude are always included
+    if (validationFailed) {
+      console.error('Validation failed with error:', validationError);
+    }
     expect(validationFailed).toBe(false);
   });
 
@@ -264,6 +273,7 @@ describe('Seed Transformation and Validation', () => {
 
     // Run validation on the transformed data using CLI command
     let validationFailed = false;
+    let validationError: string | undefined;
 
     try {
       execSync(`node dist/index.js validate "${outputZip}"`, {
@@ -271,11 +281,19 @@ describe('Seed Transformation and Validation', () => {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
-    } catch {
+    } catch (error: any) {
       validationFailed = true;
+      validationError =
+        error?.stderr?.toString() ||
+        error?.stdout?.toString() ||
+        error?.message ||
+        String(error);
     }
 
     // Validation should pass now that longitude and latitude are always included
+    if (validationFailed) {
+      console.error('Validation failed with error:', validationError);
+    }
     expect(validationFailed).toBe(false);
   });
 });
