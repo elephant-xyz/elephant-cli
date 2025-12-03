@@ -517,6 +517,128 @@ describe('transform command', () => {
         expect(relationshipFiles.length).toBe(0);
       });
 
+      it('should not create property relationship for exemption files', async () => {
+        const options = {
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+        };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        const writeFileCalls: any[] = [];
+        vi.mocked(fsPromises.writeFile).mockImplementation(
+          async (file: any, data: any) => {
+            writeFileCalls.push({ file, data });
+          }
+        );
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          return '{}';
+        });
+
+        vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
+          if (typeof dir === 'string' && dir.includes('data')) {
+            return [
+              'property.json',
+              'exemption_1_1.json',
+              'exemption_2_1.json',
+            ] as any;
+          }
+          return [] as any;
+        });
+
+        await handleTransform(options);
+
+        const relationshipFiles = writeFileCalls.filter(
+          (call) =>
+            call.file.includes('relationship_property_exemption_1_1.json') ||
+            call.file.includes('relationship_property_exemption_2_1.json')
+        );
+
+        expect(relationshipFiles.length).toBe(0);
+      });
+
+      it('should not create property relationship for jurisdiction files', async () => {
+        const options = {
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+        };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        const writeFileCalls: any[] = [];
+        vi.mocked(fsPromises.writeFile).mockImplementation(
+          async (file: any, data: any) => {
+            writeFileCalls.push({ file, data });
+          }
+        );
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          return '{}';
+        });
+
+        vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
+          if (typeof dir === 'string' && dir.includes('data')) {
+            return [
+              'property.json',
+              'jurisdiction_1.json',
+              'jurisdiction_4.json',
+            ] as any;
+          }
+          return [] as any;
+        });
+
+        await handleTransform(options);
+
+        const relationshipFiles = writeFileCalls.filter(
+          (call) =>
+            call.file.includes('relationship_property_jurisdiction_1.json') ||
+            call.file.includes('relationship_property_jurisdiction_4.json')
+        );
+
+        expect(relationshipFiles.length).toBe(0);
+      });
+
+      it('should not create property relationship for files with both exemption and jurisdiction', async () => {
+        const options = {
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+        };
+
+        vi.mocked(existsSync).mockReturnValue(true);
+
+        const writeFileCalls: any[] = [];
+        vi.mocked(fsPromises.writeFile).mockImplementation(
+          async (file: any, data: any) => {
+            writeFileCalls.push({ file, data });
+          }
+        );
+
+        vi.mocked(fsPromises.readFile).mockImplementation(async (file: any) => {
+          return '{}';
+        });
+
+        vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
+          if (typeof dir === 'string' && dir.includes('data')) {
+            return [
+              'property.json',
+              'tax_jurisdiction_exemption_1.json',
+            ] as any;
+          }
+          return [] as any;
+        });
+
+        await handleTransform(options);
+
+        const relationshipFiles = writeFileCalls.filter((call) =>
+          call.file.includes(
+            'relationship_property_tax_jurisdiction_exemption_1.json'
+          )
+        );
+
+        expect(relationshipFiles.length).toBe(0);
+      });
+
       it('should collect geometry relationship files from output directory', async () => {
         const options = {
           inputZip: 'test-input.zip',
