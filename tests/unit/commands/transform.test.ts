@@ -579,7 +579,11 @@ describe('transform command', () => {
 
         vi.mocked(fsPromises.readdir).mockImplementation(async (dir: any) => {
           if (typeof dir === 'string' && dir.includes('data')) {
-            return ['property.json', 'jurisdiction_1.json', 'jurisdiction_4.json'] as any;
+            return [
+              'property.json',
+              'jurisdiction_1.json',
+              'jurisdiction_4.json',
+            ] as any;
           }
           return [] as any;
         });
@@ -627,7 +631,9 @@ describe('transform command', () => {
         await handleTransform(options);
 
         const relationshipFiles = writeFileCalls.filter((call) =>
-          call.file.includes('relationship_property_tax_jurisdiction_exemption_1.json')
+          call.file.includes(
+            'relationship_property_tax_jurisdiction_exemption_1.json'
+          )
         );
 
         expect(relationshipFiles.length).toBe(0);
