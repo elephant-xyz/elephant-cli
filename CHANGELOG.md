@@ -1,3 +1,10 @@
+# [1.57.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.3...v1.57.0) (2025-12-03)
+
+
+### Features
+
+* **checkTransactionStatus:** making checkTransaction available as li… ([#225](https://github.com/elephant-xyz/elephant-cli/issues/225)) ([cb7508d](https://github.com/elephant-xyz/elephant-cli/commit/cb7508d724df391377035f45087791c4a1dbdef0))
+
 ## [1.56.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.2...v1.56.3) (2025-12-03)
 
 
