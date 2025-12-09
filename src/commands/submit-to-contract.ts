@@ -45,6 +45,7 @@ export interface SubmitToContractCommandOptions {
   keystorePassword?: string;
   silent?: boolean;
   cwd?: string;
+  gasLimitBufferPercentage?: number;
 }
 
 interface CsvRecord {
@@ -137,6 +138,11 @@ export function registerSubmitToContractCommand(program: Command) {
       "EIP-1559: Maximum priority fee (tip) per gas in Gwei ('auto' or a number)"
     )
     .option(
+      '--gas-buffer <percent>',
+      'Percent buffer to add to the estimated gas limit (default: 20)',
+      '20'
+    )
+    .option(
       '--dry-run',
       'Perform all checks without submitting transactions.',
       false
@@ -188,6 +194,19 @@ export function registerSubmitToContractCommand(program: Command) {
         options.maxPriorityFeePerGas,
         'max-priority-fee-per-gas'
       );
+      const gasBufferInput = options.gasBuffer ?? '20';
+      const gasLimitBufferPercentage = parseFloat(gasBufferInput);
+      if (
+        isNaN(gasLimitBufferPercentage) ||
+        !isFinite(gasLimitBufferPercentage) ||
+        gasLimitBufferPercentage < 0
+      ) {
+        const errorMsg =
+          'Error: Invalid gas-buffer. Must be a non-negative number.';
+        logger.error(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
 
       // Validate that maxPriorityFeePerGas requires maxFeePerGas
       if (maxPriorityFeePerGas !== undefined && maxFeePerGas === undefined) {
@@ -280,16 +299,19 @@ export function registerSubmitToContractCommand(program: Command) {
         process.exit(1);
       }
 
-      options.transactionBatchSize =
+      const transactionBatchSize =
         parseInt(options.transactionBatchSize, 10) || 200;
 
       const workingDir = options.cwd || process.cwd();
       const commandOptions: SubmitToContractCommandOptions = {
-        ...options,
         csvFile: path.resolve(workingDir, csvFile),
+        rpcUrl: options.rpcUrl,
+        contractAddress: options.contractAddress,
+        transactionBatchSize,
         gasPrice,
         maxFeePerGas,
         maxPriorityFeePerGas,
+        dryRun: options.dryRun,
         unsignedTransactionsJson: options.unsignedTransactionsJson
           ? path.resolve(workingDir, options.unsignedTransactionsJson)
           : undefined,
@@ -305,7 +327,9 @@ export function registerSubmitToContractCommand(program: Command) {
           ? path.resolve(options.keystoreJson)
           : undefined,
         keystorePassword: options.keystorePassword,
+        silent: options.silent,
         cwd: workingDir,
+        gasLimitBufferPercentage,
       };
 
       await handleSubmitToContract(commandOptions);
@@ -502,12 +526,18 @@ export async function handleSubmitToContract(
   logger.technical(`Contract: ${options.contractAddress}`);
   logger.technical(`Transaction batch size: ${options.transactionBatchSize}`);
   logger.technical(`Gas price: ${options.gasPrice}`);
-
-  const config = createSubmitConfig(
-    {
-      transactionBatchSize: options.transactionBatchSize,
-    },
-    options.cwd
+  const configOverrides =
+    options.gasLimitBufferPercentage !== undefined
+      ? {
+          transactionBatchSize: options.transactionBatchSize,
+          gasLimitBufferPercentage: options.gasLimitBufferPercentage,
+        }
+      : {
+          transactionBatchSize: options.transactionBatchSize,
+        };
+  const config = createSubmitConfig(configOverrides, options.cwd);
+  logger.technical(
+    `Gas buffer percentage: ${config.gasLimitBufferPercentage}%`
   );
 
   // Create mock services when eligibility checks are disabled, in dry-run mode, or API mode to avoid blockchain calls

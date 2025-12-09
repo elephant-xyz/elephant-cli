@@ -187,10 +187,17 @@ export class TransactionBatcherService {
           ].estimateGas(preparedBatch);
         logger.info(`Estimated gas for batch: ${estimatedGas.toString()}`);
 
+        const bufferPercent = this.config.gasLimitBufferPercentage;
+        const bufferAmount = BigInt(
+          Math.floor(Number(estimatedGas) * (bufferPercent / 100))
+        );
+        const gasLimit = estimatedGas + bufferAmount;
         const txOptions: Overrides = {
-          gasLimit:
-            estimatedGas + BigInt(Math.floor(Number(estimatedGas) * 0.2)), // Add 20% buffer
+          gasLimit,
         };
+        logger.info(
+          `Applying ${bufferPercent}% gas buffer. Gas limit: ${gasLimit.toString()}`
+        );
 
         // Gas pricing strategy (backward compatible):
         // 1. If EIP-1559 params are provided, use them (Type 2 transaction)
