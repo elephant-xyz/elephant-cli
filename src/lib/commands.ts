@@ -140,6 +140,7 @@ export interface SubmitToContractOptions {
   cwd?: string;
   keystoreJson?: string;
   keystorePassword?: string;
+  gasLimitBufferPercentage?: number;
 }
 
 export interface SubmitToContractResult {
@@ -369,6 +370,9 @@ export async function submitToContract(
       keystorePassword: options.keystorePassword,
       silent: true, // Enable silent mode for library usage
       cwd: options.cwd,
+      ...(options.gasLimitBufferPercentage !== undefined
+        ? { gasLimitBufferPercentage: options.gasLimitBufferPercentage }
+        : {}),
     };
 
     await handleSubmitToContract(submitOptions);

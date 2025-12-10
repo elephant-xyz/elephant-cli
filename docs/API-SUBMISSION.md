@@ -34,6 +34,7 @@ elephant-cli submit-to-contract <csv-file> \
 
 - `--from-address`: The address to use as the transaction sender (defaults to zero address if not provided)
 - `--gas-price`: Gas price in Gwei or 'auto' (default: 30)
+- `--gas-buffer`: Percent buffer to add to the estimated gas limit (default: 20)
 - `--dry-run`: Test mode without actually submitting transactions
 - `--transaction-ids-csv`: Output CSV file for transaction IDs (default: transaction-ids-{timestamp}.csv)
 
@@ -52,7 +53,8 @@ elephant-cli submit-to-contract ./results.csv \
   --api-key abc123def456 \
   --oracle-key-id 550e8400-e29b-41d4-a716-446655440000 \
   --from-address 0x1234567890123456789012345678901234567890 \
-  --gas-price auto
+  --gas-price auto \
+  --gas-buffer 25
 
 # Dry run to test without submitting
 elephant-cli submit-to-contract ./results.csv \

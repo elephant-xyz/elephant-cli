@@ -14,6 +14,9 @@ export interface SubmitConfig {
   fileScanBatchSize: number;
   chainQueryBatchSize: number;
 
+  // Gas configuration
+  gasLimitBufferPercentage: number;
+
   // Caching configuration
   schemaCacheSize: number;
   enableDiskCache: boolean;
@@ -51,6 +54,9 @@ export const DEFAULT_SUBMIT_CONFIG: SubmitConfig = {
   transactionBatchSize: 200,
   fileScanBatchSize: 1000,
   chainQueryBatchSize: 50,
+
+  // Gas configuration
+  gasLimitBufferPercentage: 20,
 
   // Caching configuration
   schemaCacheSize: 1000,
