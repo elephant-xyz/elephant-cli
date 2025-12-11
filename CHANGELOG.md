@@ -1,3 +1,10 @@
+# [1.58.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.57.0...v1.58.0) (2025-12-11)
+
+
+### Features
+
+* **submit:** add configurable buffer for gas limit estimate ([#230](https://github.com/elephant-xyz/elephant-cli/issues/230)) ([5497bbf](https://github.com/elephant-xyz/elephant-cli/commit/5497bbf939d40033936296e6faed564002342150))
+
 # [1.57.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.3...v1.57.0) (2025-12-03)
 
 
