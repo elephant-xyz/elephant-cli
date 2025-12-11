@@ -989,3 +989,4 @@ When media assets are referenced and accessible through the gateway, they are do
 | `-r, --rpc-url <url>`     | Polygon RPC endpoint used when resolving transaction hashes (falls back to `RPC_URL`). | Elephant default                    |
 
 Set `--gateway` to match the provider used during uploads if you need consistent access controls. Provide an RPC endpoint with access to Elephant submissions when fetching by transaction hash.
+
