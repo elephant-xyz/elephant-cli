@@ -1,3 +1,10 @@
+## [1.58.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.0...v1.58.1) (2025-12-11)
+
+
+### Bug Fixes
+
+* **submit:** triggering another release ([#231](https://github.com/elephant-xyz/elephant-cli/issues/231)) ([a171feb](https://github.com/elephant-xyz/elephant-cli/commit/a171feb183061cf13b9f63350451fa4b6a9ea160))
+
 # [1.58.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.57.0...v1.58.0) (2025-12-11)
 
 
