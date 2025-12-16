@@ -3,9 +3,9 @@ import { promises as fsPromises } from 'fs';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { postProcessErrorCsv } from '../../../src/commands/validate.js';
 
-// We need to test the CSV post-processing functions that are internal to validate.ts
-// Since they're not exported, we'll test them through their effects on actual CSV files
+// Test the CSV post-processing function from validate.ts
 
 // Helper functions extracted for testing - these mirror the internal implementations
 function parseCsvLine(line: string): string[] {
@@ -239,146 +239,6 @@ describe('CSV Post-Processing Integration', () => {
     }
   });
 
-  // Helper to simulate postProcessErrorCsv
-  async function postProcessErrorCsv(csvPath: string): Promise<number> {
-    const content = await fsPromises.readFile(csvPath, 'utf-8');
-    const lines = content.split('\n');
-
-    if (lines.length <= 1) {
-      return 0;
-    }
-
-    const header = lines[0];
-    const dataLines = lines.slice(1).filter((line) => line.trim() !== '');
-
-    type RowType = {
-      original: string;
-      propertyCid: string;
-      dataGroupCid: string;
-      filePath: string;
-      errorPath: string;
-      errorMessage: string;
-      currentValue: string;
-      timestamp: string;
-    };
-
-    const rows: RowType[] = [];
-    const addressErrorFiles = new Set<string>();
-
-    for (const line of dataLines) {
-      const fields = parseCsvLine(line);
-      if (fields.length < 7) {
-        continue;
-      }
-
-      const [
-        propertyCid,
-        dataGroupCid,
-        filePath,
-        errorPath,
-        errorMessage,
-        currentValue,
-        timestamp,
-      ] = fields;
-
-      if (TYPE_ERROR_PATTERN.test(errorMessage)) {
-        continue;
-      }
-
-      const isAddressAnyOfError =
-        errorPath.includes('property_has_address') &&
-        errorMessage === 'must match a schema in anyOf';
-      if (isAddressAnyOfError) {
-        addressErrorFiles.add(filePath);
-      }
-
-      if (errorMessage === 'must match a schema in anyOf') {
-        continue;
-      }
-
-      rows.push({
-        original: line,
-        propertyCid,
-        dataGroupCid,
-        filePath,
-        errorPath,
-        errorMessage,
-        currentValue,
-        timestamp,
-      });
-    }
-
-    const addressConsolidatedRows: RowType[] = [];
-    const nonAddressRows: RowType[] = [];
-
-    for (const row of rows) {
-      const isAddressRelatedError =
-        row.errorPath.includes('property_has_address') ||
-        row.errorPath.includes('address_has_fact_sheet');
-
-      if (addressErrorFiles.has(row.filePath) && isAddressRelatedError) {
-        const hasConsolidated = addressConsolidatedRows.some(
-          (r) => r.filePath === row.filePath
-        );
-        if (!hasConsolidated) {
-          addressConsolidatedRows.push({
-            ...row,
-            errorPath: '/relationships/property_has_address',
-            errorMessage:
-              'Address should provide either unnormalized_address or normalized version distributed to other fields',
-          });
-        }
-      } else {
-        nonAddressRows.push(row);
-      }
-    }
-
-    const filteredRows = [...nonAddressRows, ...addressConsolidatedRows];
-
-    const dedupeMap = new Map<string, RowType>();
-
-    for (const row of filteredRows) {
-      const pathParts = row.errorPath.split('/').filter((p) => p !== '');
-      const lastSegment =
-        pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'root';
-      const key = `${row.errorMessage}::${lastSegment}`;
-
-      const existing = dedupeMap.get(key);
-      if (!existing) {
-        dedupeMap.set(key, row);
-        continue;
-      }
-
-      const existingHasFactSheet =
-        existing.errorPath.includes('has_fact_sheet');
-      const currentHasFactSheet = row.errorPath.includes('has_fact_sheet');
-
-      if (existingHasFactSheet && !currentHasFactSheet) {
-        dedupeMap.set(key, row);
-      }
-    }
-
-    const dedupedRows = Array.from(dedupeMap.values());
-    const outputLines = [header];
-
-    for (const row of dedupedRows) {
-      const csvLine = [
-        escapeCsvValue(row.propertyCid),
-        escapeCsvValue(row.dataGroupCid),
-        escapeCsvValue(row.filePath),
-        escapeCsvValue(row.errorPath),
-        escapeCsvValue(row.errorMessage),
-        escapeCsvValue(row.currentValue),
-        escapeCsvValue(row.timestamp),
-      ].join(',');
-      outputLines.push(csvLine);
-    }
-
-    await fsPromises.writeFile(csvPath, outputLines.join('\n') + '\n');
-
-    return dedupedRows.length;
-  }
-
   it('should return 0 for empty CSV (header only)', async () => {
     const header =
       'property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp\n';
@@ -448,22 +308,74 @@ prop2,dg2,file2.json,/label,is required,,2024-01-01
     expect(result).toContain('is required');
   });
 
-  it('should consolidate address-related errors into single error', async () => {
+  it('should show property errors without consolidation when error is on /from side', async () => {
+    // Errors on /from (property) side should NOT be consolidated
     const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
 prop1,dg1,file1.json,/relationships/property_has_address/0/from,must match a schema in anyOf,value,2024-01-01
-prop1,dg1,file1.json,/relationships/property_has_address/0/to/street,is required,,2024-01-01
-prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another error,,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/0/from/property_type,is required,,2024-01-01
+prop1,dg1,file1.json,/label,label error,,2024-01-01
 `;
     await fsPromises.writeFile(csvPath, csv);
 
     const count = await postProcessErrorCsv(csvPath);
+    // Shows actual property errors (not consolidated because error is on /from side)
+    expect(count).toBe(2);
+
+    const result = await fsPromises.readFile(csvPath, 'utf-8');
+    // Should NOT contain consolidated message since errors are on property (/from) side
+    expect(result).not.toContain(
+      'Address should provide either unnormalized_address or normalized version distributed to other fields'
+    );
+    // Should show actual errors
+    expect(result).toContain('is required');
+    expect(result).toContain('label error');
+  });
+
+  it('should consolidate address errors when anyOf error is on /to side', async () => {
+    // Errors on /to (address) side SHOULD be consolidated
+    const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+prop1,dg1,file1.json,/relationships/property_has_address/0/to,must match a schema in anyOf,value,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/0/to/street,is required,,2024-01-01
+prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another address error,,2024-01-01
+`;
+    await fsPromises.writeFile(csvPath, csv);
+
+    const count = await postProcessErrorCsv(csvPath);
+    // Should be consolidated into single address error
     expect(count).toBe(1);
 
     const result = await fsPromises.readFile(csvPath, 'utf-8');
+    // Should contain consolidated message
     expect(result).toContain(
       'Address should provide either unnormalized_address or normalized version distributed to other fields'
     );
-    expect(result).not.toContain('another error');
+    // Should NOT show individual address errors
+    expect(result).not.toContain('is required');
+    expect(result).not.toContain('another address error');
+  });
+
+  it('should consolidate address errors when oneOf error is on /to side', async () => {
+    // Same as above but with oneOf error (which is what actually gets generated)
+    const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+prop1,dg1,file1.json,/relationships/property_has_address/to,must match exactly one schema in oneOf,value,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/to,unexpected property 'street_number',,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/to,missing required property 'city_name',,2024-01-01
+prop1,dg1,file1.json,/relationships/address_has_fact_sheet/1/from,unexpected property 'unnormalized_address',,2024-01-01
+`;
+    await fsPromises.writeFile(csvPath, csv);
+
+    const count = await postProcessErrorCsv(csvPath);
+    // Should be consolidated into single address error
+    expect(count).toBe(1);
+
+    const result = await fsPromises.readFile(csvPath, 'utf-8');
+    // Should contain consolidated message
+    expect(result).toContain(
+      'Address should provide either unnormalized_address or normalized version distributed to other fields'
+    );
+    // Should NOT show individual address errors
+    expect(result).not.toContain('unexpected property');
+    expect(result).not.toContain('missing required property');
   });
 
   it('should deduplicate errors by message and last path segment', async () => {
@@ -530,28 +442,27 @@ prop2,dg2,file2.json,/path,is required,,2024-01-01
     expect(result).toContain('is required');
   });
 
-  it('should preserve non-address errors for files with address errors', async () => {
-    // The file has an address anyOf error (which gets tracked), an address field error (which gets consolidated),
-    // and a non-address error (which is preserved)
+  it('should preserve property errors when anyOf is not on /to side', async () => {
+    // anyOf error is on generic path, not specifically on /to, so no consolidation
     const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
 prop1,dg1,file1.json,/relationships/property_has_address/0,must match a schema in anyOf,value,2024-01-01
-prop1,dg1,file1.json,/relationships/property_has_address/0/street,is required,,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/0/from/property_type,is required,,2024-01-01
 prop1,dg1,file1.json,/label,label is required,,2024-01-01
 `;
     await fsPromises.writeFile(csvPath, csv);
 
     const count = await postProcessErrorCsv(csvPath);
+    // Shows all actual errors (anyOf filtered, property_type and label errors remain)
     expect(count).toBe(2);
 
     const result = await fsPromises.readFile(csvPath, 'utf-8');
     expect(result).toContain('label is required');
-    expect(result).toContain(
+    // Should NOT contain consolidated message since anyOf is not on /to side
+    expect(result).not.toContain(
       'Address should provide either unnormalized_address or normalized version distributed to other fields'
     );
-    // The specific address field error should not be present (consolidated)
-    expect(result).not.toContain(
-      '/relationships/property_has_address/0/street'
-    );
+    // The specific property error IS present (not consolidated)
+    expect(result).toContain('is required');
   });
 
   it('should not add consolidated error if no address errors remain after filtering', async () => {
