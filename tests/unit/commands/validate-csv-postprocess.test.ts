@@ -263,7 +263,17 @@ describe('CSV Post-Processing Integration', () => {
     };
 
     const rows: RowType[] = [];
-    const addressOneOfErrorFiles = new Set<string>();
+    const addressSchemaErrorFiles = new Set<string>();
+
+    // Schema mismatch errors that indicate address doesn't match either oneOf option
+    const isSchemaMatchError = (msg: string) =>
+      msg === 'must match a schema in anyOf' ||
+      msg === 'must match exactly one schema in oneOf';
+
+    // Check if error path is related to address entity (not property)
+    const isAddressPath = (p: string) =>
+      (p.includes('property_has_address') && p.includes('/to')) ||
+      (p.includes('address_has_fact_sheet') && p.includes('/from'));
 
     for (const line of dataLines) {
       const fields = parseCsvLine(line);
@@ -285,16 +295,13 @@ describe('CSV Post-Processing Integration', () => {
         continue;
       }
 
-      // Track files with address oneOf errors (on the /to side, which is the address entity)
-      const isAddressOneOfError =
-        errorPath.includes('property_has_address') &&
-        errorPath.includes('/to') &&
-        errorMessage === 'must match a schema in anyOf';
-      if (isAddressOneOfError) {
-        addressOneOfErrorFiles.add(filePath);
+      // Track files with address schema errors (anyOf/oneOf on the address entity)
+      if (isAddressPath(errorPath) && isSchemaMatchError(errorMessage)) {
+        addressSchemaErrorFiles.add(filePath);
       }
 
-      if (errorMessage === 'must match a schema in anyOf') {
+      // Filter out generic anyOf/oneOf schema matching errors
+      if (isSchemaMatchError(errorMessage)) {
         continue;
       }
 
@@ -311,18 +318,16 @@ describe('CSV Post-Processing Integration', () => {
     }
 
     // Consolidate address-related errors only for files where the address entity itself
-    // failed the oneOf validation (not property errors)
+    // failed the oneOf/anyOf validation (not property errors)
     const addressConsolidatedRows: RowType[] = [];
     const nonAddressRows: RowType[] = [];
 
     for (const row of rows) {
-      // Only consolidate errors on the address entity (/to side), not property errors (/from side)
-      const isAddressEntityError =
-        (row.errorPath.includes('property_has_address') &&
-          row.errorPath.includes('/to')) ||
-        row.errorPath.includes('address_has_fact_sheet');
-
-      if (addressOneOfErrorFiles.has(row.filePath) && isAddressEntityError) {
+      // Only consolidate errors on the address entity, not property errors
+      if (
+        addressSchemaErrorFiles.has(row.filePath) &&
+        isAddressPath(row.errorPath)
+      ) {
         const hasConsolidated = addressConsolidatedRows.some(
           (r) => r.filePath === row.filePath
         );
@@ -498,6 +503,30 @@ prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another addres
     // Should NOT show individual address errors
     expect(result).not.toContain('is required');
     expect(result).not.toContain('another address error');
+  });
+
+  it('should consolidate address errors when oneOf error is on /to side', async () => {
+    // Same as above but with oneOf error (which is what actually gets generated)
+    const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+prop1,dg1,file1.json,/relationships/property_has_address/to,must match exactly one schema in oneOf,value,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/to,unexpected property 'street_number',,2024-01-01
+prop1,dg1,file1.json,/relationships/property_has_address/to,missing required property 'city_name',,2024-01-01
+prop1,dg1,file1.json,/relationships/address_has_fact_sheet/1/from,unexpected property 'unnormalized_address',,2024-01-01
+`;
+    await fsPromises.writeFile(csvPath, csv);
+
+    const count = await postProcessErrorCsv(csvPath);
+    // Should be consolidated into single address error
+    expect(count).toBe(1);
+
+    const result = await fsPromises.readFile(csvPath, 'utf-8');
+    // Should contain consolidated message
+    expect(result).toContain(
+      'Address should provide either unnormalized_address or normalized version distributed to other fields'
+    );
+    // Should NOT show individual address errors
+    expect(result).not.toContain('unexpected property');
+    expect(result).not.toContain('missing required property');
   });
 
   it('should deduplicate errors by message and last path segment', async () => {
