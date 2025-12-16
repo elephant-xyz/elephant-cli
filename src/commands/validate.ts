@@ -865,7 +865,17 @@ async function postProcessErrorCsv(csvPath: string): Promise<number> {
   };
 
   const rows: RowType[] = [];
-  const addressErrorFiles = new Set<string>();
+  const addressSchemaErrorFiles = new Set<string>();
+
+  // Schema mismatch errors that indicate address doesn't match either oneOf option
+  const isSchemaMatchError = (msg: string) =>
+    msg === 'must match a schema in anyOf' ||
+    msg === 'must match exactly one schema in oneOf';
+
+  // Check if error path is related to address entity (not property)
+  const isAddressPath = (path: string) =>
+    (path.includes('property_has_address') && path.includes('/to')) ||
+    (path.includes('address_has_fact_sheet') && path.includes('/from'));
 
   for (const line of dataLines) {
     const fields = parseCsvLine(line);
@@ -888,16 +898,14 @@ async function postProcessErrorCsv(csvPath: string): Promise<number> {
       continue;
     }
 
-    // Track files with address anyOf errors to consolidate them (before filtering)
-    const isAddressAnyOfError =
-      errorPath.includes('property_has_address') &&
-      errorMessage === 'must match a schema in anyOf';
-    if (isAddressAnyOfError) {
-      addressErrorFiles.add(filePath);
+    // Track files with address schema errors (anyOf/oneOf on the address entity)
+    // Only consolidate when the address itself fails the schema validation
+    if (isAddressPath(errorPath) && isSchemaMatchError(errorMessage)) {
+      addressSchemaErrorFiles.add(filePath);
     }
 
-    // Filter out generic anyOf schema matching errors (not useful to users)
-    if (errorMessage === 'must match a schema in anyOf') {
+    // Filter out generic anyOf/oneOf schema matching errors (not useful to users)
+    if (isSchemaMatchError(errorMessage)) {
       continue;
     }
 
@@ -913,17 +921,17 @@ async function postProcessErrorCsv(csvPath: string): Promise<number> {
     });
   }
 
-  // Filter out all address-related errors for files that have address anyOf errors
-  // and replace with a single consolidated error
+  // Consolidate address-related errors only for files where the address entity itself
+  // failed the oneOf/anyOf validation (not property errors)
   const addressConsolidatedRows: RowType[] = [];
   const nonAddressRows: RowType[] = [];
 
   for (const row of rows) {
-    const isAddressRelatedError =
-      row.errorPath.includes('property_has_address') ||
-      row.errorPath.includes('address_has_fact_sheet');
-
-    if (addressErrorFiles.has(row.filePath) && isAddressRelatedError) {
+    // Only consolidate errors on the address entity, not property errors
+    if (
+      addressSchemaErrorFiles.has(row.filePath) &&
+      isAddressPath(row.errorPath)
+    ) {
       // Check if we already have a consolidated error for this file
       const hasConsolidated = addressConsolidatedRows.some(
         (r) => r.filePath === row.filePath
