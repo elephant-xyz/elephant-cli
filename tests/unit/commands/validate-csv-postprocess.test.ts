@@ -3,9 +3,9 @@ import { promises as fsPromises } from 'fs';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { postProcessErrorCsv } from '../../../src/commands/validate.js';
 
-// We need to test the CSV post-processing functions that are internal to validate.ts
-// Since they're not exported, we'll test them through their effects on actual CSV files
+// Test the CSV post-processing function from validate.ts
 
 // Helper functions extracted for testing - these mirror the internal implementations
 function parseCsvLine(line: string): string[] {
@@ -238,157 +238,6 @@ describe('CSV Post-Processing Integration', () => {
       await fsPromises.rm(tempDir, { recursive: true, force: true });
     }
   });
-
-  // Helper to simulate postProcessErrorCsv
-  async function postProcessErrorCsv(csvPath: string): Promise<number> {
-    const content = await fsPromises.readFile(csvPath, 'utf-8');
-    const lines = content.split('\n');
-
-    if (lines.length <= 1) {
-      return 0;
-    }
-
-    const header = lines[0];
-    const dataLines = lines.slice(1).filter((line) => line.trim() !== '');
-
-    type RowType = {
-      original: string;
-      propertyCid: string;
-      dataGroupCid: string;
-      filePath: string;
-      errorPath: string;
-      errorMessage: string;
-      currentValue: string;
-      timestamp: string;
-    };
-
-    const rows: RowType[] = [];
-    const addressSchemaErrorFiles = new Set<string>();
-
-    // Schema mismatch errors that indicate address doesn't match either oneOf option
-    const isSchemaMatchError = (msg: string) =>
-      msg === 'must match a schema in anyOf' ||
-      msg === 'must match exactly one schema in oneOf';
-
-    // Check if error path is related to address entity (not property)
-    const isAddressPath = (p: string) =>
-      (p.includes('property_has_address') && p.includes('/to')) ||
-      (p.includes('address_has_fact_sheet') && p.includes('/from'));
-
-    for (const line of dataLines) {
-      const fields = parseCsvLine(line);
-      if (fields.length < 7) {
-        continue;
-      }
-
-      const [
-        propertyCid,
-        dataGroupCid,
-        filePath,
-        errorPath,
-        errorMessage,
-        currentValue,
-        timestamp,
-      ] = fields;
-
-      if (TYPE_ERROR_PATTERN.test(errorMessage)) {
-        continue;
-      }
-
-      // Track files with address schema errors (anyOf/oneOf on the address entity)
-      if (isAddressPath(errorPath) && isSchemaMatchError(errorMessage)) {
-        addressSchemaErrorFiles.add(filePath);
-      }
-
-      // Filter out generic anyOf/oneOf schema matching errors
-      if (isSchemaMatchError(errorMessage)) {
-        continue;
-      }
-
-      rows.push({
-        original: line,
-        propertyCid,
-        dataGroupCid,
-        filePath,
-        errorPath,
-        errorMessage,
-        currentValue,
-        timestamp,
-      });
-    }
-
-    // Consolidate address-related errors only for files where the address entity itself
-    // failed the oneOf/anyOf validation (not property errors)
-    const addressConsolidatedRows: RowType[] = [];
-    const nonAddressRows: RowType[] = [];
-
-    for (const row of rows) {
-      // Only consolidate errors on the address entity, not property errors
-      if (
-        addressSchemaErrorFiles.has(row.filePath) &&
-        isAddressPath(row.errorPath)
-      ) {
-        const hasConsolidated = addressConsolidatedRows.some(
-          (r) => r.filePath === row.filePath
-        );
-        if (!hasConsolidated) {
-          addressConsolidatedRows.push({
-            ...row,
-            errorPath: '/relationships/property_has_address',
-            errorMessage:
-              'Address should provide either unnormalized_address or normalized version distributed to other fields',
-          });
-        }
-      } else {
-        nonAddressRows.push(row);
-      }
-    }
-
-    const filteredRows = [...nonAddressRows, ...addressConsolidatedRows];
-
-    const dedupeMap = new Map<string, RowType>();
-
-    for (const row of filteredRows) {
-      const pathParts = row.errorPath.split('/').filter((p) => p !== '');
-      const lastSegment =
-        pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'root';
-      const key = `${row.errorMessage}::${lastSegment}`;
-
-      const existing = dedupeMap.get(key);
-      if (!existing) {
-        dedupeMap.set(key, row);
-        continue;
-      }
-
-      const existingHasFactSheet =
-        existing.errorPath.includes('has_fact_sheet');
-      const currentHasFactSheet = row.errorPath.includes('has_fact_sheet');
-
-      if (existingHasFactSheet && !currentHasFactSheet) {
-        dedupeMap.set(key, row);
-      }
-    }
-
-    const dedupedRows = Array.from(dedupeMap.values());
-    const outputLines = [header];
-
-    for (const row of dedupedRows) {
-      const csvLine = [
-        escapeCsvValue(row.propertyCid),
-        escapeCsvValue(row.dataGroupCid),
-        escapeCsvValue(row.filePath),
-        escapeCsvValue(row.errorPath),
-        escapeCsvValue(row.errorMessage),
-        escapeCsvValue(row.currentValue),
-        escapeCsvValue(row.timestamp),
-      ].join(',');
-      outputLines.push(csvLine);
-    }
-
-    await fsPromises.writeFile(csvPath, outputLines.join('\n') + '\n');
-
-    return dedupedRows.length;
-  }
 
   it('should return 0 for empty CSV (header only)', async () => {
     const header =

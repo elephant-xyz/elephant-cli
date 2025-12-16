@@ -841,7 +841,7 @@ function escapeCsvValue(value: string): string {
   return escaped;
 }
 
-async function postProcessErrorCsv(csvPath: string): Promise<number> {
+export async function postProcessErrorCsv(csvPath: string): Promise<number> {
   const content = await fsPromises.readFile(csvPath, 'utf-8');
   const lines = content.split('\n');
 
