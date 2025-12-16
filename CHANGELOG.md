@@ -1,3 +1,10 @@
+## [1.58.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.1...v1.58.2) (2025-12-16)
+
+
+### Bug Fixes
+
+* false error from address if property validation failed ([#233](https://github.com/elephant-xyz/elephant-cli/issues/233)) ([32d9952](https://github.com/elephant-xyz/elephant-cli/commit/32d9952ad40092af70d39178ab928561d6fcf642))
+
 ## [1.58.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.0...v1.58.1) (2025-12-11)
 
 
