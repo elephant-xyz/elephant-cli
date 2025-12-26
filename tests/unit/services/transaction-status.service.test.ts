@@ -196,7 +196,7 @@ describe('TransactionStatusService', () => {
       });
     });
 
-    it('should return dropped for non-existent transaction', async () => {
+    it('should return not_found for non-existent transaction', async () => {
       mockProvider.getTransactionReceipt.mockResolvedValue(null);
       mockProvider.getTransaction.mockResolvedValue(null);
 
@@ -204,8 +204,8 @@ describe('TransactionStatusService', () => {
 
       expect(result).toEqual({
         hash: mockTxHash,
-        status: 'dropped',
-        error: 'Transaction dropped - not found in mempool or blockchain',
+        status: 'not_found',
+        error: 'Transaction not found in mempool or blockchain',
       });
     });
 

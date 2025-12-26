@@ -141,7 +141,7 @@ function showSummary(results: TransactionStatusResult[], outputPath?: string) {
     success: results.filter((r) => r.status === 'success').length,
     failed: results.filter((r) => r.status === 'failed').length,
     pending: results.filter((r) => r.status === 'pending').length,
-    dropped: results.filter((r) => r.status === 'dropped').length,
+    notFound: results.filter((r) => r.status === 'not_found').length,
   };
 
   console.log(chalk.green('\n✅ Transaction Status Check Complete\n'));
@@ -150,7 +150,7 @@ function showSummary(results: TransactionStatusResult[], outputPath?: string) {
   console.log(`  Successful:            ${chalk.green(summary.success)}`);
   console.log(`  Failed:                ${chalk.red(summary.failed)}`);
   console.log(`  Still pending:         ${chalk.yellow(summary.pending)}`);
-  console.log(`  Dropped:               ${chalk.gray(summary.dropped)}`);
+  console.log(`  Not found:             ${chalk.gray(summary.notFound)}`);
 
   if (outputPath) {
     console.log(`\n  Output saved to:       ${outputPath}`);
