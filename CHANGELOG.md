@@ -1,3 +1,10 @@
+## [1.58.3](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.2...v1.58.3) (2025-12-26)
+
+
+### Bug Fixes
+
+* if transaction not found in the mempool it should be marked as not found ([#234](https://github.com/elephant-xyz/elephant-cli/issues/234)) ([e46abac](https://github.com/elephant-xyz/elephant-cli/commit/e46abac1ffa1e3056dabb53a8a1a607d982465f8))
+
 ## [1.58.2](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.1...v1.58.2) (2025-12-16)
 
 
