@@ -196,7 +196,7 @@ describe('TransactionStatusService', () => {
       });
     });
 
-    it('should return pending with error for non-existent transaction', async () => {
+    it('should return not_found for non-existent transaction', async () => {
       mockProvider.getTransactionReceipt.mockResolvedValue(null);
       mockProvider.getTransaction.mockResolvedValue(null);
 
@@ -204,8 +204,8 @@ describe('TransactionStatusService', () => {
 
       expect(result).toEqual({
         hash: mockTxHash,
-        status: 'pending',
-        error: 'Transaction not found on chain',
+        status: 'not_found',
+        error: 'Transaction not found in mempool or blockchain',
       });
     });
 

@@ -139,8 +139,8 @@ export class TransactionStatusService {
 
       return {
         hash: txHash,
-        status: 'pending',
-        error: 'Transaction not found on chain',
+        status: 'not_found',
+        error: 'Transaction not found in mempool or blockchain',
       };
     } catch (error) {
       logger.warn(

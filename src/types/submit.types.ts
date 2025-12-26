@@ -96,7 +96,7 @@ export interface ApiSubmissionResponse {
 
 export interface TransactionStatus {
   hash: string;
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed' | 'not_found';
   blockNumber?: number;
   gasUsed?: string;
   error?: string;
@@ -114,7 +114,7 @@ export interface ApiSubmissionResult {
 export interface TransactionStatusEntry {
   batchIndex: number;
   transactionHash: string;
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed' | 'not_found';
   blockNumber?: number;
   gasUsed?: string;
   itemCount: number;
