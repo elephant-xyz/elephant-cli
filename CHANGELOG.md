@@ -1,3 +1,18 @@
+# [1.58.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.57.0...v1.58.0) (2025-12-26)
+
+
+### Bug Fixes
+
+* downgrade version to 1.57.0 ([#235](https://github.com/elephant-xyz/elephant-cli/issues/235)) ([c8fbe29](https://github.com/elephant-xyz/elephant-cli/commit/c8fbe29b60f91b23396a0adf256c0a24a4ad08a7))
+* false error from address if property validation failed ([#233](https://github.com/elephant-xyz/elephant-cli/issues/233)) ([32d9952](https://github.com/elephant-xyz/elephant-cli/commit/32d9952ad40092af70d39178ab928561d6fcf642))
+* if transaction not found in the mempool it should be marked as not found ([#234](https://github.com/elephant-xyz/elephant-cli/issues/234)) ([e46abac](https://github.com/elephant-xyz/elephant-cli/commit/e46abac1ffa1e3056dabb53a8a1a607d982465f8))
+* **submit:** triggering another release ([#231](https://github.com/elephant-xyz/elephant-cli/issues/231)) ([a171feb](https://github.com/elephant-xyz/elephant-cli/commit/a171feb183061cf13b9f63350451fa4b6a9ea160))
+
+
+### Features
+
+* **submit:** add configurable buffer for gas limit estimate ([#230](https://github.com/elephant-xyz/elephant-cli/issues/230)) ([5497bbf](https://github.com/elephant-xyz/elephant-cli/commit/5497bbf939d40033936296e6faed564002342150))
+
 # [1.57.0](https://github.com/elephant-xyz/elephant-cli/compare/v1.56.3...v1.57.0) (2025-12-03)
 
 
