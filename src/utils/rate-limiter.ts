@@ -59,13 +59,10 @@ export class RateLimiter {
 
     await new Promise((resolve) => setTimeout(resolve, waitTime));
 
-    // After waiting, refill tokens and consume one
-    const afterWaitTime = Date.now();
-    const afterWaitElapsed = afterWaitTime - this.lastRefill;
-    const afterWaitTokens = afterWaitElapsed * this.refillRate;
-
-    this.tokens = Math.min(this.tokens + afterWaitTokens - 1, this.maxTokens);
-    this.lastRefill = afterWaitTime;
+    // After waiting, consume the token that should now be available
+    // The token counter already reflects the state before waiting, so we just need to consume 1 token
+    this.tokens = Math.max(0, this.tokens + 1 - 1); // Added the waited token, then consumed it
+    this.lastRefill = Date.now();
   }
 
   /**
