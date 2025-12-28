@@ -307,6 +307,10 @@ async function generateFactSheet(tempRoot: string) {
     withFileTypes: true,
   });
   const propertySubDirs = htmlEntries.filter((entry) => entry.isDirectory());
+  if (propertySubDirs.length === 0) {
+    logger.warn('No property directories found in generated HTML output');
+    return; // Nothing to copy; skip relationship generation
+  }
   const htmlPropertyDir = path.join(htmlOutputDir, propertySubDirs[0].name);
   const htmlPropertyEntries = await fs.readdir(htmlPropertyDir, {
     withFileTypes: true,
