@@ -33,7 +33,7 @@ export interface TransformCommandOptions {
   cwd?: string;
   dataGroup?: string;
   /**
-   * Schema mode: 'elephant' uses Elephant Network schemas (property/parcel),
+   * Schema mode: 'elephant' uses Elephant processing,
    * 'generic' skips Elephant-specific processing and just runs transform scripts.
    * Default: 'elephant' for backward compatibility.
    */
@@ -177,7 +177,8 @@ async function handleScriptsMode(options: TransformCommandOptions) {
 
   // Generic mode always requires scripts (no Elephant seed processing)
   if (options.schemaMode === 'generic' && !resolvedScriptsZip) {
-    const error = 'Generic schema mode requires --scripts-zip (no seed processing available)';
+    const error =
+      'Generic schema mode requires --scripts-zip (no seed processing available)';
     if (!options.silent) {
       console.error(chalk.red(error));
     }
@@ -610,10 +611,7 @@ async function handleSeedTransform(tempRoot: string) {
  * - Numbered scripts (starting with 1_, 2_, etc.) run in sequence
  * - Non-numbered scripts run in parallel after numbered ones
  */
-async function handleGenericTransform(
-  scriptsDir: string,
-  tempRoot: string
-) {
+async function handleGenericTransform(scriptsDir: string, tempRoot: string) {
   logger.info('Running transform scripts in generic mode...');
 
   // Find all .js files in the scripts directory
@@ -626,7 +624,9 @@ async function handleGenericTransform(
   // Separate numbered and non-numbered scripts
   const { numbered, nonNumbered } = categorizeScripts(allScripts);
 
-  logger.info(`Found ${allScripts.length} scripts: ${numbered.length} numbered, ${nonNumbered.length} non-numbered`);
+  logger.info(
+    `Found ${allScripts.length} scripts: ${numbered.length} numbered, ${nonNumbered.length} non-numbered`
+  );
 
   // Run numbered scripts in order
   if (numbered.length > 0) {
@@ -636,17 +636,21 @@ async function handleGenericTransform(
 
   // Run non-numbered scripts in parallel
   if (nonNumbered.length > 0) {
-    logger.info(`Running non-numbered scripts in parallel: ${nonNumbered.join(', ')}`);
+    logger.info(
+      `Running non-numbered scripts in parallel: ${nonNumbered.join(', ')}`
+    );
     await runScriptsPipeline(scriptsDir, tempRoot, nonNumbered);
   }
 
   const outputFiles = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
-  const jsonFiles = outputFiles.filter(f => f.endsWith('.json'));
+  const jsonFiles = outputFiles.filter((f) => f.endsWith('.json'));
 
   if (jsonFiles.length === 0) {
     logger.warn('No JSON files produced by transform scripts');
   } else {
-    logger.info(`Generic transform produced ${jsonFiles.length} JSON files: ${jsonFiles.join(', ')}`);
+    logger.info(
+      `Generic transform produced ${jsonFiles.length} JSON files: ${jsonFiles.join(', ')}`
+    );
   }
 }
 
@@ -673,7 +677,10 @@ async function findAllJsFiles(dir: string): Promise<string[]> {
  * Categorize scripts into numbered (run in order) and non-numbered (run in parallel).
  * Numbered scripts start with a digit (e.g., 1_extract.js, 2_transform.js).
  */
-function categorizeScripts(scripts: string[]): { numbered: string[]; nonNumbered: string[] } {
+function categorizeScripts(scripts: string[]): {
+  numbered: string[];
+  nonNumbered: string[];
+} {
   const numbered: string[] = [];
   const nonNumbered: string[] = [];
 

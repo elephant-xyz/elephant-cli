@@ -49,7 +49,7 @@ export interface TransformOptions {
   cwd?: string;
   dataGroup?: string;
   /**
-   * Schema mode: 'elephant' uses Elephant Network schemas (property/parcel),
+   * Schema mode: 'elephant' uses Elephant processing,
    * 'generic' skips Elephant-specific processing and just runs transform scripts.
    * Default: 'elephant' for backward compatibility.
    */
