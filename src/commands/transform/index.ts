@@ -32,6 +32,12 @@ export interface TransformCommandOptions {
   silent?: boolean;
   cwd?: string;
   dataGroup?: string;
+  /**
+   * Schema mode: 'elephant' uses Elephant processing,
+   * 'generic' skips Elephant-specific processing and just runs transform scripts.
+   * Default: 'elephant' for backward compatibility.
+   */
+  schemaMode?: 'elephant' | 'generic';
   [key: string]: any;
 }
 
@@ -104,6 +110,11 @@ export function registerTransformCommand(program: Command) {
       'Specify data group type to create (e.g., "Property Improvement")',
       undefined
     )
+    .option(
+      '--schema-mode <mode>',
+      'Schema mode: "elephant" (default) for Elephant Network schemas, "generic" for custom schemas',
+      'elephant'
+    )
     .action(async (options: TransformCommandOptions) => {
       await handleTransform(options);
     });
@@ -161,6 +172,20 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       } else {
         process.exit(1);
       }
+    }
+  }
+
+  // Generic mode always requires scripts (no Elephant seed processing)
+  if (options.schemaMode === 'generic' && !resolvedScriptsZip) {
+    const error =
+      'Generic schema mode requires --scripts-zip (no seed processing available)';
+    if (!options.silent) {
+      console.error(chalk.red(error));
+    }
+    if (options.silent) {
+      throw new Error(error);
+    } else {
+      process.exit(1);
     }
   }
   if (!existsSync(resolvedInputZip)) {
@@ -246,20 +271,26 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         }
       }
 
-      await handleDataGroupTransform(
-        scriptsDir,
-        tempRoot,
-        dataGroupType,
-        createDataGroupFunction
-      );
+      // Use generic handler for generic mode, otherwise use Elephant-specific handler
+      if (options.schemaMode === 'generic') {
+        await handleGenericTransform(scriptsDir, tempRoot);
+      } else {
+        await handleDataGroupTransform(
+          scriptsDir,
+          tempRoot,
+          dataGroupType,
+          createDataGroupFunction
+        );
+      }
     } else {
       logger.info('Processing seed data group...');
       await handleSeedTransform(tempRoot);
       isSeedMode = true;
     }
 
-    if (!isSeedMode) {
+    if (!isSeedMode && options.schemaMode !== 'generic') {
       // Only generate fact sheets for County data groups, not Property Improvement
+      // Skip fact sheets entirely in generic mode (they are property-specific)
       if (
         !options.dataGroup ||
         options.dataGroup.toLowerCase() !== 'property improvement'
@@ -570,6 +601,119 @@ async function handleSeedTransform(tempRoot: string) {
       await fs.writeFile(absPath, file.content, 'utf-8');
     })
   );
+}
+
+/**
+ * Generic transform handler - runs scripts without Elephant-specific processing.
+ * Just runs the transform scripts and outputs whatever JSON files they produce.
+ *
+ * Script execution order:
+ * - Numbered scripts (starting with 1_, 2_, etc.) run in sequence
+ * - Non-numbered scripts run in parallel after numbered ones
+ */
+async function handleGenericTransform(scriptsDir: string, tempRoot: string) {
+  logger.info('Running transform scripts in generic mode...');
+
+  // Find all .js files in the scripts directory
+  const allScripts = await findAllJsFiles(scriptsDir);
+
+  if (allScripts.length === 0) {
+    throw new Error('No JavaScript files found in scripts directory');
+  }
+
+  // Separate numbered and non-numbered scripts
+  const { numbered, nonNumbered } = categorizeScripts(allScripts);
+
+  logger.info(
+    `Found ${allScripts.length} scripts: ${numbered.length} numbered, ${nonNumbered.length} non-numbered`
+  );
+
+  // Run numbered scripts in order
+  if (numbered.length > 0) {
+    logger.info(`Running numbered scripts in order: ${numbered.join(' → ')}`);
+    await runScriptsSequentially(scriptsDir, tempRoot, numbered);
+  }
+
+  // Run non-numbered scripts in parallel
+  if (nonNumbered.length > 0) {
+    logger.info(
+      `Running non-numbered scripts in parallel: ${nonNumbered.join(', ')}`
+    );
+    await runScriptsPipeline(scriptsDir, tempRoot, nonNumbered);
+  }
+
+  const outputFiles = await fs.readdir(path.join(tempRoot, OUTPUT_DIR));
+  const jsonFiles = outputFiles.filter((f) => f.endsWith('.json'));
+
+  if (jsonFiles.length === 0) {
+    logger.warn('No JSON files produced by transform scripts');
+  } else {
+    logger.info(
+      `Generic transform produced ${jsonFiles.length} JSON files: ${jsonFiles.join(', ')}`
+    );
+  }
+}
+
+/**
+ * Find all .js files recursively in a directory.
+ */
+async function findAllJsFiles(dir: string): Promise<string[]> {
+  const results: string[] = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith('.js')) {
+      results.push(entry.name);
+    } else if (entry.isDirectory()) {
+      // For nested directories, we'd need to handle paths differently
+      // For now, only look at root level
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Categorize scripts into numbered (run in order) and non-numbered (run in parallel).
+ * Numbered scripts start with a digit (e.g., 1_extract.js, 2_transform.js).
+ */
+function categorizeScripts(scripts: string[]): {
+  numbered: string[];
+  nonNumbered: string[];
+} {
+  const numbered: string[] = [];
+  const nonNumbered: string[] = [];
+
+  for (const script of scripts) {
+    if (/^\d/.test(script)) {
+      numbered.push(script);
+    } else {
+      nonNumbered.push(script);
+    }
+  }
+
+  // Sort numbered scripts by their numeric prefix
+  numbered.sort((a, b) => {
+    const numA = parseInt(a.match(/^(\d+)/)?.[1] || '0', 10);
+    const numB = parseInt(b.match(/^(\d+)/)?.[1] || '0', 10);
+    return numA - numB;
+  });
+
+  return { numbered, nonNumbered };
+}
+
+/**
+ * Run scripts sequentially (one after another).
+ */
+async function runScriptsSequentially(
+  scriptsDir: string,
+  tempRoot: string,
+  scriptNames: string[]
+): Promise<void> {
+  for (const scriptName of scriptNames) {
+    logger.info(`Running script: ${scriptName}`);
+    await runScriptsPipeline(scriptsDir, tempRoot, [scriptName]);
+  }
 }
 
 async function handleDataGroupTransform(
