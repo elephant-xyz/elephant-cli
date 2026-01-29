@@ -85,6 +85,55 @@ describe('Library Commands', () => {
         })
       );
     });
+
+    it('should accept schemaMode option in TransformOptions interface', () => {
+      const options: TransformOptions = {
+        inputZip: 'test-input.zip',
+        scriptsZip: 'test-scripts.zip',
+        schemaMode: 'generic',
+      };
+
+      expect(options.schemaMode).toBe('generic');
+    });
+
+    it('should pass schemaMode option to CLI implementation', async () => {
+      const { handleTransform } = await import(
+        '../../../src/commands/transform/index.js'
+      );
+
+      await transform({
+        inputZip: 'test-input.zip',
+        scriptsZip: 'test-scripts.zip',
+        outputZip: 'test-output.zip',
+        schemaMode: 'generic',
+      });
+
+      expect(handleTransform).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputZip: 'test-input.zip',
+          scriptsZip: 'test-scripts.zip',
+          schemaMode: 'generic',
+          silent: true,
+        })
+      );
+    });
+
+    it('should default to elephant mode when schemaMode not specified', async () => {
+      const { handleTransform } = await import(
+        '../../../src/commands/transform/index.js'
+      );
+
+      await transform({
+        inputZip: 'test-input.zip',
+        scriptsZip: 'test-scripts.zip',
+      });
+
+      expect(handleTransform).toHaveBeenCalledWith(
+        expect.objectContaining({
+          schemaMode: undefined,
+        })
+      );
+    });
   });
 
   describe('checkGasPrice', () => {
