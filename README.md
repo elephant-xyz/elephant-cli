@@ -15,6 +15,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Browser Flow Templates](#browser-flow-templates)
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
+- [Generic Transform Mode](#generic-transform-mode)
 - [Hash the County Dataset](#hash-the-county-dataset)
 - [Upload Datagroups to IPFS](#upload-datagroups-to-ipfs)
 - [Submit Hashes to the Contract](#submit-hashes-to-the-contract)
@@ -628,6 +629,72 @@ transformed-data.zip
 | `--scripts-zip <path>` | ZIP of scripts to execute.                                     | Required in scripts mode |
 | `--output-zip <path>`  | Destination ZIP for the transformed county bundle.             | `transformed-data.zip`   |
 | `--legacy-mode`        | Use the legacy agent flow (not part of the standard pipeline). | `false`                  |
+| `--schema-mode <mode>` | Schema mode: `elephant` (default) or `generic`.                | `elephant`               |
+
+## Generic Transform Mode
+
+The `--schema-mode generic` option allows you to use the transform command with any schema, not just Elephant's property/parcel schema. This is useful for custom data pipelines that don't require Elephant-specific processing.
+
+### Usage
+
+```bash
+elephant-cli transform \
+  --input-zip input.zip \
+  --scripts-zip scripts.zip \
+  --schema-mode generic \
+  --output-zip output.zip
+```
+
+Or via the library:
+
+```javascript
+import { transform } from '@elephant-xyz/cli/lib';
+
+const result = await transform({
+  inputZip: 'input.zip',
+  scriptsZip: 'scripts.zip',
+  schemaMode: 'generic',
+  outputZip: 'output.zip',
+});
+```
+
+### What Generic Mode Skips
+
+| Elephant-Specific Feature | Skipped in Generic Mode |
+|---------------------------|------------------------|
+| `seed.csv` processing     | Yes                    |
+| Schema manifest fetch     | Yes                    |
+| Fact sheet generation     | Yes                    |
+| Property relationships    | Yes                    |
+
+### Input Requirements
+
+**Input Zip**: Files at the root level (not nested in folders):
+
+```
+input.zip
+├── data.csv
+├── source.json
+└── config.txt
+```
+
+**Scripts Zip**: Required in generic mode. JavaScript files at the root level:
+
+```
+scripts.zip
+├── 1_fetch.js
+├── 2_transform.js
+└── helper.js
+```
+
+### Script Execution Order
+
+Scripts are executed based on their filename:
+
+- **Numbered scripts** (e.g., `1_fetch.js`, `2_transform.js`) run **sequentially** in numeric order
+- **Non-numbered scripts** (e.g., `helper.js`) run **in parallel** after numbered scripts complete
+
+Numbers are sorted numerically (1, 2, 10, 100), not alphabetically.
 
 ## Hash the County Dataset
 
