@@ -3,7 +3,10 @@ import { describe, it, expect } from 'vitest';
 // Test the categorizeScripts logic
 describe('Generic Transform - Script Categorization', () => {
   // Helper function that mirrors the implementation
-  function categorizeScripts(scripts: string[]): { numbered: string[]; nonNumbered: string[] } {
+  function categorizeScripts(scripts: string[]): {
+    numbered: string[];
+    nonNumbered: string[];
+  } {
     const numbered: string[] = [];
     const nonNumbered: string[] = [];
 
@@ -35,17 +38,32 @@ describe('Generic Transform - Script Categorization', () => {
     });
 
     it('should sort numbered scripts by numeric prefix', () => {
-      const scripts = ['3_output.js', '1_fetch.js', '10_cleanup.js', '2_transform.js'];
+      const scripts = [
+        '3_output.js',
+        '1_fetch.js',
+        '10_cleanup.js',
+        '2_transform.js',
+      ];
       const result = categorizeScripts(scripts);
 
-      expect(result.numbered).toEqual(['1_fetch.js', '2_transform.js', '3_output.js', '10_cleanup.js']);
+      expect(result.numbered).toEqual([
+        '1_fetch.js',
+        '2_transform.js',
+        '3_output.js',
+        '10_cleanup.js',
+      ]);
     });
 
     it('should handle scripts with multi-digit numbers', () => {
       const scripts = ['10_step.js', '2_step.js', '100_step.js', '1_step.js'];
       const result = categorizeScripts(scripts);
 
-      expect(result.numbered).toEqual(['1_step.js', '2_step.js', '10_step.js', '100_step.js']);
+      expect(result.numbered).toEqual([
+        '1_step.js',
+        '2_step.js',
+        '10_step.js',
+        '100_step.js',
+      ]);
     });
 
     it('should handle all numbered scripts', () => {
@@ -61,7 +79,11 @@ describe('Generic Transform - Script Categorization', () => {
       const result = categorizeScripts(scripts);
 
       expect(result.numbered).toEqual([]);
-      expect(result.nonNumbered).toEqual(['helper.js', 'utils.js', 'transform.js']);
+      expect(result.nonNumbered).toEqual([
+        'helper.js',
+        'utils.js',
+        'transform.js',
+      ]);
     });
 
     it('should handle empty array', () => {
