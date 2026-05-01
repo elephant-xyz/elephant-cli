@@ -157,6 +157,72 @@ async function prettierFormat(content: string): Promise<string> {
   }
 }
 
+export async function createStealthBrowserPage(
+  headless: boolean,
+  proxy?: ProxyOptions
+): Promise<AsyncDisposablePage> {
+  const additionalArgs = proxy
+    ? ['--proxy-server=' + proxy.ip + ':' + proxy.port]
+    : [];
+  const puppeteerExtra = (await import('puppeteer-extra')) as unknown as {
+    default: {
+      use: (plugin: unknown) => void;
+      launch: (opts: unknown) => Promise<Browser>;
+    };
+  };
+  const { default: StealthPlugin } = await import(
+    'puppeteer-extra-plugin-stealth'
+  );
+  puppeteerExtra.default.use(StealthPlugin());
+
+  let browser: Browser;
+  if (process.platform === 'linux') {
+    const { default: Chromium } = await import('@sparticuz/chromium');
+    logger.info('Launching stealth browser (Linux)...');
+    browser = await puppeteerExtra.default.launch({
+      ignoreDefaultArgs: ['--disable-extensions'],
+      executablePath: await Chromium.executablePath(),
+      headless: 'shell',
+      args: [
+        ...Chromium.args,
+        '--hide-scrollbars',
+        '--disable-web-security',
+        '--no-sandbox',
+        '--disable-features=site-per-process',
+        ...additionalArgs,
+      ],
+      timeout: 30000,
+    });
+  } else if (process.platform === 'darwin') {
+    logger.info('Launching stealth browser (macOS)...');
+    browser = await puppeteerExtra.default.launch({
+      headless: headless ? 'shell' : false,
+      timeout: 30000,
+      args: ['--no-sandbox', '--disable-web-security', ...additionalArgs],
+    });
+  } else {
+    const errorMessage =
+      'Unsupported platform. Only Linux and macOS are supported.';
+    console.log(chalk.red(errorMessage));
+    throw new Error(errorMessage);
+  }
+
+  const page = await browser.newPage();
+  (page as AsyncDisposablePage)[Symbol.asyncDispose] = async () => {
+    await browser.close();
+  };
+  if (proxy) {
+    await page.authenticate({
+      username: proxy.username,
+      password: proxy.password,
+    });
+  }
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+  });
+  return page as AsyncDisposablePage;
+}
+
 export async function createBrowserPage(
   headless: boolean,
   proxy?: ProxyOptions
@@ -187,7 +253,7 @@ export async function createBrowserPage(
     const puppeteer = await import('puppeteer');
     logger.info('Launching browser...');
     browser = await puppeteer.launch({
-      headless: headless,
+      headless: headless ? 'shell' : false,
       timeout: 30000,
       args: ['--no-sandbox', '--disable-web-security', ...additionalArgs],
     });

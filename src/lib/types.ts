@@ -39,3 +39,16 @@ export type Request = {
   json?: unknown;
   body?: string;
 };
+
+export type ScrapePermitError = {
+  permitNumber: string;
+  error: string;
+};
+
+export type ScrapeResult = {
+  pcn: string;
+  county: string;
+  files: string[];
+  permitCount: number;
+  errors: ScrapePermitError[];
+};

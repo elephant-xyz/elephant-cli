@@ -76,6 +76,8 @@
     "prettier": "^3.2.5",
     "puppeteer": "^24.17.0",
     "puppeteer-core": "^24.17.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "winston": "^3.17.0",
     "zod": "^3.25.76",
     "zod-to-json-schema": "3.22.3"

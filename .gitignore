@@ -79,3 +79,6 @@ input.zip
 output.zip
 
 keystore.json
+
+# Scrape output
+test-scrape-output/
