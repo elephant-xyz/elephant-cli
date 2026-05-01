@@ -170,9 +170,8 @@ export async function createStealthBrowserPage(
       launch: (opts: unknown) => Promise<Browser>;
     };
   };
-  const { default: StealthPlugin } = await import(
-    'puppeteer-extra-plugin-stealth'
-  );
+  const { default: StealthPlugin } =
+    await import('puppeteer-extra-plugin-stealth');
   puppeteerExtra.default.use(StealthPlugin());
 
   let browser: Browser;

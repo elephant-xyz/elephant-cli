@@ -41,9 +41,8 @@ describe('Library Commands', () => {
     });
 
     it('should pass dataGroup option to CLI implementation', async () => {
-      const { handleTransform } = await import(
-        '../../../src/commands/transform/index.js'
-      );
+      const { handleTransform } =
+        await import('../../../src/commands/transform/index.js');
 
       await transform({
         inputZip: 'test-input.zip',
@@ -65,9 +64,8 @@ describe('Library Commands', () => {
     });
 
     it('should work without dataGroup option (County mode)', async () => {
-      const { handleTransform } = await import(
-        '../../../src/commands/transform/index.js'
-      );
+      const { handleTransform } =
+        await import('../../../src/commands/transform/index.js');
 
       await transform({
         inputZip: 'test-input.zip',
@@ -187,9 +185,8 @@ describe('Library Commands', () => {
     let TransactionStatusCheckerServiceMock: any;
 
     beforeEach(async () => {
-      const module = await import(
-        '../../../src/services/transaction-status-checker.service.js'
-      );
+      const module =
+        await import('../../../src/services/transaction-status-checker.service.js');
       TransactionStatusCheckerServiceMock =
         module.TransactionStatusCheckerService;
 

@@ -239,9 +239,8 @@ describe('Upload Command - Media Files Support', () => {
       });
 
       // Mock datagroup analyzer
-      const { analyzeDatagroupFiles } = await import(
-        '../../../src/utils/datagroup-analyzer.js'
-      );
+      const { analyzeDatagroupFiles } =
+        await import('../../../src/utils/datagroup-analyzer.js');
       vi.mocked(analyzeDatagroupFiles).mockResolvedValue([
         {
           fileName: 'bafkreidata1.json',

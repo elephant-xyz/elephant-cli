@@ -21,9 +21,8 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
     // Mock processSinglePropertyInput
-    const { processSinglePropertyInput } = await import(
-      '../../../src/utils/single-property-processor.js'
-    );
+    const { processSinglePropertyInput } =
+      await import('../../../src/utils/single-property-processor.js');
     vi.mocked(processSinglePropertyInput).mockResolvedValue({
       actualInputDir: testExtractedDir,
       cleanup: vi.fn().mockResolvedValue(undefined),
@@ -110,9 +109,8 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     };
 
     // Mock scan result
-    const { scanSinglePropertyDirectoryV2 } = await import(
-      '../../../src/utils/single-property-file-scanner-v2.js'
-    );
+    const { scanSinglePropertyDirectoryV2 } =
+      await import('../../../src/utils/single-property-file-scanner-v2.js');
     vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
       allFiles: [
         {
@@ -236,9 +234,8 @@ describe('Hash Command - htmlLink in CSV Output', () => {
     };
 
     // Mock scan result
-    const { scanSinglePropertyDirectoryV2 } = await import(
-      '../../../src/utils/single-property-file-scanner-v2.js'
-    );
+    const { scanSinglePropertyDirectoryV2 } =
+      await import('../../../src/utils/single-property-file-scanner-v2.js');
     vi.mocked(scanSinglePropertyDirectoryV2).mockResolvedValue({
       allFiles: [
         {
