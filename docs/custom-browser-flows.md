@@ -12,6 +12,7 @@ Custom browser flows allow you to define complex, site-specific browser automati
 - [Available Actions](#available-actions)
 - [Dynamic Values](#dynamic-values)
 - [Capture Configuration](#capture-configuration)
+- [Version 2 Named Captures](#version-2-named-captures)
 - [Complete Examples](#complete-examples)
 - [Validation and Error Handling](#validation-and-error-handling)
 - [Best Practices](#best-practices)
@@ -87,6 +88,7 @@ A workflow is a JSON object with the following top-level properties:
 
 ```typescript
 {
+  "version": 1,                       // Optional: omitted means version 1
   "starts_at": "state_name",        // Required: Initial state to execute
   "states": {                        // Required: Map of state definitions
     "state_name": { ... }
@@ -97,6 +99,8 @@ A workflow is a JSON object with the following top-level properties:
   }
 }
 ```
+
+Custom browser flows are versioned. If `version` is omitted, the workflow is treated as version 1 for backward compatibility. Version 1 supports the top-level `capture` field for one final page or iframe capture. Version 2 adds explicit `capture_html` and `capture_source_url` states and does not support top-level `capture`.
 
 ### State Definition
 
@@ -349,6 +353,45 @@ Press a keyboard key.
 
 **Common keys**: `Enter`, `Tab`, `Escape`, `ArrowDown`, `ArrowUp`, `Backspace`
 
+### capture_html
+
+Capture cleaned HTML at a specific point in a version 2 workflow. Each `capture_html` state writes one `.html` file.
+
+```json
+{
+  "type": "capture_html",
+  "input": {
+    "name": "property-details",
+    "target": {
+      "type": "iframe",
+      "selector": "#main-frame"
+    }
+  },
+  "next": "capture_source"
+}
+```
+
+`name` is required and must be lowercase kebab-case, such as `search-results` or `property-details`. The name `default` is reserved. If `target` is omitted, the top-level page is captured. Use an iframe target to capture a specific frame's DOM.
+
+### capture_source_url
+
+Capture the URL that should be written back to seed metadata as `source_http_request` in a version 2 workflow.
+
+```json
+{
+  "type": "capture_source_url",
+  "input": {
+    "target": {
+      "type": "iframe",
+      "selector": "#main-frame"
+    }
+  },
+  "end": true
+}
+```
+
+If `target` is omitted, the top-level page URL is captured. Iframe targets use the iframe's current URL. The captured URL must be `http://` or `https://`. A version 2 workflow may contain at most one `capture_source_url` state. If a version 2 workflow has one or more `capture_html` states, it must contain exactly one `capture_source_url` state.
+
 ## Dynamic Values
 
 You can use template syntax to inject runtime values into your workflow:
@@ -387,7 +430,7 @@ Use the `result` field to store values from `wait_for_selector` actions:
 
 ## Capture Configuration
 
-Control what content is captured at the end of the workflow:
+In version 1 workflows, control what content is captured at the end of the workflow:
 
 ### Capture Entire Page (Default)
 
@@ -411,6 +454,90 @@ Or omit the `capture` field entirely - page capture is the default.
   }
 }
 ```
+
+Version 2 workflows do not support top-level `capture`. Use explicit `capture_html` states instead.
+
+## Version 2 Named Captures
+
+Use version 2 when one browser execution needs to capture multiple HTML files at specific points.
+
+```json
+{
+  "version": 2,
+  "starts_at": "open_search_page",
+  "states": {
+    "open_search_page": {
+      "type": "open_page",
+      "input": {
+        "url": "{{=it.url}}",
+        "timeout": 30000,
+        "wait_until": "domcontentloaded"
+      },
+      "next": "wait_for_results"
+    },
+    "wait_for_results": {
+      "type": "wait_for_selector",
+      "input": {
+        "selector": "#results",
+        "visible": true,
+        "iframe_selector": "#main-frame"
+      },
+      "next": "capture_results"
+    },
+    "capture_results": {
+      "type": "capture_html",
+      "input": {
+        "name": "search-results",
+        "target": {
+          "type": "iframe",
+          "selector": "#main-frame"
+        }
+      },
+      "next": "click_details"
+    },
+    "click_details": {
+      "type": "click",
+      "input": {
+        "selector": ".details-link",
+        "iframe_selector": "#main-frame"
+      },
+      "next": "wait_for_details"
+    },
+    "wait_for_details": {
+      "type": "wait_for_selector",
+      "input": {
+        "selector": "#details",
+        "visible": true,
+        "iframe_selector": "#main-frame"
+      },
+      "next": "capture_details"
+    },
+    "capture_details": {
+      "type": "capture_html",
+      "input": {
+        "name": "details",
+        "target": {
+          "type": "iframe",
+          "selector": "#main-frame"
+        }
+      },
+      "next": "capture_source"
+    },
+    "capture_source": {
+      "type": "capture_source_url",
+      "input": {
+        "target": {
+          "type": "iframe",
+          "selector": "#main-frame"
+        }
+      },
+      "end": true
+    }
+  }
+}
+```
+
+In input ZIP mode, named captures are written as `<capture-name>.html`, such as `search-results.html` and `details.html`. In CSV mode, the current flat ZIP interface is preserved, so captures are written as `<request_identifier>-<capture-name>.html`.
 
 ## Complete Examples
 

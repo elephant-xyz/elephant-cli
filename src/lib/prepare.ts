@@ -4,7 +4,13 @@ import AdmZip from 'adm-zip';
 import { promises as fs } from 'fs';
 import { extractZipToTemp } from '../utils/zip.js';
 import chalk from 'chalk';
-import { PrepareOptions, Request, ProxyUrl, ProxyOptions } from './types.js';
+import {
+  PrepareOptions,
+  Request,
+  ProxyUrl,
+  ProxyOptions,
+  Prepared,
+} from './types.js';
 import { withBrowser } from './withBrowser.js';
 import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
@@ -38,6 +44,36 @@ function parseProxy(proxy: ProxyUrl): ProxyOptions {
     `Proxy parsed: ${JSON.stringify({ ...proxyOptions, password: 'hidden-password' })}`
   );
   return proxyOptions;
+}
+
+async function writePreparedFiles(
+  root: string,
+  requestId: string,
+  prepared: Prepared,
+  mode: 'single' | 'csv'
+): Promise<void> {
+  if (prepared.captureMode === 'explicit' && prepared.captures?.length) {
+    for (const capture of prepared.captures) {
+      const name =
+        mode === 'csv'
+          ? `${requestId}-${capture.name}.html`
+          : `${capture.name}.html`;
+      const outputPath = path.join(root, name);
+      try {
+        await fs.access(outputPath);
+        throw new Error(`Output file already exists: ${name}`);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Output file')) {
+          throw error;
+        }
+      }
+      await fs.writeFile(outputPath, capture.content, 'utf-8');
+    }
+    return;
+  }
+
+  const name = `${requestId}.${prepared.type}`;
+  await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
 }
 
 /**
@@ -122,8 +158,7 @@ async function prepareFromInputCsv(
             extractUrlFromWorkflow(browserWorkflow!, requestId)
           );
 
-      const name = `${requestId}.${prepared.type}`;
-      await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
+      await writePreparedFiles(root, requestId, prepared, 'csv');
     }
 
     const zip = new AdmZip();
@@ -317,8 +352,7 @@ export async function prepare(
       prepared = await withFetch(req);
     }
 
-    const name = `${requestId}.${prepared.type}`;
-    await fs.writeFile(path.join(root, name), prepared.content, 'utf-8');
+    await writePreparedFiles(root, requestId, prepared, 'single');
 
     // If browser flow was used and we have a final URL, update the seed files
     if (

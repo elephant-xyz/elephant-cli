@@ -29,6 +29,12 @@ export type Prepared = {
   content: string;
   type: 'json' | 'html';
   finalUrl?: string; // The final URL after browser navigation
+  captureMode?: 'default' | 'explicit';
+  captures?: Array<{
+    name: string;
+    content: string;
+    type: 'html';
+  }>;
 };
 
 export type Request = {

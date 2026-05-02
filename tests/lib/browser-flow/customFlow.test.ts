@@ -407,6 +407,150 @@ describe('Custom Browser Flow', () => {
       expect(result.valid).toBe(true);
     });
 
+    it('should reject version 2 captures without source URL capture', () => {
+      const workflow = {
+        version: 2,
+        starts_at: 'open_page',
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: {
+              url: 'https://example.com',
+            },
+            next: 'capture_details',
+          },
+          capture_details: {
+            type: 'capture_html',
+            input: {
+              name: 'details',
+            },
+            end: true,
+          },
+        },
+      };
+
+      const result = validateCustomFlow(workflow);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Workflow version 2 has capture_html states ["capture_details"] but no capture_source_url state'
+      );
+    });
+
+    it('should reject top-level capture in version 2 workflows', () => {
+      const result = validateCustomFlow({
+        version: 2,
+        starts_at: 'open_page',
+        capture: { type: 'page' },
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: { url: 'https://example.com' },
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors?.some((error) => error.includes('capture'))).toBe(
+        true
+      );
+    });
+
+    it('should reject non-kebab-case version 2 capture names', () => {
+      const result = validateCustomFlow({
+        version: 2,
+        starts_at: 'open_page',
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: { url: 'https://example.com' },
+            next: 'capture_details',
+          },
+          capture_details: {
+            type: 'capture_html',
+            input: { name: 'Property_Details' },
+            next: 'capture_source',
+          },
+          capture_source: {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors?.some((error) =>
+          error.includes('capture name must be lowercase kebab-case')
+        )
+      ).toBe(true);
+    });
+
+    it('should reject duplicate version 2 capture names', () => {
+      const result = validateCustomFlow({
+        version: 2,
+        starts_at: 'open_page',
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: { url: 'https://example.com' },
+            next: 'capture_details',
+          },
+          capture_details: {
+            type: 'capture_html',
+            input: { name: 'details' },
+            next: 'capture_details_again',
+          },
+          capture_details_again: {
+            type: 'capture_html',
+            input: { name: 'details' },
+            next: 'capture_source',
+          },
+          capture_source: {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Duplicate capture name "details" used by states "capture_details" and "capture_details_again"'
+      );
+    });
+
+    it('should reject multiple version 2 source URL captures', () => {
+      const result = validateCustomFlow({
+        version: 2,
+        starts_at: 'open_page',
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: { url: 'https://example.com' },
+            next: 'capture_source_a',
+          },
+          capture_source_a: {
+            type: 'capture_source_url',
+            input: {},
+            next: 'capture_source_b',
+          },
+          capture_source_b: {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain(
+        'Workflow version 2 must contain at most one capture_source_url state, found ["capture_source_a", "capture_source_b"]'
+      );
+    });
+
     it('should validate wait_for_selector_race with validate_winner', () => {
       const workflow = {
         starts_at: 'race_state',

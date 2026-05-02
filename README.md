@@ -346,6 +346,7 @@ elephant-cli prepare prepare-input.zip \
 - Reads `source_http_request` from `property_seed.json`.
 - Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints, or multi-request flow for multiple API endpoints).
 - Writes the response to `<request_identifier>.html` or `<request_identifier>.json` alongside the seed files.
+- Custom browser flow version 2 can write multiple named HTML captures, such as `search-results.html` and `details.html`.
 
 **Inputs**
 
@@ -357,8 +358,10 @@ elephant-cli prepare prepare-input.zip \
 prepared-site.zip
 ├── property_seed.json
 ├── unnormalized_address.json
-└── <request_identifier>.html | <request_identifier>.json
+└── <request_identifier>.html | <request_identifier>.json | <capture-name>.html
 ```
+
+When `prepare` runs from `--input-csv`, output remains a flat ZIP. Version 2 browser-flow captures are written as `<request_identifier>-<capture-name>.html` to avoid collisions across rows.
 
 **Options**
 
@@ -989,4 +992,3 @@ When media assets are referenced and accessible through the gateway, they are do
 | `-r, --rpc-url <url>`     | Polygon RPC endpoint used when resolving transaction hashes (falls back to `RPC_URL`). | Elephant default                    |
 
 Set `--gateway` to match the provider used during uploads if you need consistent access controls. Provide an RPC endpoint with access to Elephant submissions when fetching by transaction hash.
-

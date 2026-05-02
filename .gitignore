@@ -77,5 +77,8 @@ collected_output.csv
 transaction-ids*
 input.zip
 output.zip
+test-*.json
+test-*.csv
+test_errors.csv
 
 keystore.json

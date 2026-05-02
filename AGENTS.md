@@ -39,6 +39,7 @@
 - Vitest only includes `tests/**/*.test.ts` and `tests/**/*.spec.ts`; helper files without those suffixes are not test entrypoints.
 - `tests/setup.ts` mocks console methods and suppresses unhandled rejections/exceptions, so assertions on logging need explicit mock checks.
 - Browser/HTML flows depend on Puppeteer/Chromium packages; README lists Linux system libraries needed for local browser execution.
+- Browser-flow errors should include relevant state names in their messages, but do not use generic wrappers like `State "<name>" failed: ...`; write specific, actionable messages instead.
 - `generate-transform` requires `OPENAI_API_KEY`; `upload` requires `PINATA_JWT`; contract submission and chain checks require an RPC URL.
 - Avoid committing generated/runtime artifacts such as `dist/`, `coverage/`, `tmp/`, logs, CSV outputs, ZIP bundles, and `.env`.
 

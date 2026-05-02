@@ -3,6 +3,7 @@ import { getTemplate, listTemplates } from './templates/index.js';
 import { validateParameters, parseParameters } from './validator.js';
 import { logger } from '../../utils/logger.js';
 import { BrowserFlowParameters } from './types.js';
+import { validateCustomFlow } from './customFlow.js';
 
 export interface BrowserFlowOptions {
   template?: string;
@@ -38,7 +39,18 @@ export function createWorkflowFromTemplate(
   logger.debug(`Template parameters: ${JSON.stringify(params)}`);
   logger.debug(`Context URL: ${context.url}`);
 
-  return template.createWorkflow(params as BrowserFlowParameters, context);
+  const workflow = template.createWorkflow(
+    params as BrowserFlowParameters,
+    context
+  );
+  const workflowValidation = validateCustomFlow(workflow);
+  if (!workflowValidation.valid) {
+    logger.error('Generated browser flow validation failed:');
+    workflowValidation.errors?.forEach((error) => logger.error(`  - ${error}`));
+    return null;
+  }
+
+  return workflow;
 }
 
 export { getTemplate, listTemplates } from './templates/index.js';
