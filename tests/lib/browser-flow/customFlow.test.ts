@@ -551,6 +551,52 @@ describe('Custom Browser Flow', () => {
       );
     });
 
+    it('should validate go_back in version 2 workflows', () => {
+      const result = validateCustomFlow({
+        version: 2,
+        starts_at: 'open_page',
+        states: {
+          open_page: {
+            type: 'open_page',
+            input: { url: 'https://example.com' },
+            next: 'back_to_results',
+          },
+          back_to_results: {
+            type: 'go_back',
+            input: {},
+            next: 'capture_source',
+          },
+          capture_source: {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject go_back in version 1 workflows', () => {
+      const result = validateCustomFlow({
+        starts_at: 'back_to_results',
+        states: {
+          back_to_results: {
+            type: 'go_back',
+            input: {},
+            end: true,
+          },
+        },
+      });
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors?.some((error) =>
+          error.includes('Invalid discriminator value')
+        )
+      ).toBe(true);
+    });
+
     it('should validate wait_for_selector_race with validate_winner', () => {
       const workflow = {
         starts_at: 'race_state',

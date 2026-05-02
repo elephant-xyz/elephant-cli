@@ -539,6 +539,28 @@ Use version 2 when one browser execution needs to capture multiple HTML files at
 
 In input ZIP mode, named captures are written as `<capture-name>.html`, such as `search-results.html` and `details.html`. In CSV mode, the current flat ZIP interface is preserved, so captures are written as `<request_identifier>-<capture-name>.html`.
 
+Version 2 workflows can use `go_back` to navigate back through browser history between captures. This is only for browser history navigation; use `click` when the site provides its own Back or Return button.
+
+```json
+{
+  "capture_permit": {
+    "type": "capture_html",
+    "input": { "name": "permit-details" },
+    "next": "back_to_results"
+  },
+  "back_to_results": {
+    "type": "go_back",
+    "input": {
+      "timeout": 30000,
+      "wait_until": "domcontentloaded"
+    },
+    "next": "wait_for_results"
+  }
+}
+```
+
+If `timeout` or `wait_until` is omitted, `go_back` uses the same defaults as `open_page`: `30000` ms and `domcontentloaded`.
+
 ## Complete Examples
 
 ### Example 1: Simple Search Flow

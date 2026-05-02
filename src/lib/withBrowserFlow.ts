@@ -14,6 +14,11 @@ interface OpenPageInput {
   wait_until?: WaitUntil;
 }
 
+interface GoBackInput {
+  timeout?: number;
+  wait_until?: WaitUntil;
+}
+
 interface WaitForSelectorInput {
   selector: Selector;
   timeout?: number;
@@ -109,6 +114,12 @@ type CaptureSourceUrlNode = {
   next?: string;
   end?: boolean;
 };
+type GoBackNode = {
+  type: 'go_back';
+  input: GoBackInput;
+  next?: string;
+  end?: boolean;
+};
 
 type StepNode =
   | OpenPageNode
@@ -118,7 +129,8 @@ type StepNode =
   | TypeNode
   | KeyboardPressNode
   | CaptureHtmlNode
-  | CaptureSourceUrlNode;
+  | CaptureSourceUrlNode
+  | GoBackNode;
 
 type States = Record<string, StepNode>;
 
@@ -401,6 +413,15 @@ export async function withBrowserFlow(
           await page.keyboard.press(key);
           break;
         }
+        case 'go_back': {
+          const { timeout, wait_until } = input;
+          await page.goBack({
+            waitUntil: wait_until ?? 'domcontentloaded',
+            timeout: timeout ?? 30000,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          break;
+        }
         case 'capture_html': {
           const { name, target } = input;
           const capture = target ?? { type: 'page' };
@@ -551,6 +572,8 @@ function formatStateError(
         : `State "${stateName}" could not type into selector "${state.input.selector}": ${message}`;
     case 'keyboard_press':
       return `State "${stateName}" could not press key "${state.input.key}": ${message}`;
+    case 'go_back':
+      return `State "${stateName}" could not go back in browser history: ${message}`;
     case 'capture_html': {
       const target = state.input.target ?? { type: 'page' };
       return target.type === 'iframe'

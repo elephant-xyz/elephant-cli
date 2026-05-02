@@ -21,6 +21,11 @@ const openPageInputSchema = z.object({
   wait_until: waitUntilSchema.optional(),
 });
 
+const goBackInputSchema = z.object({
+  timeout: z.number().optional(),
+  wait_until: waitUntilSchema.optional(),
+});
+
 const waitForSelectorInputSchema = z.object({
   selector: z.string().min(1),
   timeout: z.number().optional(),
@@ -219,6 +224,15 @@ const captureSourceUrlNodeV2Schema = z
   })
   .strict();
 
+const goBackNodeV2Schema = z
+  .object({
+    type: z.literal('go_back'),
+    input: goBackInputSchema.strict(),
+    next: z.string().optional(),
+    end: z.boolean().optional(),
+  })
+  .strict();
+
 const nodeV2Schema = z.discriminatedUnion('type', [
   openPageNodeV2Schema,
   waitForSelectorNodeV2Schema,
@@ -228,6 +242,7 @@ const nodeV2Schema = z.discriminatedUnion('type', [
   keyboardPressNodeV2Schema,
   captureHtmlNodeV2Schema,
   captureSourceUrlNodeV2Schema,
+  goBackNodeV2Schema,
 ]);
 
 const workflowV1Schema = z.object({

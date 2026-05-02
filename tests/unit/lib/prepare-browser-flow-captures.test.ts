@@ -14,6 +14,7 @@ const { page, frame } = vi.hoisted(() => {
     frame,
     page: {
       goto: vi.fn().mockResolvedValue({}),
+      goBack: vi.fn().mockResolvedValue({}),
       content: vi.fn(),
       waitForSelector: vi.fn().mockResolvedValue({}),
       $: vi.fn().mockResolvedValue({
@@ -48,6 +49,7 @@ describe('prepare browser flow captures', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     page.goto.mockResolvedValue({});
+    page.goBack.mockResolvedValue({});
     page.waitForSelector.mockResolvedValue({});
     page.$.mockResolvedValue({
       contentFrame: vi.fn().mockResolvedValue(frame),
@@ -300,5 +302,115 @@ describe('prepare browser flow captures', () => {
       'https://example.com/frame-details'
     );
     expect(parcel.entry_http_request.url).toBe('https://example.com/search');
+  });
+
+  it('can go back in browser history between version 2 captures', async () => {
+    page.content.mockReset();
+    page.content
+      .mockResolvedValueOnce('<html><body>Permit Details</body></html>')
+      .mockResolvedValueOnce('<html><body>Search Results Again</body></html>');
+
+    await fs.writeFile(
+      browserFlowPath,
+      JSON.stringify({
+        version: 2,
+        starts_at: 'open-search-page',
+        states: {
+          'open-search-page': {
+            type: 'open_page',
+            input: {
+              url: '{{=it.url}}',
+            },
+            next: 'click-permit',
+          },
+          'click-permit': {
+            type: 'click',
+            input: {
+              selector: '#permit',
+            },
+            next: 'capture-permit',
+          },
+          'capture-permit': {
+            type: 'capture_html',
+            input: {
+              name: 'permit-details',
+            },
+            next: 'back-to-results',
+          },
+          'back-to-results': {
+            type: 'go_back',
+            input: {},
+            next: 'capture-results-again',
+          },
+          'capture-results-again': {
+            type: 'capture_html',
+            input: {
+              name: 'results-after-back',
+            },
+            next: 'capture-source',
+          },
+          'capture-source': {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      }),
+      'utf-8'
+    );
+
+    await prepare(inputZipPath, outputZipPath, {
+      browserFlowFile: browserFlowPath,
+      headless: true,
+    });
+
+    const outputZip = new AdmZip(outputZipPath);
+
+    expect(outputZip.readAsText('permit-details.html')).toContain(
+      'Permit Details'
+    );
+    expect(outputZip.readAsText('results-after-back.html')).toContain(
+      'Search Results Again'
+    );
+  });
+
+  it('reports go_back state names in browser history errors', async () => {
+    page.goBack.mockRejectedValueOnce(new Error('No history entry'));
+    await fs.writeFile(
+      browserFlowPath,
+      JSON.stringify({
+        version: 2,
+        starts_at: 'open-search-page',
+        states: {
+          'open-search-page': {
+            type: 'open_page',
+            input: {
+              url: '{{=it.url}}',
+            },
+            next: 'back-to-results',
+          },
+          'back-to-results': {
+            type: 'go_back',
+            input: {},
+            next: 'capture-source',
+          },
+          'capture-source': {
+            type: 'capture_source_url',
+            input: {},
+            end: true,
+          },
+        },
+      }),
+      'utf-8'
+    );
+
+    await expect(
+      prepare(inputZipPath, outputZipPath, {
+        browserFlowFile: browserFlowPath,
+        headless: true,
+      })
+    ).rejects.toThrow(
+      'State "back-to-results" could not go back in browser history: No history entry'
+    );
   });
 });
