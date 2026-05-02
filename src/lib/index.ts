@@ -31,6 +31,13 @@ export type {
 } from './commands.js';
 
 export type { PrepareOptions } from './types.js';
+export type {
+  BrowserFlowV2Capture,
+  BrowserFlowV2Context,
+  BrowserFlowV2Input,
+  BrowserFlowV2Manifest,
+  SaveHtmlOptions,
+} from './browser-flow-v2.js';
 
 // Export gas price types
 export type { GasPriceInfo } from '../services/gas-price.service.js';

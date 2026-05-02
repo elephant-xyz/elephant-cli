@@ -10,6 +10,7 @@ import { withFetch } from './withFetch.js';
 import { withBrowserFlow } from './withBrowserFlow.js';
 import { createWorkflowFromTemplate } from './browser-flow/index.js';
 import { loadCustomFlow } from './browser-flow/customFlow.js';
+import { executeBrowserFlowV2 } from './browser-flow-v2.js';
 import { logger } from '../utils/logger.js';
 import { constructUrl, parseUrlToRequest } from './common.js';
 import { fetchOrangeCountyData } from './county-specific-prepare/orange.js';
@@ -147,6 +148,15 @@ export async function prepare(
   outputZip: string,
   options: PrepareOptions = {}
 ) {
+  const usesBrowserFlowV2 =
+    options.browserFlowVersion === 2 || options.browserFlowVersion === '2';
+  if (options.browserFlowZip && !usesBrowserFlowV2) {
+    throw new Error('--browser-flow-zip requires --browser-flow-version 2');
+  }
+  if (usesBrowserFlowV2 && !options.browserFlowZip) {
+    throw new Error('--browser-flow-zip is required for browser flow v2');
+  }
+
   // Handle input CSV mode - batch processing
   if (options.inputCsv) {
     return await prepareFromInputCsv(outputZip, options);
@@ -271,6 +281,24 @@ export async function prepare(
       addressData.county_jurisdiction === 'Orange';
 
     let prepared;
+
+    if (usesBrowserFlowV2) {
+      await executeBrowserFlowV2({
+        flowZip: options.browserFlowZip!,
+        inputDir: dir,
+        outputZip,
+        input: {
+          request_identifier: requestId,
+          url: constructUrl(req),
+          source_http_request: req,
+          parcel: obj,
+          address: addressData,
+        },
+        headless,
+        proxy,
+      });
+      return;
+    }
 
     if (options.multiRequestFlowFile) {
       const flow = await loadMultiRequestFlow(options.multiRequestFlowFile);

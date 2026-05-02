@@ -16,6 +16,8 @@ export interface PrepareCommandOptions {
   browserFlowTemplate?: string;
   browserFlowParameters?: string;
   browserFlowFile?: string;
+  browserFlowVersion?: '2';
+  browserFlowZip?: string;
   ignoreCaptcha?: boolean;
   proxy?: ProxyUrl;
   multiRequestFlowFile?: string;
@@ -47,6 +49,11 @@ export function registerPrepareCommand(program: Command) {
     .option(
       '--browser-flow-file <path>',
       'Path to custom browser flow JSON file (takes precedence over template)'
+    )
+    .option('--browser-flow-version <version>', 'Browser flow version to use')
+    .option(
+      '--browser-flow-zip <path>',
+      'Path to browser flow v2 handler ZIP file'
     )
     .option(
       '--ignore-captcha',
@@ -109,6 +116,8 @@ export async function handlePrepare(
     proxy: options.proxy,
     multiRequestFlowFile: options.multiRequestFlowFile,
     inputCsv: options.inputCsv,
+    browserFlowVersion: options.browserFlowVersion,
+    browserFlowZip: options.browserFlowZip,
   });
   spinner.succeed('Prepared.');
   logger.success(`Output saved to: ${options.outputZip}`);
