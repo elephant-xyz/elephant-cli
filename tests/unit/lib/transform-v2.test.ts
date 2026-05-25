@@ -101,6 +101,53 @@ describe('transform v2', () => {
     ).rejects.toThrow('captures.json is required for transform v2');
   });
 
+  it('reports malformed capture manifests separately from missing manifests', async () => {
+    const input = new AdmZip();
+    input.addFile(
+      'address.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          county_name: 'Example',
+          unnormalized_address: '123 Main St',
+        })
+      )
+    );
+    input.addFile(
+      'parcel.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          parcel_identifier: 'parcel-123',
+          source_http_request: {
+            method: 'GET',
+            url: 'https://county.example/search',
+            multiValueQueryString: {},
+          },
+        })
+      )
+    );
+    input.addFile('captures.json', Buffer.from('{'));
+    input.writeZip(inputZip);
+
+    const handler = new AdmZip();
+    handler.addFile(
+      'handler.js',
+      Buffer.from('export async function handler() {}')
+    );
+    handler.writeZip(transformZip);
+
+    await expect(
+      handleTransform({
+        inputZip,
+        outputZip,
+        transformVersion: 2,
+        transformZip,
+        silent: true,
+      })
+    ).rejects.toThrow('captures.json is invalid JSON');
+  });
+
   it('returns transform v2 failures through scriptFailure in the library API', async () => {
     const input = new AdmZip();
     input.addFile(

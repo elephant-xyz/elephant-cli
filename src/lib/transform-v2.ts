@@ -97,6 +97,14 @@ async function readJsonFile<T>(file: string): Promise<T> {
   return JSON.parse(await fs.readFile(file, 'utf-8')) as T;
 }
 
+function parseCaptures(content: string): BrowserFlowV2Manifest {
+  try {
+    return JSON.parse(content) as BrowserFlowV2Manifest;
+  } catch {
+    throw new Error('captures.json is invalid JSON');
+  }
+}
+
 function getTimeoutMs(config: TransformV2Config | undefined) {
   const timeoutMs = config?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (
@@ -205,12 +213,12 @@ export async function executeTransformV2(options: TransformV2Options) {
     const dir = await extractZipToTemp(options.inputZip, root, 'input');
     const outputDir = path.join(root, 'data');
     const capturesPath = path.join(dir, 'captures.json');
-    const captures = await fs
+    const capturesContent = await fs
       .readFile(capturesPath, 'utf-8')
-      .then((content) => JSON.parse(content) as BrowserFlowV2Manifest)
       .catch(() => {
         throw new Error('captures.json is required for transform v2');
       });
+    const captures = parseCaptures(capturesContent);
     const address = await readJsonFile<Record<string, unknown>>(
       path.join(dir, 'address.json')
     );
