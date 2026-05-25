@@ -4,6 +4,10 @@
 
 Custom browser flows allow you to define complex, site-specific browser automation workflows without being constrained by predefined templates. You can create a JSON file that describes exactly what actions the browser should take, providing maximum flexibility for handling unique website structures.
 
+This guide covers the JSON workflow format used with `--browser-flow-file`. If
+you need to write a JavaScript Puppeteer handler instead, use
+[Browser Flow v2 Handler Packages](./browser-flow-v2.md).
+
 ## Table of Contents
 
 - [When to Use Custom Flows](#when-to-use-custom-flows)

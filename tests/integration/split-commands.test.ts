@@ -9,7 +9,7 @@ import 'dotenv/config';
 
 const execAsync = promisify(exec);
 const __dirname = process.cwd();
-const RPC_URL = process.env.RPC_URL || 'https://polygon-rpc.com';
+const RPC_URL = 'http://127.0.0.1:8545';
 
 // Helper function to generate CIDv1 from test data
 async function generateCIDFromData(data: string): Promise<string> {

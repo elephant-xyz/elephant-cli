@@ -85,12 +85,13 @@ async function handleCheckTransactionStatus(
       options.maxConcurrent
     );
 
-    const results = await checkerService.checkTransactionStatuses(
-      records,
-      () => {
+    const results = await checkerService
+      .checkTransactionStatuses(records, () => {
         progressTracker.increment('processed');
-      }
-    );
+      })
+      .finally(() => {
+        checkerService.destroy();
+      });
 
     progressTracker.stop();
 

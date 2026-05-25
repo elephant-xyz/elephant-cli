@@ -6,6 +6,7 @@ import path from 'path';
 describe('--from-address validation', () => {
   const testCsvPath = path.join(process.cwd(), 'test-validation.csv');
   const testJsonPath = path.join(process.cwd(), 'test-unsigned.json');
+  const rpcUrl = 'http://127.0.0.1:8545';
 
   const validCsvContent = `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
 bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,"/test/property1/dataGroup1.json",2024-01-01T00:00:00Z`;
@@ -99,7 +100,7 @@ bafkreigpfi4pqur43wj3x2dwm43hnbtrxabgwsi3hobzbtqrs3iytohevu,bafkreigpfi4pqur43wj
   });
 
   it('should accept valid from-address format', () => {
-    const command = `./bin/elephant-cli submit-to-contract ${testCsvPath} --dry-run --unsigned-transactions-json ${testJsonPath} --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0`;
+    const command = `./bin/elephant-cli submit-to-contract ${testCsvPath} --dry-run --unsigned-transactions-json ${testJsonPath} --from-address 0x742d35Cc6634C0532925a3b844Bc9e7595f89ce0 --rpc-url ${rpcUrl}`;
 
     // Should not throw an error
     expect(() => {

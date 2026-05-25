@@ -9,6 +9,7 @@ describe('check-transaction-status integration', () => {
   const inputCsvPath = join(testDir, 'test-transactions.csv');
   const outputCsvPath = join(testDir, 'test-output.csv');
   const cliPath = './bin/elephant-cli';
+  const rpcUrl = 'http://127.0.0.1:8545';
 
   beforeEach(() => {
     // Create test CSV file
@@ -31,7 +32,7 @@ describe('check-transaction-status integration', () => {
   it('should check transaction status and generate output CSV', () => {
     try {
       const output = execSync(
-        `${cliPath} check-transaction-status ${inputCsvPath} --output-csv ${outputCsvPath} --max-concurrent 2`,
+        `${cliPath} check-transaction-status ${inputCsvPath} --output-csv ${outputCsvPath} --max-concurrent 2 --rpc-url ${rpcUrl}`,
         { encoding: 'utf8' }
       );
 
@@ -84,10 +85,13 @@ describe('check-transaction-status integration', () => {
 
   it('should use default output filename when not specified', () => {
     try {
-      execSync(`${cliPath} check-transaction-status ${inputCsvPath}`, {
-        encoding: 'utf8',
-        cwd: testDir,
-      });
+      execSync(
+        `${cliPath} check-transaction-status ${inputCsvPath} --rpc-url ${rpcUrl}`,
+        {
+          encoding: 'utf8',
+          cwd: testDir,
+        }
+      );
 
       // Check that a file was created with the default naming pattern
       const files = execSync('ls transaction-status-checked-*.csv', {

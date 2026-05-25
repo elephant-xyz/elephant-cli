@@ -29,6 +29,10 @@ export class TransactionStatusCheckerService {
     );
   }
 
+  destroy(): void {
+    this.statusService.destroy();
+  }
+
   async checkTransactionStatuses(
     transactions: TransactionRecord[],
     onProgress?: (completed: number, total: number) => void

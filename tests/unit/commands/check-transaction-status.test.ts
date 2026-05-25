@@ -31,6 +31,7 @@ describe('check-transaction-status command', () => {
 
     mockCheckerService = {
       checkTransactionStatuses: vi.fn(),
+      destroy: vi.fn(),
     };
     vi.mocked(TransactionStatusCheckerService).mockImplementation(
       () => mockCheckerService
