@@ -83,7 +83,7 @@ async function loadHandler(flowZip: string, root: string) {
 
   await fs.access(path.join(dir, 'handler.js'));
 
-  const importDir = path.join(root, `flow-import-${Date.now()}`);
+  const importDir = await fs.mkdtemp(path.join(root, 'flow-import-'));
   await fs.cp(dir, importDir, { recursive: true });
   const packagePath = path.join(importDir, 'package.json');
   const handlerPath = path.join(importDir, 'handler.js');
