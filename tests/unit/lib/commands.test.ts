@@ -40,6 +40,29 @@ describe('Library Commands', () => {
       expect(options.outputZip).toBe('test-output.zip');
     });
 
+    it('should pass transform v2 options to CLI implementation', async () => {
+      const { handleTransform } = await import(
+        '../../../src/commands/transform/index.js'
+      );
+
+      await transform({
+        inputZip: 'test-input.zip',
+        transformVersion: 2,
+        transformZip: 'transform-v2.zip',
+        outputZip: 'test-output.zip',
+      });
+
+      expect(handleTransform).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputZip: 'test-input.zip',
+          transformVersion: 2,
+          transformZip: 'transform-v2.zip',
+          outputZip: expect.stringContaining('test-output.zip'),
+          silent: true,
+        })
+      );
+    });
+
     it('should pass dataGroup option to CLI implementation', async () => {
       const { handleTransform } = await import(
         '../../../src/commands/transform/index.js'

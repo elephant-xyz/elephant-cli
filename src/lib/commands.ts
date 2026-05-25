@@ -44,6 +44,8 @@ export interface GenerateTransformResult {
 export interface TransformOptions {
   outputZip?: string;
   scriptsZip?: string;
+  transformVersion?: 2 | '2';
+  transformZip?: string;
   inputZip: string;
   legacyMode?: boolean;
   cwd?: string;
@@ -163,6 +165,8 @@ export async function transform(
   const transformOptions: TransformCommandOptions = {
     outputZip,
     scriptsZip: options.scriptsZip,
+    transformVersion: options.transformVersion,
+    transformZip: options.transformZip,
     inputZip: options.inputZip,
     legacyMode: options.legacyMode || false,
     silent: true, // Enable silent mode for library usage
@@ -188,6 +192,8 @@ export async function transform(
     const stderrTail = tail(split(stderrMarker));
     const stdoutTail = tail(split(stdoutMarker));
     const summary = msg.split('\n---')[0]?.trim() || msg;
+    const isTransformV2 =
+      options.transformVersion === 2 || options.transformVersion === '2';
     const failure =
       stderrTail || stdoutTail
         ? {
@@ -195,7 +201,11 @@ export async function transform(
             stdout: stdoutTail,
             stderr: stderrTail,
           }
-        : undefined;
+        : isTransformV2
+          ? {
+              message: summary,
+            }
+          : undefined;
 
     return {
       success: false,
