@@ -230,6 +230,7 @@ export async function executeTransformV2(options: TransformV2Options) {
     const mod = await loadHandler(options.transformZip, root);
     const timeoutMs = getTimeoutMs(mod.config);
     const outputs = new Set<string>();
+    const entities = new Set<string>();
     const relationships = new Map<string, RelationshipRef[]>();
 
     await fs.mkdir(outputDir, { recursive: true });
@@ -239,7 +240,13 @@ export async function executeTransformV2(options: TransformV2Options) {
       if (!capture) {
         throw new Error(`Unknown capture: ${name}`);
       }
-      return await fs.readFile(path.join(dir, capture.path), 'utf-8');
+      const inputRoot = path.resolve(dir);
+      const resolved = path.resolve(inputRoot, capture.path);
+      const relative = path.relative(inputRoot, resolved);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`Invalid capture path: ${capture.path}`);
+      }
+      return await fs.readFile(resolved, 'utf-8');
     };
 
     const writeJson = async (name: string, value: Record<string, unknown>) => {
@@ -249,6 +256,7 @@ export async function executeTransformV2(options: TransformV2Options) {
       }
 
       outputs.add(name);
+      entities.add(name);
       await fs.writeFile(
         path.join(outputDir, `${name}.json`),
         JSON.stringify(
@@ -269,10 +277,10 @@ export async function executeTransformV2(options: TransformV2Options) {
       if (outputs.has(options.name)) {
         throw new Error(`Duplicate output name: ${options.name}`);
       }
-      if (!outputs.has(options.from)) {
+      if (!entities.has(options.from)) {
         throw new Error(`Unknown relationship source: ${options.from}`);
       }
-      if (!outputs.has(options.to)) {
+      if (!entities.has(options.to)) {
         throw new Error(`Unknown relationship target: ${options.to}`);
       }
 

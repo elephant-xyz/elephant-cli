@@ -345,6 +345,160 @@ export async function handler({ input, writeJson, writeRelationship }) {
     });
   });
 
+  it('rejects capture paths that escape the prepared input directory', async () => {
+    const input = new AdmZip();
+    input.addFile(
+      'address.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          county_name: 'Example',
+          unnormalized_address: '123 Main St',
+        })
+      )
+    );
+    input.addFile(
+      'parcel.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          parcel_identifier: 'parcel-123',
+          source_http_request: {
+            method: 'GET',
+            url: 'https://county.example/search',
+            multiValueQueryString: {},
+          },
+        })
+      )
+    );
+    input.addFile(
+      'captures.json',
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          request_identifier: 'parcel-123',
+          sourceUrl: 'https://county.example/details?id=parcel-123',
+          captures: [
+            {
+              name: 'property-detail',
+              path: '../../../package.json',
+              type: 'html',
+            },
+          ],
+        })
+      )
+    );
+    input.writeZip(inputZip);
+
+    const handler = new AdmZip();
+    handler.addFile(
+      'handler.js',
+      Buffer.from(`
+export async function handler({ readCapture, writeJson }) {
+  const content = await readCapture('property-detail');
+  await writeJson('property', { leaked: content.length });
+}
+`)
+    );
+    handler.writeZip(transformZip);
+
+    await expect(
+      handleTransform({
+        inputZip,
+        outputZip,
+        transformVersion: 2,
+        transformZip,
+        silent: true,
+      })
+    ).rejects.toThrow('Invalid capture path: ../../../package.json');
+  });
+
+  it('rejects relationships that reference relationship outputs', async () => {
+    const input = new AdmZip();
+    input.addFile(
+      'address.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          county_name: 'Example',
+          unnormalized_address: '123 Main St',
+        })
+      )
+    );
+    input.addFile(
+      'parcel.json',
+      Buffer.from(
+        JSON.stringify({
+          request_identifier: 'parcel-123',
+          parcel_identifier: 'parcel-123',
+          source_http_request: {
+            method: 'GET',
+            url: 'https://county.example/search',
+            multiValueQueryString: {},
+          },
+        })
+      )
+    );
+    input.addFile(
+      'captures.json',
+      Buffer.from(
+        JSON.stringify({
+          version: 2,
+          request_identifier: 'parcel-123',
+          sourceUrl: 'https://county.example/details?id=parcel-123',
+          captures: [
+            {
+              name: 'property-detail',
+              path: 'captures/property-detail.html',
+              type: 'html',
+            },
+          ],
+        })
+      )
+    );
+    input.addFile(
+      'captures/property-detail.html',
+      Buffer.from('<html><body><h1>Property Detail</h1></body></html>')
+    );
+    input.writeZip(inputZip);
+
+    const handler = new AdmZip();
+    handler.addFile(
+      'handler.js',
+      Buffer.from(`
+export async function handler({ input, writeJson, writeRelationship }) {
+  await writeJson('property', { parcel_identifier: input.parcel.parcel_identifier });
+  await writeJson('address', input.address);
+  await writeRelationship({
+    type: 'property_has_address',
+    name: 'relationship_property_address',
+    from: 'property',
+    to: 'address'
+  });
+  await writeRelationship({
+    type: 'property_has_address',
+    name: 'relationship_property_address_2',
+    from: 'relationship_property_address',
+    to: 'address'
+  });
+}
+`)
+    );
+    handler.writeZip(transformZip);
+
+    await expect(
+      handleTransform({
+        inputZip,
+        outputZip,
+        transformVersion: 2,
+        transformZip,
+        silent: true,
+      })
+    ).rejects.toThrow(
+      'Unknown relationship source: relationship_property_address'
+    );
+  });
+
   it('validates timeout configuration exported by the handler package', async () => {
     const input = new AdmZip();
     input.addFile(
