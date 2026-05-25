@@ -16,6 +16,8 @@ import {
 import { extractHashFromCID } from '../utils/validation.js';
 import { logger } from '../utils/logger.js';
 
+const RPC_REQUEST_TIMEOUT_MS = 5000;
+
 export class UnsignedTransactionJsonService {
   private jsonPath: string;
   private contractAddress: string;
@@ -33,6 +35,13 @@ export class UnsignedTransactionJsonService {
     this.contractAddress = contractAddress;
     this.gasPrice = gasPrice;
     this.startingNonce = startingNonce;
+  }
+
+  private createProvider(rpcUrl: string): ethers.JsonRpcProvider {
+    const request = new ethers.FetchRequest(rpcUrl);
+    request.timeout = RPC_REQUEST_TIMEOUT_MS;
+
+    return new ethers.JsonRpcProvider(request);
   }
 
   /**
@@ -178,7 +187,7 @@ export class UnsignedTransactionJsonService {
     userAddress: string
   ): Promise<EIP1474Transaction[]> {
     // Create provider - required for gas estimation and nonce fetching
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const provider = this.createProvider(rpcUrl);
 
     // Get starting nonce from provider with better error handling
     let currentNonce = this.startingNonce;
@@ -192,27 +201,31 @@ export class UnsignedTransactionJsonService {
       // Continue with default nonce but keep provider for gas estimation
     }
 
-    const transactions: EIP1474Transaction[] = [];
+    try {
+      const transactions: EIP1474Transaction[] = [];
 
-    // Process each batch
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i];
-      logger.info(
-        `Generating unsigned transaction for batch ${i + 1} of ${batches.length} (${batch.length} items)`
-      );
+      // Process each batch
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        logger.info(
+          `Generating unsigned transaction for batch ${i + 1} of ${batches.length} (${batch.length} items)`
+        );
 
-      // Create EIP-1474 compliant transaction (gas estimation is now internal)
-      const transaction = await this.createEIP1474Transaction(
-        batch,
-        userAddress,
-        currentNonce + i,
-        provider
-      );
+        // Create EIP-1474 compliant transaction (gas estimation is now internal)
+        const transaction = await this.createEIP1474Transaction(
+          batch,
+          userAddress,
+          currentNonce + i,
+          provider
+        );
 
-      transactions.push(transaction);
+        transactions.push(transaction);
+      }
+
+      return transactions;
+    } finally {
+      provider.destroy();
     }
-
-    return transactions;
   }
 
   /**

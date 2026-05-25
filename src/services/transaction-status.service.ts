@@ -2,16 +2,25 @@ import { ethers, TransactionReceipt } from 'ethers';
 import { TransactionStatus } from '../types/submit.types.js';
 import { logger } from '../utils/logger.js';
 
+const RPC_REQUEST_TIMEOUT_MS = 5000;
+
 export class TransactionStatusService {
   private provider: ethers.JsonRpcProvider;
   private pollingInterval: number = 2000; // 2 seconds
   private maxPollingTime: number = 15 * 60 * 1000; // 15 minutes
 
   constructor(rpcUrl: string) {
-    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    const request = new ethers.FetchRequest(rpcUrl);
+    request.timeout = RPC_REQUEST_TIMEOUT_MS;
+
+    this.provider = new ethers.JsonRpcProvider(request);
     logger.technical(
       `Transaction status service initialized with RPC: ${rpcUrl}`
     );
+  }
+
+  destroy(): void {
+    this.provider.destroy();
   }
 
   /**

@@ -5,6 +5,10 @@ import { TransactionStatusService } from '../../../src/services/transaction-stat
 vi.mock('ethers', () => ({
   ethers: {
     JsonRpcProvider: vi.fn(),
+    FetchRequest: vi.fn().mockImplementation((url: string) => ({
+      timeout: 0,
+      url,
+    })),
   },
 }));
 
@@ -18,6 +22,7 @@ describe('TransactionStatusService', () => {
     mockProvider = {
       getTransaction: vi.fn(),
       getTransactionReceipt: vi.fn(),
+      destroy: vi.fn(),
     };
 
     const { ethers } = await import('ethers');
