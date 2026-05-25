@@ -68,8 +68,14 @@ describe('prepare browser flow v2', () => {
 
     const flow = new AdmZip();
     flow.addFile(
+      'capture-name.js',
+      Buffer.from("export const captureName = 'property-detail';")
+    );
+    flow.addFile(
       'handler.js',
       Buffer.from(`
+import { captureName } from './capture-name.js';
+
 export async function handler({ input, page, saveHtml, saveSourceUrl }) {
   if (input.request_identifier !== 'parcel-123') {
     throw new Error('unexpected request identifier');
@@ -80,7 +86,7 @@ export async function handler({ input, page, saveHtml, saveSourceUrl }) {
   }
 
   await saveSourceUrl('https://county.example/details?id=parcel-123');
-  await saveHtml({ name: 'property-detail', html: await page.content() });
+  await saveHtml({ name: captureName, html: await page.content() });
 }
 `)
     );
@@ -170,5 +176,63 @@ export async function handler({ input, page, saveHtml, saveSourceUrl }) {
         browserFlowZip: flowZip,
       })
     ).rejects.toThrow('--browser-flow-zip requires --browser-flow-version 2');
+  });
+
+  it('ignores helper writes after a handler timeout', async () => {
+    const inputDir = path.join(dir, 'input-dir');
+    await fs.mkdir(inputDir);
+    await fs.writeFile(path.join(inputDir, 'parcel.json'), '{}', 'utf-8');
+
+    const flow = new AdmZip();
+    flow.addFile(
+      'handler.js',
+      Buffer.from(`
+export async function handler({ saveHtml, saveSourceUrl, signal }) {
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  if (!signal.aborted) {
+    throw new Error('expected timeout abort');
+  }
+
+  await saveSourceUrl('https://county.example/late');
+  await saveHtml({
+    name: 'late-capture',
+    html: '<!DOCTYPE html><html><body>Late</body></html>'
+  });
+}
+`)
+    );
+    flow.writeZip(flowZip);
+
+    const { executeBrowserFlowV2 } = await import(
+      '../../../src/lib/browser-flow-v2.js'
+    );
+
+    await expect(
+      executeBrowserFlowV2({
+        flowZip,
+        inputDir,
+        outputZip,
+        input: {
+          request_identifier: 'parcel-123',
+          url: 'https://county.example/search',
+          source_http_request: {
+            method: 'GET',
+            url: 'https://county.example/search',
+            multiValueQueryString: {},
+          },
+          parcel: {},
+          address: {},
+        },
+        headless: true,
+        timeoutMs: 1,
+      })
+    ).rejects.toThrow('Browser flow v2 timed out after 1ms');
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    await expect(
+      fs.access(path.join(inputDir, 'captures/late-capture.html'))
+    ).rejects.toThrow();
   });
 });

@@ -39,6 +39,7 @@ export interface BrowserFlowV2Context {
   input: BrowserFlowV2Input;
   saveHtml(options: SaveHtmlOptions): Promise<void>;
   saveSourceUrl(url: string): Promise<void>;
+  signal: AbortSignal;
   logger: typeof logger;
 }
 
@@ -80,11 +81,21 @@ async function loadHandler(flowZip: string, root: string) {
   await fs.mkdir(dir, { recursive: true });
   new AdmZip(flowZip).extractAllTo(dir, true);
 
-  const handlerPath = path.join(dir, 'handler.js');
-  await fs.access(handlerPath);
+  await fs.access(path.join(dir, 'handler.js'));
+
+  const importDir = path.join(root, `flow-import-${Date.now()}`);
+  await fs.cp(dir, importDir, { recursive: true });
+  const packagePath = path.join(importDir, 'package.json');
+  const handlerPath = path.join(importDir, 'handler.js');
+
+  try {
+    await fs.access(packagePath);
+  } catch {
+    await fs.writeFile(packagePath, '{"type":"module"}', 'utf-8');
+  }
 
   const mod = (await import(
-    `${pathToFileURL(handlerPath).href}?t=${Date.now()}`
+    pathToFileURL(handlerPath).href
   )) as Partial<BrowserFlowV2Module>;
 
   if (typeof mod.handler !== 'function') {
@@ -102,17 +113,32 @@ function validateCaptureName(name: string) {
   }
 }
 
-async function withTimeout(action: Promise<void>, timeoutMs: number) {
+async function withTimeout(
+  action: Promise<void>,
+  timeoutMs: number,
+  controller: AbortController
+) {
   let timeout: NodeJS.Timeout | undefined;
   const timer = new Promise<never>((_, reject) => {
-    timeout = setTimeout(
-      () => reject(new Error(`Browser flow v2 timed out after ${timeoutMs}ms`)),
-      timeoutMs
-    );
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Browser flow v2 timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
   });
 
   try {
     await Promise.race([action, timer]);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      action.catch((cause) => {
+        logger.debug(
+          `Browser flow v2 handler failed after timeout: ${
+            cause instanceof Error ? cause.message : String(cause)
+          }`
+        );
+      });
+    }
+    throw error;
   } finally {
     if (timeout) clearTimeout(timeout);
   }
@@ -125,6 +151,7 @@ export async function executeBrowserFlowV2(options: BrowserFlowV2Options) {
   try {
     await using page = await createBrowserPage(options.headless, options.proxy);
     const handler = await loadHandler(options.flowZip, root);
+    const controller = new AbortController();
     const captures = new Map<string, BrowserFlowV2Capture>();
     let sourceUrl: string | undefined;
 
@@ -132,18 +159,21 @@ export async function executeBrowserFlowV2(options: BrowserFlowV2Options) {
     await fs.mkdir(capturesDir, { recursive: true });
 
     const saveHtml = async ({ name, html }: SaveHtmlOptions) => {
+      if (controller.signal.aborted) return;
       validateCaptureName(name);
       if (captures.has(name)) {
         throw new Error(`Duplicate capture name: ${name}`);
       }
 
       const content = await cleanHtml(html ?? (await page.content()));
+      if (controller.signal.aborted) return;
       const capturePath = `captures/${name}.html`;
       await fs.writeFile(
         path.join(options.inputDir, capturePath),
         content,
         'utf-8'
       );
+      if (controller.signal.aborted) return;
       captures.set(name, {
         name,
         path: capturePath,
@@ -152,6 +182,7 @@ export async function executeBrowserFlowV2(options: BrowserFlowV2Options) {
     };
 
     const saveSourceUrl = async (url: string) => {
+      if (controller.signal.aborted) return;
       if (sourceUrl) {
         throw new Error('saveSourceUrl may only be called once');
       }
@@ -164,9 +195,11 @@ export async function executeBrowserFlowV2(options: BrowserFlowV2Options) {
         input: options.input,
         saveHtml,
         saveSourceUrl,
+        signal: controller.signal,
         logger,
       }),
-      options.timeoutMs ?? 300000
+      options.timeoutMs ?? 300000,
+      controller
     );
 
     if (!sourceUrl) {

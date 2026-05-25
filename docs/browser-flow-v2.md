@@ -132,6 +132,7 @@ type BrowserFlowV2Context = {
   input: BrowserFlowV2Input;
   saveHtml(options: { name: string; html?: string }): Promise<void>;
   saveSourceUrl(url: string): Promise<void>;
+  signal: AbortSignal;
   logger: {
     debug(message: string): void;
     info(message: string): void;
@@ -193,6 +194,16 @@ owner-summary
 ```
 
 The CLI writes those captures under `captures/<name>.html`.
+
+### `signal`
+
+An `AbortSignal` that is aborted when the Browser Flow v2 timeout expires. Check
+`signal.aborted` inside long-running handlers to stop additional browser work
+after timeout:
+
+```javascript
+if (signal.aborted) return;
+```
 
 ### `logger`
 
@@ -296,17 +307,20 @@ export async function handler({
   page,
   saveHtml,
   saveSourceUrl,
+  signal,
   logger,
 }) {
   logger.info(`Preparing ${input.request_identifier}`);
 
   await page.goto(input.url, { waitUntil: 'domcontentloaded' });
+  if (signal.aborted) return;
 
   const accept = await page.$('#acceptDataDisclaimer');
   if (accept) {
     await accept.click();
     await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
   }
+  if (signal.aborted) return;
 
   await page.waitForSelector('#property-details', { timeout: 60000 });
 
@@ -386,5 +400,6 @@ Use lowercase kebab-case capture names. For example, use `property-detail`, not
 - Use `--no-headless` while developing selectors locally.
 - Log major milestones with `logger.info`.
 - Keep waits tied to selectors that prove the data is loaded.
+- Check `signal.aborted` after long waits or navigation steps.
 - Avoid writing files directly from the handler; use `saveHtml` so the CLI can
   clean, name, and manifest captures consistently.
