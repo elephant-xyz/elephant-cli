@@ -13,6 +13,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Build the Seed Bundle](#build-the-seed-bundle)
 - [Fetch Current Source Content](#fetch-current-source-content)
 - [Browser Flow Templates](#browser-flow-templates)
+- [Browser Flow v2 Handler Packages](#browser-flow-v2-handler-packages)
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
@@ -339,25 +340,45 @@ elephant-cli prepare prepare-input.zip \
 elephant-cli prepare prepare-input.zip \
   --output-zip prepared-site.zip \
   --multi-request-flow-file flow.json
+
+# Using Browser Flow v2 for packaged Puppeteer handlers
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-version 2 \
+  --browser-flow-zip county-browser-flow-v2.zip
 ```
 
 **What it does**
 
 - Reads `source_http_request` from `property_seed.json`.
-- Performs the HTTP request (direct fetch by default, optional headless browser for GET endpoints, or multi-request flow for multiple API endpoints).
-- Writes the response to `<request_identifier>.html` or `<request_identifier>.json` alongside the seed files.
+- Performs the HTTP request, browser workflow, multi-request flow, or Browser Flow v2 handler package.
+- Writes the fetched response or captured HTML alongside the seed files.
 
 **Inputs**
 
 - ZIP containing `property_seed.json` and `unnormalized_address.json` at the top level.
+- Browser Flow v2 also accepts the newer top-level names `parcel.json` and `address.json`.
 
 **Output**
+
+Default, browser template, custom browser flow, and multi-request outputs use one response file:
 
 ```
 prepared-site.zip
 ├── property_seed.json
 ├── unnormalized_address.json
 └── <request_identifier>.html | <request_identifier>.json
+```
+
+Browser Flow v2 outputs a capture manifest and one or more cleaned HTML captures:
+
+```
+prepared-site.zip
+├── property_seed.json
+├── unnormalized_address.json
+├── captures.json
+└── captures/
+    └── <capture-name>.html
 ```
 
 **Options**
@@ -372,6 +393,8 @@ prepared-site.zip
 | `--browser-flow-template <name>`     | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
 | `--browser-flow-parameters <json>`   | JSON parameters for the browser flow template.                                  | None     |
 | `--browser-flow-file <path>`         | Path to custom browser flow JSON file (takes precedence over template).         | None     |
+| `--browser-flow-version <version>`   | Set to `2` to run a packaged Browser Flow v2 handler.                           | None     |
+| `--browser-flow-zip <path>`          | Path to a Browser Flow v2 ZIP containing `handler.js`.                          | None     |
 | `--multi-request-flow-file <path>`   | Path to JSON file defining a multi-request flow (sequence of HTTP requests).    | None     |
 | `--proxy <url>`                      | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
 
@@ -399,6 +422,39 @@ elephant-cli prepare input.zip \
   --output-zip output.zip \
   --browser-flow-file my-custom-flow.json
 ```
+
+### Browser Flow v2 Handler Packages
+
+Browser Flow v2 is for counties where the browser workflow is easier to maintain
+as JavaScript than as a template or JSON workflow. Package an ES module named
+`handler.js` into a ZIP, then run `prepare` with `--browser-flow-version 2` and
+`--browser-flow-zip`.
+
+Quick example using a Browser Flow v2 package:
+
+```bash
+elephant-cli prepare prepare-input.zip \
+  --output-zip prepared-site.zip \
+  --browser-flow-version 2 \
+  --browser-flow-zip county-browser-flow-v2.zip
+```
+
+The handler receives a Puppeteer `page`, normalized seed input, a `logger`, and
+helpers for recording the final source URL and saving cleaned HTML captures:
+
+```javascript
+export async function handler({ input, page, saveHtml, saveSourceUrl }) {
+  await page.goto(input.url, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#property-details', { timeout: 60000 });
+
+  await saveSourceUrl(page.url());
+  await saveHtml({ name: 'property-detail' });
+}
+```
+
+The output includes `captures.json` and `captures/<name>.html` files. See
+[Browser Flow v2 Handler Packages](./docs/browser-flow-v2.md) for the complete
+package contract, handler API, output manifest, and troubleshooting guide.
 
 ### Multi-Request Flows
 
