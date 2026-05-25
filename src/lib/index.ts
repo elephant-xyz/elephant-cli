@@ -38,6 +38,12 @@ export type {
   BrowserFlowV2Manifest,
   SaveHtmlOptions,
 } from './browser-flow-v2.js';
+export type {
+  TransformV2Config,
+  TransformV2Context,
+  TransformV2Input,
+  WriteRelationshipOptions,
+} from './transform-v2.js';
 
 // Export gas price types
 export type { GasPriceInfo } from '../services/gas-price.service.js';

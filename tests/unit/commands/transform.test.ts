@@ -107,6 +107,45 @@ describe('transform command', () => {
 
   describe('handleTransform', () => {
     const options = { legacyMode: true };
+    it('rejects transform v2 package without explicit version flag', async () => {
+      await expect(
+        handleTransform({
+          transformZip: 'transform-v2.zip',
+          silent: true,
+        })
+      ).rejects.toThrow('--transform-zip requires --transform-version 2');
+    });
+
+    it('requires a transform v2 package when version 2 is selected', async () => {
+      await expect(
+        handleTransform({
+          transformVersion: 2,
+          silent: true,
+        })
+      ).rejects.toThrow('--transform-zip is required for transform v2');
+    });
+
+    it('rejects scripts zip when transform v2 is selected', async () => {
+      await expect(
+        handleTransform({
+          transformVersion: 2,
+          transformZip: 'transform-v2.zip',
+          scriptsZip: 'generated-scripts.zip',
+          silent: true,
+        })
+      ).rejects.toThrow('--scripts-zip cannot be used with transform v2');
+    });
+
+    it('requires an input zip when transform v2 is selected', async () => {
+      await expect(
+        handleTransform({
+          transformVersion: 2,
+          transformZip: 'transform-v2.zip',
+          silent: true,
+        })
+      ).rejects.toThrow('In transform v2, --input-zip is required');
+    });
+
     it('should successfully transform data with default output zip', async () => {
       const options = { legacyMode: true };
 

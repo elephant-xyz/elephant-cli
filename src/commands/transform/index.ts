@@ -16,6 +16,7 @@ import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
 import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
 import { SchemaCacheService } from '../../services/schema-cache.service.js';
+import { executeTransformV2 } from '../../lib/transform-v2.js';
 import {
   parseMultiValueQueryString,
   SourceHttpRequest,
@@ -28,6 +29,8 @@ export interface TransformCommandOptions {
   outputZip?: string;
   inputZip?: string;
   scriptsZip?: string;
+  transformVersion?: 2 | '2';
+  transformZip?: string;
   legacyMode?: boolean;
   silent?: boolean;
   cwd?: string;
@@ -94,6 +97,8 @@ export function registerTransformCommand(program: Command) {
       '--scripts-zip <path>',
       'Run transformation using generated scripts ZIP'
     )
+    .option('--transform-version <version>', 'Transform runtime version to use')
+    .option('--transform-zip <path>', 'Path to transform v2 handler ZIP file')
     .option(
       '--input-zip <path>',
       'Input ZIP for scripts mode (must include address.json or unnormalized_address.json, parcel.json or property_seed.json, and an HTML/JSON file)'
@@ -113,6 +118,34 @@ export async function handleTransform(options: TransformCommandOptions) {
   if (!options.silent) {
     console.log(chalk.bold.blue('🐘 Elephant Network CLI - Transform'));
     console.log();
+  }
+
+  const usesTransformV2 =
+    options.transformVersion === 2 || options.transformVersion === '2';
+  if (options.transformZip && !usesTransformV2) {
+    throw new Error('--transform-zip requires --transform-version 2');
+  }
+  if (usesTransformV2 && !options.transformZip) {
+    throw new Error('--transform-zip is required for transform v2');
+  }
+  if (usesTransformV2 && options.scriptsZip) {
+    throw new Error('--scripts-zip cannot be used with transform v2');
+  }
+  if (usesTransformV2 && !options.inputZip) {
+    throw new Error('In transform v2, --input-zip is required');
+  }
+  if (usesTransformV2) {
+    const workingDir = options.cwd || process.cwd();
+    await executeTransformV2({
+      inputZip: path.resolve(workingDir, options.inputZip!),
+      outputZip: path.resolve(
+        workingDir,
+        options.outputZip || 'transformed-data.zip'
+      ),
+      transformZip: path.resolve(workingDir, options.transformZip!),
+      dataGroup: options.dataGroup,
+    });
+    return;
   }
 
   if (options.legacyMode) {

@@ -14,6 +14,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Fetch Current Source Content](#fetch-current-source-content)
 - [Browser Flow Templates](#browser-flow-templates)
 - [Browser Flow v2 Handler Packages](#browser-flow-v2-handler-packages)
+- [Transform v2 Handler Packages](#transform-v2-handler-packages)
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
@@ -455,6 +456,25 @@ export async function handler({ input, page, saveHtml, saveSourceUrl }) {
 The output includes `captures.json` and `captures/<name>.html` files. See
 [Browser Flow v2 Handler Packages](./docs/browser-flow-v2.md) for the complete
 package contract, handler API, output manifest, and troubleshooting guide.
+
+## Transform v2 Handler Packages
+
+Transform v2 consumes Browser Flow v2 prepared ZIPs (`address.json`,
+`parcel.json`, `captures.json`, and `captures/*.html`) with a packaged
+`handler.js` transform. It is separate from the v1 `--scripts-zip` runner.
+
+```bash
+elephant-cli transform \
+  --transform-version 2 \
+  --transform-zip county-transform-v2.zip \
+  --input-zip prepared-site.zip \
+  --output-zip transformed-data.zip
+```
+
+Use transform v2 when one transform entrypoint should read one or more named
+captures and write entity and relationship JSON through the helper API. See
+[Transform v2 Handler Packages](./docs/TRANSFORM-V2.md) for the full package
+contract, context API, metadata rules, and examples.
 
 ### Multi-Request Flows
 
