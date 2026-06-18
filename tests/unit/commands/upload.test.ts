@@ -500,7 +500,7 @@ describe('Upload Command', () => {
   });
 
   it('should throw error if no storage credentials are provided', async () => {
-    // Default provider is S3; without credentials the factory throws.
+    // When neither Pinata JWT nor S3 creds are present, the factory throws.
     // A storageProvider override bypasses credential validation, so we must
     // NOT pass one here — we want the real factory to run.
     const mockZipExtractor = {
@@ -526,7 +526,7 @@ describe('Upload Command', () => {
         zipExtractorService: mockZipExtractor,
         progressTracker: mockProgress,
       })
-    ).rejects.toThrow('S3 credentials are required');
+    ).rejects.toThrow('Storage credentials are required');
   });
 
   it('should handle exception during upload', async () => {

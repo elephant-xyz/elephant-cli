@@ -58,7 +58,7 @@ describe('createStorageProvider', () => {
     expect(provider).toBeInstanceOf(S3CompatibleStorageProvider);
   });
 
-  it('defaults to S3 provider when storage option is omitted', () => {
+  it('infers S3 provider from credentials when storage flag is omitted', () => {
     const options: UploadCommandOptions = {
       input: 'test.zip',
       s3AccessKeyId: 'key',
@@ -69,13 +69,31 @@ describe('createStorageProvider', () => {
     expect(provider).toBeInstanceOf(S3CompatibleStorageProvider);
   });
 
-  it('throws when S3 credentials are missing', () => {
+  it('infers Pinata provider when only pinataJwt is present (backward compat for oracle-node)', () => {
+    // oracle-node upload-worker calls upload({ pinataJwt }) without --storage or S3 creds.
+    // Must route to Pinata, not throw.
+    const options: UploadCommandOptions = {
+      input: 'test.zip',
+      pinataJwt: 'test-jwt',
+    };
+    const provider = createStorageProvider(options);
+    expect(provider).toBeInstanceOf(PinataDirectoryUploadService);
+  });
+
+  it('throws when S3 credentials are missing and storage is explicitly "s3"', () => {
     const options: UploadCommandOptions = {
       input: 'test.zip',
       storage: 's3',
     };
     expect(() => createStorageProvider(options)).toThrow(
       'S3 credentials are required'
+    );
+  });
+
+  it('throws when neither Pinata JWT nor S3 credentials are provided', () => {
+    const options: UploadCommandOptions = { input: 'test.zip' };
+    expect(() => createStorageProvider(options)).toThrow(
+      'Storage credentials are required'
     );
   });
 

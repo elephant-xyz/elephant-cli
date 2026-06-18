@@ -33,39 +33,68 @@ export interface UploadCommandOptions {
 export function createStorageProvider(
   options: UploadCommandOptions
 ): StorageProvider {
-  const providerType: StorageProviderType = options.storage ?? 's3';
-
-  if (providerType === 'pinata') {
-    if (!options.pinataJwt) {
-      throw new Error(
-        'Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
-      );
-    }
-    return new PinataDirectoryUploadService(options.pinataJwt);
-  }
-
   const accessKeyId =
     options.s3AccessKeyId ?? process.env.S3_ACCESS_KEY_ID ?? '';
   const secretAccessKey =
     options.s3SecretAccessKey ?? process.env.S3_SECRET_ACCESS_KEY ?? '';
   const bucket = options.s3Bucket ?? process.env.S3_BUCKET ?? '';
-  const endpoint =
-    options.s3Endpoint ?? process.env.S3_ENDPOINT ?? FILEBASE_ENDPOINT;
-  const region = options.s3Region ?? process.env.S3_REGION ?? 'us-east-1';
+  const hasS3Creds = Boolean(accessKeyId && secretAccessKey && bucket);
 
-  if (!accessKeyId || !secretAccessKey || !bucket) {
-    throw new Error(
-      'S3 credentials are required. Provide --s3-access-key-id, --s3-secret-access-key, and --s3-bucket options or S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET environment variables.'
-    );
+  const pinataJwt = options.pinataJwt ?? process.env.PINATA_JWT ?? '';
+  const hasPinataJwt = Boolean(pinataJwt);
+
+  // Provider selection: explicit flag beats inference; inference prefers Pinata
+  // when only a JWT is present (preserves backward compat for oracle-node callers
+  // that pass `pinataJwt` without a `--storage` flag).
+  const explicitType = options.storage;
+
+  if (explicitType === 'pinata') {
+    if (!hasPinataJwt) {
+      throw new Error(
+        'Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
+      );
+    }
+    return new PinataDirectoryUploadService(pinataJwt);
   }
 
-  return new S3CompatibleStorageProvider({
-    endpoint,
-    region,
-    accessKeyId,
-    secretAccessKey,
-    bucket,
-  });
+  if (explicitType === 's3') {
+    if (!hasS3Creds) {
+      throw new Error(
+        'S3 credentials are required. Provide --s3-access-key-id, --s3-secret-access-key, and --s3-bucket options or S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET environment variables.'
+      );
+    }
+    return new S3CompatibleStorageProvider({
+      endpoint:
+        options.s3Endpoint ?? process.env.S3_ENDPOINT ?? FILEBASE_ENDPOINT,
+      region: options.s3Region ?? process.env.S3_REGION ?? 'us-east-1',
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+    });
+  }
+
+  // No explicit --storage flag: infer from which credentials are present.
+  // Pinata JWT present → Pinata (backward-compat for existing callers).
+  // S3 creds present → S3/Filebase.
+  // Neither → require credentials.
+  if (hasPinataJwt && !hasS3Creds) {
+    return new PinataDirectoryUploadService(pinataJwt);
+  }
+
+  if (hasS3Creds) {
+    return new S3CompatibleStorageProvider({
+      endpoint:
+        options.s3Endpoint ?? process.env.S3_ENDPOINT ?? FILEBASE_ENDPOINT,
+      region: options.s3Region ?? process.env.S3_REGION ?? 'us-east-1',
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+    });
+  }
+
+  throw new Error(
+    'Storage credentials are required. Provide Pinata JWT (--pinata-jwt / PINATA_JWT) or S3 credentials (--s3-access-key-id, --s3-secret-access-key, --s3-bucket / S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET).'
+  );
 }
 
 export function registerUploadCommand(program: Command) {
@@ -80,8 +109,7 @@ export function registerUploadCommand(program: Command) {
     )
     .option(
       '--storage <provider>',
-      'Storage provider to use: "s3" (default, S3-compatible e.g. Filebase) or "pinata".',
-      's3'
+      'Storage provider to use: "s3" (S3-compatible e.g. Filebase) or "pinata". When omitted, inferred from which credentials are present (Pinata JWT → pinata, S3 creds → s3).'
     )
     .option(
       '--s3-access-key-id <key>',
@@ -109,36 +137,18 @@ export function registerUploadCommand(program: Command) {
         ...options,
         input: path.resolve(workingDir, input),
         pinataJwt: options.pinataJwt || process.env.PINATA_JWT,
-        storage: (options.storage as StorageProviderType) || 's3',
+        storage: options.storage as StorageProviderType | undefined,
         cwd: workingDir,
       };
 
-      const providerType = commandOptions.storage ?? 's3';
-
-      if (providerType === 'pinata' && !commandOptions.pinataJwt) {
+      // Validate credentials early so we surface a helpful message before touching the file.
+      try {
+        createStorageProvider(commandOptions);
+      } catch (err) {
         console.error(
-          chalk.red(
-            '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
-          )
+          chalk.red(`❌ ${err instanceof Error ? err.message : String(err)}`)
         );
         process.exit(1);
-      }
-
-      if (providerType === 's3') {
-        const accessKeyId =
-          commandOptions.s3AccessKeyId || process.env.S3_ACCESS_KEY_ID;
-        const secretAccessKey =
-          commandOptions.s3SecretAccessKey || process.env.S3_SECRET_ACCESS_KEY;
-        const bucket = commandOptions.s3Bucket || process.env.S3_BUCKET;
-
-        if (!accessKeyId || !secretAccessKey || !bucket) {
-          console.error(
-            chalk.red(
-              '❌ S3 credentials are required. Provide --s3-access-key-id, --s3-secret-access-key, and --s3-bucket options or S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET environment variables.'
-            )
-          );
-          process.exit(1);
-        }
       }
 
       await handleUpload(commandOptions);

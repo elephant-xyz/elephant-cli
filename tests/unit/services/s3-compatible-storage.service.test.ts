@@ -15,9 +15,17 @@ vi.mock('../../../src/utils/logger.js', () => ({
 }));
 
 const mockSend = vi.fn();
+const mockMiddlewareAdd = vi.fn();
+const mockMiddlewareRemove = vi.fn();
 
 vi.mock('@aws-sdk/client-s3', () => ({
-  S3Client: vi.fn().mockImplementation(() => ({ send: mockSend })),
+  S3Client: vi.fn().mockImplementation(() => ({
+    send: mockSend,
+    middlewareStack: {
+      add: mockMiddlewareAdd,
+      remove: mockMiddlewareRemove,
+    },
+  })),
   PutObjectCommand: vi.fn().mockImplementation((input) => input),
 }));
 
@@ -33,6 +41,37 @@ const baseConfig = {
   bucket: 'test-bucket',
 };
 
+/**
+ * Simulate what the deserialize middleware captures: the middleware factory
+ * receives (next, context) and returns a handler. When that handler is invoked,
+ * it calls next(args) and reads result.response.headers. We need to call
+ * the middleware callback ourselves so capturedHeaders gets populated.
+ */
+function makeMiddlewareSendMock(headersCid: string | undefined) {
+  return vi.fn().mockImplementation(async () => {
+    // The middleware is added via middlewareStack.add; the captured factory fn
+    // is available from the mockMiddlewareAdd call. Invoke it to populate headers.
+    const factory = mockMiddlewareAdd.mock.calls.at(-1)?.[0];
+    if (factory) {
+      const fakeNext = vi.fn().mockResolvedValue({
+        output: { $metadata: { httpStatusCode: 200 } },
+        response: {
+          statusCode: 200,
+          headers: headersCid
+            ? {
+                'x-amz-meta-cid': headersCid,
+                'content-type': 'application/xml',
+              }
+            : { 'content-type': 'application/xml' },
+        },
+      });
+      const handler = factory(fakeNext, {});
+      await handler({ input: {}, request: {} });
+    }
+    return { $metadata: { httpStatusCode: 200 } };
+  });
+}
+
 describe('S3CompatibleStorageProvider', () => {
   let tempDir: string;
 
@@ -41,6 +80,8 @@ describe('S3CompatibleStorageProvider', () => {
       path.join(os.tmpdir(), 's3-storage-test-')
     );
     mockSend.mockClear();
+    mockMiddlewareAdd.mockClear();
+    mockMiddlewareRemove.mockClear();
   });
 
   afterEach(async () => {
@@ -55,10 +96,7 @@ describe('S3CompatibleStorageProvider', () => {
     it('throws if accessKeyId is missing', () => {
       expect(
         () =>
-          new S3CompatibleStorageProvider({
-            ...baseConfig,
-            accessKeyId: '',
-          })
+          new S3CompatibleStorageProvider({ ...baseConfig, accessKeyId: '' })
       ).toThrow('S3 accessKeyId is required.');
     });
 
@@ -74,11 +112,7 @@ describe('S3CompatibleStorageProvider', () => {
 
     it('throws if bucket is missing', () => {
       expect(
-        () =>
-          new S3CompatibleStorageProvider({
-            ...baseConfig,
-            bucket: '',
-          })
+        () => new S3CompatibleStorageProvider({ ...baseConfig, bucket: '' })
       ).toThrow('S3 bucket name is required.');
     });
 
@@ -97,9 +131,7 @@ describe('S3CompatibleStorageProvider', () => {
         endpoint: 'https://custom.s3.example.com',
       });
       expect(vi.mocked(S3Client)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          endpoint: 'https://custom.s3.example.com',
-        })
+        expect.objectContaining({ endpoint: 'https://custom.s3.example.com' })
       );
     });
   });
@@ -140,7 +172,7 @@ describe('S3CompatibleStorageProvider', () => {
         JSON.stringify({ b: 2 })
       );
 
-      mockSend.mockResolvedValue({ 'x-amz-meta-cid': 'bafybeimockcid123' });
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid123'));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
       const result = await provider.uploadDirectory(dir, {
@@ -161,7 +193,7 @@ describe('S3CompatibleStorageProvider', () => {
         JSON.stringify({ x: 1 })
       );
 
-      mockSend.mockResolvedValue({ 'x-amz-meta-cid': 'bafybeimockcid' });
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid'));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
       await provider.uploadDirectory(dir);
@@ -179,12 +211,10 @@ describe('S3CompatibleStorageProvider', () => {
         JSON.stringify({})
       );
 
-      mockSend.mockResolvedValue({ 'x-amz-meta-cid': 'bafybeimockcid' });
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid'));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
-      await provider.uploadDirectory(dir, {
-        directoryName: 'custom-dir-name',
-      });
+      await provider.uploadDirectory(dir, { directoryName: 'custom-dir-name' });
 
       const putCall = mockSend.mock.calls[0][0];
       expect(putCall.Key).toBe('custom-dir-name/file.json');
@@ -198,7 +228,7 @@ describe('S3CompatibleStorageProvider', () => {
         JSON.stringify({})
       );
 
-      mockSend.mockResolvedValue({ 'x-amz-meta-cid': 'bafybeimockcid' });
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid'));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
       await provider.uploadDirectory(dir, {
@@ -218,7 +248,46 @@ describe('S3CompatibleStorageProvider', () => {
       });
     });
 
-    it('returns success with undefined CID when provider does not return header', async () => {
+    it('returns local CID as canonical when header is absent (missing-header fallback)', async () => {
+      const dir = path.join(tempDir, 'local-cid-dir');
+      await fsPromises.mkdir(dir, { recursive: true });
+      await fsPromises.writeFile(
+        path.join(dir, 'file.json'),
+        JSON.stringify({})
+      );
+
+      // Provider returns no CID header
+      mockSend.mockImplementation(makeMiddlewareSendMock(undefined));
+
+      const provider = new S3CompatibleStorageProvider(baseConfig);
+      const result = await provider.uploadDirectory(dir, {
+        keyvalues: { localCid: 'bafybeifromlocalcid' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.cid).toBe('bafybeifromlocalcid');
+    });
+
+    it('prefers local CID over provider header CID', async () => {
+      const dir = path.join(tempDir, 'prefer-local-dir');
+      await fsPromises.mkdir(dir, { recursive: true });
+      await fsPromises.writeFile(
+        path.join(dir, 'file.json'),
+        JSON.stringify({})
+      );
+
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeiheadercid'));
+
+      const provider = new S3CompatibleStorageProvider(baseConfig);
+      const result = await provider.uploadDirectory(dir, {
+        keyvalues: { localCid: 'bafybeifromlocalcid' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.cid).toBe('bafybeifromlocalcid');
+    });
+
+    it('returns error when no header CID and no local CID', async () => {
       const dir = path.join(tempDir, 'no-cid-dir');
       await fsPromises.mkdir(dir, { recursive: true });
       await fsPromises.writeFile(
@@ -226,13 +295,13 @@ describe('S3CompatibleStorageProvider', () => {
         JSON.stringify({})
       );
 
-      mockSend.mockResolvedValue({});
+      mockSend.mockImplementation(makeMiddlewareSendMock(undefined));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
       const result = await provider.uploadDirectory(dir);
 
-      expect(result.success).toBe(true);
-      expect(result.cid).toBeUndefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No CID available');
     });
 
     it('uploads files in nested directories with posix-style keys', async () => {
@@ -242,7 +311,7 @@ describe('S3CompatibleStorageProvider', () => {
       await fsPromises.writeFile(path.join(dir, 'root.json'), '{}');
       await fsPromises.writeFile(path.join(sub, 'nested.json'), '{}');
 
-      mockSend.mockResolvedValue({ 'x-amz-meta-cid': 'bafybeimockcid' });
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid'));
 
       const provider = new S3CompatibleStorageProvider(baseConfig);
       await provider.uploadDirectory(dir);
@@ -256,7 +325,7 @@ describe('S3CompatibleStorageProvider', () => {
       expect(keys).toContain('nested-dir/subdir/nested.json');
     });
 
-    it('propagates S3 send errors as a failed result — throws are not suppressed', async () => {
+    it('propagates S3 send errors — does not suppress them', async () => {
       const dir = path.join(tempDir, 'err-dir');
       await fsPromises.mkdir(dir, { recursive: true });
       await fsPromises.writeFile(path.join(dir, 'file.json'), '{}');
@@ -267,6 +336,22 @@ describe('S3CompatibleStorageProvider', () => {
       await expect(provider.uploadDirectory(dir)).rejects.toThrow(
         'S3 connection refused'
       );
+    });
+
+    it('attaches and removes the capture middleware per file', async () => {
+      const dir = path.join(tempDir, 'middleware-lifecycle-dir');
+      await fsPromises.mkdir(dir, { recursive: true });
+      await fsPromises.writeFile(path.join(dir, 'f1.json'), '{}');
+      await fsPromises.writeFile(path.join(dir, 'f2.json'), '{}');
+
+      mockSend.mockImplementation(makeMiddlewareSendMock('bafybeimockcid'));
+
+      const provider = new S3CompatibleStorageProvider(baseConfig);
+      await provider.uploadDirectory(dir);
+
+      // add and remove should each be called once per file (2 files)
+      expect(mockMiddlewareAdd).toHaveBeenCalledTimes(2);
+      expect(mockMiddlewareRemove).toHaveBeenCalledTimes(2);
     });
   });
 });
