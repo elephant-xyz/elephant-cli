@@ -41,6 +41,7 @@
   "author": "Elephant XYZ",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1071.0",
     "@elephant-xyz/fact-sheet": "^1.2.4",
     "@ipld/dag-cbor": "^9.2.4",
     "@ipld/dag-json": "^10.2.5",

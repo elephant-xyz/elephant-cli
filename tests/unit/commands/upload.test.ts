@@ -499,11 +499,16 @@ describe('Upload Command', () => {
     });
   });
 
-  it('should throw error if no JWT is provided', async () => {
-    const options: UploadCommandOptions = {
-      input: mockZipPath,
-      // No pinataJwt provided
-    };
+  it('should throw error if no storage credentials are provided', async () => {
+    // Default provider is S3; without credentials the factory throws.
+    // A storageProvider override bypasses credential validation, so we must
+    // NOT pass one here — we want the real factory to run.
+    const mockZipExtractor = {
+      isZipFile: vi.fn().mockResolvedValue(true),
+      extractZip: vi.fn().mockResolvedValue(mockExtractedPath),
+      getTempRootDir: vi.fn().mockReturnValue(tempDir),
+      cleanup: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ZipExtractorService;
 
     const mockProgress = {
       start: vi.fn(),
@@ -511,13 +516,17 @@ describe('Upload Command', () => {
       increment: vi.fn(),
     } as unknown as SimpleProgress;
 
+    const options: UploadCommandOptions = {
+      input: mockZipPath,
+      // No storage credentials provided
+    };
+
     await expect(
       handleUpload(options, {
+        zipExtractorService: mockZipExtractor,
         progressTracker: mockProgress,
       })
-    ).rejects.toThrow(
-      'Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
-    );
+    ).rejects.toThrow('S3 credentials are required');
   });
 
   it('should handle exception during upload', async () => {

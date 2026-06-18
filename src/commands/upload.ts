@@ -6,15 +6,66 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { ZipExtractorService } from '../services/zip-extractor.service.js';
 import { PinataDirectoryUploadService } from '../services/pinata-directory-upload.service.js';
+import {
+  S3CompatibleStorageProvider,
+  FILEBASE_ENDPOINT,
+} from '../services/s3-compatible-storage.service.js';
+import type { StorageProvider } from '../services/storage-provider.interface.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isMediaFile } from '../utils/file-type-helpers.js';
 
+export type StorageProviderType = 'pinata' | 's3';
+
 export interface UploadCommandOptions {
   input: string;
   pinataJwt?: string;
+  storage?: StorageProviderType;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
+  s3Bucket?: string;
+  s3Endpoint?: string;
+  s3Region?: string;
   silent?: boolean;
   cwd?: string;
+}
+
+export function createStorageProvider(
+  options: UploadCommandOptions
+): StorageProvider {
+  const providerType: StorageProviderType = options.storage ?? 's3';
+
+  if (providerType === 'pinata') {
+    if (!options.pinataJwt) {
+      throw new Error(
+        'Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
+      );
+    }
+    return new PinataDirectoryUploadService(options.pinataJwt);
+  }
+
+  const accessKeyId =
+    options.s3AccessKeyId ?? process.env.S3_ACCESS_KEY_ID ?? '';
+  const secretAccessKey =
+    options.s3SecretAccessKey ?? process.env.S3_SECRET_ACCESS_KEY ?? '';
+  const bucket = options.s3Bucket ?? process.env.S3_BUCKET ?? '';
+  const endpoint =
+    options.s3Endpoint ?? process.env.S3_ENDPOINT ?? FILEBASE_ENDPOINT;
+  const region = options.s3Region ?? process.env.S3_REGION ?? 'us-east-1';
+
+  if (!accessKeyId || !secretAccessKey || !bucket) {
+    throw new Error(
+      'S3 credentials are required. Provide --s3-access-key-id, --s3-secret-access-key, and --s3-bucket options or S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET environment variables.'
+    );
+  }
+
+  return new S3CompatibleStorageProvider({
+    endpoint,
+    region,
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+  });
 }
 
 export function registerUploadCommand(program: Command) {
@@ -27,22 +78,67 @@ export function registerUploadCommand(program: Command) {
       '--pinata-jwt <jwt>',
       'Pinata JWT for authentication. If not provided, uses PINATA_JWT environment variable.'
     )
+    .option(
+      '--storage <provider>',
+      'Storage provider to use: "s3" (default, S3-compatible e.g. Filebase) or "pinata".',
+      's3'
+    )
+    .option(
+      '--s3-access-key-id <key>',
+      'S3 access key ID. Falls back to S3_ACCESS_KEY_ID environment variable.'
+    )
+    .option(
+      '--s3-secret-access-key <secret>',
+      'S3 secret access key. Falls back to S3_SECRET_ACCESS_KEY environment variable.'
+    )
+    .option(
+      '--s3-bucket <bucket>',
+      'S3 bucket name. Falls back to S3_BUCKET environment variable.'
+    )
+    .option(
+      '--s3-endpoint <url>',
+      `S3-compatible endpoint URL. Defaults to Filebase (${FILEBASE_ENDPOINT}). Falls back to S3_ENDPOINT environment variable.`
+    )
+    .option(
+      '--s3-region <region>',
+      'S3 region. Defaults to us-east-1. Falls back to S3_REGION environment variable.'
+    )
     .action(async (input, options) => {
       const workingDir = options.cwd || process.cwd();
       const commandOptions: UploadCommandOptions = {
         ...options,
         input: path.resolve(workingDir, input),
         pinataJwt: options.pinataJwt || process.env.PINATA_JWT,
+        storage: (options.storage as StorageProviderType) || 's3',
         cwd: workingDir,
       };
 
-      if (!commandOptions.pinataJwt) {
+      const providerType = commandOptions.storage ?? 's3';
+
+      if (providerType === 'pinata' && !commandOptions.pinataJwt) {
         console.error(
           chalk.red(
             '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
           )
         );
         process.exit(1);
+      }
+
+      if (providerType === 's3') {
+        const accessKeyId =
+          commandOptions.s3AccessKeyId || process.env.S3_ACCESS_KEY_ID;
+        const secretAccessKey =
+          commandOptions.s3SecretAccessKey || process.env.S3_SECRET_ACCESS_KEY;
+        const bucket = commandOptions.s3Bucket || process.env.S3_BUCKET;
+
+        if (!accessKeyId || !secretAccessKey || !bucket) {
+          console.error(
+            chalk.red(
+              '❌ S3 credentials are required. Provide --s3-access-key-id, --s3-secret-access-key, and --s3-bucket options or S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET environment variables.'
+            )
+          );
+          process.exit(1);
+        }
       }
 
       await handleUpload(commandOptions);
@@ -57,6 +153,7 @@ async function createTempDir(prefix: string): Promise<string> {
 export interface UploadServiceOverrides {
   zipExtractorService?: ZipExtractorService;
   pinataDirectoryUploadService?: PinataDirectoryUploadService;
+  storageProvider?: StorageProvider;
   progressTracker?: SimpleProgress;
   schemaManifestService?: SchemaManifestService;
 }
@@ -68,6 +165,7 @@ export async function handleUpload(
   const isTestMode =
     serviceOverrides.zipExtractorService ||
     serviceOverrides.pinataDirectoryUploadService ||
+    serviceOverrides.storageProvider ||
     serviceOverrides.progressTracker;
 
   if (!isTestMode && !options.silent) {
@@ -80,12 +178,6 @@ export async function handleUpload(
   let extractedPath: string | null = null;
   let tempDir: string | null = null;
   let progressTracker = serviceOverrides.progressTracker;
-
-  if (!options.pinataJwt) {
-    throw new Error(
-      'Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
-    );
-  }
 
   try {
     logger.info(`Checking input file: ${options.input}`);
@@ -142,11 +234,6 @@ export async function handleUpload(
         'No valid structure found in the extracted ZIP. Expected property directories with JSON files from hash command.'
       );
     }
-
-    // Initialize Pinata service
-    const pinataService =
-      serviceOverrides.pinataDirectoryUploadService ??
-      new PinataDirectoryUploadService(options.pinataJwt!);
 
     // Initialize progress tracking
     if (!progressTracker) {
@@ -271,7 +358,11 @@ export async function handleUpload(
 
     // Upload everything as one directory to IPFS
     logger.info('Uploading directory structure to IPFS...');
-    const uploadResult = await pinataService.uploadDirectory(tempDir, {
+    const resolvedProvider: StorageProvider =
+      serviceOverrides.storageProvider ??
+      serviceOverrides.pinataDirectoryUploadService ??
+      createStorageProvider(options);
+    const uploadResult = await resolvedProvider.uploadDirectory(tempDir, {
       name: 'elephant-upload',
       keyvalues: {
         source: 'elephant-cli-upload',
