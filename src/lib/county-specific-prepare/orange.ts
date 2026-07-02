@@ -37,7 +37,16 @@ async function resolveParcelId(pid: string): Promise<QuickSearchResult[]> {
     }
 
     const data = await response.json();
-    if (Array.isArray(data) && data.length > 0) {
+    // Fast-fail on a structurally-unexpected (non-array) body — e.g. an error
+    // or rate-limit envelope. Only a valid-but-empty array is a retryable
+    // "not found yet"; folding non-arrays into the retry loop would mask a
+    // malformed response as a mere empty result.
+    if (!Array.isArray(data)) {
+      throw new Error(
+        `Quick search for parcel ${pid} returned unexpected format (attempt ${attempt})`
+      );
+    }
+    if (data.length > 0) {
       return data as QuickSearchResult[];
     }
 

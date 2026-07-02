@@ -146,5 +146,19 @@ describe('fetchOrangeCountyData', () => {
       );
       expect(calls).toBe(1);
     });
+
+    it('fast-fails (no retry) on a structurally-unexpected non-array body', async () => {
+      let calls = 0;
+      const mockFetch = makeFetch(() => {
+        calls += 1;
+        return { ok: true, status: 200, body: { error: 'rate limited' } };
+      });
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      await expect(fetchOrangeCountyData('012027000000001')).rejects.toThrow(
+        /returned unexpected format/
+      );
+      expect(calls).toBe(1);
+    });
   });
 });
