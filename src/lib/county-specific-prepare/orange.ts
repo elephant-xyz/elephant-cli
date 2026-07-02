@@ -1,6 +1,68 @@
 import { Prepared } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
+// OCPA's QuickSearch endpoint requires a 15-digit parcel id, but the county
+// seed stores mixed 14/15-digit ids (numeric CSV storage strips leading
+// zeros). Pad to 15 so 14-digit ids resolve instead of returning [].
+const OCPA_PID_LENGTH = 15;
+
+// OCPA intermittently returns an empty array/body for a valid id (measured
+// ~16% first-pass in the pilot; all recovered on retry). Retry on empty with
+// a short increasing backoff before treating the id as not found. This is
+// local to Orange so no other county's fetch behavior changes.
+const EMPTY_RETRY_ATTEMPTS = 4;
+const EMPTY_RETRY_BASE_DELAY_MS = 300;
+
+interface QuickSearchResult {
+  parcelId?: string;
+  [key: string]: unknown;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Resolve the canonical OCPA parcelId. Retries only when the response is a
+// valid HTTP 2xx with an empty array; genuine HTTP errors are thrown
+// immediately (not retried) so existing error handling is unchanged.
+async function resolveParcelId(pid: string): Promise<QuickSearchResult[]> {
+  const url = `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${pid}`;
+
+  for (let attempt = 1; attempt <= EMPTY_RETRY_ATTEMPTS; attempt++) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `API request to ${url} failed with status ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+    // Fast-fail on a structurally-unexpected (non-array) body — e.g. an error
+    // or rate-limit envelope. Only a valid-but-empty array is a retryable
+    // "not found yet"; folding non-arrays into the retry loop would mask a
+    // malformed response as a mere empty result.
+    if (!Array.isArray(data)) {
+      throw new Error(
+        `Quick search for parcel ${pid} returned unexpected format (attempt ${attempt})`
+      );
+    }
+    if (data.length > 0) {
+      return data as QuickSearchResult[];
+    }
+
+    logger.warn(
+      `Quick search for parcel ${pid} returned empty (attempt ${attempt}/${EMPTY_RETRY_ATTEMPTS})`
+    );
+    if (attempt < EMPTY_RETRY_ATTEMPTS) {
+      await delay(attempt * EMPTY_RETRY_BASE_DELAY_MS);
+    }
+  }
+
+  throw new Error(
+    `Quick search for parcel ${pid} returned empty after ${EMPTY_RETRY_ATTEMPTS} attempts`
+  );
+}
+
 async function fetchAllYearsNonAdValorem(parcelId: string): Promise<unknown[]> {
   const results: unknown[] = [];
   let taxYear = 0;
@@ -76,20 +138,18 @@ export async function fetchOrangeCountyData(
 ): Promise<Prepared> {
   logger.info('Orange County detected - using hardcoded API flow');
 
-  const cleanRequestId = requestId.replace(/-/g, '');
-
-  // First, fetch the quick search to get the parcelId
-  const quickSearchUrl = `https://ocpa-mainsite-afd-standard.azurefd.net/api/QuickSearch/GetSearchInfoByParcel?pid=${cleanRequestId}`;
-  const quickSearchResponse = await fetch(quickSearchUrl);
-  if (!quickSearchResponse.ok) {
+  // Strip every non-digit (seed ids may carry dashes/whitespace), then
+  // left-pad to 15 so 14-digit ids resolve. Never truncate longer ids.
+  const digits = requestId.replace(/\D/g, '');
+  if (digits.length > OCPA_PID_LENGTH) {
     throw new Error(
-      `API request to ${quickSearchUrl} failed with status ${quickSearchResponse.status}`
+      `Orange County parcel id "${requestId}" cleaned to ${digits.length} digits (> ${OCPA_PID_LENGTH}); cannot resolve`
     );
   }
-  const quickSearchData = await quickSearchResponse.json();
-  if (!Array.isArray(quickSearchData) || quickSearchData.length === 0) {
-    throw new Error('Quick search response is not a valid array or is empty');
-  }
+  const cleanRequestId = digits.padStart(OCPA_PID_LENGTH, '0');
+
+  // First, resolve the canonical parcelId (retries on transient empty result).
+  const quickSearchData = await resolveParcelId(cleanRequestId);
   const parcelId = quickSearchData[0]?.parcelId;
   if (!parcelId) {
     throw new Error('Failed to retrieve parcelId from quick search response');
