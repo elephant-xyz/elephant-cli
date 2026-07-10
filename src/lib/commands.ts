@@ -50,6 +50,12 @@ export interface TransformOptions {
   legacyMode?: boolean;
   cwd?: string;
   dataGroup?: string;
+  /**
+   * Schema mode: 'elephant' uses Elephant processing,
+   * 'generic' skips Elephant-specific processing and just runs transform scripts.
+   * Default: 'elephant' for backward compatibility.
+   */
+  schemaMode?: 'elephant' | 'generic';
 }
 
 export interface TransformFailureDetail {
@@ -172,6 +178,7 @@ export async function transform(
     silent: true, // Enable silent mode for library usage
     cwd: options.cwd,
     dataGroup: options.dataGroup,
+    schemaMode: options.schemaMode,
   };
 
   try {
