@@ -20,6 +20,7 @@ import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.j
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
+import { CarOutputService } from '../services/car-output.service.js';
 import {
   bail,
   isBatchInput,
@@ -47,6 +48,7 @@ export interface HashCommandOptions {
   input: string;
   outputZip: string;
   outputCsv: string;
+  outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
   silent?: boolean;
@@ -70,6 +72,10 @@ export function registerHashCommand(program: Command) {
       'hash-results.csv'
     )
     .option(
+      '--output-car <path>',
+      'Also write every hashed JSON block of the run into one CAR file (blocks deduplicated by CID, data-group roots as CAR roots)'
+    )
+    .option(
       '--max-concurrent-tasks <number>',
       "Target maximum concurrent processing tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
       undefined
@@ -88,6 +94,9 @@ export function registerHashCommand(program: Command) {
         input: path.resolve(workingDir, input),
         outputZip: path.resolve(workingDir, options.outputZip),
         outputCsv: path.resolve(workingDir, options.outputCsv),
+        outputCar: options.outputCar
+          ? path.resolve(workingDir, options.outputCar)
+          : undefined,
         cwd: workingDir,
       };
 
@@ -103,14 +112,35 @@ export interface HashServiceOverrides {
   progressTracker?: SimpleProgress;
   ipldConverterService?: IPLDConverterService;
   schemaManifestService?: SchemaManifestService;
+  carOutputService?: CarOutputService;
 }
 
 export async function handleHash(
   options: HashCommandOptions,
   serviceOverrides: HashServiceOverrides = {}
 ) {
+  const car = options.outputCar
+    ? new CarOutputService(options.outputCar)
+    : undefined;
+  const overrides = car
+    ? { ...serviceOverrides, carOutputService: car }
+    : serviceOverrides;
+  const finish = async () => {
+    if (!car) {
+      return;
+    }
+    await car.close();
+    if (!options.silent) {
+      console.log(
+        chalk.green(
+          `CAR written: ${car.target} (${car.blocks} blocks, ${car.roots.length} roots)`
+        )
+      );
+    }
+  };
   if (!(await isBatchInput(options.input))) {
-    return hashProperty(options, serviceOverrides);
+    await hashProperty(options, overrides);
+    return finish();
   }
   const existing = await fsPromises.stat(options.outputZip).catch(() => null);
   if (existing?.isFile()) {
@@ -123,8 +153,9 @@ export async function handleHash(
   await runBatchInput(
     options,
     hashProperty,
-    sharedServices(serviceOverrides),
-    (stem) => ({ outputZip: path.join(options.outputZip, `${stem}.zip`) })
+    sharedServices(overrides),
+    (stem) => ({ outputZip: path.join(options.outputZip, `${stem}.zip`) }),
+    finish
   );
 }
 
@@ -632,15 +663,25 @@ async function hashProperty(
 
     // Add each hashed file to the ZIP
     // For single property: use property CID as the single folder name (no 'data' wrapper)
+    // The same bytes go into the CAR when --output-car is set. CAR roots are
+    // every data-group root (the dataCid column of the CSV); a single county
+    // index root will replace them in a follow-up.
+    // ponytail: json blocks only; add media blocks if a consumer needs them in the CAR
+    const car = serviceOverrides.carOutputService;
     for (const hashedFile of hashedFiles) {
       // Single folder structure: propertyCid/calculatedCid.json
       const zipPath = path.join(
         propertyFolderName,
         `${hashedFile.calculatedCid}.json`
       );
+      const bytes = Buffer.from(hashedFile.canonicalJson, 'utf-8');
 
       // Add the canonical JSON to the ZIP
-      zip.addFile(zipPath, Buffer.from(hashedFile.canonicalJson, 'utf-8'));
+      zip.addFile(zipPath, bytes);
+      await car?.put(hashedFile.calculatedCid, bytes);
+      if (hashedFile.dataGroupCid) {
+        car?.root(hashedFile.calculatedCid);
+      }
     }
 
     // Add media files (HTML and images) with their original names

@@ -88,6 +88,7 @@ export interface HashOptions {
   input: string;
   outputZip?: string;
   outputCsv?: string;
+  outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
   cwd?: string;
@@ -294,6 +295,7 @@ export async function hash(options: HashOptions): Promise<HashResult> {
       input: options.input,
       outputZip,
       outputCsv,
+      outputCar: options.outputCar,
       maxConcurrentTasks: options.maxConcurrentTasks,
       propertyCid: options.propertyCid,
       silent: true, // Enable silent mode for library usage

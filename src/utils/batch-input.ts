@@ -88,13 +88,15 @@ async function appendCsv(target: string, part: string): Promise<void> {
  * under a temp directory; those are appended to `options.outputCsv` and to
  * `submit_errors.csv` / `submit_warnings.csv` beside it. Failures are
  * counted, not fatal, until the summary; then exit 1 (or throw when
- * `options.silent`).
+ * `options.silent`). `finish` runs once after the last property, before
+ * the summary, so batch-wide outputs are completed even when some failed.
  */
 export async function runBatchInput<O extends BatchOptions, S>(
   options: O,
   handler: (options: O, overrides: S) => Promise<void>,
   shared: S,
-  extra: (stem: string) => Partial<O> = () => ({})
+  extra: (stem: string) => Partial<O> = () => ({}),
+  finish: () => Promise<void> = async () => {}
 ): Promise<void> {
   const children = await listChildren(options.input);
   const stems = children.map((entry) =>
@@ -157,6 +159,7 @@ export async function runBatchInput<O extends BatchOptions, S>(
     }
   }
   await fsPromises.rm(tmp, { recursive: true, force: true });
+  await finish();
   const summary = `Properties processed: ${children.length}, succeeded: ${children.length - failed.length}, failed: ${failed.length}`;
   if (!options.silent) {
     console.log(
