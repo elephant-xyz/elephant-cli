@@ -33,6 +33,15 @@ export async function processSinglePropertyInput(
     // Check if input exists and get stats
     const stats = await fsPromises.stat(input.inputPath);
 
+    if (stats.isDirectory() && !input.requireZip) {
+      logger.info(`Processing single property directory: ${input.inputPath}`);
+      return {
+        actualInputDir: await pickPropertyDir(input.inputPath),
+        tempDir: null,
+        cleanup: async () => {},
+      };
+    }
+
     if (!stats.isFile()) {
       const errorMsg = 'Input must be a ZIP file, not a directory';
       console.error(chalk.red(`❌ Error: ${errorMsg}`));
@@ -69,28 +78,7 @@ export async function processSinglePropertyInput(
       throw new Error(`Extracted path ${extractedDir} is not a directory`);
     }
 
-    // Look for the single property directory inside the extracted content
-    const entries = await fsPromises.readdir(extractedDir, {
-      withFileTypes: true,
-    });
-    const directories = entries.filter((entry) => entry.isDirectory());
-
-    if (directories.length === 0) {
-      // No subdirectories - the extracted content IS the property directory
-      actualInputDir = extractedDir;
-      logger.debug('Using extracted root as property directory');
-    } else if (directories.length === 1) {
-      // Single subdirectory - this should be the property directory
-      actualInputDir = path.join(extractedDir, directories[0].name);
-      logger.debug(
-        `Using single subdirectory as property directory: ${directories[0].name}`
-      );
-    } else {
-      throw new Error(
-        `Expected single property data, but found ${directories.length} directories. ` +
-          'Single property ZIP should contain files directly or within a single property directory.'
-      );
-    }
+    actualInputDir = await pickPropertyDir(extractedDir);
 
     // Return the processed input with cleanup function
     return {
@@ -113,6 +101,29 @@ export async function processSinglePropertyInput(
     logger.error(`Failed to process ZIP input: ${errorMsg}`);
     throw error;
   }
+}
+
+/**
+ * Pick the property directory inside `root`: the root itself when it has no
+ * subdirectories, the single subdirectory when there is exactly one.
+ */
+async function pickPropertyDir(root: string): Promise<string> {
+  const entries = await fsPromises.readdir(root, { withFileTypes: true });
+  const directories = entries.filter((entry) => entry.isDirectory());
+  if (directories.length === 0) {
+    logger.debug('Using extracted root as property directory');
+    return root;
+  }
+  if (directories.length === 1) {
+    logger.debug(
+      `Using single subdirectory as property directory: ${directories[0].name}`
+    );
+    return path.join(root, directories[0].name);
+  }
+  throw new Error(
+    `Expected single property data, but found ${directories.length} directories. ` +
+      'Single property ZIP should contain files directly or within a single property directory.'
+  );
 }
 
 /**

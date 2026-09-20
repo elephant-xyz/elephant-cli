@@ -218,7 +218,26 @@ describe('Hash Command - ZIP Input', () => {
   });
 
   describe('ZIP Input Requirements', () => {
-    it('should reject directory input and require ZIP file', async () => {
+    it('should reject a file at --output-zip when the input is a directory of properties', async () => {
+      vi.mocked(fsPromises.readdir).mockResolvedValueOnce([
+        { name: 'a.zip', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      vi.mocked(fsPromises.stat).mockResolvedValueOnce({
+        isDirectory: () => false,
+        isFile: () => true,
+      } as any);
+
+      await expect(
+        handleHash({
+          input: '/test/batch',
+          outputZip: testOutputZip,
+          outputCsv: testOutputCsv,
+          silent: true,
+        })
+      ).rejects.toThrow('is a file');
+    });
+
+    it('should accept a directory input as a single property', async () => {
       // Mock as directory instead of file
       vi.mocked(fsPromises.stat).mockResolvedValueOnce({
         isDirectory: () => true,
@@ -229,16 +248,13 @@ describe('Hash Command - ZIP Input', () => {
         throw new Error('Process exited');
       }) as any);
 
-      await expect(
-        handleHash({
-          input: '/test/directory',
-          outputZip: testOutputZip,
-          outputCsv: testOutputCsv,
-        })
-      ).rejects.toThrow('Process exited');
+      await handleHash({
+        input: '/test/directory',
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+      }).catch(() => {});
 
-      expect(mockExit).toHaveBeenCalledWith(1);
-      expect(console.error).toHaveBeenCalledWith(
+      expect(console.error).not.toHaveBeenCalledWith(
         expect.stringContaining('Error: Input must be a ZIP file')
       );
       mockExit.mockRestore();

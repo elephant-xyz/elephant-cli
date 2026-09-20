@@ -18,6 +18,11 @@ import {
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
+import {
+  isBatchInput,
+  runBatchInput,
+  sharedServices,
+} from '../utils/batch-input.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -73,6 +78,20 @@ export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
 ) {
+  if (!(await isBatchInput(options.input))) {
+    return validateProperty(options, serviceOverrides);
+  }
+  await runBatchInput(
+    options,
+    validateProperty,
+    sharedServices(serviceOverrides)
+  );
+}
+
+async function validateProperty(
+  options: ValidateCommandOptions,
+  serviceOverrides: ValidateServiceOverrides
+) {
   if (!options.silent) {
     console.log(
       chalk.bold.blue('🐘 Elephant Network CLI - Validate (Single Property)')
@@ -85,7 +104,7 @@ export async function handleValidate(
   try {
     processedInput = await processSinglePropertyInput({
       inputPath: options.input,
-      requireZip: true,
+      requireZip: false,
     });
   } catch (error) {
     logger.error(
