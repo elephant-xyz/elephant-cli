@@ -109,13 +109,27 @@ export interface HashResult {
 // Upload function interface
 export interface UploadOptions {
   input: string;
-  pinataJwt: string;
+  /** Required for a ZIP input (Pinata). */
+  pinataJwt?: string;
   cwd?: string;
+  /** Filebase settings, used when `input` is a `.car` file. */
+  bucket?: string;
+  key?: string;
+  filebaseAccessKey?: string;
+  filebaseSecretKey?: string;
+  endpoint?: string;
+  gateway?: string;
+  timeout?: number;
+  outputJson?: string;
 }
 
 export interface UploadResult {
   success: boolean;
   cid?: string;
+  /** CAR input only: Filebase object CID, CAR root and its gateway URL. */
+  objectCid?: string;
+  root?: string;
+  gatewayUrl?: string;
   errorMessage?: string;
   errors?: {
     propertyDir: string;
@@ -339,10 +353,8 @@ export async function hash(options: HashOptions): Promise<HashResult> {
 export async function upload(options: UploadOptions): Promise<UploadResult> {
   try {
     const uploadOptions: UploadCommandOptions = {
-      input: options.input,
-      pinataJwt: options.pinataJwt,
+      ...options,
       silent: true, // Enable silent mode for library usage
-      cwd: options.cwd,
     };
 
     return await handleUpload(uploadOptions);

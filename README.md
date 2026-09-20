@@ -812,28 +812,60 @@ elephant-cli upload hashed-data.zip \
   --output-csv upload-results.csv
 ```
 
+A `.car` input (from `hash --output-car`) is imported into Filebase instead: one S3 PUT with `import=car` metadata, then the CAR root is read back from the gateway and its bytes verified against the root CID before success is reported. Provide the bucket and keys via options or `FILEBASE_BUCKET`, `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`.
+
+```bash
+export FILEBASE_ACCESS_KEY=... FILEBASE_SECRET_KEY=... FILEBASE_BUCKET=county-cars
+elephant-cli upload county.car \
+  --key duval/2025-09/county.car \
+  --output-json upload-summary.json
+```
+
 **What it does**
 
 - Extracts the single property directory from the hashed ZIP.
 - Uploads JSON datagroups (and HTML/image assets) to IPFS via Pinata.
 - Writes a CSV in the same format as `hash-results.csv`, including upload timestamps and media links when available.
+- For a `.car` input: uploads the file to Filebase, requires the object CID Filebase reports (`x-amz-meta-cid`) to equal the CAR header root, polls `<gateway>/ipfs/<root>?format=raw` until it resolves, and checks the returned bytes hash to the root CID.
 
 **Inputs**
 
 - `hashed-data.zip` containing one property directory named by property CID.
+- Or `county.car` from `hash --output-car`, whose single root is the county index.
 
 **Outputs**
 
 - IPFS CID for the JSON directory (printed in the CLI).
 - Optional CID for media files when present.
 - `upload-results.csv` mirroring the hash CSV headers with populated `uploadedAt` (ISO 8601) and `htmlLink` columns.
+- For a `.car` input: a summary with bucket, key, object CID, root CID, block count, gateway URL of the root, and upload timestamp, printed and (with `--output-json`) written as JSON:
+
+```json
+{
+  "bucket": "county-cars",
+  "key": "duval/2025-09/county.car",
+  "objectCid": "baguqeera...",
+  "root": "baguqeera...",
+  "gatewayUrl": "https://ipfs.filebase.io/ipfs/baguqeera...",
+  "blocks": 133,
+  "uploadedAt": "2025-09-21T00:00:00.000Z"
+}
+```
 
 **Options**
 
-| Option                    | Description                                               | Default                    |
-| ------------------------- | --------------------------------------------------------- | -------------------------- |
-| `--pinata-jwt <jwt>`      | Pinata authentication token (falls back to `PINATA_JWT`). | Required if env var absent |
-| `-o, --output-csv <path>` | CSV summarizing uploaded datagroups.                      | `upload-results.csv`       |
+| Option                         | Description                                                                    | Default                      |
+| ------------------------------ | ------------------------------------------------------------------------------ | ---------------------------- |
+| `--pinata-jwt <jwt>`           | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.      | Required if env var absent   |
+| `-o, --output-csv <path>`      | CSV summarizing uploaded datagroups. ZIP input only.                           | `upload-results.csv`         |
+| `--bucket <name>`              | Filebase bucket (falls back to `FILEBASE_BUCKET`). CAR input only.             | Required if env var absent   |
+| `--key <key>`                  | Object key for the CAR in the bucket.                                          | CAR file name                |
+| `--filebase-access-key <key>`  | Filebase access key (falls back to `FILEBASE_ACCESS_KEY`).                     | Required if env var absent   |
+| `--filebase-secret-key <key>`  | Filebase secret key (falls back to `FILEBASE_SECRET_KEY`).                     | Required if env var absent   |
+| `--endpoint <url>`             | Filebase S3 endpoint.                                                          | `https://s3.filebase.io`     |
+| `--gateway <url>`              | IPFS gateway used to read the CAR root back.                                   | `https://ipfs.filebase.io`   |
+| `--timeout <seconds>`          | Seconds to wait for the object CID and the root to resolve on the gateway.     | `300`                        |
+| `--output-json <path>`         | Write the CAR upload summary as JSON.                                          | Not written                  |
 
 ## Submit Hashes to the Contract
 
