@@ -812,6 +812,19 @@ elephant-cli upload hashed-data.zip \
   --output-csv upload-results.csv
 ```
 
+A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway (`--gateway` or `ELEPHANT_CAR_GATEWAY`, an origin with no trailing slash) and its bytes verified against the root CID; `--timeout` bounds that readback, not the upload.
+
+```bash
+# local kubo daemon (API on 127.0.0.1:5001, gateway on 127.0.0.1:8080)
+elephant-cli upload county.car
+
+# Filebase: the token is composed from the three FILEBASE_* variables
+export FILEBASE_ACCESS_KEY=... FILEBASE_SECRET_KEY=... FILEBASE_BUCKET=county-cars
+elephant-cli upload county.car \
+  --api https://rpc.filebase.io \
+  --output-json upload-summary.json
+```
+
 **What it does**
 
 - Extracts the single property directory from the hashed ZIP.
@@ -827,13 +840,28 @@ elephant-cli upload hashed-data.zip \
 - IPFS CID for the JSON directory (printed in the CLI).
 - Optional CID for media files when present.
 - `upload-results.csv` mirroring the hash CSV headers with populated `uploadedAt` (ISO 8601) and `htmlLink` columns.
+- For a `.car` input: the upload summary, printed and (with `--output-json`) written as JSON:
+
+```json
+{
+  "api": "https://rpc.filebase.io",
+  "root": "baguqeera...",
+  "blocks": 133,
+  "gatewayUrl": "https://ipfs.filebase.io/ipfs/baguqeera...",
+  "uploadedAt": "2025-09-21T00:00:00.000Z"
+}
+```
 
 **Options**
 
-| Option                    | Description                                               | Default                    |
-| ------------------------- | --------------------------------------------------------- | -------------------------- |
-| `--pinata-jwt <jwt>`      | Pinata authentication token (falls back to `PINATA_JWT`). | Required if env var absent |
-| `-o, --output-csv <path>` | CSV summarizing uploaded datagroups.                      | `upload-results.csv`       |
+| Option                 | Description                                                                                                                             | Default                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `--pinata-jwt <jwt>`   | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.                                                               | Required if env var absent                                                          |
+| `--api <url>`          | Kubo RPC API for a CAR input (falls back to `IPFS_API`).                                                                                | `http://127.0.0.1:5001`                                                             |
+| `--token <bearer>`     | Bearer token for the API (falls back to `IPFS_API_TOKEN`, then to base64 of `FILEBASE_ACCESS_KEY:FILEBASE_SECRET_KEY:FILEBASE_BUCKET`). | None                                                                                |
+| `--gateway <url>`      | Gateway origin, no trailing slash, used to read the CAR root back (falls back to `ELEPHANT_CAR_GATEWAY`).                                                             | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
+| `--timeout <seconds>`  | Seconds to wait for the root to resolve on the gateway.                                                                                 | `300`                                                                               |
+| `--output-json <path>` | Write the CAR upload summary as JSON.                                                                                                   | Not written                                                                         |
 
 ## Submit Hashes to the Contract
 

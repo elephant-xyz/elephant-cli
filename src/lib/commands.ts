@@ -9,6 +9,7 @@ import {
 } from '../commands/validate.js';
 import { handleHash, HashCommandOptions } from '../commands/hash.js';
 import { handleUpload, UploadCommandOptions } from '../commands/upload.js';
+import type { CarImportResult } from '../services/car-import.service.js';
 import {
   handleSubmitToContract,
   SubmitToContractCommandOptions,
@@ -109,14 +110,22 @@ export interface HashResult {
 // Upload function interface
 export interface UploadOptions {
   input: string;
-  pinataJwt: string;
+  /** Required for a ZIP input (Pinata). */
+  pinataJwt?: string;
   cwd?: string;
+  /** Kubo RPC API settings, used when `input` is a `.car` file. */
+  api?: string;
+  token?: string;
+  gateway?: string;
+  timeout?: number | string;
+  outputJson?: string;
 }
 
-export interface UploadResult {
+/** The `CarImportResult` fields are set for a CAR input only. */
+export interface UploadResult extends Partial<CarImportResult> {
   success: boolean;
   cid?: string;
-  errorMessage?: string;
+  error?: string;
   errors?: {
     propertyDir: string;
     success: boolean;
@@ -339,17 +348,15 @@ export async function hash(options: HashOptions): Promise<HashResult> {
 export async function upload(options: UploadOptions): Promise<UploadResult> {
   try {
     const uploadOptions: UploadCommandOptions = {
-      input: options.input,
-      pinataJwt: options.pinataJwt,
+      ...options,
       silent: true, // Enable silent mode for library usage
-      cwd: options.cwd,
     };
 
     return await handleUpload(uploadOptions);
   } catch (error) {
     return {
       success: false,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

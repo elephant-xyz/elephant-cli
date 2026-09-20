@@ -9,23 +9,67 @@ import { PinataDirectoryUploadService } from '../services/pinata-directory-uploa
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isMediaFile } from '../utils/file-type-helpers.js';
+import { importCar } from '../services/car-import.service.js';
 
 export interface UploadCommandOptions {
   input: string;
   pinataJwt?: string;
   silent?: boolean;
   cwd?: string;
+  /** CAR options, used only when `input` is a `.car` file. */
+  api?: string;
+  token?: string;
+  gateway?: string;
+  timeout?: number | string;
+  outputJson?: string;
+}
+
+/** Filebase's Kubo RPC token is `base64(access key:secret key:bucket)`. */
+function filebaseToken(env: NodeJS.ProcessEnv): string | undefined {
+  const parts = [
+    env.FILEBASE_ACCESS_KEY,
+    env.FILEBASE_SECRET_KEY,
+    env.FILEBASE_BUCKET,
+  ];
+  return parts.every(Boolean)
+    ? Buffer.from(parts.join(':')).toString('base64')
+    : undefined;
+}
+
+export function isCarInput(input: string): boolean {
+  return input.toLowerCase().endsWith('.car');
 }
 
 export function registerUploadCommand(program: Command) {
   program
     .command('upload <input>')
     .description(
-      'Upload property data from the output of hash command to IPFS. The input should be a ZIP file containing property directories with CID-named JSON files. Supports single or multiple properties.'
+      'Upload property data from the output of hash command to IPFS. A ZIP of property directories with CID-named JSON files is uploaded to Pinata; a .car file from hash --output-car is imported through a Kubo RPC API (local kubo, Filebase, ...) and its root read back from the gateway.'
     )
     .option(
       '--pinata-jwt <jwt>',
       'Pinata JWT for authentication. If not provided, uses PINATA_JWT environment variable.'
+    )
+    .option(
+      '--api <url>',
+      'Kubo RPC API for a .car input. If not provided, uses IPFS_API environment variable or http://127.0.0.1:5001.'
+    )
+    .option(
+      '--token <bearer>',
+      'Bearer token for the API. If not provided, uses IPFS_API_TOKEN, or composes the Filebase token from FILEBASE_ACCESS_KEY, FILEBASE_SECRET_KEY and FILEBASE_BUCKET.'
+    )
+    .option(
+      '--gateway <url>',
+      'Gateway origin (no trailing slash) used to read the CAR root back. If not provided, uses ELEPHANT_CAR_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
+    )
+    .option(
+      '--timeout <seconds>',
+      'Seconds to wait for the CAR root to resolve on the gateway.',
+      '300'
+    )
+    .option(
+      '--output-json <path>',
+      'Write the CAR upload summary (api, root, blocks, gateway URL) as JSON.'
     )
     .action(async (input, options) => {
       const workingDir = options.cwd || process.cwd();
@@ -36,7 +80,7 @@ export function registerUploadCommand(program: Command) {
         cwd: workingDir,
       };
 
-      if (!commandOptions.pinataJwt) {
+      if (!isCarInput(commandOptions.input) && !commandOptions.pinataJwt) {
         console.error(
           chalk.red(
             '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
@@ -61,6 +105,45 @@ export interface UploadServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
+/** `.car` input: one `dag/import` through the Kubo RPC API, then read the root back from the gateway. */
+async function handleCarUpload(options: UploadCommandOptions) {
+  const result = await importCar({
+    input: options.input,
+    api: options.api || process.env.IPFS_API,
+    token:
+      options.token || process.env.IPFS_API_TOKEN || filebaseToken(process.env),
+    gateway: options.gateway || process.env.ELEPHANT_CAR_GATEWAY,
+    timeout: options.timeout,
+  }).catch((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  );
+
+  if (result instanceof Error) {
+    logger.error(`Failed to upload CAR: ${result.message}`);
+    if (options.silent) {
+      return { success: false, error: result.message };
+    }
+    console.log(chalk.red(`\n❌ Upload failed: ${result.message}\n`));
+    process.exit(1);
+  }
+
+  if (options.outputJson) {
+    await fsPromises.writeFile(
+      path.resolve(options.cwd || process.cwd(), options.outputJson),
+      JSON.stringify(result, null, 2)
+    );
+  }
+  if (!options.silent) {
+    console.log(chalk.green('\n✅ Upload completed successfully\n'));
+    console.log(chalk.bold('Upload Summary:'));
+    for (const [name, value] of Object.entries(result)) {
+      console.log(`  ${name}: ${value}`);
+    }
+    console.log();
+  }
+  return { success: true, cid: result.root, ...result };
+}
+
 export async function handleUpload(
   options: UploadCommandOptions,
   serviceOverrides: UploadServiceOverrides = {}
@@ -73,6 +156,10 @@ export async function handleUpload(
   if (!isTestMode && !options.silent) {
     console.log(chalk.bold.blue('🐘 Elephant Network CLI - Upload to IPFS'));
     console.log();
+  }
+
+  if (isCarInput(options.input)) {
+    return handleCarUpload(options);
   }
 
   const zipExtractorService =
