@@ -9,22 +9,31 @@ import { PinataDirectoryUploadService } from '../services/pinata-directory-uploa
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isMediaFile } from '../utils/file-type-helpers.js';
-import { uploadCarToFilebase } from '../services/filebase-car-upload.service.js';
+import { importCar } from '../services/car-import.service.js';
 
 export interface UploadCommandOptions {
   input: string;
   pinataJwt?: string;
   silent?: boolean;
   cwd?: string;
-  /** Filebase options, used only when `input` is a `.car` file. */
-  bucket?: string;
-  key?: string;
-  filebaseAccessKey?: string;
-  filebaseSecretKey?: string;
-  endpoint?: string;
+  /** CAR options, used only when `input` is a `.car` file. */
+  api?: string;
+  token?: string;
   gateway?: string;
   timeout?: number;
   outputJson?: string;
+}
+
+/** Filebase's Kubo RPC token is `base64(access key:secret key:bucket)`. */
+function filebaseToken(env: NodeJS.ProcessEnv): string | undefined {
+  const parts = [
+    env.FILEBASE_ACCESS_KEY,
+    env.FILEBASE_SECRET_KEY,
+    env.FILEBASE_BUCKET,
+  ];
+  return parts.every(Boolean)
+    ? Buffer.from(parts.join(':')).toString('base64')
+    : undefined;
 }
 
 export function isCarInput(input: string): boolean {
@@ -35,37 +44,23 @@ export function registerUploadCommand(program: Command) {
   program
     .command('upload <input>')
     .description(
-      'Upload property data from the output of hash command to IPFS. A ZIP of property directories with CID-named JSON files is uploaded to Pinata; a .car file from hash --output-car is imported into Filebase and its root read back from the gateway.'
+      'Upload property data from the output of hash command to IPFS. A ZIP of property directories with CID-named JSON files is uploaded to Pinata; a .car file from hash --output-car is imported through a Kubo RPC API (local kubo, Filebase, ...) and its root read back from the gateway.'
     )
     .option(
       '--pinata-jwt <jwt>',
       'Pinata JWT for authentication. If not provided, uses PINATA_JWT environment variable.'
     )
     .option(
-      '--bucket <name>',
-      'Filebase bucket for a .car input. If not provided, uses FILEBASE_BUCKET environment variable.'
+      '--api <url>',
+      'Kubo RPC API for a .car input. If not provided, uses IPFS_API environment variable or http://127.0.0.1:5001.'
     )
     .option(
-      '--key <key>',
-      'Object key for the CAR in the bucket. Defaults to the CAR file name.'
-    )
-    .option(
-      '--filebase-access-key <key>',
-      'Filebase access key. If not provided, uses FILEBASE_ACCESS_KEY environment variable.'
-    )
-    .option(
-      '--filebase-secret-key <key>',
-      'Filebase secret key. If not provided, uses FILEBASE_SECRET_KEY environment variable.'
-    )
-    .option(
-      '--endpoint <url>',
-      'Filebase S3 endpoint.',
-      'https://s3.filebase.io'
+      '--token <bearer>',
+      'Bearer token for the API. If not provided, uses IPFS_API_TOKEN, or composes the Filebase token from FILEBASE_ACCESS_KEY, FILEBASE_SECRET_KEY and FILEBASE_BUCKET.'
     )
     .option(
       '--gateway <url>',
-      'IPFS gateway used to read the CAR root back.',
-      'https://ipfs.filebase.io'
+      'IPFS gateway used to read the CAR root back. If not provided, uses IPFS_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
     )
     .option(
       '--timeout <seconds>',
@@ -74,7 +69,7 @@ export function registerUploadCommand(program: Command) {
     )
     .option(
       '--output-json <path>',
-      'Write the CAR upload summary (bucket, key, CIDs, gateway URL) as JSON.'
+      'Write the CAR upload summary (api, root, blocks, gateway URL) as JSON.'
     )
     .action(async (input, options) => {
       const workingDir = options.cwd || process.cwd();
@@ -82,11 +77,6 @@ export function registerUploadCommand(program: Command) {
         ...options,
         input: path.resolve(workingDir, input),
         pinataJwt: options.pinataJwt || process.env.PINATA_JWT,
-        bucket: options.bucket || process.env.FILEBASE_BUCKET,
-        filebaseAccessKey:
-          options.filebaseAccessKey || process.env.FILEBASE_ACCESS_KEY,
-        filebaseSecretKey:
-          options.filebaseSecretKey || process.env.FILEBASE_SECRET_KEY,
         timeout: Number(options.timeout),
         cwd: workingDir,
       };
@@ -116,32 +106,18 @@ export interface UploadServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
-/** `.car` input: one Filebase PUT with `import=car`, then read the root back from the gateway. */
+/** `.car` input: one `dag/import` through the Kubo RPC API, then read the root back from the gateway. */
 async function handleCarUpload(options: UploadCommandOptions) {
-  const missing = [
-    ['bucket', options.bucket],
-    ['access key', options.filebaseAccessKey],
-    ['secret key', options.filebaseSecretKey],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-  const result =
-    missing.length > 0
-      ? new Error(
-          `Filebase ${missing.join(', ')} required for a .car input. Provide --bucket / --filebase-access-key / --filebase-secret-key or FILEBASE_BUCKET / FILEBASE_ACCESS_KEY / FILEBASE_SECRET_KEY.`
-        )
-      : await uploadCarToFilebase({
-          input: options.input,
-          bucket: options.bucket!,
-          key: options.key || path.basename(options.input),
-          accessKey: options.filebaseAccessKey!,
-          secretKey: options.filebaseSecretKey!,
-          endpoint: options.endpoint,
-          gateway: options.gateway,
-          timeout: options.timeout,
-        }).catch((error: unknown) =>
-          error instanceof Error ? error : new Error(String(error))
-        );
+  const result = await importCar({
+    input: options.input,
+    api: options.api || process.env.IPFS_API,
+    token:
+      options.token || process.env.IPFS_API_TOKEN || filebaseToken(process.env),
+    gateway: options.gateway || process.env.IPFS_GATEWAY,
+    timeout: options.timeout,
+  }).catch((error: unknown) =>
+    error instanceof Error ? error : new Error(String(error))
+  );
 
   if (result instanceof Error) {
     logger.error(`Failed to upload CAR: ${result.message}`);
@@ -166,7 +142,7 @@ async function handleCarUpload(options: UploadCommandOptions) {
     }
     console.log();
   }
-  return { success: true, cid: result.objectCid, ...result };
+  return { success: true, cid: result.root, ...result };
 }
 
 export async function handleUpload(

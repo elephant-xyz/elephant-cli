@@ -11,20 +11,6 @@ import { ZipExtractorService } from '../../../src/services/zip-extractor.service
 import { PinataDirectoryUploadService } from '../../../src/services/pinata-directory-upload.service.js';
 import { SimpleProgress } from '../../../src/utils/simple-progress.js';
 
-const send = vi.fn();
-
-vi.mock('@aws-sdk/client-s3', () => ({
-  S3Client: class {
-    send = send;
-  },
-  PutObjectCommand: class {
-    constructor(readonly input: Record<string, unknown>) {}
-  },
-  HeadObjectCommand: class {
-    constructor(readonly input: Record<string, unknown>) {}
-  },
-}));
-
 vi.mock('../../../src/utils/logger.js', () => ({
   logger: {
     info: vi.fn(),
@@ -36,19 +22,11 @@ vi.mock('../../../src/utils/logger.js', () => ({
   },
 }));
 
-type Command = {
-  constructor: { name: string };
-  input: { Body?: AsyncIterable<Uint8Array> };
-};
-
-/** Like the SDK: a PUT drains its body before resolving; a HEAD answers `reply`. */
-const head = (reply: object) => async (command: Command) =>
-  command.constructor.name === 'HeadObjectCommand'
-    ? reply
-    : Array.fromAsync(command.input.Body!).then(() => ({}));
-
 const property =
   'baguqeeraefi3cy4z3j2xvnuta73mktlysxlkqsflbtrpwxsvvxfwbqs6qyra';
+
+const ndjson = (root: string, pinError = '') =>
+  `{"Root":{"Cid":{"/":"${root}"},"PinErrorMsg":"${pinError}"}}\n{"Stats":{"BlockCount":2,"BlockBytesCount":300}}\n`;
 
 describe('upload with a .car input', () => {
   let tmp: string;
@@ -56,6 +34,17 @@ describe('upload with a .car input', () => {
   let root: string;
   let bytes: Uint8Array;
   const fetchMock = vi.fn();
+
+  /** `dag/import` answers `imported`; the gateway answers `served` in order. */
+  const serve = (imported: object, ...served: object[]) =>
+    fetchMock.mockImplementation(async (url: string) =>
+      url.includes('/api/v0/dag/import')
+        ? imported
+        : (served.shift() ?? {
+            ok: true,
+            arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset),
+          })
+    );
 
   beforeEach(async () => {
     tmp = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'upload-car-'));
@@ -67,53 +56,42 @@ describe('upload with a .car input', () => {
     const reader = await CarReader.fromBytes(await fsPromises.readFile(car));
     bytes = (await reader.get((await reader.getRoots())[0]))!.bytes;
 
-    send.mockReset();
-    send.mockImplementation(head({ Metadata: { cid: root } }));
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    serve({ ok: true, status: 200, text: async () => ndjson(root) });
   });
 
   afterEach(async () => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     await fsPromises.rm(tmp, { recursive: true, force: true });
   });
 
   const options = () => ({
     input: car,
-    bucket: 'scratch',
-    key: 'cli-upload-test/county.car',
-    filebaseAccessKey: 'ak',
-    filebaseSecretKey: 'sk',
+    api: 'https://rpc.filebase.io/',
+    token: 'secret-token',
     silent: true,
     timeout: 30,
   });
 
-  it('puts with import=car, checks the head cid, polls the gateway, verifies the digest and reports the root', async () => {
-    fetchMock
-      .mockResolvedValueOnce({ ok: false, status: 504 })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset),
-      });
+  it('posts the car to dag/import, polls the gateway, verifies the digest and reports root and blocks', async () => {
+    serve(
+      { ok: true, status: 200, text: async () => ndjson(root) },
+      { ok: false, status: 504 }
+    );
 
     const result = await handleUpload(options());
 
-    const commands = send.mock.calls.map((call) => call[0]);
-    expect(commands.map((c) => c.constructor.name)).toEqual([
-      'PutObjectCommand',
-      'HeadObjectCommand',
-    ]);
-    expect(commands[0].input).toMatchObject({
-      Bucket: 'scratch',
-      Key: 'cli-upload-test/county.car',
-      Metadata: { import: 'car' },
-    });
-    expect(commands[1].input).toMatchObject({
-      Bucket: 'scratch',
-      Key: 'cli-upload-test/county.car',
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      'https://rpc.filebase.io/api/v0/dag/import?pin-roots=true&stats=true'
+    );
+    expect(init.method).toBe('POST');
+    expect(init.headers).toEqual({ Authorization: 'Bearer secret-token' });
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('file')).toBeInstanceOf(Blob);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenLastCalledWith(
       `https://ipfs.filebase.io/ipfs/${root}?format=raw`,
       { signal: expect.any(AbortSignal) }
@@ -121,57 +99,73 @@ describe('upload with a .car input', () => {
     expect(result).toMatchObject({
       success: true,
       cid: root,
-      objectCid: root,
+      api: 'https://rpc.filebase.io',
       root,
+      blocks: 2,
       gatewayUrl: `https://ipfs.filebase.io/ipfs/${root}`,
     });
   });
 
-  it('fails when the head cid differs from the car root', async () => {
-    send.mockImplementation(head({ Metadata: { cid: property } }));
+  it('fails when the imported root differs from the car root', async () => {
+    serve({ ok: true, status: 200, text: async () => ndjson(property) });
 
     const result = await handleUpload(options());
 
-    expect(result).toMatchObject({ success: false });
-    expect(result.error).toContain(`object CID ${property}`);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.error).toContain(`reported root ${property}`);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails when pinning the root failed', async () => {
+    serve({
+      ok: true,
+      status: 200,
+      text: async () => ndjson(root, 'pin failed'),
+    });
+
+    const result = await handleUpload(options());
+
+    expect(result.error).toContain(`Pinning ${root} failed: pin failed`);
+  });
+
+  it('composes the filebase token from the env when --token is absent', async () => {
+    vi.stubEnv('FILEBASE_ACCESS_KEY', 'ak');
+    vi.stubEnv('FILEBASE_SECRET_KEY', 'sk');
+    vi.stubEnv('FILEBASE_BUCKET', 'bucket');
+
+    const result = await handleUpload({ ...options(), token: undefined });
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({
+      Authorization: `Bearer ${Buffer.from('ak:sk:bucket').toString('base64')}`,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('sends no authorization header without a token', async () => {
+    await handleUpload({
+      ...options(),
+      api: 'http://127.0.0.1:5001',
+      token: undefined,
+    });
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({});
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `http://127.0.0.1:8080/ipfs/${root}?format=raw`,
+      { signal: expect.any(AbortSignal) }
+    );
   });
 
   it('fails when the gateway bytes do not hash to the root', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () =>
-        new TextEncoder().encode('{"tampered":1}').buffer,
-    });
+    serve(
+      { ok: true, status: 200, text: async () => ndjson(root) },
+      {
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode('x').buffer,
+      }
+    );
 
     const result = await handleUpload(options());
 
-    expect(result).toMatchObject({ success: false });
     expect(result.error).toContain('not the root');
-  });
-
-  it('names the missing filebase settings', async () => {
-    const result = await handleUpload({ input: car, silent: true });
-
-    expect(result.error).toContain('bucket, access key, secret key');
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it('waits for the head cid to appear', async () => {
-    send
-      .mockImplementationOnce(head({}))
-      .mockImplementationOnce(head({}))
-      .mockImplementationOnce(head({ Metadata: { cid: root } }));
-    fetchMock.mockResolvedValue({
-      ok: true,
-      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset),
-    });
-
-    const result = await handleUpload(options());
-
-    expect(send).toHaveBeenCalledTimes(3);
-    expect(result).toMatchObject({ success: true, objectCid: root });
   });
 
   it.each([0, 2])('rejects a car with %i roots', async (count) => {
@@ -187,10 +181,12 @@ describe('upload with a .car input', () => {
     expect(result.error).toContain(
       `Expected one root in ${car}, found ${count}`
     );
-    expect(send).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('times out naming the last error', async () => {
+    serve({ ok: true, status: 200, text: async () => ndjson(root) });
+    fetchMock.mockImplementationOnce(fetchMock.getMockImplementation()!);
     fetchMock.mockRejectedValue(new Error('ECONNRESET'));
 
     const result = await handleUpload({ ...options(), timeout: 0.001 });
@@ -227,7 +223,7 @@ describe('upload with a .car input', () => {
     );
 
     expect(pinata.uploadDirectory).toHaveBeenCalledTimes(1);
-    expect(send).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({ success: true, cid: 'Qm1' });
   });
 });

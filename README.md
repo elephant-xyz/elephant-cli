@@ -812,12 +812,16 @@ elephant-cli upload hashed-data.zip \
   --output-csv upload-results.csv
 ```
 
-A `.car` input (from `hash --output-car`) is imported into Filebase instead: one S3 PUT with `import=car` metadata, then the CAR root is read back from the gateway and its bytes verified against the root CID before success is reported. Provide the bucket and keys via options or `FILEBASE_BUCKET`, `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`.
+A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway and its bytes verified against the root CID.
 
 ```bash
+# local kubo daemon (API on 127.0.0.1:5001, gateway on 127.0.0.1:8080)
+elephant-cli upload county.car
+
+# Filebase: the token is composed from the three FILEBASE_* variables
 export FILEBASE_ACCESS_KEY=... FILEBASE_SECRET_KEY=... FILEBASE_BUCKET=county-cars
 elephant-cli upload county.car \
-  --key duval/2025-09/county.car \
+  --api https://rpc.filebase.io \
   --output-json upload-summary.json
 ```
 
@@ -841,10 +845,9 @@ elephant-cli upload county.car \
 
 ```json
 {
-  "bucket": "county-cars",
-  "key": "duval/2025-09/county.car",
-  "objectCid": "baguqeera...",
+  "api": "https://rpc.filebase.io",
   "root": "baguqeera...",
+  "blocks": 133,
   "gatewayUrl": "https://ipfs.filebase.io/ipfs/baguqeera...",
   "uploadedAt": "2025-09-21T00:00:00.000Z"
 }
@@ -852,17 +855,14 @@ elephant-cli upload county.car \
 
 **Options**
 
-| Option                         | Description                                                                    | Default                      |
-| ------------------------------ | ------------------------------------------------------------------------------ | ---------------------------- |
-| `--pinata-jwt <jwt>`           | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.      | Required if env var absent   |
-| `--bucket <name>`              | Filebase bucket (falls back to `FILEBASE_BUCKET`). CAR input only.             | Required if env var absent   |
-| `--key <key>`                  | Object key for the CAR in the bucket.                                          | CAR file name                |
-| `--filebase-access-key <key>`  | Filebase access key (falls back to `FILEBASE_ACCESS_KEY`).                     | Required if env var absent   |
-| `--filebase-secret-key <key>`  | Filebase secret key (falls back to `FILEBASE_SECRET_KEY`).                     | Required if env var absent   |
-| `--endpoint <url>`             | Filebase S3 endpoint.                                                          | `https://s3.filebase.io`     |
-| `--gateway <url>`              | IPFS gateway used to read the CAR root back.                                   | `https://ipfs.filebase.io`   |
-| `--timeout <seconds>`          | Seconds to wait for the object CID and the root to resolve on the gateway.     | `300`                        |
-| `--output-json <path>`         | Write the CAR upload summary as JSON.                                          | Not written                  |
+| Option                 | Description                                                                                                                             | Default                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `--pinata-jwt <jwt>`   | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.                                                               | Required if env var absent                                                          |
+| `--api <url>`          | Kubo RPC API for a CAR input (falls back to `IPFS_API`).                                                                                | `http://127.0.0.1:5001`                                                             |
+| `--token <bearer>`     | Bearer token for the API (falls back to `IPFS_API_TOKEN`, then to base64 of `FILEBASE_ACCESS_KEY:FILEBASE_SECRET_KEY:FILEBASE_BUCKET`). | None                                                                                |
+| `--gateway <url>`      | IPFS gateway used to read the CAR root back (falls back to `IPFS_GATEWAY`).                                                             | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
+| `--timeout <seconds>`  | Seconds to wait for the root to resolve on the gateway.                                                                                 | `300`                                                                               |
+| `--output-json <path>` | Write the CAR upload summary as JSON.                                                                                                   | Not written                                                                         |
 
 ## Submit Hashes to the Contract
 

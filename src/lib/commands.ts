@@ -9,7 +9,7 @@ import {
 } from '../commands/validate.js';
 import { handleHash, HashCommandOptions } from '../commands/hash.js';
 import { handleUpload, UploadCommandOptions } from '../commands/upload.js';
-import type { FilebaseCarUploadResult } from '../services/filebase-car-upload.service.js';
+import type { CarImportResult } from '../services/car-import.service.js';
 import {
   handleSubmitToContract,
   SubmitToContractCommandOptions,
@@ -113,19 +113,16 @@ export interface UploadOptions {
   /** Required for a ZIP input (Pinata). */
   pinataJwt?: string;
   cwd?: string;
-  /** Filebase settings, used when `input` is a `.car` file. */
-  bucket?: string;
-  key?: string;
-  filebaseAccessKey?: string;
-  filebaseSecretKey?: string;
-  endpoint?: string;
+  /** Kubo RPC API settings, used when `input` is a `.car` file. */
+  api?: string;
+  token?: string;
   gateway?: string;
   timeout?: number;
   outputJson?: string;
 }
 
-/** The `FilebaseCarUploadResult` fields are set for a CAR input only. */
-export interface UploadResult extends Partial<FilebaseCarUploadResult> {
+/** The `CarImportResult` fields are set for a CAR input only. */
+export interface UploadResult extends Partial<CarImportResult> {
   success: boolean;
   cid?: string;
   errorMessage?: string;
