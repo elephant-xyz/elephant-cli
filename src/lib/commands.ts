@@ -88,6 +88,7 @@ export interface HashOptions {
   input: string;
   outputZip?: string;
   outputCsv?: string;
+  outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
   cwd?: string;
@@ -97,6 +98,8 @@ export interface HashResult {
   success: boolean;
   outputZipPath: string;
   outputCsvPath: string;
+  outputCarPath?: string;
+  carRoot?: string;
   totalFiles: number;
   processed: number;
   errors: number;
@@ -290,22 +293,28 @@ export async function hash(options: HashOptions): Promise<HashResult> {
     const workingDir = options.cwd || process.cwd();
     const outputZip = options.outputZip || 'hashed-data.zip';
     const outputCsv = options.outputCsv || 'hash-results.csv';
+    const outputCar = options.outputCar
+      ? path.resolve(workingDir, options.outputCar)
+      : undefined;
     const hashOptions: HashCommandOptions = {
       input: options.input,
       outputZip,
       outputCsv,
+      outputCar,
       maxConcurrentTasks: options.maxConcurrentTasks,
       propertyCid: options.propertyCid,
       silent: true, // Enable silent mode for library usage
       cwd: options.cwd,
     };
 
-    await handleHash(hashOptions);
+    const carRoot = await handleHash(hashOptions);
 
     return {
       success: true,
       outputZipPath: path.resolve(workingDir, outputZip),
       outputCsvPath: path.resolve(workingDir, outputCsv),
+      outputCarPath: outputCar,
+      carRoot,
       totalFiles: 0, // This would need to be returned from handleHash
       processed: 0,
       errors: 0,

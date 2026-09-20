@@ -20,6 +20,7 @@ import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.j
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
+import { CarOutputService } from '../services/car-output.service.js';
 import {
   bail,
   isBatchInput,
@@ -47,6 +48,7 @@ export interface HashCommandOptions {
   input: string;
   outputZip: string;
   outputCsv: string;
+  outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
   silent?: boolean;
@@ -70,6 +72,10 @@ export function registerHashCommand(program: Command) {
       'hash-results.csv'
     )
     .option(
+      '--output-car <path>',
+      'Also write every hashed JSON block of the run into one CAR file rooted at a county index block'
+    )
+    .option(
       '--max-concurrent-tasks <number>',
       "Target maximum concurrent processing tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
       undefined
@@ -88,6 +94,9 @@ export function registerHashCommand(program: Command) {
         input: path.resolve(workingDir, input),
         outputZip: path.resolve(workingDir, options.outputZip),
         outputCsv: path.resolve(workingDir, options.outputCsv),
+        outputCar: options.outputCar
+          ? path.resolve(workingDir, options.outputCar)
+          : undefined,
         cwd: workingDir,
       };
 
@@ -105,32 +114,61 @@ export interface HashServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
+/** Returns the CAR root (county index CID) when `outputCar` is set. */
 export async function handleHash(
   options: HashCommandOptions,
   serviceOverrides: HashServiceOverrides = {}
-) {
-  if (!(await isBatchInput(options.input))) {
-    return hashProperty(options, serviceOverrides);
+): Promise<string | undefined> {
+  const batch = await isBatchInput(options.input);
+  if (batch) {
+    const existing = await fsPromises.stat(options.outputZip).catch(() => null);
+    if (existing?.isFile()) {
+      bail(
+        options,
+        `Output ZIP path ${options.outputZip} is a file; with a directory input it must be a directory that receives one ZIP per property`
+      );
+    }
+    await fsPromises.mkdir(options.outputZip, { recursive: true });
   }
-  const existing = await fsPromises.stat(options.outputZip).catch(() => null);
-  if (existing?.isFile()) {
-    bail(
-      options,
-      `Output ZIP path ${options.outputZip} is a file; with a directory input it must be a directory that receives one ZIP per property`
-    );
-  }
-  await fsPromises.mkdir(options.outputZip, { recursive: true });
-  await runBatchInput(
-    options,
-    hashProperty,
-    sharedServices(serviceOverrides),
-    (stem) => ({ outputZip: path.join(options.outputZip, `${stem}.zip`) })
-  );
+  // The CAR is internal to this run: opened after the checks above, finalized
+  // by `finish`, and removed by `abort` (or the exit hook) on any failure.
+  const car = options.outputCar
+    ? new CarOutputService(options.outputCar)
+    : undefined;
+  await car?.open();
+  const finish = async () => {
+    if (!car) {
+      return;
+    }
+    const { blocks, root } = await car.close();
+    if (!options.silent) {
+      console.log(
+        chalk.green(
+          `CAR written: ${car.target} (${blocks} blocks, root ${root})`
+        )
+      );
+    }
+    return root;
+  };
+  const run = batch
+    ? runBatchInput(
+        options,
+        (property, overrides) => hashProperty(property, overrides, car),
+        sharedServices(serviceOverrides),
+        (stem) => ({ outputZip: path.join(options.outputZip, `${stem}.zip`) }),
+        finish
+      )
+    : hashProperty(options, serviceOverrides, car).then(finish);
+  return run.catch(async (error: unknown) => {
+    await car?.abort();
+    throw error;
+  });
 }
 
 async function hashProperty(
   options: HashCommandOptions,
-  serviceOverrides: HashServiceOverrides
+  serviceOverrides: HashServiceOverrides,
+  car?: CarOutputService
 ) {
   if (!options.silent) {
     console.log(
@@ -642,6 +680,32 @@ async function hashProperty(
       // Add the canonical JSON to the ZIP
       zip.addFile(zipPath, Buffer.from(hashedFile.canonicalJson, 'utf-8'));
     }
+
+    // The same bytes go into the CAR when --output-car is set, once per CID
+    // within this property (cidToFileMap already keys every hashed file by CID).
+    // Block order is property order (sorted names in batch mode) then CID
+    // order, so the same input yields the same CAR bytes.
+    // ponytail: json blocks only; add media blocks if a consumer needs them in the CAR
+    for (const [cid, hashedFile] of [...cidToFileMap].sort(([a], [b]) =>
+      a.localeCompare(b)
+    )) {
+      await car?.put(
+        CID.parse(cid),
+        Buffer.from(hashedFile.canonicalJson, 'utf-8')
+      );
+    }
+    // One index entry per property: its data-group roots, the CSV rows above.
+    await car?.property(
+      CID.parse(propertyFolderName),
+      Object.fromEntries(
+        hashedFiles
+          .filter((hashedFile) => hashedFile.dataGroupCid)
+          .map((hashedFile) => [
+            hashedFile.dataGroupCid,
+            CID.parse(hashedFile.calculatedCid),
+          ])
+      )
+    );
 
     // Add media files (HTML and images) with their original names
     for (const mediaFile of mediaFiles) {

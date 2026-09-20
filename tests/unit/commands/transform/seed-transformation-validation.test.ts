@@ -20,7 +20,11 @@ vi.mock('../../../../src/utils/schema-fetcher.js', () => ({
   }),
 }));
 
-describe('Seed Transformation and Validation', () => {
+// Runs the real CLI against the live lexicon manifest and public IPFS gateways,
+// which rate-limit CI runners. Opt in locally with ELEPHANT_LIVE_TESTS=1.
+const live = process.env.ELEPHANT_LIVE_TESTS ? describe : describe.skip;
+
+live('Seed Transformation and Validation', () => {
   let tempDir: string;
   let inputZip: string;
   let outputZip: string;
