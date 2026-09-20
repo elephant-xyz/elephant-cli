@@ -10,14 +10,18 @@ import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
 import { equals as u8eq } from 'uint8arrays/equals';
 
+/** The dag-json value of `bytes`, or undefined when they do not decode. */
+export function decodeDagJson(bytes: Uint8Array): unknown {
+  try {
+    return dagJSON.decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
 // Unresolved ./path links are not DAG-JSON; keep those blocks raw.
 function isDagJson(bytes: Uint8Array): boolean {
-  try {
-    dagJSON.decode(bytes);
-    return true;
-  } catch {
-    return false;
-  }
+  return decodeDagJson(bytes) !== undefined;
 }
 
 /**

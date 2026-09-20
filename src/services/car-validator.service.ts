@@ -5,6 +5,8 @@ import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
+import { equals as u8eq } from 'uint8arrays/equals';
+import { decodeDagJson } from './cid-calculator.service.js';
 import { CsvReporterService } from './csv-reporter.service.js';
 import { JsonValidatorService } from './json-validator.service.js';
 import { SchemaCacheService } from './schema-cache.service.js';
@@ -45,14 +47,6 @@ interface Row {
 interface Entry {
   property: string;
   groups: { schema: string; data: CID }[];
-}
-
-function decode(bytes: Uint8Array): unknown {
-  try {
-    return dagJSON.decode(bytes);
-  } catch {
-    return undefined;
-  }
 }
 
 function links(value: unknown, into: CID[] = []): CID[] {
@@ -128,9 +122,7 @@ export async function validateCar(
       const hash = block.cid.multihash;
       const intact =
         hash.code === sha256.code &&
-        Buffer.from(hash.digest).equals(
-          Buffer.from((await sha256.digest(block.bytes)).digest)
-        );
+        u8eq(hash.digest, (await sha256.digest(block.bytes)).digest);
       if (!intact) {
         await report('integrity', {
           block: block.cid.toString(),
@@ -161,7 +153,7 @@ export async function validateCar(
       return;
     }
     const head = await reader.get(root);
-    const index = head ? decode(head.bytes) : undefined;
+    const index = head ? decodeDagJson(head.bytes) : undefined;
     if (!index || typeof index !== 'object') {
       await report('root', {
         block: root.toString(),
@@ -224,7 +216,7 @@ export async function validateCar(
         continue;
       }
       const block = await reader.get(shard);
-      const body = block ? decode(block.bytes) : undefined;
+      const body = block ? decodeDagJson(block.bytes) : undefined;
       const listed = (body as { properties?: unknown } | undefined)?.properties;
       if (!Array.isArray(listed)) {
         await report('index', {
@@ -306,7 +298,7 @@ export async function validateCar(
         continue;
       }
       const block = await reader.get(next.cid);
-      const value = block ? decode(block.bytes) : undefined;
+      const value = block ? decodeDagJson(block.bytes) : undefined;
       if (value === undefined) {
         await report('graph', { block: key, message: 'block is not dag-json' });
         continue;
@@ -332,7 +324,7 @@ export async function validateCar(
           const block = await reader.get(group.data);
           const value =
             block && group.data.code === dagJSON.code
-              ? decode(block.bytes)
+              ? decodeDagJson(block.bytes)
               : undefined;
           if (!block || value === undefined) {
             await report('lexicon', {

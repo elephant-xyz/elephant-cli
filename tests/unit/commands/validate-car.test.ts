@@ -175,6 +175,9 @@ describe('validate <county.car>', () => {
       },
     });
     expect(await rows()).toEqual([]);
+    await expect(
+      fsPromises.access(path.join(tmp, 'submit_warnings.csv'))
+    ).rejects.toThrow();
   });
 
   it('reports a block whose bytes were altered', async () => {
@@ -236,14 +239,6 @@ describe('validate <county.car>', () => {
       )
     ).rejects.toThrow('is not a readable file');
     await expect(fsPromises.access(csv)).rejects.toThrow();
-  });
-
-  it('leaves no warnings file beside the error csv', async () => {
-    await build(car);
-    await run();
-    await expect(
-      fsPromises.access(path.join(tmp, 'submit_warnings.csv'))
-    ).rejects.toThrow();
   });
 
   it('reports a data-group root that fails its schema', async () => {
