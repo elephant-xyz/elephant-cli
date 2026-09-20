@@ -8,6 +8,7 @@ export const DEFAULT_SCHEMA_MANIFEST_URL =
   'https://lexicon.elephant.xyz/api/manifest';
 export const DEFAULT_IPFS_GATEWAYS = [
   'https://ipfs.filebase.io',
+  'https://gateway.pinata.cloud',
   'https://ipfs.io',
   'https://gateway.ipfs.io',
   'https://dweb.link',
