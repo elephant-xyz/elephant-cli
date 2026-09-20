@@ -122,6 +122,22 @@ describe('hash --output-car', () => {
     for (const [cid, bytes] of entries) {
       expect(Buffer.from(car.blocks.get(cid)!)).toEqual(bytes);
     }
+
+    const again = path.join(tmp, 'out', 'again.car');
+    await handleHash(
+      {
+        input,
+        outputZip: path.join(tmp, 'again.zip'),
+        outputCsv: path.join(tmp, 'again.csv'),
+        outputCar: again,
+        silent: true,
+        cwd: tmp,
+      },
+      overrides
+    );
+    expect(await fsPromises.readFile(again)).toEqual(
+      await fsPromises.readFile(outputCar)
+    );
   });
 
   it('finalizes a batch car listing only the properties that succeeded', async () => {

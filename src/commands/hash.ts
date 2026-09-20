@@ -683,8 +683,12 @@ async function hashProperty(
 
     // The same bytes go into the CAR when --output-car is set, once per CID
     // within this property (cidToFileMap already keys every hashed file by CID).
+    // Block order is property order (sorted names in batch mode) then CID
+    // order, so the same input yields the same CAR bytes.
     // ponytail: json blocks only; add media blocks if a consumer needs them in the CAR
-    for (const [cid, hashedFile] of cidToFileMap) {
+    for (const [cid, hashedFile] of [...cidToFileMap].sort(([a], [b]) =>
+      a.localeCompare(b)
+    )) {
       await car?.put(
         CID.parse(cid),
         Buffer.from(hashedFile.canonicalJson, 'utf-8')
