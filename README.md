@@ -255,11 +255,11 @@ This ensures all files conform to the Property Improvement schema and relationsh
 
 **Inputs**
 
-- A single property ZIP, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order).
+- A single property ZIP, a single extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order; children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run).
 
 **Outputs**
 
-- `--output-csv` (default `submit_errors.csv`): validation errors. With a directory input, one combined CSV for the whole batch, followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
+- `--output-csv` (default `submit_errors.csv`): validation errors. With a directory of properties, one combined CSV for the whole batch (plus a combined `submit_warnings.csv` beside it), followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
 
 ```bash
 # Validate every property in a county directory in one invocation
@@ -739,7 +739,7 @@ elephant-cli hash transformed-data.zip \
 **Inputs**
 
 - ZIP containing a single property directory (such as `transformed-data.zip` from the previous step). The ZIP may contain either files directly or a `data/` folder; both are supported.
-- Or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch.
+- Or an extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch. Children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run before any property is processed.
 
 **Outputs**
 
@@ -770,9 +770,11 @@ county-hashed/
 └── <property-b>.zip
 
 county-hash-results.csv   (one header, rows from every property)
+submit_errors.csv         (combined per-property error reports, beside the CSV)
+submit_warnings.csv       (combined per-property warning reports, beside the CSV)
 ```
 
-A property that fails does not stop the batch; a `Properties processed / succeeded / failed` summary is printed and the exit code is non-zero when any property failed.
+`--output-zip` must be a directory (or not exist yet); an existing file is rejected. A property that fails does not stop the batch; a `Properties processed / succeeded / failed` summary is printed and the exit code is non-zero when any property failed.
 
 **Options**
 

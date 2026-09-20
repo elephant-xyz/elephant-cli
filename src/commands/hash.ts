@@ -20,7 +20,11 @@ import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.j
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
-import { isBatchInput, runBatchInput } from '../utils/batch-input.js';
+import {
+  isBatchInput,
+  runBatchInput,
+  sharedServices,
+} from '../utils/batch-input.js';
 
 interface HashedFile {
   originalPath: string;
@@ -86,21 +90,6 @@ export function registerHashCommand(program: Command) {
         cwd: workingDir,
       };
 
-      if (await isBatchInput(commandOptions.input)) {
-        await fsPromises.mkdir(commandOptions.outputZip, { recursive: true });
-        await runBatchInput(
-          commandOptions,
-          handleHash,
-          {
-            schemaCacheService: new SchemaCacheService(),
-            schemaManifestService: new SchemaManifestService(),
-          },
-          (stem) => ({
-            outputZip: path.join(commandOptions.outputZip, `${stem}.zip`),
-          })
-        );
-        return;
-      }
       await handleHash(commandOptions);
     });
 }
@@ -119,6 +108,31 @@ export async function handleHash(
   options: HashCommandOptions,
   serviceOverrides: HashServiceOverrides = {}
 ) {
+  if (!(await isBatchInput(options.input))) {
+    return hashProperty(options, serviceOverrides);
+  }
+  const existing = await fsPromises.stat(options.outputZip).catch(() => null);
+  if (existing?.isFile()) {
+    const message = `Output ZIP path ${options.outputZip} is a file; with a directory input it must be a directory that receives one ZIP per property`;
+    console.error(chalk.red(`❌ ${message}`));
+    if (options.silent) {
+      throw new Error(message);
+    }
+    process.exit(1);
+  }
+  await fsPromises.mkdir(options.outputZip, { recursive: true });
+  await runBatchInput(
+    options,
+    hashProperty,
+    sharedServices(serviceOverrides),
+    (stem) => ({ outputZip: path.join(options.outputZip, `${stem}.zip`) })
+  );
+}
+
+async function hashProperty(
+  options: HashCommandOptions,
+  serviceOverrides: HashServiceOverrides
+) {
   if (!options.silent) {
     console.log(
       chalk.bold.blue('🐘 Elephant Network CLI - Hash (Single Property)')
@@ -131,7 +145,7 @@ export async function handleHash(
   try {
     processedInput = await processSinglePropertyInput({
       inputPath: options.input,
-      requireZip: true,
+      requireZip: false,
     });
   } catch (error) {
     logger.error(

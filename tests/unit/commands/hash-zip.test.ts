@@ -218,7 +218,7 @@ describe('Hash Command - ZIP Input', () => {
   });
 
   describe('ZIP Input Requirements', () => {
-    it('should reject directory input and require ZIP file', async () => {
+    it('should accept a directory input as a single property', async () => {
       // Mock as directory instead of file
       vi.mocked(fsPromises.stat).mockResolvedValueOnce({
         isDirectory: () => true,
@@ -229,16 +229,13 @@ describe('Hash Command - ZIP Input', () => {
         throw new Error('Process exited');
       }) as any);
 
-      await expect(
-        handleHash({
-          input: '/test/directory',
-          outputZip: testOutputZip,
-          outputCsv: testOutputCsv,
-        })
-      ).rejects.toThrow('Process exited');
+      await handleHash({
+        input: '/test/directory',
+        outputZip: testOutputZip,
+        outputCsv: testOutputCsv,
+      }).catch(() => {});
 
-      expect(mockExit).toHaveBeenCalledWith(1);
-      expect(console.error).toHaveBeenCalledWith(
+      expect(console.error).not.toHaveBeenCalledWith(
         expect.stringContaining('Error: Input must be a ZIP file')
       );
       mockExit.mockRestore();
