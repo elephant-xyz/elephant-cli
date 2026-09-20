@@ -246,11 +246,25 @@ property-improvement-output.zip
 **Validation:**
 
 The output can be validated using:
+
 ```bash
 elephant-cli validate property-improvement-output.zip
 ```
 
 This ensures all files conform to the Property Improvement schema and relationships are properly structured.
+
+**Inputs**
+
+- A single property ZIP, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order).
+
+**Outputs**
+
+- `--output-csv` (default `submit_errors.csv`): validation errors. With a directory input, one combined CSV for the whole batch, followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
+
+```bash
+# Validate every property in a county directory in one invocation
+elephant-cli validate ./county-outputs --output-csv county-errors.csv
+```
 
 ## Build the Seed Bundle
 
@@ -725,6 +739,7 @@ elephant-cli hash transformed-data.zip \
 **Inputs**
 
 - ZIP containing a single property directory (such as `transformed-data.zip` from the previous step). The ZIP may contain either files directly or a `data/` folder; both are supported.
+- Or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch.
 
 **Outputs**
 
@@ -740,6 +755,24 @@ propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
 ```
 
 The CSV leaves `uploadedAt` empty (populated after IPFS upload) and populates `htmlLink` when fact-sheet media assets are present.
+
+With a directory input, `--output-zip` is treated as an output directory and `--output-csv` collects every property's rows into one file:
+
+```bash
+elephant-cli hash ./county-transformed \
+  --output-zip ./county-hashed \
+  --output-csv county-hash-results.csv
+```
+
+```
+county-hashed/
+├── <property-a>.zip   (stem of the child ZIP or subdirectory name)
+└── <property-b>.zip
+
+county-hash-results.csv   (one header, rows from every property)
+```
+
+A property that fails does not stop the batch; a `Properties processed / succeeded / failed` summary is printed and the exit code is non-zero when any property failed.
 
 **Options**
 

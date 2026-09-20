@@ -18,6 +18,7 @@ import {
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
+import { isBatchInput, runBatchInput } from '../utils/batch-input.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -57,6 +58,13 @@ export function registerValidateCommand(program: Command) {
         cwd: workingDir,
       };
 
+      if (await isBatchInput(commandOptions.input)) {
+        await runBatchInput(commandOptions, handleValidate, {
+          schemaCacheService: new SchemaCacheService(),
+          schemaManifestService: new SchemaManifestService(),
+        });
+        return;
+      }
       await handleValidate(commandOptions);
     });
 }

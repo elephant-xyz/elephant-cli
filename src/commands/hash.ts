@@ -20,6 +20,7 @@ import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.j
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
+import { isBatchInput, runBatchInput } from '../utils/batch-input.js';
 
 interface HashedFile {
   originalPath: string;
@@ -85,6 +86,21 @@ export function registerHashCommand(program: Command) {
         cwd: workingDir,
       };
 
+      if (await isBatchInput(commandOptions.input)) {
+        await fsPromises.mkdir(commandOptions.outputZip, { recursive: true });
+        await runBatchInput(
+          commandOptions,
+          handleHash,
+          {
+            schemaCacheService: new SchemaCacheService(),
+            schemaManifestService: new SchemaManifestService(),
+          },
+          (stem) => ({
+            outputZip: path.join(commandOptions.outputZip, `${stem}.zip`),
+          })
+        );
+        return;
+      }
       await handleHash(commandOptions);
     });
 }
