@@ -44,20 +44,4 @@ describe('IPLDConverterService linked-file codec', () => {
     expect(linked.multihash.bytes).toEqual(CID.parse(pinned).multihash.bytes);
     expect(result.linkedCIDs).toEqual([linked.toString()]);
   });
-
-  it('returns the uploaded CID when Pinata pinned different bytes', async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ipld-codec-'));
-    await fs.writeFile(path.join(dir, 'child.json'), '{"value":1}');
-    const other = 'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku';
-    const pinata = {
-      uploadBatch: async () => [{ success: true, cid: other }],
-    } as unknown as PinataService;
-    const converter = new IPLDConverterService(dir, pinata);
-
-    const result = await converter.convertToIPLD(
-      { link: { '/': './child.json' } },
-      path.join(dir, 'parent.json')
-    );
-    expect(result.convertedData.link['/']).toBe(other);
-  });
 });

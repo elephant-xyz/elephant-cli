@@ -8,12 +8,9 @@ import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
 import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
+import { equals as u8eq } from 'uint8arrays/equals';
 
-/**
- * True when the bytes decode as DAG-JSON. Content that still carries unresolved
- * file-path links (for example `{"/": "./child.json"}`) is not valid DAG-JSON and
- * must not be labelled with the dag-json codec.
- */
+// Unresolved ./path links are not DAG-JSON; keep those blocks raw.
 function isDagJson(bytes: Uint8Array): boolean {
   try {
     dagJSON.decode(bytes);
@@ -29,11 +26,7 @@ function isDagJson(bytes: Uint8Array): boolean {
  */
 export function sameDigest(a: string, b: string): boolean {
   try {
-    const left = CID.parse(a).multihash.bytes;
-    const right = CID.parse(b).multihash.bytes;
-    return (
-      left.length === right.length && left.every((byte, i) => byte === right[i])
-    );
+    return u8eq(CID.parse(a).multihash.bytes, CID.parse(b).multihash.bytes);
   } catch {
     return false;
   }

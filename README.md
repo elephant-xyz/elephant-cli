@@ -42,7 +42,7 @@ Each section below explains what a command does, the inputs it expects, the resu
 - Oracle private key to be stored in an encrypted keystore file.
 - Pinata JWT (`PINATA_JWT`) for IPFS uploads.
 - OpenAI API key (`OPENAI_API_KEY`) for script generation.
-- Optional: `ELEPHANT_SCHEMA_MANIFEST_URL` to override the lexicon schema manifest endpoint (default `https://lexicon.elephant.xyz/api/manifest`), and `ELEPHANT_IPFS_GATEWAYS` as a comma-separated list of gateways tried in order when fetching schemas (default order: `https://ipfs.filebase.io`, `https://gateway.pinata.cloud`, then the public ipfs.io family).
+- Optional: `ELEPHANT_SCHEMA_MANIFEST_URL` to override the lexicon schema manifest endpoint (default `https://lexicon.elephant.xyz/api/manifest`), and `ELEPHANT_IPFS_GATEWAYS` as a comma-separated list of gateway origins (no trailing slash) tried in order when fetching schemas (default order: `https://ipfs.filebase.io`, `https://gateway.pinata.cloud`, then the public ipfs.io family).
 - Stable network connection and sufficient disk space for ZIP artifacts.
 
 ## Installation

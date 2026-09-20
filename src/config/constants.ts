@@ -4,8 +4,6 @@ export const DEFAULT_ASSIGNMENTS_CONTRACT_ADDRESS =
   '0xb93AcE67A9017D526245E165ADf361dF9588d3fB';
 export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
 export const DEFAULT_IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
-export const DEFAULT_SCHEMA_MANIFEST_URL =
-  'https://lexicon.elephant.xyz/api/manifest';
 export const DEFAULT_IPFS_GATEWAYS = [
   'https://ipfs.filebase.io',
   'https://gateway.pinata.cloud',
@@ -18,7 +16,8 @@ export const DEFAULT_IPFS_GATEWAYS = [
 /** Schema manifest URL; override with ELEPHANT_SCHEMA_MANIFEST_URL. */
 export function schemaManifestUrl(): string {
   return (
-    process.env.ELEPHANT_SCHEMA_MANIFEST_URL || DEFAULT_SCHEMA_MANIFEST_URL
+    process.env.ELEPHANT_SCHEMA_MANIFEST_URL ||
+    'https://lexicon.elephant.xyz/api/manifest'
   );
 }
 
@@ -26,7 +25,7 @@ export function schemaManifestUrl(): string {
 export function ipfsGateways(): string[] {
   const list = (process.env.ELEPHANT_IPFS_GATEWAYS || '')
     .split(',')
-    .map((gateway) => gateway.trim().replace(/\/+$/, ''))
+    .map((gateway) => gateway.trim())
     .filter(Boolean);
   return list.length > 0 ? list : DEFAULT_IPFS_GATEWAYS;
 }

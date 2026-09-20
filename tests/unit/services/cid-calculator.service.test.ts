@@ -472,11 +472,8 @@ describe('CidCalculatorService', () => {
       CID.parse(rawCid).multihash
     ).toString();
 
-    it('is true for the same bytes under different codecs', () => {
+    it('compares the multihash only', () => {
       expect(sameDigest(rawCid, dagJsonCid)).toBe(true);
-    });
-
-    it('is false for different content or non-CID strings', () => {
       expect(
         sameDigest(
           rawCid,
