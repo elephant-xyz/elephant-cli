@@ -756,14 +756,12 @@ propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
 
 The CSV leaves `uploadedAt` empty (populated after IPFS upload) and populates `htmlLink` when fact-sheet media assets are present.
 
-With `--output-car`, every hashed JSON block of the run is also written into one CAR file that Filebase or any IPFS node imports in a single step (`ipfs dag import --pin-roots=true county.car`); HTML and image files are not included in the CAR. Its single root is a county index block (dag-json) that links to shard blocks of at most 5000 properties each, so a consumer walks root -> shard -> property -> data group:
+With `--output-car`, every hashed JSON block of the run (HTML and image files excluded) is also written into one CAR file whose single root is a county index; a consumer walks root -> shard -> property -> data group:
 
 ```
 <index>   {"label":"CountyIndex","version":1,"properties":<count>,"shards":[{"/":"<shard cid>"},...]}
 <shard>   {"properties":[{"property_cid":{"/":"<property cid>"},"data_groups":{"<data group schema cid>":{"/":"<data cid>"},...}},...]}
 ```
-
-The command prints `CAR written: <path> (<blocks> blocks, root <index cid>)`; the CSV remains the machine-readable record of every property and data group.
 
 With a directory input, `--output-zip` is treated as an output directory and `--output-csv` collects every property's rows into one file:
 

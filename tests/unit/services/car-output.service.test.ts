@@ -22,7 +22,7 @@ describe('CarOutputService', () => {
     for (const cid of cids) {
       await car.property(cid, { schema: cid });
     }
-    const root = await car.close();
+    const { blocks, root } = await car.close();
 
     const reader = await CarReader.fromBytes(await fsPromises.readFile(target));
     const roots = await reader.getRoots();
@@ -42,7 +42,7 @@ describe('CarOutputService', () => {
     );
     expect(sizes).toEqual([2, 1]);
     // 2 shards + 1 index, no property blocks were put
-    expect(car.blocks).toBe(3);
+    expect(blocks).toBe(3);
     await fsPromises.rm(tmp, { recursive: true, force: true });
   });
 });

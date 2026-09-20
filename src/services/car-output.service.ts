@@ -9,7 +9,6 @@ import * as dagJSON from '@ipld/dag-json';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 
-const DAG_JSON = 0x0129;
 // dag-json CID of `{}`: same byte length as the index CID that replaces it in the header.
 const PLACEHOLDER = CID.parse(
   'baguqeeraiqjw7i2vwntyuekgvulpp2det2kpwt6cd7tx5ayqybqpmhfk76fa'
@@ -24,7 +23,10 @@ async function encode(
   value: unknown
 ): Promise<{ cid: CID; bytes: Uint8Array }> {
   const bytes = dagJSON.encode(value);
-  return { cid: CID.create(1, DAG_JSON, await sha256.digest(bytes)), bytes };
+  return {
+    cid: CID.create(1, dagJSON.code, await sha256.digest(bytes)),
+    bytes,
+  };
 }
 
 /**
@@ -37,8 +39,7 @@ async function encode(
  * beyond the current partial shard.
  */
 export class CarOutputService {
-  blocks = 0;
-  root?: string;
+  private blocks = 0;
   private properties = 0;
   private pending: Property[] = [];
   private readonly shards: CID[] = [];
@@ -78,16 +79,8 @@ export class CarOutputService {
     this.blocks += 1;
   }
 
-  async property(cid: string, groups: Record<string, string>): Promise<void> {
-    this.pending.push({
-      property_cid: CID.parse(cid),
-      data_groups: Object.fromEntries(
-        Object.entries(groups).map(([schema, data]) => [
-          schema,
-          CID.parse(data),
-        ])
-      ),
-    });
+  async property(cid: CID, groups: Record<string, CID>): Promise<void> {
+    this.pending.push({ property_cid: cid, data_groups: groups });
     this.properties += 1;
     if (this.pending.length >= this.shardSize) {
       await this.flush();
@@ -101,8 +94,8 @@ export class CarOutputService {
     this.shards.push(shard.cid);
   }
 
-  /** Finalize the file; the index CID is returned and kept in `root`. */
-  async close(): Promise<string> {
+  /** Finalize the file; returns the block count and the index CID. */
+  async close(): Promise<{ blocks: number; root: string }> {
     if (this.pending.length > 0) {
       await this.flush();
     }
@@ -113,16 +106,14 @@ export class CarOutputService {
       shards: this.shards,
     });
     await this.put(index.cid, index.bytes);
-    await Promise.race([this.channel.writer.close(), this.drained]);
-    await this.drained;
+    await Promise.all([this.channel.writer.close(), this.drained]);
     const fd = await fsPromises.open(this.target, 'r+');
     await CarWriter.updateRootsInFile(fd, [index.cid]).finally(() =>
       fd.close()
     );
     this.done = true;
     process.off('exit', this.purge);
-    this.root = index.cid.toString();
-    return this.root;
+    return { blocks: this.blocks, root: index.cid.toString() };
   }
 
   /** Remove the partial file unless `close()` already finalized it. */

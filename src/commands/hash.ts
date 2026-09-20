@@ -140,14 +140,15 @@ export async function handleHash(
     if (!car) {
       return;
     }
-    await car.close();
+    const { blocks, root } = await car.close();
     if (!options.silent) {
       console.log(
         chalk.green(
-          `CAR written: ${car.target} (${car.blocks} blocks, root ${car.root})`
+          `CAR written: ${car.target} (${blocks} blocks, root ${root})`
         )
       );
     }
+    return root;
   };
   const run = batch
     ? runBatchInput(
@@ -158,11 +159,10 @@ export async function handleHash(
         finish
       )
     : hashProperty(options, serviceOverrides, car).then(finish);
-  await run.catch(async (error: unknown) => {
+  return run.catch(async (error: unknown) => {
     await car?.abort();
     throw error;
   });
-  return car?.root;
 }
 
 async function hashProperty(
@@ -692,13 +692,13 @@ async function hashProperty(
     }
     // One index entry per property: its data-group roots, the CSV rows above.
     await car?.property(
-      propertyFolderName,
+      CID.parse(propertyFolderName),
       Object.fromEntries(
         hashedFiles
           .filter((hashedFile) => hashedFile.dataGroupCid)
           .map((hashedFile) => [
             hashedFile.dataGroupCid,
-            hashedFile.calculatedCid,
+            CID.parse(hashedFile.calculatedCid),
           ])
       )
     );
