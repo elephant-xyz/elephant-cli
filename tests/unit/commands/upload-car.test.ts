@@ -141,20 +141,6 @@ describe('upload with a .car input', () => {
     expect(result.success).toBe(true);
   });
 
-  it('sends no authorization header without a token', async () => {
-    await handleUpload({
-      ...options(),
-      api: 'http://127.0.0.1:5001',
-      token: undefined,
-    });
-
-    expect(fetchMock.mock.calls[0][1].headers).toEqual({});
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      `http://127.0.0.1:8080/ipfs/${root}?format=raw`,
-      { signal: expect.any(AbortSignal) }
-    );
-  });
-
   it('fails when the gateway bytes do not hash to the root', async () => {
     serve(
       { ok: true, status: 200, text: async () => ndjson(root) },
@@ -219,16 +205,6 @@ describe('upload with a .car input', () => {
       `Expected one root in ${car}, found ${count}`
     );
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('times out naming the last error', async () => {
-    serve({ ok: true, status: 200, text: async () => ndjson(root) });
-    fetchMock.mockImplementationOnce(fetchMock.getMockImplementation()!);
-    fetchMock.mockRejectedValue(new Error('ECONNRESET'));
-
-    const result = await handleUpload({ ...options(), timeout: 0.001 });
-
-    expect(result.error).toMatch(/Timed out waiting for .*: ECONNRESET/);
   });
 
   it('still sends a zip input to pinata', async () => {

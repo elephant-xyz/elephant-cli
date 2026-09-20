@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import { CarCIDIterator } from '@ipld/car';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
+import { equals as u8eq } from 'uint8arrays/equals';
 import { logger } from '../utils/logger.js';
 import { DEFAULT_IPFS_GATEWAYS } from '../config/constants.js';
 import { sameDigest } from './cid-calculator.service.js';
@@ -91,9 +92,10 @@ export async function importCar(
   if (!URL.canParse(api)) {
     throw new Error(`--api must be a URL with a scheme, got ${options.api}`);
   }
+  const url = new URL(api);
   const gateway = (
     options.gateway ??
-    (new URL(api).host === 'rpc.filebase.io'
+    (url.host === 'rpc.filebase.io'
       ? DEFAULT_IPFS_GATEWAYS[0]
       : 'http://127.0.0.1:8080')
   ).replace(/\/+$/, '');
@@ -174,10 +176,9 @@ export async function importCar(
     return new Uint8Array(await response.arrayBuffer());
   });
   const digest = await sha256.digest(bytes);
-  const hashed = CID.create(1, root.code, digest);
-  if (!root.toV1().equals(hashed)) {
+  if (!u8eq(digest.bytes, root.multihash.bytes)) {
     throw new Error(
-      `Gateway bytes for ${root} hash to ${hashed}, not the root`
+      `Gateway bytes for ${root} hash to ${CID.create(1, root.code, digest)}, not the root`
     );
   }
 

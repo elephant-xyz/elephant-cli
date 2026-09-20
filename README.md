@@ -834,7 +834,6 @@ elephant-cli upload county.car \
 **Inputs**
 
 - `hashed-data.zip` containing one property directory named by property CID.
-- Or `county.car` from `hash --output-car`, whose single root is the county index.
 
 **Outputs**
 
