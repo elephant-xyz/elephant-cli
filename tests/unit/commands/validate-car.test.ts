@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -14,6 +14,14 @@ import {
 import { JsonValidatorService } from '../../../src/services/json-validator.service.js';
 import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
 import { CarSummary } from '../../../src/services/car-validator.service.js';
+import { fetchFromIpfs } from '../../../src/utils/schema-fetcher.js';
+
+vi.mock('../../../src/utils/schema-fetcher.js', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../../src/utils/schema-fetcher.js')
+  >()),
+  fetchFromIpfs: vi.fn(),
+}));
 
 interface Block {
   cid: CID;
@@ -66,6 +74,7 @@ const overrides: ValidateServiceOverrides = {
 interface Tweaks {
   bad?: boolean;
   dangling?: boolean;
+  lost?: boolean;
   extra?: boolean;
 }
 
@@ -83,7 +92,9 @@ async function build(file: string, tweaks: Tweaks = {}) {
     });
     const seed = await json({
       label: 'Seed',
-      relationships: { parcel: parcel.cid },
+      relationships: {
+        parcel: tweaks.lost && suffix === 'b' ? nowhere : parcel.cid,
+      },
     });
     blocks.push(seed, parcel, note);
     entries.push({
@@ -204,6 +215,35 @@ describe('validate <county.car>', () => {
     expect((await rows()).map((row) => row[2])).toEqual([
       blocks[8].cid.toString(),
     ]);
+  });
+
+  it('fails lexicon on a pointer missing from the car without touching ipfs', async () => {
+    const { blocks, nowhere } = await build(car, { lost: true });
+    const summary = (await run()) as CarSummary;
+    expect(summary.errors).toMatchObject({ graph: 1, lexicon: 1, orphans: 2 });
+    const row = (await rows()).find((fields) => fields[3] === 'root');
+    expect(row?.[0]).toBe(blocks[3].cid.toString());
+    expect(row?.[4]).toContain(`block ${nowhere} is not in the car`);
+    expect(fetchFromIpfs).not.toHaveBeenCalled();
+  });
+
+  it('rejects a path that is not a readable file', async () => {
+    car = path.join(tmp, 'missing.car');
+    await expect(
+      handleValidate(
+        { input: car, outputCsv: csv, silent: true, cwd: tmp },
+        overrides
+      )
+    ).rejects.toThrow('is not a readable file');
+    await expect(fsPromises.access(csv)).rejects.toThrow();
+  });
+
+  it('leaves no warnings file beside the error csv', async () => {
+    await build(car);
+    await run();
+    await expect(
+      fsPromises.access(path.join(tmp, 'submit_warnings.csv'))
+    ).rejects.toThrow();
   });
 
   it('reports a data-group root that fails its schema', async () => {

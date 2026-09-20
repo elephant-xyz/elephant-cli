@@ -28,6 +28,11 @@ import {
   CarSummary,
   validateCar,
 } from '../services/car-validator.service.js';
+import {
+  filterErrorRows,
+  formatCurrentValue,
+} from '../utils/validation-errors.js';
+import { isCarInput } from '../utils/car-input.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -95,7 +100,7 @@ export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
 ): Promise<CarSummary | undefined> {
-  if (options.input.endsWith('.car')) {
+  if (isCarInput(options.input)) {
     return validateCounty(options, serviceOverrides);
   }
   if (!(await isBatchInput(options.input))) {
@@ -119,10 +124,26 @@ async function validateCounty(
     );
     console.log();
   }
+  const fail = (message: string): never => {
+    logger.error(message);
+    if (options.silent) {
+      throw new Error(message);
+    }
+    process.exit(1);
+  };
+  const stats = await fsPromises.stat(options.input).catch(() => undefined);
+  if (!stats?.isFile()) {
+    fail(`Failed to process input: ${options.input} is not a readable file`);
+  }
   const workingDir = options.cwd || process.cwd();
   const errorCsvPath = path.resolve(
     workingDir,
     options.outputCsv || 'submit_errors.csv'
+  );
+  // The reporter always opens a warnings stream; a CAR run never writes to it, so drop the empty file.
+  const warningCsvPath = path.join(
+    path.dirname(errorCsvPath),
+    'submit_warnings.csv'
   );
   const schemaCacheService =
     serviceOverrides.schemaCacheService ?? new SchemaCacheService();
@@ -131,17 +152,28 @@ async function validateCounty(
     new JsonValidatorService('', schemaCacheService);
   const csvReporterService =
     serviceOverrides.csvReporterService ??
-    new CsvReporterService(
-      errorCsvPath,
-      path.resolve(workingDir, 'submit_warnings.csv')
-    );
+    new CsvReporterService(errorCsvPath, warningCsvPath);
   await csvReporterService.initialize();
   logger.technical(`Validation errors will be saved to: ${errorCsvPath}`);
   const summary = await validateCar(options.input, {
     schemaCacheService,
     jsonValidatorService,
     csvReporterService,
-  }).finally(() => csvReporterService.finalize());
+  })
+    .finally(async () => {
+      await csvReporterService.finalize();
+      if (
+        !serviceOverrides.csvReporterService &&
+        csvReporterService.getWarningCount() === 0
+      ) {
+        await fsPromises.rm(warningCsvPath, { force: true });
+      }
+    })
+    .catch((error: unknown) =>
+      fail(
+        `CAR validation aborted: ${error instanceof Error ? error.message : String(error)}`
+      )
+    );
   const failed = Object.values(summary.errors).reduce((a, b) => a + b, 0);
   if (!options.silent) {
     console.log(chalk.bold('\n📊 CAR Validation Report:'));
@@ -888,21 +920,6 @@ function formatFilePathForReport(filePath: string): string {
   return filePath;
 }
 
-function formatCurrentValue(data: unknown): string {
-  if (data === undefined) {
-    return '';
-  }
-  if (data === null) {
-    return 'null';
-  }
-  if (typeof data === 'object') {
-    return JSON.stringify(data);
-  }
-  return String(data);
-}
-
-const TYPE_ERROR_PATTERN = /^must be (null|object|array)$/;
-
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
   let current = '';
@@ -951,132 +968,20 @@ export async function postProcessErrorCsv(csvPath: string): Promise<number> {
   const header = lines[0];
   const dataLines = lines.slice(1).filter((line) => line.trim() !== '');
 
-  // Parse and filter rows
-  type RowType = {
-    original: string;
-    propertyCid: string;
-    dataGroupCid: string;
-    filePath: string;
-    errorPath: string;
-    errorMessage: string;
-    currentValue: string;
-    timestamp: string;
-  };
-
-  const rows: RowType[] = [];
-  const addressSchemaErrorFiles = new Set<string>();
-
-  // Schema mismatch errors that indicate address doesn't match either oneOf option
-  const isSchemaMatchError = (msg: string) =>
-    msg === 'must match a schema in anyOf' ||
-    msg === 'must match exactly one schema in oneOf';
-
-  // Check if error path is related to address entity (not property)
-  const isAddressPath = (path: string) =>
-    (path.includes('property_has_address') && path.includes('/to')) ||
-    (path.includes('address_has_fact_sheet') && path.includes('/from'));
-
-  for (const line of dataLines) {
-    const fields = parseCsvLine(line);
-    if (fields.length < 7) {
-      continue;
-    }
-
-    const [
-      propertyCid,
-      dataGroupCid,
-      filePath,
-      errorPath,
-      errorMessage,
-      currentValue,
-      timestamp,
-    ] = fields;
-
-    // Filter out anyOf/oneOf type errors
-    if (TYPE_ERROR_PATTERN.test(errorMessage)) {
-      continue;
-    }
-
-    // Track files with address schema errors (anyOf/oneOf on the address entity)
-    // Only consolidate when the address itself fails the schema validation
-    if (isAddressPath(errorPath) && isSchemaMatchError(errorMessage)) {
-      addressSchemaErrorFiles.add(filePath);
-    }
-
-    // Filter out generic anyOf/oneOf schema matching errors (not useful to users)
-    if (isSchemaMatchError(errorMessage)) {
-      continue;
-    }
-
-    rows.push({
-      original: line,
-      propertyCid,
-      dataGroupCid,
-      filePath,
-      errorPath,
-      errorMessage,
-      currentValue,
-      timestamp,
-    });
-  }
-
-  // Consolidate address-related errors only for files where the address entity itself
-  // failed the oneOf/anyOf validation (not property errors)
-  const addressConsolidatedRows: RowType[] = [];
-  const nonAddressRows: RowType[] = [];
-
-  for (const row of rows) {
-    // Only consolidate errors on the address entity, not property errors
-    if (
-      addressSchemaErrorFiles.has(row.filePath) &&
-      isAddressPath(row.errorPath)
-    ) {
-      // Check if we already have a consolidated error for this file
-      const hasConsolidated = addressConsolidatedRows.some(
-        (r) => r.filePath === row.filePath
-      );
-      if (!hasConsolidated) {
-        addressConsolidatedRows.push({
-          ...row,
-          errorPath: '/relationships/property_has_address',
-          errorMessage:
-            'Address should provide either unnormalized_address or normalized version distributed to other fields',
-        });
-      }
-    } else {
-      nonAddressRows.push(row);
-    }
-  }
-
-  const filteredRows = [...nonAddressRows, ...addressConsolidatedRows];
-
-  // Deduplicate by errorMessage + lastPathSegment
-  // Prefer paths without has_fact_sheet
-  const dedupeMap = new Map<string, RowType>();
-
-  for (const row of filteredRows) {
-    const pathParts = row.errorPath.split('/').filter((p) => p !== '');
-    const lastSegment =
-      pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'root';
-    const key = `${row.errorMessage}::${lastSegment}`;
-
-    const existing = dedupeMap.get(key);
-    if (!existing) {
-      dedupeMap.set(key, row);
-      continue;
-    }
-
-    // Prefer paths without has_fact_sheet
-    const existingHasFactSheet = existing.errorPath.includes('has_fact_sheet');
-    const currentHasFactSheet = row.errorPath.includes('has_fact_sheet');
-
-    if (existingHasFactSheet && !currentHasFactSheet) {
-      dedupeMap.set(key, row);
-    }
-  }
-
-  // Write deduplicated results
-  const dedupedRows = Array.from(dedupeMap.values());
+  const dedupedRows = filterErrorRows(
+    dataLines
+      .map(parseCsvLine)
+      .filter((fields) => fields.length >= 7)
+      .map((fields) => ({
+        propertyCid: fields[0],
+        dataGroupCid: fields[1],
+        filePath: fields[2],
+        errorPath: fields[3],
+        errorMessage: fields[4],
+        currentValue: fields[5],
+        timestamp: fields[6],
+      }))
+  );
   const outputLines = [header];
 
   for (const row of dedupedRows) {

@@ -10,6 +10,7 @@ import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isMediaFile } from '../utils/file-type-helpers.js';
 import { importCar } from '../services/car-import.service.js';
+import { isCarInput } from '../utils/car-input.js';
 
 export interface UploadCommandOptions {
   input: string;
@@ -34,10 +35,6 @@ function filebaseToken(env: NodeJS.ProcessEnv): string | undefined {
   return parts.every(Boolean)
     ? Buffer.from(parts.join(':')).toString('base64')
     : undefined;
-}
-
-export function isCarInput(input: string): boolean {
-  return input.toLowerCase().endsWith('.car');
 }
 
 export function registerUploadCommand(program: Command) {

@@ -162,9 +162,13 @@ export class JsonValidatorService {
     });
   }
 
-  /** Resolve `{"/": cid}` data pointers from this source before falling back to IPFS. */
+  /**
+   * Resolve `{"/": cid}` data pointers from this source instead of IPFS; a
+   * pointer the source cannot supply fails validation. Pass `undefined` to
+   * restore IPFS resolution.
+   */
   setBlockSource(
-    source: (cid: string) => Promise<Uint8Array | undefined>
+    source: ((cid: string) => Promise<Uint8Array | undefined>) | undefined
   ): void {
     this.blockSource = source;
   }
@@ -496,6 +500,9 @@ export class JsonValidatorService {
       if (isCID) {
         try {
           const local = await this.blockSource?.(pointerValue);
+          if (this.blockSource && !local) {
+            throw new Error(`block ${pointerValue} is not in the car`);
+          }
           const text = local
             ? new TextDecoder().decode(local)
             : await fetchFromIpfs(pointerValue);
