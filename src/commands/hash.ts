@@ -21,6 +21,7 @@ import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-sca
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
 import {
+  bail,
   isBatchInput,
   runBatchInput,
   sharedServices,
@@ -113,12 +114,10 @@ export async function handleHash(
   }
   const existing = await fsPromises.stat(options.outputZip).catch(() => null);
   if (existing?.isFile()) {
-    const message = `Output ZIP path ${options.outputZip} is a file; with a directory input it must be a directory that receives one ZIP per property`;
-    console.error(chalk.red(`❌ ${message}`));
-    if (options.silent) {
-      throw new Error(message);
-    }
-    process.exit(1);
+    bail(
+      options,
+      `Output ZIP path ${options.outputZip} is a file; with a directory input it must be a directory that receives one ZIP per property`
+    );
   }
   await fsPromises.mkdir(options.outputZip, { recursive: true });
   await runBatchInput(

@@ -739,7 +739,7 @@ elephant-cli hash transformed-data.zip \
 **Inputs**
 
 - ZIP containing a single property directory (such as `transformed-data.zip` from the previous step). The ZIP may contain either files directly or a `data/` folder; both are supported.
-- Or an extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch. Children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run before any property is processed.
+- Or an extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch. Same directory rules as `validate`.
 
 **Outputs**
 

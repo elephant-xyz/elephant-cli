@@ -37,23 +37,33 @@ describe('batch input', () => {
     );
   });
 
-  it('is a batch only for a directory with zip or subdirectory children', async () => {
+  it('is a batch only for a directory with visible zip or subdirectory children', async () => {
     const dir = await fixture();
     expect(await isBatchInput(dir)).toBe(true);
     expect(await isBatchInput(path.join(dir, 'a.zip'))).toBe(false);
     expect(await isBatchInput(path.join(dir, 'missing.zip'))).toBe(false);
     expect(await isBatchInput(path.join(dir, 'c'))).toBe(false);
+    await fsPromises.mkdir(path.join(dir, '__MACOSX', '.only'));
     expect(await isBatchInput(path.join(dir, '__MACOSX'))).toBe(false);
   });
 
-  it('runs the handler per child in sorted order with shared services and one csv', async () => {
+  it('runs sorted visible children with shared services and combines every csv', async () => {
     const dir = await fixture();
     const out = path.join(dir, 'out', 'combined.csv');
     const handler = vi.fn(
       async (options: { input: string; outputCsv?: string; cwd?: string }) => {
+        const stem = path.basename(options.input, '.zip');
         await fsPromises.writeFile(
           options.outputCsv as string,
-          `h1,h2\n${path.basename(options.input)},1\n`
+          `h1,h2\n${stem},1\n`
+        );
+        await fsPromises.writeFile(
+          path.join(options.cwd as string, 'submit_errors.csv'),
+          `e1,e2\n${stem},err\n`
+        );
+        await fsPromises.writeFile(
+          path.join(options.cwd as string, 'submit_warnings.csv'),
+          'w1,w2\n'
         );
       }
     );
@@ -65,7 +75,6 @@ describe('batch input', () => {
       (stem) => ({ outputZip: `${stem}.out` })
     );
 
-    expect(handler).toHaveBeenCalledTimes(3);
     const calls = handler.mock.calls.map((call) => call[0]);
     expect(calls.map((call) => call.input)).toEqual([
       path.join(dir, 'a.zip'),
@@ -78,41 +87,8 @@ describe('batch input', () => {
       expect(call[1]).toBe(shared);
     }
     expect(await fsPromises.readFile(out, 'utf-8')).toBe(
-      'h1,h2\na.zip,1\nb.zip,1\nc,1\n'
+      'h1,h2\na,1\nb,1\nc,1\n'
     );
-  });
-
-  it('skips hidden and tooling children', async () => {
-    const dir = await fixture();
-    const handler = vi.fn(async () => {});
-    await runBatchInput({ input: dir, silent: true }, handler, shared);
-    const names = handler.mock.calls.map((call) =>
-      path.basename(call[0].input)
-    );
-    expect(names).toEqual(['a.zip', 'b.zip', 'c']);
-  });
-
-  it('combines per-property submit_errors and submit_warnings beside the output csv', async () => {
-    const dir = await fixture();
-    const out = path.join(dir, 'out', 'combined.csv');
-    const handler = vi.fn(async (options: { input: string; cwd?: string }) => {
-      const stem = path.basename(options.input, '.zip');
-      await fsPromises.writeFile(
-        path.join(options.cwd as string, 'submit_errors.csv'),
-        `e1,e2\n${stem},err\n`
-      );
-      await fsPromises.writeFile(
-        path.join(options.cwd as string, 'submit_warnings.csv'),
-        'w1,w2\n'
-      );
-    });
-
-    await runBatchInput(
-      { input: dir, outputCsv: out, silent: true },
-      handler,
-      shared
-    );
-
     expect(
       await fsPromises.readFile(
         path.join(dir, 'out', 'submit_errors.csv'),
@@ -127,22 +103,7 @@ describe('batch input', () => {
     ).toBe('w1,w2\n');
   });
 
-  it('aborts on duplicate stems before running anything', async () => {
-    const dir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'batch-'));
-    dirs.push(dir);
-    await fsPromises.writeFile(path.join(dir, '12345.zip'), 'zip');
-    await fsPromises.mkdir(path.join(dir, '12345'));
-    await fsPromises.writeFile(path.join(dir, 'abc.zip'), 'zip');
-    await fsPromises.writeFile(path.join(dir, 'ABC.zip'), 'zip');
-    const handler = vi.fn(async () => {});
-
-    await expect(
-      runBatchInput({ input: dir, silent: true }, handler, shared)
-    ).rejects.toThrow('Duplicate property names');
-    expect(handler).not.toHaveBeenCalled();
-  });
-
-  it('continues past a failing child and reports the failure', async () => {
+  it('continues past a failing child, fails at the end, and aborts on duplicate stems', async () => {
     const dir = await fixture();
     const handler = vi.fn(async (options: { input: string }) => {
       if (options.input.endsWith('b.zip')) {
@@ -157,5 +118,12 @@ describe('batch input', () => {
 
     await runBatchInput({ input: dir }, handler, shared);
     expect(process.exit).toHaveBeenCalledWith(1);
+
+    handler.mockClear();
+    await fsPromises.mkdir(path.join(dir, 'A'));
+    await expect(
+      runBatchInput({ input: dir, silent: true }, handler, shared)
+    ).rejects.toThrow('Duplicate property names');
+    expect(handler).not.toHaveBeenCalled();
   });
 });

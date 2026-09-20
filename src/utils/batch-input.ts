@@ -21,29 +21,31 @@ interface SharedServices {
 /** Per-run reports every handler writes relative to `cwd`; combined next to `outputCsv`. */
 const REPORTS = ['submit_errors.csv', 'submit_warnings.csv'];
 
-async function listChildren(
-  dir: string
-): Promise<{ children: Dirent[]; hidden: Dirent[] }> {
+function isHidden(name: string): boolean {
+  return name.startsWith('.') || name.startsWith('__');
+}
+
+async function listChildren(dir: string): Promise<Dirent[]> {
   const entries = await fsPromises
     .readdir(dir, { withFileTypes: true })
     .catch(() => [] as Dirent[]);
-  const hidden = entries.filter(
-    (entry) => entry.name.startsWith('.') || entry.name.startsWith('__')
-  );
-  const children = entries
-    .filter(
-      (entry) =>
-        !hidden.includes(entry) &&
-        (entry.isDirectory() ||
-          (entry.isFile() && entry.name.toLowerCase().endsWith('.zip')))
-    )
+  return entries
+    .filter((entry) => {
+      if (isHidden(entry.name)) {
+        logger.info(`Skipping hidden child ${entry.name}`);
+        return false;
+      }
+      return (
+        entry.isDirectory() ||
+        (entry.isFile() && entry.name.toLowerCase().endsWith('.zip'))
+      );
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
-  return { children, hidden };
 }
 
 /** True when the input is a directory holding at least one property (`.zip` file or subdirectory). */
 export async function isBatchInput(input: string): Promise<boolean> {
-  return (await listChildren(input)).children.length > 0;
+  return (await listChildren(input)).length > 0;
 }
 
 /** Fill the services every property in a batch must share, unless the caller already supplied them. */
@@ -57,7 +59,7 @@ export function sharedServices<S extends SharedServices>(overrides: S): S {
   };
 }
 
-function bail(options: BatchOptions, message: string): never {
+export function bail(options: BatchOptions, message: string): never {
   console.error(chalk.red(`❌ ${message}`));
   if (options.silent) {
     throw new Error(message);
@@ -94,28 +96,16 @@ export async function runBatchInput<O extends BatchOptions, S>(
   shared: S,
   extra: (stem: string) => Partial<O> = () => ({})
 ): Promise<void> {
-  const { children, hidden } = await listChildren(options.input);
-  for (const entry of hidden) {
-    logger.info(`Skipping hidden child ${entry.name}`);
-    if (!options.silent) {
-      console.log(chalk.gray(`  skipped ${entry.name}`));
-    }
-  }
+  const children = await listChildren(options.input);
   const stems = children.map((entry) =>
     entry.isDirectory() ? entry.name : entry.name.slice(0, -'.zip'.length)
   );
-  const groups = new Map<string, string[]>();
-  children.forEach((entry, index) => {
-    const key = stems[index].toLowerCase();
-    groups.set(key, [...(groups.get(key) ?? []), entry.name]);
-  });
-  const collisions = [...groups.values()].filter((names) => names.length > 1);
-  if (collisions.length > 0) {
+  const lower = stems.map((s) => s.toLowerCase());
+  const dupes = stems.filter((s, i) => lower.indexOf(s.toLowerCase()) !== i);
+  if (dupes.length > 0) {
     bail(
       options,
-      `Duplicate property names in ${options.input}: ${collisions
-        .map((names) => names.join(' / '))
-        .join(', ')}`
+      `Duplicate property names in ${options.input}: ${dupes.join(', ')}`
     );
   }
   const combined = options.outputCsv;
@@ -138,9 +128,6 @@ export async function runBatchInput<O extends BatchOptions, S>(
     const stem = stems[index];
     const cwd = path.join(tmp, stem);
     const part = path.join(cwd, 'output.csv');
-    if (!options.silent) {
-      console.log(chalk.blue(`▶ ${stem}`));
-    }
     logger.info(`Batch property ${stem}: ${entry.name}`);
     await fsPromises
       .mkdir(cwd, { recursive: true })
@@ -161,9 +148,6 @@ export async function runBatchInput<O extends BatchOptions, S>(
         const message = error instanceof Error ? error.message : String(error);
         failed.push(stem);
         logger.error(`Batch property ${stem} failed: ${message}`);
-        if (!options.silent) {
-          console.log(chalk.red(`  ✗ ${stem}: ${message}`));
-        }
       });
     if (combined) {
       await appendCsv(combined, part);

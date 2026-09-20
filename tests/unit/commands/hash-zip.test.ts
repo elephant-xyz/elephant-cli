@@ -218,6 +218,25 @@ describe('Hash Command - ZIP Input', () => {
   });
 
   describe('ZIP Input Requirements', () => {
+    it('should reject a file at --output-zip when the input is a directory of properties', async () => {
+      vi.mocked(fsPromises.readdir).mockResolvedValueOnce([
+        { name: 'a.zip', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      vi.mocked(fsPromises.stat).mockResolvedValueOnce({
+        isDirectory: () => false,
+        isFile: () => true,
+      } as any);
+
+      await expect(
+        handleHash({
+          input: '/test/batch',
+          outputZip: testOutputZip,
+          outputCsv: testOutputCsv,
+          silent: true,
+        })
+      ).rejects.toThrow('is a file');
+    });
+
     it('should accept a directory input as a single property', async () => {
       // Mock as directory instead of file
       vi.mocked(fsPromises.stat).mockResolvedValueOnce({
