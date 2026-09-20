@@ -756,7 +756,14 @@ propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
 
 The CSV leaves `uploadedAt` empty (populated after IPFS upload) and populates `htmlLink` when fact-sheet media assets are present.
 
-With `--output-car`, every hashed JSON block of the run is also written into one CAR file (deduplicated by CID, with each data-group root as a CAR root) that Filebase or any IPFS node imports in a single step; HTML and image files are not included in the CAR.
+With `--output-car`, every hashed JSON block of the run is also written into one CAR file that Filebase or any IPFS node imports in a single step (`ipfs dag import --pin-roots=true county.car`); HTML and image files are not included in the CAR. Its single root is a county index block (dag-json) that links to shard blocks of at most 5000 properties each, so a consumer walks root -> shard -> property -> data group:
+
+```
+<index>   {"label":"CountyIndex","version":1,"properties":<count>,"shards":[{"/":"<shard cid>"},...]}
+<shard>   {"properties":[{"property_cid":{"/":"<property cid>"},"data_groups":{"<data group schema cid>":{"/":"<data cid>"},...}},...]}
+```
+
+The command prints `CAR written: <path> (<blocks> blocks, root <index cid>)`; the CSV remains the machine-readable record of every property and data group.
 
 With a directory input, `--output-zip` is treated as an output directory and `--output-csv` collects every property's rows into one file:
 
@@ -793,7 +800,7 @@ elephant-cli hash ./county-transformed \
 | --------------------------------- | ----------------------------------------------------------------------------- | -------------------------- |
 | `-o, --output-zip <path>`         | Destination ZIP containing canonicalized JSON (folder named by property CID). | `hashed-data.zip`          |
 | `-c, --output-csv <path>`         | CSV file with hash results.                                                   | `hash-results.csv`         |
-| `--output-car <path>`             | Also write all hashed JSON blocks of the run into one CAR file.               | Not written                |
+| `--output-car <path>`             | Also write all hashed JSON blocks of the run into one CAR rooted at an index. | Not written                |
 | `--max-concurrent-tasks <number>` | Target concurrency for hashing (fallback determined automatically).           | Auto                       |
 | `--property-cid <cid>`            | Override the property CID used for the output folder and CSV.                 | Seed CID or inferred value |
 
