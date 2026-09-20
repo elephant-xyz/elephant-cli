@@ -3,7 +3,8 @@ import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
 import AdmZip from 'adm-zip';
-import { CarReader } from '@ipld/car';
+import { CarReader, CarWriter } from '@ipld/car';
+import { CID } from 'multiformats/cid';
 import { handleUpload } from '../../../src/commands/upload.js';
 import { CarOutputService } from '../../../src/services/car-output.service.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
@@ -35,6 +36,17 @@ vi.mock('../../../src/utils/logger.js', () => ({
   },
 }));
 
+type Command = {
+  constructor: { name: string };
+  input: { Body?: AsyncIterable<Uint8Array> };
+};
+
+/** Like the SDK: a PUT drains its body before resolving; a HEAD answers `reply`. */
+const head = (reply: object) => async (command: Command) =>
+  command.constructor.name === 'HeadObjectCommand'
+    ? reply
+    : Array.fromAsync(command.input.Body!).then(() => ({}));
+
 const property =
   'baguqeeraefi3cy4z3j2xvnuta73mktlysxlkqsflbtrpwxsvvxfwbqs6qyra';
 
@@ -56,12 +68,7 @@ describe('upload with a .car input', () => {
     bytes = (await reader.get((await reader.getRoots())[0]))!.bytes;
 
     send.mockReset();
-    send.mockImplementation(
-      async (command: { constructor: { name: string } }) =>
-        command.constructor.name === 'HeadObjectCommand'
-          ? { Metadata: { cid: root } }
-          : {}
-    );
+    send.mockImplementation(head({ Metadata: { cid: root } }));
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -108,7 +115,8 @@ describe('upload with a .car input', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
-      `https://ipfs.filebase.io/ipfs/${root}?format=raw`
+      `https://ipfs.filebase.io/ipfs/${root}?format=raw`,
+      { signal: expect.any(AbortSignal) }
     );
     expect(result).toMatchObject({
       success: true,
@@ -121,12 +129,7 @@ describe('upload with a .car input', () => {
   });
 
   it('fails when the head cid differs from the car root', async () => {
-    send.mockImplementation(
-      async (command: { constructor: { name: string } }) =>
-        command.constructor.name === 'HeadObjectCommand'
-          ? { Metadata: { cid: property } }
-          : {}
-    );
+    send.mockImplementation(head({ Metadata: { cid: property } }));
 
     const result = await handleUpload(options());
 
@@ -147,6 +150,53 @@ describe('upload with a .car input', () => {
 
     expect(result).toMatchObject({ success: false });
     expect(result.error).toContain('not the root');
+  });
+
+  it('names the missing filebase settings', async () => {
+    const result = await handleUpload({ input: car, silent: true });
+
+    expect(result.error).toContain('bucket, access key, secret key');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('waits for the head cid to appear', async () => {
+    send
+      .mockImplementationOnce(head({}))
+      .mockImplementationOnce(head({}))
+      .mockImplementationOnce(head({ Metadata: { cid: root } }));
+    fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset),
+    });
+
+    const result = await handleUpload(options());
+
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ success: true, objectCid: root });
+  });
+
+  it.each([0, 2])('rejects a car with %i roots', async (count) => {
+    const cid = CID.parse(property);
+    const { writer, out } = CarWriter.create(Array(count).fill(cid));
+    const done = Array.fromAsync(out);
+    await writer.put({ cid, bytes: new Uint8Array([1]) });
+    await writer.close();
+    await fsPromises.writeFile(car, Buffer.concat(await done));
+
+    const result = await handleUpload(options());
+
+    expect(result.error).toContain(
+      `Expected one root in ${car}, found ${count}`
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('times out naming the last error', async () => {
+    fetchMock.mockRejectedValue(new Error('ECONNRESET'));
+
+    const result = await handleUpload({ ...options(), timeout: 0.001 });
+
+    expect(result.error).toMatch(/Timed out waiting for .*: ECONNRESET/);
   });
 
   it('still sends a zip input to pinata', async () => {

@@ -126,10 +126,14 @@ export interface UploadOptions {
 export interface UploadResult {
   success: boolean;
   cid?: string;
-  /** CAR input only: Filebase object CID, CAR root and its gateway URL. */
+  /** CAR input only: the Filebase upload summary. */
+  bucket?: string;
+  key?: string;
   objectCid?: string;
   root?: string;
   gatewayUrl?: string;
+  blocks?: number;
+  uploadedAt?: string;
   errorMessage?: string;
   errors?: {
     propertyDir: string;

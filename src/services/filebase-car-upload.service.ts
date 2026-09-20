@@ -1,4 +1,5 @@
 import { createReadStream, promises as fsPromises } from 'fs';
+import { PassThrough } from 'stream';
 import { setTimeout as sleep } from 'timers/promises';
 import {
   HeadObjectCommand,
@@ -32,21 +33,46 @@ export interface FilebaseCarUploadResult {
   uploadedAt: string;
 }
 
-/** Retry `step` every two seconds until it resolves a value or `deadline` (ms epoch) passes. */
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Retry `step` every two seconds until it resolves a value or `deadline`
+ * (ms epoch) passes. A rejection (gateway ECONNRESET, HEAD `NotFound` while
+ * Filebase is still finalizing the import) is a retry, not a failure; the
+ * last one is named in the timeout error.
+ */
 async function poll<T>(
   deadline: number,
   what: string,
-  step: () => Promise<T | undefined>
+  step: () => Promise<T | undefined>,
+  last?: unknown
 ): Promise<T> {
-  const value = await step();
-  if (value !== undefined) {
-    return value;
+  const attempt = await step().then(
+    (value) => ({ value }),
+    (error: unknown) => ({ error })
+  );
+  if ('value' in attempt && attempt.value !== undefined) {
+    return attempt.value;
   }
+  const reason = 'error' in attempt ? attempt.error : last;
   if (Date.now() >= deadline) {
-    throw new Error(`Timed out waiting for ${what}`);
+    throw new Error(
+      `Timed out waiting for ${what}${reason === undefined ? '' : `: ${message(reason)}`}`
+    );
   }
   await sleep(2000);
-  return poll(deadline, what, step);
+  return poll(deadline, what, step, reason);
+}
+
+/** Read the header roots only; the stream is closed before any block. */
+async function roots(input: string): Promise<CID[]> {
+  const stream = createReadStream(input);
+  const iterator = await CarCIDIterator.fromIterable(stream).finally(() =>
+    stream.destroy()
+  );
+  return iterator.getRoots();
 }
 
 /**
@@ -57,31 +83,35 @@ async function poll<T>(
 export async function uploadCarToFilebase(
   options: FilebaseCarUploadOptions
 ): Promise<FilebaseCarUploadResult> {
-  const endpoint = options.endpoint ?? 'https://s3.filebase.io';
-  const gateway = options.gateway ?? 'https://ipfs.filebase.io';
-  const deadline = Date.now() + (options.timeout ?? 300) * 1000;
-
-  const iterator = await CarCIDIterator.fromIterable(
-    createReadStream(options.input)
-  );
-  const roots = await iterator.getRoots();
-  if (roots.length !== 1) {
+  const timeout = options.timeout ?? 300;
+  if (!Number.isFinite(timeout) || timeout <= 0) {
     throw new Error(
-      `Expected one root in ${options.input}, found ${roots.length}`
+      `--timeout must be a number of seconds greater than zero, got ${options.timeout}`
     );
   }
-  const root = roots[0];
-  const count = { blocks: 0, rooted: false };
-  for await (const cid of iterator) {
-    count.blocks += 1;
-    count.rooted = count.rooted || cid.equals(root);
+  const endpoint = (options.endpoint ?? 'https://s3.filebase.io').replace(
+    /\/+$/,
+    ''
+  );
+  const gateway = (options.gateway ?? 'https://ipfs.filebase.io').replace(
+    /\/+$/,
+    ''
+  );
+  const deadline = Date.now() + timeout * 1000;
+
+  const header = await roots(options.input);
+  if (header.length !== 1) {
+    throw new Error(
+      `Expected one root in ${options.input}, found ${header.length}`
+    );
   }
-  if (!count.rooted) {
-    throw new Error(`Root ${root} is not a block in ${options.input}`);
+  const root = header[0];
+  if (root.multihash.code !== sha256.code) {
+    throw new Error(
+      `Unsupported root hash: ${root} uses multihash code ${root.multihash.code}, only sha2-256 roots can be verified`
+    );
   }
-  const blocks = count.blocks;
   const size = (await fsPromises.stat(options.input)).size;
-  logger.info(`CAR ${options.input}: ${blocks} blocks, root ${root}`);
 
   const client = new S3Client({
     endpoint,
@@ -96,19 +126,51 @@ export async function uploadCarToFilebase(
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
 
+  // One read of the file: the bytes go to the PUT body and, in parallel, through
+  // a CID iterator that counts blocks and confirms the root is among them.
+  const source = createReadStream(options.input);
+  const body = new PassThrough();
+  const tally = new PassThrough();
+  source.pipe(body);
+  source.pipe(tally);
+  source.once('error', (error) => {
+    body.destroy(error);
+    tally.destroy(error);
+  });
+  source.once('close', () => tally.end());
+  const counted = (async () => {
+    const iterator = await CarCIDIterator.fromIterable(tally);
+    const count = { blocks: 0, rooted: false };
+    for await (const cid of iterator) {
+      count.blocks += 1;
+      count.rooted = count.rooted || cid.equals(root);
+    }
+    if (!count.rooted) {
+      throw new Error(`Root ${root} is not a block in ${options.input}`);
+    }
+    return count.blocks;
+  })();
+
   logger.info(`Uploading to s3://${options.bucket}/${options.key}`);
   // ponytail: single PUT; add multipart when a county CAR exceeds 5 GB
-  await client.send(
-    new PutObjectCommand({
-      Bucket: options.bucket,
-      Key: options.key,
-      Body: createReadStream(options.input),
-      ContentLength: size,
-      ContentType: 'application/vnd.ipld.car',
-      Metadata: { import: 'car' },
-    })
-  );
+  const put = client
+    .send(
+      new PutObjectCommand({
+        Bucket: options.bucket,
+        Key: options.key,
+        Body: body,
+        ContentLength: size,
+        ContentType: 'application/vnd.ipld.car',
+        Metadata: { import: 'car' },
+      })
+    )
+    .catch((error: unknown) => {
+      source.destroy();
+      throw error;
+    });
+  const [, blocks] = await Promise.all([put, counted]);
   const uploadedAt = new Date().toISOString();
+  logger.info(`CAR ${options.input}: ${blocks} blocks, root ${root}`);
 
   const objectCid = await poll(deadline, 'object cid', async () => {
     const head = await client.send(
@@ -116,7 +178,10 @@ export async function uploadCarToFilebase(
     );
     return head.Metadata?.cid;
   });
-  if (objectCid !== root.toString()) {
+  const same = await Promise.resolve()
+    .then(() => CID.parse(objectCid).equals(root))
+    .catch(() => false);
+  if (!same) {
     throw new Error(
       `Filebase reported object CID ${objectCid} but the CAR root is ${root}`
     );
@@ -125,7 +190,9 @@ export async function uploadCarToFilebase(
   const gatewayUrl = `${gateway}/ipfs/${root}`;
   logger.info(`Waiting for ${gatewayUrl} to resolve`);
   const bytes = await poll(deadline, `${gatewayUrl} to resolve`, async () => {
-    const response = await fetch(`${gatewayUrl}?format=raw`);
+    const response = await fetch(`${gatewayUrl}?format=raw`, {
+      signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+    });
     if (!response.ok) {
       return undefined;
     }

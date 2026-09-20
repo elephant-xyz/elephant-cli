@@ -857,7 +857,6 @@ elephant-cli upload county.car \
 | Option                         | Description                                                                    | Default                      |
 | ------------------------------ | ------------------------------------------------------------------------------ | ---------------------------- |
 | `--pinata-jwt <jwt>`           | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.      | Required if env var absent   |
-| `-o, --output-csv <path>`      | CSV summarizing uploaded datagroups. ZIP input only.                           | `upload-results.csv`         |
 | `--bucket <name>`              | Filebase bucket (falls back to `FILEBASE_BUCKET`). CAR input only.             | Required if env var absent   |
 | `--key <key>`                  | Object key for the CAR in the bucket.                                          | CAR file name                |
 | `--filebase-access-key <key>`  | Filebase access key (falls back to `FILEBASE_ACCESS_KEY`).                     | Required if env var absent   |
