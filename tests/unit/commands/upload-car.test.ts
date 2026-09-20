@@ -5,6 +5,7 @@ import path from 'path';
 import AdmZip from 'adm-zip';
 import { CarReader, CarWriter } from '@ipld/car';
 import { CID } from 'multiformats/cid';
+import { sha256 } from 'multiformats/hashes/sha2';
 import { handleUpload } from '../../../src/commands/upload.js';
 import { CarOutputService } from '../../../src/services/car-output.service.js';
 import { ZipExtractorService } from '../../../src/services/zip-extractor.service.js';
@@ -166,6 +167,42 @@ describe('upload with a .car input', () => {
     const result = await handleUpload(options());
 
     expect(result.error).toContain('not the root');
+  });
+
+  it('verifies a cidv0 root against the gateway bytes', async () => {
+    const block = new TextEncoder().encode('\x0a\x02\x08\x01');
+    const cid = CID.createV0(await sha256.digest(block));
+    const { writer, out } = CarWriter.create([cid]);
+    const done = Array.fromAsync(out);
+    await writer.put({ cid, bytes: block });
+    await writer.close();
+    await fsPromises.writeFile(car, Buffer.concat(await done));
+    serve(
+      { ok: true, status: 200, text: async () => ndjson(cid.toString()) },
+      { ok: true, arrayBuffer: async () => block.buffer }
+    );
+
+    const result = await handleUpload(options());
+
+    expect(result).toMatchObject({ success: true, root: cid.toString() });
+  });
+
+  it('reports the raw body when dag/import does not answer ndjson', async () => {
+    serve({ ok: true, status: 200, text: async () => '<html>nope</html>' });
+
+    const result = await handleUpload(options());
+
+    expect(result.error).toContain('expected one; response: <html>nope</html>');
+  });
+
+  it('rejects an --api without a scheme and a --timeout that is not seconds', async () => {
+    expect(
+      (await handleUpload({ ...options(), api: 'rpc.filebase.io' })).error
+    ).toBe('--api must be a URL with a scheme, got rpc.filebase.io');
+    expect(
+      (await handleUpload({ ...options(), timeout: '5m' })).error
+    ).toContain('got 5m');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it.each([0, 2])('rejects a car with %i roots', async (count) => {

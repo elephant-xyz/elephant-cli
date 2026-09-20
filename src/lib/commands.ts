@@ -117,7 +117,7 @@ export interface UploadOptions {
   api?: string;
   token?: string;
   gateway?: string;
-  timeout?: number;
+  timeout?: number | string;
   outputJson?: string;
 }
 
@@ -125,7 +125,7 @@ export interface UploadOptions {
 export interface UploadResult extends Partial<CarImportResult> {
   success: boolean;
   cid?: string;
-  errorMessage?: string;
+  error?: string;
   errors?: {
     propertyDir: string;
     success: boolean;
@@ -356,7 +356,7 @@ export async function upload(options: UploadOptions): Promise<UploadResult> {
   } catch (error) {
     return {
       success: false,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

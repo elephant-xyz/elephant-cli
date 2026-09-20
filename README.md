@@ -812,7 +812,7 @@ elephant-cli upload hashed-data.zip \
   --output-csv upload-results.csv
 ```
 
-A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway and its bytes verified against the root CID.
+A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway (`--gateway` or `ELEPHANT_CAR_GATEWAY`, an origin with no trailing slash) and its bytes verified against the root CID; `--timeout` bounds that readback, not the upload.
 
 ```bash
 # local kubo daemon (API on 127.0.0.1:5001, gateway on 127.0.0.1:8080)
@@ -860,7 +860,7 @@ elephant-cli upload county.car \
 | `--pinata-jwt <jwt>`   | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.                                                               | Required if env var absent                                                          |
 | `--api <url>`          | Kubo RPC API for a CAR input (falls back to `IPFS_API`).                                                                                | `http://127.0.0.1:5001`                                                             |
 | `--token <bearer>`     | Bearer token for the API (falls back to `IPFS_API_TOKEN`, then to base64 of `FILEBASE_ACCESS_KEY:FILEBASE_SECRET_KEY:FILEBASE_BUCKET`). | None                                                                                |
-| `--gateway <url>`      | IPFS gateway used to read the CAR root back (falls back to `IPFS_GATEWAY`).                                                             | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
+| `--gateway <url>`      | Gateway origin, no trailing slash, used to read the CAR root back (falls back to `ELEPHANT_CAR_GATEWAY`).                                                             | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
 | `--timeout <seconds>`  | Seconds to wait for the root to resolve on the gateway.                                                                                 | `300`                                                                               |
 | `--output-json <path>` | Write the CAR upload summary as JSON.                                                                                                   | Not written                                                                         |
 

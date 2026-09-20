@@ -20,7 +20,7 @@ export interface UploadCommandOptions {
   api?: string;
   token?: string;
   gateway?: string;
-  timeout?: number;
+  timeout?: number | string;
   outputJson?: string;
 }
 
@@ -60,7 +60,7 @@ export function registerUploadCommand(program: Command) {
     )
     .option(
       '--gateway <url>',
-      'IPFS gateway used to read the CAR root back. If not provided, uses IPFS_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
+      'Gateway origin (no trailing slash) used to read the CAR root back. If not provided, uses ELEPHANT_CAR_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
     )
     .option(
       '--timeout <seconds>',
@@ -77,7 +77,6 @@ export function registerUploadCommand(program: Command) {
         ...options,
         input: path.resolve(workingDir, input),
         pinataJwt: options.pinataJwt || process.env.PINATA_JWT,
-        timeout: Number(options.timeout),
         cwd: workingDir,
       };
 
@@ -113,7 +112,7 @@ async function handleCarUpload(options: UploadCommandOptions) {
     api: options.api || process.env.IPFS_API,
     token:
       options.token || process.env.IPFS_API_TOKEN || filebaseToken(process.env),
-    gateway: options.gateway || process.env.IPFS_GATEWAY,
+    gateway: options.gateway || process.env.ELEPHANT_CAR_GATEWAY,
     timeout: options.timeout,
   }).catch((error: unknown) =>
     error instanceof Error ? error : new Error(String(error))

@@ -5,6 +5,7 @@ import { CarCIDIterator } from '@ipld/car';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { logger } from '../utils/logger.js';
+import { DEFAULT_IPFS_GATEWAYS } from '../config/constants.js';
 import { sameDigest } from './cid-calculator.service.js';
 
 export interface CarImportOptions {
@@ -15,8 +16,8 @@ export interface CarImportOptions {
   token?: string;
   /** Gateway used to read the root back. */
   gateway?: string;
-  /** Seconds to wait for the root readback. */
-  timeout?: number;
+  /** Seconds to wait for the root readback; a CLI string or a number. */
+  timeout?: number | string;
 }
 
 export interface CarImportResult {
@@ -80,20 +81,22 @@ async function roots(input: string): Promise<CID[]> {
 export async function importCar(
   options: CarImportOptions
 ): Promise<CarImportResult> {
-  const timeout = options.timeout ?? 300;
+  const timeout = Number(options.timeout ?? 300);
   if (!Number.isFinite(timeout) || timeout <= 0) {
     throw new Error(
       `--timeout must be a number of seconds greater than zero, got ${options.timeout}`
     );
   }
   const api = (options.api ?? 'http://127.0.0.1:5001').replace(/\/+$/, '');
+  if (!URL.canParse(api)) {
+    throw new Error(`--api must be a URL with a scheme, got ${options.api}`);
+  }
   const gateway = (
     options.gateway ??
     (new URL(api).host === 'rpc.filebase.io'
-      ? 'https://ipfs.filebase.io'
+      ? DEFAULT_IPFS_GATEWAYS[0]
       : 'http://127.0.0.1:8080')
   ).replace(/\/+$/, '');
-  const deadline = Date.now() + timeout * 1000;
 
   const header = await roots(options.input);
   if (header.length !== 1) {
@@ -132,14 +135,16 @@ export async function importCar(
       `dag/import failed: ${response.status} ${response.statusText}: ${text}`
     );
   }
+  // Only JSON lines are parsed, so a 200 with an HTML body (wrong --api) is
+  // reported below with the body instead of a bare SyntaxError.
   const lines: ImportLine[] = text
     .split('\n')
-    .filter((line) => line.trim() !== '')
+    .filter((line) => line.trimStart().startsWith('{'))
     .map((line) => JSON.parse(line));
   const imported = lines.filter((line) => line.Root);
   if (imported.length !== 1) {
     throw new Error(
-      `dag/import returned ${imported.length} roots, expected one: ${text}`
+      `dag/import returned ${imported.length} roots, expected one; response: ${text}`
     );
   }
   const pinned = imported[0].Root!;
@@ -153,6 +158,8 @@ export async function importCar(
   }
   const blocks = lines.find((line) => line.Stats)?.Stats?.BlockCount ?? 0;
   const uploadedAt = new Date().toISOString();
+  // --timeout is the wait for the root to resolve; a slow upload must not consume it.
+  const deadline = Date.now() + timeout * 1000;
 
   const gatewayUrl = `${gateway}/ipfs/${root}`;
   logger.info(`Waiting for ${gatewayUrl} to resolve`);
@@ -161,14 +168,16 @@ export async function importCar(
       signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
     });
     if (!response.ok) {
+      await response.body?.cancel();
       return undefined;
     }
     return new Uint8Array(await response.arrayBuffer());
   });
   const digest = await sha256.digest(bytes);
-  if (!CID.create(1, root.code, digest).equals(root)) {
+  const hashed = CID.create(1, root.code, digest);
+  if (!root.toV1().equals(hashed)) {
     throw new Error(
-      `Gateway bytes for ${root} hash to ${CID.create(1, root.code, digest)}, not the root`
+      `Gateway bytes for ${root} hash to ${hashed}, not the root`
     );
   }
 
