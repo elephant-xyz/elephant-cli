@@ -123,7 +123,6 @@ describe('upload with a .car input', () => {
       cid: root,
       objectCid: root,
       root,
-      blocks: 2,
       gatewayUrl: `https://ipfs.filebase.io/ipfs/${root}`,
     });
   });

@@ -1,5 +1,4 @@
 import { createReadStream, promises as fsPromises } from 'fs';
-import { PassThrough } from 'stream';
 import { setTimeout as sleep } from 'timers/promises';
 import {
   HeadObjectCommand,
@@ -10,6 +9,7 @@ import { CarCIDIterator } from '@ipld/car';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { logger } from '../utils/logger.js';
+import { sameDigest } from './cid-calculator.service.js';
 
 export interface FilebaseCarUploadOptions {
   input: string;
@@ -29,12 +29,7 @@ export interface FilebaseCarUploadResult {
   objectCid: string;
   root: string;
   gatewayUrl: string;
-  blocks: number;
   uploadedAt: string;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -59,7 +54,7 @@ async function poll<T>(
   const reason = 'error' in attempt ? attempt.error : last;
   if (Date.now() >= deadline) {
     throw new Error(
-      `Timed out waiting for ${what}${reason === undefined ? '' : `: ${message(reason)}`}`
+      `Timed out waiting for ${what}${reason === undefined ? '' : `: ${reason instanceof Error ? reason.message : String(reason)}`}`
     );
   }
   await sleep(2000);
@@ -126,51 +121,19 @@ export async function uploadCarToFilebase(
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
 
-  // One read of the file: the bytes go to the PUT body and, in parallel, through
-  // a CID iterator that counts blocks and confirms the root is among them.
-  const source = createReadStream(options.input);
-  const body = new PassThrough();
-  const tally = new PassThrough();
-  source.pipe(body);
-  source.pipe(tally);
-  source.once('error', (error) => {
-    body.destroy(error);
-    tally.destroy(error);
-  });
-  source.once('close', () => tally.end());
-  const counted = (async () => {
-    const iterator = await CarCIDIterator.fromIterable(tally);
-    const count = { blocks: 0, rooted: false };
-    for await (const cid of iterator) {
-      count.blocks += 1;
-      count.rooted = count.rooted || cid.equals(root);
-    }
-    if (!count.rooted) {
-      throw new Error(`Root ${root} is not a block in ${options.input}`);
-    }
-    return count.blocks;
-  })();
-
   logger.info(`Uploading to s3://${options.bucket}/${options.key}`);
   // ponytail: single PUT; add multipart when a county CAR exceeds 5 GB
-  const put = client
-    .send(
-      new PutObjectCommand({
-        Bucket: options.bucket,
-        Key: options.key,
-        Body: body,
-        ContentLength: size,
-        ContentType: 'application/vnd.ipld.car',
-        Metadata: { import: 'car' },
-      })
-    )
-    .catch((error: unknown) => {
-      source.destroy();
-      throw error;
-    });
-  const [, blocks] = await Promise.all([put, counted]);
+  await client.send(
+    new PutObjectCommand({
+      Bucket: options.bucket,
+      Key: options.key,
+      Body: createReadStream(options.input),
+      ContentLength: size,
+      ContentType: 'application/vnd.ipld.car',
+      Metadata: { import: 'car' },
+    })
+  );
   const uploadedAt = new Date().toISOString();
-  logger.info(`CAR ${options.input}: ${blocks} blocks, root ${root}`);
 
   const objectCid = await poll(deadline, 'object cid', async () => {
     const head = await client.send(
@@ -178,10 +141,7 @@ export async function uploadCarToFilebase(
     );
     return head.Metadata?.cid;
   });
-  const same = await Promise.resolve()
-    .then(() => CID.parse(objectCid).equals(root))
-    .catch(() => false);
-  if (!same) {
+  if (!sameDigest(objectCid, root.toString())) {
     throw new Error(
       `Filebase reported object CID ${objectCid} but the CAR root is ${root}`
     );
@@ -211,7 +171,6 @@ export async function uploadCarToFilebase(
     objectCid,
     root: root.toString(),
     gatewayUrl,
-    blocks,
     uploadedAt,
   };
 }

@@ -9,6 +9,7 @@ import {
 } from '../commands/validate.js';
 import { handleHash, HashCommandOptions } from '../commands/hash.js';
 import { handleUpload, UploadCommandOptions } from '../commands/upload.js';
+import type { FilebaseCarUploadResult } from '../services/filebase-car-upload.service.js';
 import {
   handleSubmitToContract,
   SubmitToContractCommandOptions,
@@ -123,17 +124,10 @@ export interface UploadOptions {
   outputJson?: string;
 }
 
-export interface UploadResult {
+/** The `FilebaseCarUploadResult` fields are set for a CAR input only. */
+export interface UploadResult extends Partial<FilebaseCarUploadResult> {
   success: boolean;
   cid?: string;
-  /** CAR input only: the Filebase upload summary. */
-  bucket?: string;
-  key?: string;
-  objectCid?: string;
-  root?: string;
-  gatewayUrl?: string;
-  blocks?: number;
-  uploadedAt?: string;
   errorMessage?: string;
   errors?: {
     propertyDir: string;

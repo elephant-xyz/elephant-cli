@@ -826,7 +826,6 @@ elephant-cli upload county.car \
 - Extracts the single property directory from the hashed ZIP.
 - Uploads JSON datagroups (and HTML/image assets) to IPFS via Pinata.
 - Writes a CSV in the same format as `hash-results.csv`, including upload timestamps and media links when available.
-- For a `.car` input: uploads the file to Filebase, requires the object CID Filebase reports (`x-amz-meta-cid`) to equal the CAR header root, polls `<gateway>/ipfs/<root>?format=raw` until it resolves, and checks the returned bytes hash to the root CID.
 
 **Inputs**
 
@@ -838,7 +837,7 @@ elephant-cli upload county.car \
 - IPFS CID for the JSON directory (printed in the CLI).
 - Optional CID for media files when present.
 - `upload-results.csv` mirroring the hash CSV headers with populated `uploadedAt` (ISO 8601) and `htmlLink` columns.
-- For a `.car` input: a summary with bucket, key, object CID, root CID, block count, gateway URL of the root, and upload timestamp, printed and (with `--output-json`) written as JSON:
+- For a `.car` input: the upload summary, printed and (with `--output-json`) written as JSON:
 
 ```json
 {
@@ -847,7 +846,6 @@ elephant-cli upload county.car \
   "objectCid": "baguqeera...",
   "root": "baguqeera...",
   "gatewayUrl": "https://ipfs.filebase.io/ipfs/baguqeera...",
-  "blocks": 133,
   "uploadedAt": "2025-09-21T00:00:00.000Z"
 }
 ```

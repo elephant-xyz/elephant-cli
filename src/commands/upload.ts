@@ -91,12 +91,7 @@ export function registerUploadCommand(program: Command) {
         cwd: workingDir,
       };
 
-      if (isCarInput(commandOptions.input)) {
-        await handleUpload(commandOptions);
-        return;
-      }
-
-      if (!commandOptions.pinataJwt) {
+      if (!isCarInput(commandOptions.input) && !commandOptions.pinataJwt) {
         console.error(
           chalk.red(
             '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
@@ -166,13 +161,9 @@ async function handleCarUpload(options: UploadCommandOptions) {
   if (!options.silent) {
     console.log(chalk.green('\n✅ Upload completed successfully\n'));
     console.log(chalk.bold('Upload Summary:'));
-    console.log(`  Bucket: ${result.bucket}`);
-    console.log(`  Key: ${result.key}`);
-    console.log(`  Object CID: ${result.objectCid}`);
-    console.log(`  Root CID: ${result.root}`);
-    console.log(`  Blocks: ${result.blocks}`);
-    console.log(`  Gateway: ${result.gatewayUrl}`);
-    console.log(`  Uploaded at: ${result.uploadedAt}`);
+    for (const [name, value] of Object.entries(result)) {
+      console.log(`  ${name}: ${value}`);
+    }
     console.log();
   }
   return { success: true, cid: result.objectCid, ...result };
