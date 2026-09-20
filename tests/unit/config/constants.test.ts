@@ -39,6 +39,11 @@ describe('schema fetch configuration', () => {
     expect(DEFAULT_IPFS_GATEWAYS[0]).toBe('https://ipfs.filebase.io');
   });
 
+  it('falls back to the defaults when ELEPHANT_IPFS_GATEWAYS holds no gateway', () => {
+    process.env.ELEPHANT_IPFS_GATEWAYS = ' , ';
+    expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
+  });
+
   it('honours a comma-separated ELEPHANT_IPFS_GATEWAYS and strips trailing slashes', () => {
     process.env.ELEPHANT_IPFS_GATEWAYS =
       ' http://127.0.0.1:8080/ , https://ipfs.filebase.io,, ';

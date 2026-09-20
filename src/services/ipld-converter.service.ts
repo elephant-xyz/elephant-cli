@@ -6,7 +6,7 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { logger } from '../utils/logger.js';
 import { PinataService } from './pinata.service.js';
-import { CidCalculatorService } from './cid-calculator.service.js';
+import { CidCalculatorService, sameDigest } from './cid-calculator.service.js';
 import { IPLDCanonicalizerService } from './ipld-canonicalizer.service.js';
 import { JsonCanonicalizerService } from './json-canonicalizer.service.cjs';
 
@@ -338,8 +338,11 @@ export class IPLDConverterService {
           uploadResults[0].success &&
           uploadResults[0].cid
         ) {
-          // Use the actual Pinata CID - it's the one that exists on IPFS
-          const cidToReturn = uploadResults[0].cid;
+          // Pinata pins the same bytes under a raw CID; keep our codec when the digest matches
+          const uploaded = uploadResults[0].cid;
+          const cidToReturn = sameDigest(expectedCid, uploaded)
+            ? expectedCid
+            : uploaded;
           logger.debug(
             `Successfully uploaded linked file. CID v1: ${cidToReturn}`
           );

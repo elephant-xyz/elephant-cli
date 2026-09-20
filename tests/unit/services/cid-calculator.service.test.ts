@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
+import {
+  CidCalculatorService,
+  sameDigest,
+} from '../../../src/services/cid-calculator.service.js';
 import { CID } from 'multiformats/cid';
 import * as raw from 'multiformats/codecs/raw';
 import * as dagJSON from '@ipld/dag-json';
@@ -269,6 +272,19 @@ describe('CidCalculatorService', () => {
   });
 
   describe('calculateCidFromCanonicalJson', () => {
+    it('falls back to the raw codec when the canonical JSON is not valid DAG-JSON', async () => {
+      // an unresolved file-path link is not a CID, so the block must not claim the dag-json codec
+      const unresolved = '{"from":{"/":"./child.json"}}';
+      const cid = await cidCalculator.calculateCidFromCanonicalJson(unresolved);
+      expect(CID.parse(cid).code).toBe(raw.code);
+
+      const resolved =
+        '{"from":{"/":"bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"}}';
+      const linked =
+        await cidCalculator.calculateCidFromCanonicalJson(resolved);
+      expect(CID.parse(linked).code).toBe(dagJSON.code);
+    });
+
     it('should calculate CID using dag-json codec for canonical JSON', async () => {
       const canonicalJson = '{"test":"data"}';
       const cid =
@@ -283,7 +299,7 @@ describe('CidCalculatorService', () => {
       expect(parsedCid.code).toBe(dagJSON.code); // Should use dag-json codec (0x0129)
     });
 
-    it('should always use raw codec regardless of content', async () => {
+    it('should always use dag-json codec regardless of content', async () => {
       // Test with regular JSON
       const regularJson = '{"name":"test","value":42}';
       const regularCid =
@@ -444,6 +460,30 @@ describe('CidCalculatorService', () => {
 
       expect(rawParsed.code).toBe(0x55); // raw codec
       expect(unixfsParsed.code).toBe(0x70); // dag-pb codec
+    });
+  });
+
+  describe('sameDigest', () => {
+    const rawCid =
+      'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+    const dagJsonCid = CID.create(
+      1,
+      dagJSON.code,
+      CID.parse(rawCid).multihash
+    ).toString();
+
+    it('is true for the same bytes under different codecs', () => {
+      expect(sameDigest(rawCid, dagJsonCid)).toBe(true);
+    });
+
+    it('is false for different content or non-CID strings', () => {
+      expect(
+        sameDigest(
+          rawCid,
+          'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku'
+        )
+      ).toBe(false);
+      expect(sameDigest(rawCid, 'QmMockUploadedCID')).toBe(false);
     });
   });
 });

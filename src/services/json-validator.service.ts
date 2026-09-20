@@ -2,6 +2,7 @@ import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
 import * as raw_codec from 'multiformats/codecs/raw';
+import * as dagJSON from '@ipld/dag-json';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
@@ -104,7 +105,7 @@ export class JsonValidatorService {
           // Ensure there's content after './'
           return value.length > 2;
         }
-        const ipfsUriPattern = /^ipfs:\/\/[A-Za-z0-9]{46,59}$/;
+        const ipfsUriPattern = /^ipfs:\/\/[A-Za-z0-9]{46,64}$/;
         if (!ipfsUriPattern.test(value)) {
           return false;
         }
@@ -119,8 +120,11 @@ export class JsonValidatorService {
             return false;
           }
 
-          // Accept raw codec (0x55) or DAG-PB codec (0x70) with sha256
-          const isValidCodec = cid.code === raw_codec.code || cid.code === 0x70; // 0x70 is DAG-PB
+          // Accept raw (0x55), DAG-PB (0x70), or dag-json (0x0129) with sha256
+          const isValidCodec =
+            cid.code === raw_codec.code ||
+            cid.code === 0x70 || // DAG-PB
+            cid.code === dagJSON.code;
           // sha2-256 is 0x12
           const isSha256 = cid.multihash.code === sha256.code;
 
@@ -702,7 +706,7 @@ export class JsonValidatorService {
         case 'currency':
           return 'must be a positive number with at most 2 decimal places';
         case 'ipfs_uri':
-          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256 or a relative file path starting with ./';
+          return 'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw, dag-pb, or dag-json codec and sha256 or a relative file path starting with ./';
         case 'rate_percent':
           return 'must be a percentage rate with exactly 3 decimal places (e.g., "12.345")';
         default:

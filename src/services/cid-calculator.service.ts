@@ -9,6 +9,36 @@ import * as raw from 'multiformats/codecs/raw';
 import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
 
+/**
+ * True when the bytes decode as DAG-JSON. Content that still carries unresolved
+ * file-path links (for example `{"/": "./child.json"}`) is not valid DAG-JSON and
+ * must not be labelled with the dag-json codec.
+ */
+function isDagJson(bytes: Uint8Array): boolean {
+  try {
+    dagJSON.decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when two CID strings carry the same multihash, i.e. address the same
+ * bytes even if their codecs differ. False when either string is not a CID.
+ */
+export function sameDigest(a: string, b: string): boolean {
+  try {
+    const left = CID.parse(a).multihash.bytes;
+    const right = CID.parse(b).multihash.bytes;
+    return (
+      left.length === right.length && left.every((byte, i) => byte === right[i])
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class CidCalculatorService {
   constructor() {}
 
@@ -158,7 +188,11 @@ export class CidCalculatorService {
   async calculateCidFromCanonicalJson(canonicalJson: string): Promise<string> {
     const bytes = Buffer.from(canonicalJson, 'utf-8');
     const hash = await sha256.digest(bytes);
-    return CID.create(1, dagJSON.code, hash).toString();
+    return CID.create(
+      1,
+      isDagJson(bytes) ? dagJSON.code : raw.code,
+      hash
+    ).toString();
   }
 
   /**
