@@ -151,14 +151,14 @@ export class CidCalculatorService {
 
   /**
    * Calculate CID from canonical JSON string
-   * This ensures the CID is calculated from the exact canonical representation
-   * Always uses raw codec for consistency
+   * This ensures the CID is calculated from the exact canonical representation.
+   * Uses the DAG-JSON codec (0x0129) so gateways and IPFS nodes can traverse
+   * the IPLD links inside the block; a raw-codec CID makes the block opaque.
    */
   async calculateCidFromCanonicalJson(canonicalJson: string): Promise<string> {
-    // Always use raw codec for all files to ensure consistency
-    // The canonical JSON string is already the exact representation we want
-    const buffer = Buffer.from(canonicalJson, 'utf-8');
-    return this.calculateCidV1ForRawData(buffer);
+    const bytes = Buffer.from(canonicalJson, 'utf-8');
+    const hash = await sha256.digest(bytes);
+    return CID.create(1, dagJSON.code, hash).toString();
   }
 
   /**

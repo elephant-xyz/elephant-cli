@@ -7,7 +7,13 @@ import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import 'dotenv/config';
 
-const execAsync = promisify(exec);
+const run = promisify(exec);
+// Schema fetches must fail fast and deterministically: point the gateway list at a closed port
+// instead of relying on public gateways rate-limiting the fake CIDs used below.
+const execAsync = (command: string) =>
+  run(command, {
+    env: { ...process.env, ELEPHANT_IPFS_GATEWAYS: 'http://127.0.0.1:9' },
+  });
 const __dirname = process.cwd();
 const RPC_URL = 'http://127.0.0.1:8545';
 

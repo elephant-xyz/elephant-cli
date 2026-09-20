@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { CID } from 'multiformats/cid';
 import * as raw from 'multiformats/codecs/raw';
+import * as dagJSON from '@ipld/dag-json';
 
 describe('CidCalculatorService', () => {
   let cidCalculator: CidCalculatorService;
@@ -268,18 +269,18 @@ describe('CidCalculatorService', () => {
   });
 
   describe('calculateCidFromCanonicalJson', () => {
-    it('should calculate CID using raw codec for canonical JSON', async () => {
+    it('should calculate CID using dag-json codec for canonical JSON', async () => {
       const canonicalJson = '{"test":"data"}';
       const cid =
         await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
 
-      // CID v1 should be base32 encoded and use raw codec
-      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+      // CID v1 should be base32 encoded and use the dag-json codec
+      expect(cid).toMatch(/^baguqeera[a-z2-7]+$/);
 
-      // Verify it's a valid CID with raw codec
+      // Verify it's a valid CID with dag-json codec
       const parsedCid = CID.parse(cid);
       expect(parsedCid.version).toBe(1);
-      expect(parsedCid.code).toBe(raw.code); // Should use raw codec (0x55)
+      expect(parsedCid.code).toBe(dagJSON.code); // Should use dag-json codec (0x0129)
     });
 
     it('should always use raw codec regardless of content', async () => {
@@ -294,12 +295,21 @@ describe('CidCalculatorService', () => {
       const ipldCid =
         await cidCalculator.calculateCidFromCanonicalJson(ipldJson);
 
-      // Both should use raw codec
+      // Both should use dag-json codec
       const regularParsed = CID.parse(regularCid);
       const ipldParsed = CID.parse(ipldCid);
 
-      expect(regularParsed.code).toBe(raw.code);
-      expect(ipldParsed.code).toBe(raw.code);
+      expect(regularParsed.code).toBe(dagJSON.code);
+      expect(ipldParsed.code).toBe(dagJSON.code);
+
+      // Same bytes as the raw-codec form: only the codec prefix differs
+      const rawCid = await cidCalculator.calculateCidV1ForRawData(
+        Buffer.from(regularJson, 'utf-8')
+      );
+      expect(CID.parse(rawCid).code).toBe(raw.code);
+      expect(CID.parse(rawCid).multihash.bytes).toEqual(
+        regularParsed.multihash.bytes
+      );
     });
 
     it('should calculate consistent CID for same canonical JSON', async () => {
@@ -328,9 +338,9 @@ describe('CidCalculatorService', () => {
       const cid =
         await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
 
-      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+      expect(cid).toMatch(/^baguqeera[a-z2-7]+$/);
       const parsedCid = CID.parse(cid);
-      expect(parsedCid.code).toBe(raw.code);
+      expect(parsedCid.code).toBe(dagJSON.code);
     });
 
     it('should handle complex nested canonical JSON', async () => {
@@ -339,12 +349,12 @@ describe('CidCalculatorService', () => {
       const cid =
         await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
 
-      expect(cid).toMatch(/^bafkrei[a-z2-7]+$/);
+      expect(cid).toMatch(/^baguqeera[a-z2-7]+$/);
       const parsedCid = CID.parse(cid);
-      expect(parsedCid.code).toBe(raw.code);
+      expect(parsedCid.code).toBe(dagJSON.code);
     });
 
-    it('should be identical to calculateCidV1ForRawData for same buffer', async () => {
+    it('should share the multihash with calculateCidV1ForRawData for same buffer', async () => {
       const canonicalJson = '{"test":"value"}';
       const buffer = Buffer.from(canonicalJson, 'utf-8');
 
@@ -352,7 +362,10 @@ describe('CidCalculatorService', () => {
         await cidCalculator.calculateCidFromCanonicalJson(canonicalJson);
       const cidFromRaw = await cidCalculator.calculateCidV1ForRawData(buffer);
 
-      expect(cidFromCanonical).toBe(cidFromRaw);
+      expect(cidFromCanonical).not.toBe(cidFromRaw);
+      expect(CID.parse(cidFromCanonical).multihash.bytes).toEqual(
+        CID.parse(cidFromRaw).multihash.bytes
+      );
     });
   });
 

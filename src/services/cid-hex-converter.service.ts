@@ -2,6 +2,7 @@ import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { base32 } from 'multiformats/bases/base32';
 import * as raw from 'multiformats/codecs/raw';
+import * as dagJSON from '@ipld/dag-json';
 import { hexlify, getBytes, isHexString } from 'ethers';
 import { create as createDigest } from 'multiformats/hashes/digest';
 import { logger } from '../utils/logger.js';
@@ -99,11 +100,11 @@ export class CidHexConverterService {
         };
       }
 
-      // Check codec
-      if (cid.code !== raw.code) {
+      // Check codec: raw (0x55) for legacy data, dag-json (0x0129) for hashed JSON
+      if (cid.code !== raw.code && cid.code !== dagJSON.code) {
         return {
           valid: false,
-          error: `Expected raw codec (0x55), got codec 0x${cid.code.toString(16)}`,
+          error: `Expected raw (0x55) or dag-json (0x0129) codec, got codec 0x${cid.code.toString(16)}`,
         };
       }
 
