@@ -8,6 +8,29 @@ import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
 import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
+import { equals as u8eq } from 'uint8arrays/equals';
+
+// Unresolved ./path links are not DAG-JSON; keep those blocks raw.
+function isDagJson(bytes: Uint8Array): boolean {
+  try {
+    dagJSON.decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when two CID strings carry the same multihash, i.e. address the same
+ * bytes even if their codecs differ. False when either string is not a CID.
+ */
+export function sameDigest(a: string, b: string): boolean {
+  try {
+    return u8eq(CID.parse(a).multihash.bytes, CID.parse(b).multihash.bytes);
+  } catch {
+    return false;
+  }
+}
 
 export class CidCalculatorService {
   constructor() {}
@@ -151,14 +174,18 @@ export class CidCalculatorService {
 
   /**
    * Calculate CID from canonical JSON string
-   * This ensures the CID is calculated from the exact canonical representation
-   * Always uses raw codec for consistency
+   * This ensures the CID is calculated from the exact canonical representation.
+   * Uses the DAG-JSON codec (0x0129) so gateways and IPFS nodes can traverse
+   * the IPLD links inside the block; a raw-codec CID makes the block opaque.
    */
   async calculateCidFromCanonicalJson(canonicalJson: string): Promise<string> {
-    // Always use raw codec for all files to ensure consistency
-    // The canonical JSON string is already the exact representation we want
-    const buffer = Buffer.from(canonicalJson, 'utf-8');
-    return this.calculateCidV1ForRawData(buffer);
+    const bytes = Buffer.from(canonicalJson, 'utf-8');
+    const hash = await sha256.digest(bytes);
+    return CID.create(
+      1,
+      isDagJson(bytes) ? dagJSON.code : raw.code,
+      hash
+    ).toString();
   }
 
   /**

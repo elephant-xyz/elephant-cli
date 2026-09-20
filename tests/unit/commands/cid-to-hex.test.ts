@@ -105,7 +105,7 @@ describe('cid-to-hex command', () => {
 
     expect(mockConsoleError).toHaveBeenCalledWith(
       expect.stringContaining(
-        '✗ Invalid CID format: Expected raw codec (0x55), got codec 0x70'
+        '✗ Invalid CID format: Expected raw (0x55) or dag-json (0x0129) codec, got codec 0x70'
       )
     );
     expect(mockExit).toHaveBeenCalledWith(1);

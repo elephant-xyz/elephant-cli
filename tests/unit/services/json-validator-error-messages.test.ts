@@ -162,7 +162,7 @@ describe('JsonValidatorService - Enhanced Error Messages', () => {
       const result = await jsonValidator.validate('http://example.com', schema);
       expect(result.valid).toBe(false);
       expect(result.errors![0].message).toBe(
-        'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw codec and sha256 or a relative file path starting with ./'
+        'must be a valid IPFS URI in format ipfs://[CID] with CIDv1 using raw, dag-pb, or dag-json codec and sha256 or a relative file path starting with ./'
       );
     });
 

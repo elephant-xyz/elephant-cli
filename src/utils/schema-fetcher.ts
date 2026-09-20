@@ -5,6 +5,7 @@ import { sha256, sha512 } from 'multiformats/hashes/sha2';
 import { Hasher } from 'multiformats/hashes/hasher';
 import { logger } from '../utils/logger.js';
 import { base32 } from 'multiformats/bases/base32';
+import { ipfsGateways, schemaManifestUrl } from '../config/constants.js';
 
 type SchemaType = 'class' | 'relationship' | 'dataGroup';
 
@@ -28,9 +29,7 @@ const HASHERS: Record<number, Hasher<'sha2-256', 18> | Hasher<'sha2-512', 19>> =
 export async function fetchSchemaManifest(): Promise<
   Record<string, SchemaMeta>
 > {
-  const schemasManifestResponse = await fetch(
-    'https://lexicon.elephant.xyz/json-schemas/schema-manifest.json'
-  );
+  const schemasManifestResponse = await fetch(schemaManifestUrl());
   if (!schemasManifestResponse.ok) {
     console.error(
       chalk.red(
@@ -87,13 +86,7 @@ export async function fetchSchemas(
 
 export async function fetchFromIpfs(cid: string): Promise<string> {
   logger.info(`Fetching ${cid}`);
-  const ipfsGateways: string[] = [
-    'https://ipfs.io',
-    'https://gateway.ipfs.io',
-    'https://dweb.link',
-    'https://w3s.link',
-  ];
-  for (const gateway of ipfsGateways) {
+  for (const gateway of ipfsGateways()) {
     try {
       const response = await fetch(`${gateway}/ipfs/${cid}`);
       if (response.ok) {

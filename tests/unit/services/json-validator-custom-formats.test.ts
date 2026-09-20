@@ -158,6 +158,7 @@ describe('JsonValidatorService - Custom Formats', () => {
         'ipfs://bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', // CIDv1 raw
         'ipfs://bafkreiggtrptmp32pl3to7x2tw5eedceyfld6sv25dlcdro6lowvxc5ili',
         'ipfs://bafkreichjl4lzxm5257p6jzvmm4zq4cu3s55torjiqju3crhstofeikvxm',
+        'ipfs://baguqeeraypchgpwiv76qnt46t72q77dlzuxmqwtboaaexnyjm2oddxuuhena', // CIDv1 dag-json, as produced by hash
       ];
 
       for (const value of validValues) {
@@ -169,7 +170,7 @@ describe('JsonValidatorService - Custom Formats', () => {
     it('should reject invalid IPFS URI values', async () => {
       const invalidValues = [
         'http://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o', // Wrong protocol
-        'ipfs://baguqeeraevt2kit5iquvk554xn7jfr63skcsixiipv3wyexx65g7vyqh5rsq', //wrong codec
+        'ipfs://bafyreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi', // dag-cbor: wrong codec
         'ipfs://QmdfTbBqBPQ7VNxZEYEj14VmRuZBkqFbiwReogJgS1zR1n', // v0 long
       ];
 

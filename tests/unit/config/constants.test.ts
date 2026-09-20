@@ -9,7 +9,39 @@ import {
   PINATA_API_BASE_URL,
   PINATA_GATEWAY_BASE_URL,
   SUBMIT_CONTRACT_ABI_FRAGMENTS,
+  DEFAULT_IPFS_GATEWAYS,
+  schemaManifestUrl,
+  ipfsGateways,
 } from '../../../src/config/constants';
+import { afterEach } from 'vitest';
+
+describe('schema fetch configuration', () => {
+  afterEach(() => {
+    delete process.env.ELEPHANT_SCHEMA_MANIFEST_URL;
+    delete process.env.ELEPHANT_IPFS_GATEWAYS;
+  });
+
+  it('uses the live manifest and the Filebase-first gateway list by default', () => {
+    expect(schemaManifestUrl()).toBe(
+      'https://lexicon.elephant.xyz/api/manifest'
+    );
+    expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
+    expect(DEFAULT_IPFS_GATEWAYS[0]).toBe('https://ipfs.filebase.io');
+  });
+
+  it('honours the environment overrides', () => {
+    process.env.ELEPHANT_SCHEMA_MANIFEST_URL = 'http://127.0.0.1:9/manifest';
+    process.env.ELEPHANT_IPFS_GATEWAYS =
+      ' http://127.0.0.1:8080 , https://ipfs.filebase.io,, ';
+    expect(schemaManifestUrl()).toBe('http://127.0.0.1:9/manifest');
+    expect(ipfsGateways()).toEqual([
+      'http://127.0.0.1:8080',
+      'https://ipfs.filebase.io',
+    ]);
+    process.env.ELEPHANT_IPFS_GATEWAYS = ' , ';
+    expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
+  });
+});
 
 describe('Constants', () => {
   describe('existing constants', () => {

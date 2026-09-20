@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CidHexConverterService } from '../../../src/services/cid-hex-converter.service.js';
+import { CID } from 'multiformats/cid';
+import * as dagJSON from '@ipld/dag-json';
 
 describe('CidHexConverterService', () => {
   let service: CidHexConverterService;
@@ -77,7 +79,7 @@ describe('CidHexConverterService', () => {
       const cidDagPb =
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
       expect(() => service.cidToHex(cidDagPb)).toThrow(
-        'Expected raw codec (0x55), got codec 0x70'
+        'Expected raw (0x55) or dag-json (0x0129) codec, got codec 0x70'
       );
     });
 
@@ -142,6 +144,18 @@ describe('CidHexConverterService', () => {
   });
 
   describe('validateCidFormat', () => {
+    it('should accept a dag-json CID and map it to the same hex as its raw form', () => {
+      const rawCid =
+        'bafkreigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
+      const dagJsonCid = CID.create(
+        1,
+        dagJSON.code,
+        CID.parse(rawCid).multihash
+      ).toString();
+      expect(service.validateCidFormat(dagJsonCid).valid).toBe(true);
+      expect(service.cidToHex(dagJsonCid)).toBe(service.cidToHex(rawCid));
+    });
+
     it('should validate correct CID v1 with raw codec', () => {
       const result = service.validateCidFormat(
         'bafkreifzjut3te2nhyekklss27nh3k72ysco7y32koao5eei66wof36n5e'
@@ -163,7 +177,9 @@ describe('CidHexConverterService', () => {
         'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'
       );
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('Expected raw codec (0x55), got codec 0x70');
+      expect(result.error).toBe(
+        'Expected raw (0x55) or dag-json (0x0129) codec, got codec 0x70'
+      );
     });
 
     it('should reject invalid CID', () => {

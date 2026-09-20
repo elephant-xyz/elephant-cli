@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.js';
+import { schemaManifestUrl } from '../config/constants.js';
 
 interface SchemaManifestItem {
   ipfsCid: string;
@@ -11,8 +12,6 @@ export interface SchemaManifest {
 
 export class SchemaManifestService {
   private schemaManifest: SchemaManifest | null = null;
-  private readonly schemaManifestUrl: string =
-    'https://lexicon.elephant.xyz/json-schemas/schema-manifest.json';
 
   async loadSchemaManifest(): Promise<SchemaManifest> {
     if (this.schemaManifest) {
@@ -21,7 +20,7 @@ export class SchemaManifestService {
 
     try {
       logger.info('Fetching schema manifest from Elephant Network...');
-      const response = await fetch(this.schemaManifestUrl);
+      const response = await fetch(schemaManifestUrl());
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

@@ -38,7 +38,7 @@ describe('SchemaManifestService', () => {
 
       expect(result).toEqual(mockManifest);
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://lexicon.elephant.xyz/json-schemas/schema-manifest.json'
+        'https://lexicon.elephant.xyz/api/manifest'
       );
     });
 

@@ -13,7 +13,10 @@ import { SchemaCacheService } from '../services/schema-cache.service.js';
 import { JsonValidatorService } from '../services/json-validator.service.js';
 import { JsonCanonicalizerService } from '../services/json-canonicalizer.service.cjs';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
-import { CidCalculatorService } from '../services/cid-calculator.service.js';
+import {
+  CidCalculatorService,
+  sameDigest,
+} from '../services/cid-calculator.service.js';
 import { PinataService } from '../services/pinata.service.js';
 import { CsvReporterService } from '../services/csv-reporter.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
@@ -1207,7 +1210,10 @@ async function processFileAndGetUploadPromise(
             uploadResults[0].success &&
             uploadResults[0].cid
           ) {
-            const ipfsCid = uploadResults[0].cid;
+            const uploaded = uploadResults[0].cid;
+            const ipfsCid = sameDigest(processedFile.calculatedCid, uploaded)
+              ? processedFile.calculatedCid
+              : uploaded;
 
             // For seed files, the propertyCid should be the same as dataCid
             const isSeedFile =
