@@ -23,6 +23,11 @@ import {
   runBatchInput,
   sharedServices,
 } from '../utils/batch-input.js';
+import {
+  CAR_CHECKS,
+  CarSummary,
+  validateCar,
+} from '../services/car-validator.service.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -36,7 +41,7 @@ export function registerValidateCommand(program: Command) {
   program
     .command('validate <input>')
     .description(
-      'Validate single property data from a ZIP file against schemas without uploading to IPFS.'
+      'Validate single property data from a ZIP file, a directory of properties, or a county CAR against schemas without uploading to IPFS.'
     )
     .option(
       '-o, --output-csv <path>',
@@ -74,18 +79,93 @@ export interface ValidateServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
+/** Thrown in `silent` mode when a county CAR fails any check; carries the counts. */
+export class CarValidationError extends Error {
+  constructor(readonly summary: CarSummary) {
+    super(
+      `CAR validation failed: ${CAR_CHECKS.map(
+        (check) => `${check} ${summary.errors[check]}`
+      ).join(', ')}`
+    );
+  }
+}
+
+/** Returns the summary for a `.car` input; single property and batch inputs return nothing. */
 export async function handleValidate(
   options: ValidateCommandOptions,
   serviceOverrides: ValidateServiceOverrides = {}
-) {
+): Promise<CarSummary | undefined> {
+  if (options.input.endsWith('.car')) {
+    return validateCounty(options, serviceOverrides);
+  }
   if (!(await isBatchInput(options.input))) {
-    return validateProperty(options, serviceOverrides);
+    await validateProperty(options, serviceOverrides);
+    return;
   }
   await runBatchInput(
     options,
     validateProperty,
     sharedServices(serviceOverrides)
   );
+}
+
+async function validateCounty(
+  options: ValidateCommandOptions,
+  serviceOverrides: ValidateServiceOverrides
+): Promise<CarSummary> {
+  if (!options.silent) {
+    console.log(
+      chalk.bold.blue('🐘 Elephant Network CLI - Validate (County CAR)')
+    );
+    console.log();
+  }
+  const workingDir = options.cwd || process.cwd();
+  const errorCsvPath = path.resolve(
+    workingDir,
+    options.outputCsv || 'submit_errors.csv'
+  );
+  const schemaCacheService =
+    serviceOverrides.schemaCacheService ?? new SchemaCacheService();
+  const jsonValidatorService =
+    serviceOverrides.jsonValidatorService ??
+    new JsonValidatorService('', schemaCacheService);
+  const csvReporterService =
+    serviceOverrides.csvReporterService ??
+    new CsvReporterService(
+      errorCsvPath,
+      path.resolve(workingDir, 'submit_warnings.csv')
+    );
+  await csvReporterService.initialize();
+  logger.technical(`Validation errors will be saved to: ${errorCsvPath}`);
+  const summary = await validateCar(options.input, {
+    schemaCacheService,
+    jsonValidatorService,
+    csvReporterService,
+  }).finally(() => csvReporterService.finalize());
+  const failed = Object.values(summary.errors).reduce((a, b) => a + b, 0);
+  if (!options.silent) {
+    console.log(chalk.bold('\n📊 CAR Validation Report:'));
+    console.log(`  Blocks:                 ${summary.blocks}`);
+    console.log(`  Properties:             ${summary.properties}`);
+    console.log(`  Data groups validated:  ${summary.groups}`);
+    for (const check of CAR_CHECKS) {
+      console.log(`  ${`${check} errors:`.padEnd(24)}${summary.errors[check]}`);
+    }
+    console.log(
+      failed > 0
+        ? chalk.yellow(
+            `\n⚠️  ${failed} errors found. Check ${errorCsvPath} for details.`
+          )
+        : chalk.green('\n✅ CAR passed every check')
+    );
+  }
+  if (failed === 0) {
+    return summary;
+  }
+  if (options.silent) {
+    throw new CarValidationError(summary);
+  }
+  process.exit(1);
 }
 
 async function validateProperty(

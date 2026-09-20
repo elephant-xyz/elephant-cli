@@ -18,6 +18,7 @@ export type {
   TransformFailureDetail,
   ValidateOptions,
   ValidateResult,
+  CarSummary,
   HashOptions,
   HashResult,
   UploadOptions,

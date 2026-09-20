@@ -28,6 +28,7 @@ export class JsonValidatorService {
   private validators: Map<string, ValidateFunction> = new Map();
   private schemaCacheService: SchemaCacheService;
   private baseDirectory: string;
+  private blockSource?: (cid: string) => Promise<Uint8Array | undefined>;
 
   constructor(baseDirectory: string, schemaCacheService: SchemaCacheService) {
     this.baseDirectory = baseDirectory;
@@ -159,6 +160,13 @@ export class JsonValidatorService {
         return uriPattern.test(value);
       },
     });
+  }
+
+  /** Resolve `{"/": cid}` data pointers from this source before falling back to IPFS. */
+  setBlockSource(
+    source: (cid: string) => Promise<Uint8Array | undefined>
+  ): void {
+    this.blockSource = source;
   }
 
   private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
@@ -487,7 +495,10 @@ export class JsonValidatorService {
 
       if (isCID) {
         try {
-          const text = await fetchFromIpfs(pointerValue);
+          const local = await this.blockSource?.(pointerValue);
+          const text = local
+            ? new TextDecoder().decode(local)
+            : await fetchFromIpfs(pointerValue);
           let value: unknown = text;
           try {
             value = JSON.parse(text);
