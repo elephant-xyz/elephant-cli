@@ -4,9 +4,12 @@ import {
   TransformCommandOptions,
 } from '../commands/transform/index.js';
 import {
+  CarValidationError,
   handleValidate,
   ValidateCommandOptions,
 } from '../commands/validate.js';
+import type { CarSummary } from '../services/car-validator.service.js';
+export type { CarSummary };
 import { handleHash, HashCommandOptions } from '../commands/hash.js';
 import { handleUpload, UploadCommandOptions } from '../commands/upload.js';
 import type { CarImportResult } from '../services/car-import.service.js';
@@ -82,6 +85,8 @@ export interface ValidateResult {
   skipped: number;
   errorCsvPath: string;
   error?: string;
+  /** Set when `input` is a county CAR: block, property, and data-group counts plus errors per check. */
+  car?: CarSummary;
 }
 
 // Hash function interface
@@ -271,7 +276,7 @@ export async function validate(
       cwd: options.cwd,
     };
 
-    await handleValidate(validateOptions);
+    const car = await handleValidate(validateOptions);
 
     return {
       success: true,
@@ -280,18 +285,21 @@ export async function validate(
       processed: 0,
       skipped: 0,
       errorCsvPath: path.resolve(workingDir, outputCsv),
+      car,
     };
   } catch (error) {
     const workingDir = options.cwd || process.cwd();
     const outputCsv = options.outputCsv || 'submit_errors.csv';
+    const car = error instanceof CarValidationError ? error.summary : undefined;
     return {
       success: false,
       totalFiles: 0,
-      errors: 1,
+      errors: car ? Object.values(car.errors).reduce((a, b) => a + b, 0) : 1,
       processed: 0,
       skipped: 0,
       errorCsvPath: path.resolve(workingDir, outputCsv),
       error: error instanceof Error ? error.message : String(error),
+      car,
     };
   }
 }

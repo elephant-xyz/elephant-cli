@@ -256,14 +256,25 @@ This ensures all files conform to the Property Improvement schema and relationsh
 **Inputs**
 
 - A single property ZIP, a single extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order; children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run).
+- Or a county CAR written by `hash --output-car` (any input ending in `.car`). The file is indexed once and checked in place:
+  - Integrity: every block's bytes re-hash to its CID.
+  - Root: exactly one root, a `CountyIndex` version 1 with a numeric `properties` count and a `shards` array of links.
+  - Index closure: every shard decodes to `{"properties": [...]}`, the entries add up to `properties`, and every `property_cid` and `data_groups` link resolves inside the file.
+  - Graph closure: every link in every dag-json block reachable from the root resolves inside the file.
+  - Lexicon: every data-group root listed in a shard validates against the schema it is keyed by, resolving links from the CAR instead of IPFS.
+  - Orphans: every block is reachable from the root.
 
 **Outputs**
 
 - `--output-csv` (default `submit_errors.csv`): validation errors. With a directory of properties, one combined CSV for the whole batch (plus a combined `submit_warnings.csv` beside it), followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
+- With a CAR, one row per finding (`file_path` holds the block CID, `error_path` the check name or the JSON path for lexicon errors), followed by a summary of blocks, properties, data groups validated, and errors per check; the exit code is non-zero when any check failed.
 
 ```bash
 # Validate every property in a county directory in one invocation
 elephant-cli validate ./county-outputs --output-csv county-errors.csv
+
+# Prove a county CAR is intact, closed, and lexicon-valid before registering its root
+elephant-cli validate county.car --output-csv car-errors.csv
 ```
 
 ## Build the Seed Bundle
