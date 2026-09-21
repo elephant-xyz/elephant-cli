@@ -871,13 +871,46 @@ The `CountyTables` root links every part:
 
 The command prints `Tables written: <dir> (<tables> tables, <parts> parts, root <cid>)` and, with `--output-json`, writes the same with per-table row and part counts, the county root and an `exportedAt` timestamp.
 
+**Atlas page**
+
+[Atlas](https://github.com/elephant-xyz/atlas) registers a county as `counties/<STATE>/<county>.json`. `--atlas-page <path>` creates or updates that file from the same walk, so nothing is copied by hand:
+
+```bash
+elephant-cli export-tables county.car \
+  --output ./county-tables \
+  --atlas-page ./atlas/counties/FL/lee.json --county lee --state FL --fips 12071
+```
+
+```json
+{
+  "county": "lee",
+  "state": "FL",
+  "fips": "12071",
+  "groups": {
+    "county": {
+      "cid": "<county index root>",
+      "schema": "<data-group schema CID>",
+      "tables": "<CountyTables root>"
+    }
+  }
+}
+```
+
+- `--county`, `--state` and `--fips` are required when the page does not exist; when it does, any given value must match the file or the command fails.
+- The group key is the snake_cased title of the archive's data-group schema (`County` -> `county`, `Property Improvement` -> `property_improvement`), taken from the distinct schema CIDs in the index with the `Seed` schema dropped. An archive with more than one other data group fails: `archive carries N data groups; Atlas registers one group per archive`.
+- `groups[<key>]` is written as `{ cid, schema, tables }` (county root, schema CID, tables root); other groups in the file are kept, keys are sorted, the file is 2-space indented with a trailing newline. The command prints `Atlas page written: <path> group <key>`, and the summary (`--output-json`, library result) carries `atlas: { page, group }`.
+
 **Options**
 
-| Option                 | Description                                                                  | Default     |
-| ---------------------- | ---------------------------------------------------------------------------- | ----------- |
-| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
-| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
-| `--output-json <path>` | Write the export summary as JSON.                                            | Not written |
+| Option                 | Description                                                                                          | Default     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ----------- |
+| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`.                         | Required    |
+| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.                             | `1g`        |
+| `--output-json <path>` | Write the export summary as JSON.                                                                    | Not written |
+| `--atlas-page <path>`  | Create or update the Atlas county page with `groups[<key>] = { cid, schema, tables }`.               | Not written |
+| `--county <key>`       | Atlas county key; required with `--atlas-page` for a new page, must match an existing one.           | From page   |
+| `--state <ST>`         | Two-letter state code; required with `--atlas-page` for a new page, must match an existing one.      | From page   |
+| `--fips <code>`        | Five-digit county FIPS code; required with `--atlas-page` for a new page, must match an existing one. | From page   |
 
 ## Upload Datagroups to IPFS
 

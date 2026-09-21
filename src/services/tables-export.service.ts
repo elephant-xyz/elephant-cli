@@ -27,6 +27,12 @@ export interface ExportTablesOptions {
   output: string;
   /** Cap on the bytes of one part; default 1 GiB. */
   partSize?: number;
+  /** Atlas county page (`counties/<STATE>/<county>.json`) to create or update with this export. */
+  atlasPage?: string;
+  /** Required with `atlasPage` when the page does not exist; must match it when it does. */
+  county?: string;
+  state?: string;
+  fips?: string;
 }
 
 export interface ExportTablesResult {
@@ -41,6 +47,8 @@ export interface ExportTablesResult {
   tables: Record<string, { rows: number; parts: number }>;
   parts: number;
   exportedAt: string;
+  /** Set when `atlasPage` was written: the file and the group key registered in it. */
+  atlas?: { page: string; group: string };
 }
 
 type Kind = 'STRING' | 'DOUBLE' | 'INT64' | 'BOOLEAN';
@@ -93,6 +101,82 @@ const RELATIONSHIP: Column[] = [
   'property_cid',
   'data_group_cid',
 ].map((name) => ({ name, kind: 'STRING' }));
+
+/** An Atlas county page: `groups` keys one archive per data group, snake_cased from the schema title. */
+interface AtlasPage {
+  county: string;
+  state: string;
+  fips: string;
+  groups: Record<string, { cid: string; schema: string; tables: string }>;
+}
+
+/** `Property Improvement` -> `property_improvement`; empty when the schema has no title. */
+function snake(schema: JSONSchema): string {
+  const title = typeof schema.title === 'string' ? schema.title : '';
+  return title.trim().replace(/\s+/g, '_').toLowerCase();
+}
+
+/**
+ * The page at `file` checked against the county the options name, or the
+ * options alone when there is no file yet. Every one of county, state and
+ * fips must be known, and a given option must equal what the file records.
+ */
+async function atlasPage(
+  options: ExportTablesOptions,
+  file: string
+): Promise<AtlasPage> {
+  const text = await fsPromises.readFile(file, 'utf-8').catch(() => undefined);
+  const found =
+    text === undefined ? undefined : (JSON.parse(text) as Partial<AtlasPage>);
+  const page = {
+    county: options.county ?? found?.county,
+    state: options.state ?? found?.state,
+    fips: options.fips ?? found?.fips,
+  };
+  for (const [key, value] of Object.entries(page)) {
+    const known = found?.[key as keyof typeof page];
+    if (typeof value !== 'string') {
+      throw new Error(`--${key} is required to create ${file}`);
+    }
+    if (found && known !== value) {
+      throw new Error(
+        `--${key} ${value} does not match ${key} ${JSON.stringify(known)} in ${file}`
+      );
+    }
+  }
+  if (!/^\d{5}$/.test(String(page.fips))) {
+    throw new Error(`--fips must be five digits, got ${page.fips}`);
+  }
+  if (!/^[A-Z]{2}$/.test(String(page.state))) {
+    throw new Error(`--state must be a two-letter code, got ${page.state}`);
+  }
+  return {
+    ...found,
+    ...(page as { county: string; state: string; fips: string }),
+    groups: found?.groups ?? {},
+  };
+}
+
+/** `groups[key]` set on the page, other groups kept, keys sorted, 2-space indent, trailing newline. */
+async function writeAtlasPage(
+  file: string,
+  page: AtlasPage,
+  key: string,
+  group: AtlasPage['groups'][string]
+): Promise<{ page: string; group: string }> {
+  const groups = Object.fromEntries(
+    Object.entries({ ...page.groups, [key]: group }).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  );
+  await fsPromises.mkdir(path.dirname(file), { recursive: true });
+  await fsPromises.writeFile(
+    file,
+    `${JSON.stringify({ ...page, groups }, null, 2)}\n`
+  );
+  logger.info(`Atlas page written: ${file} group ${key}`);
+  return { page: file, group: key };
+}
 
 /** Parquet kind of a class property: the first non-null JSON type; objects, arrays and untyped values are UTF8 JSON. */
 function kind(property: JSONSchema | undefined): Kind {
@@ -325,8 +409,7 @@ export async function exportTables(
         return known;
       }
       const schema = await services.schemaCacheService.get(cid);
-      const title = typeof schema.title === 'string' ? schema.title : '';
-      const name = title.trim().replace(/\s+/g, '_').toLowerCase();
+      const name = snake(schema);
       if (!name) {
         return fail(`class schema ${cid} has no title`);
       }
@@ -416,6 +499,24 @@ export async function exportTables(
         )
       ),
     ];
+    // The Atlas group is settled before any row is written, so a bad page or
+    // an archive with two data groups fails without an hour of export first.
+    const file = options.atlasPage;
+    const page = file ? await atlasPage(options, file) : undefined;
+    const labelled = page
+      ? await Promise.all(
+          groups.map(async (cid) => ({
+            cid,
+            label: snake(await services.schemaCacheService.get(cid)),
+          }))
+        )
+      : [];
+    const rest = labelled.filter((item) => item.label !== 'seed');
+    if (page && rest.length !== 1) {
+      return fail(
+        `archive carries ${rest.length} data groups; Atlas registers one group per archive`
+      );
+    }
     const properties = writer({
       name: 'properties',
       columns: ['property_cid', ...groups].map((name) => ({
@@ -537,6 +638,14 @@ export async function exportTables(
     await channel.writer.put({ cid: root, bytes });
     await channel.writer.close();
     await drained;
+    const atlas =
+      file && page
+        ? await writeAtlasPage(file, page, rest[0].label, {
+            cid: countyRoot,
+            schema: rest[0].cid,
+            tables: root.toString(),
+          })
+        : undefined;
     return {
       output: options.output,
       car,
@@ -555,6 +664,7 @@ export async function exportTables(
         0
       ),
       exportedAt: new Date().toISOString(),
+      ...(atlas ? { atlas } : {}),
     };
   };
   try {

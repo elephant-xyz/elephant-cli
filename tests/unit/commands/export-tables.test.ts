@@ -9,7 +9,10 @@ import { CID } from 'multiformats/cid';
 import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
 import { parquetMetadata, parquetReadObjects } from 'hyparquet';
-import { handleExportTables } from '../../../src/commands/export-tables.js';
+import {
+  ExportTablesCommandOptions,
+  handleExportTables,
+} from '../../../src/commands/export-tables.js';
 import { handleUpload } from '../../../src/commands/upload.js';
 import {
   buildCountyCar,
@@ -107,9 +110,13 @@ async function fixture(tweaks: Tweaks = {}) {
   made.push(tmp);
   const car = path.join(tmp, 'county.car');
   const built = await buildCountyCar(car, tweaks);
-  const run = (output: string, partSize?: string) =>
+  const run = (
+    output: string,
+    partSize?: string,
+    extra: Partial<ExportTablesCommandOptions> = {}
+  ) =>
     handleExportTables(
-      { input: car, output, partSize, silent: true, cwd: tmp },
+      { input: car, output, partSize, silent: true, cwd: tmp, ...extra },
       { schemaCacheService }
     );
   return { tmp, car, run, ...built };
@@ -254,6 +261,108 @@ describe('export-tables <county.car>', () => {
     await expect(run(path.join(tmp, 'tables'))).rejects.toThrow(
       `table property has two schemas in this car: ${PROPERTY} and ${OTHER_PROPERTY}`
     );
+  });
+
+  it('writes a new Atlas page keyed by the non-seed data group with the county root, schema and tables root', async () => {
+    const { tmp, run, root } = await fixture({ seed: true });
+    const page = path.join(tmp, 'counties', 'FL', 'lee.json');
+    const result = await run(path.join(tmp, 'tables'), undefined, {
+      atlasPage: page,
+      county: 'lee',
+      state: 'FL',
+      fips: '12071',
+    });
+
+    expect(result.atlas).toEqual({ page, group: 'county' });
+    const expected = {
+      county: 'lee',
+      state: 'FL',
+      fips: '12071',
+      groups: {
+        county: {
+          cid: root.toString(),
+          schema: GROUP,
+          tables: result.root,
+        },
+      },
+    };
+    expect(await fsPromises.readFile(page, 'utf-8')).toBe(
+      `${JSON.stringify(expected, null, 2)}\n`
+    );
+  });
+
+  it('updates an existing Atlas page, keeping its other groups with keys sorted', async () => {
+    const { tmp, run, root } = await fixture();
+    const page = path.join(tmp, 'lee.json');
+    const zoning = {
+      cid: 'bafyzoning',
+      schema: 'bafyschema',
+      tables: 'bafytables',
+    };
+    await fsPromises.writeFile(
+      page,
+      JSON.stringify({
+        county: 'lee',
+        state: 'FL',
+        fips: '12071',
+        groups: { zoning },
+      })
+    );
+    const result = await run(path.join(tmp, 'tables'), undefined, {
+      atlasPage: page,
+      fips: '12071',
+    });
+
+    const written = JSON.parse(await fsPromises.readFile(page, 'utf-8'));
+    expect(Object.keys(written.groups)).toEqual(['county', 'zoning']);
+    expect(written).toEqual({
+      county: 'lee',
+      state: 'FL',
+      fips: '12071',
+      groups: {
+        county: { cid: root.toString(), schema: GROUP, tables: result.root },
+        zoning,
+      },
+    });
+  });
+
+  it('fails when the county metadata does not match the Atlas page, or is missing for a new one', async () => {
+    const { tmp, run } = await fixture();
+    const page = path.join(tmp, 'lee.json');
+    await fsPromises.writeFile(
+      page,
+      JSON.stringify({ county: 'lee', state: 'FL', fips: '12071', groups: {} })
+    );
+    await expect(
+      run(path.join(tmp, 'tables'), undefined, {
+        atlasPage: page,
+        county: 'collier',
+      })
+    ).rejects.toThrow('--county collier does not match county "lee"');
+    await expect(
+      run(path.join(tmp, 'tables'), undefined, {
+        atlasPage: path.join(tmp, 'new.json'),
+        county: 'collier',
+        state: 'FL',
+      })
+    ).rejects.toThrow('--fips is required to create');
+    await expect(fsPromises.stat(path.join(tmp, 'new.json'))).rejects.toThrow();
+  });
+
+  it('fails an Atlas page for an archive with two non-seed data groups before writing a row', async () => {
+    const { tmp, run } = await fixture({ twin: true, seed: true });
+    const out = path.join(tmp, 'tables');
+    await expect(
+      run(out, undefined, {
+        atlasPage: path.join(tmp, 'lee.json'),
+        county: 'lee',
+        state: 'FL',
+        fips: '12071',
+      })
+    ).rejects.toThrow(
+      'archive carries 2 data groups; Atlas registers one group per archive'
+    );
+    await expect(fsPromises.readdir(out)).resolves.toEqual([]);
   });
 
   it('exports an index with zero properties as a valid empty tables.car', async () => {

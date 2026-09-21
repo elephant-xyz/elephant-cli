@@ -37,6 +37,7 @@ export const OTHER_LINK = (
 export const OTHER_PROPERTY = (
   await text('another property class schema')
 ).cid.toString();
+export const SEED = (await text('seed data group schema')).cid.toString();
 
 /** Data group -> relationship -> class schemas, shaped like the lexicon. */
 export const SCHEMAS: Record<string, object> = {
@@ -110,6 +111,14 @@ export const SCHEMAS: Record<string, object> = {
     title: 'property',
     properties: { nickname: { type: 'string' } },
   },
+  [SEED]: {
+    type: 'object',
+    title: 'Seed',
+    properties: {
+      label: { type: 'string' },
+      relationships: { type: 'object', properties: {} },
+    },
+  },
 };
 
 export const schemaCacheService = {
@@ -129,6 +138,8 @@ export interface Tweaks {
   twin?: boolean;
   /** No properties at all: an index with zero shards. */
   empty?: boolean;
+  /** Every property also carries a Seed data group with no relationships. */
+  seed?: boolean;
 }
 
 /**
@@ -179,11 +190,16 @@ export async function buildCountyCar(
     if (tweaks.twin && b) {
       blocks.push(other, twinLink, twin);
     }
+    const seed = await json({ label: 'Seed', relationships: {} });
+    if (tweaks.seed) {
+      blocks.push(seed);
+    }
     entries.push({
       property_cid: root.cid,
       data_groups: {
         [GROUP]: root.cid,
         ...(tweaks.twin && b ? { [OTHER_GROUP]: other.cid } : {}),
+        ...(tweaks.seed ? { [SEED]: seed.cid } : {}),
       },
     });
   }
