@@ -15,6 +15,12 @@ export interface ExportTablesCommandOptions {
   /** Bytes, or a number with a `k`, `m` or `g` suffix; default `1g`. */
   partSize?: string | number;
   outputJson?: string;
+  /** Atlas county page (`counties/<STATE>/<county>.json`) to create or update. */
+  atlasPage?: string;
+  /** Required with `atlasPage` when the page does not exist; must match it when it does. */
+  county?: string;
+  state?: string;
+  fips?: string;
   silent?: boolean;
   cwd?: string;
 }
@@ -56,12 +62,25 @@ export function registerExportTablesCommand(program: Command) {
       '--output-json <path>',
       'Write the export summary (tables root, county root, per-table rows and parts) as JSON.'
     )
+    .option(
+      '--atlas-page <path>',
+      'Create or update the Atlas county page (counties/<STATE>/<county>.json) with the county root, data-group schema and tables root of this export.'
+    )
+    .option(
+      '--county <key>',
+      'Atlas county key; required with --atlas-page when the page does not exist, must match it when it does.'
+    )
+    .option('--state <ST>', 'Two-letter state code for the Atlas page.')
+    .option('--fips <code>', 'Five-digit county FIPS code for the Atlas page.')
     .action(async (input, options) => {
       const workingDir = options.cwd || process.cwd();
       await handleExportTables({
         ...options,
         input: path.resolve(workingDir, input),
         output: path.resolve(workingDir, options.output),
+        atlasPage: options.atlasPage
+          ? path.resolve(workingDir, options.atlasPage)
+          : undefined,
         cwd: workingDir,
       });
     });
@@ -96,7 +115,15 @@ export async function handleExportTables(
     );
   }
   const result = await exportTables(
-    { input: options.input, output: options.output, partSize },
+    {
+      input: options.input,
+      output: options.output,
+      partSize,
+      atlasPage: options.atlasPage,
+      county: options.county,
+      state: options.state,
+      fips: options.fips,
+    },
     {
       schemaCacheService:
         serviceOverrides.schemaCacheService ?? new SchemaCacheService(),
@@ -118,6 +145,13 @@ export async function handleExportTables(
         `Tables written: ${result.output} (${Object.keys(result.tables).length} tables, ${result.parts} parts, root ${result.root})`
       )
     );
+    if (result.atlas) {
+      console.log(
+        chalk.green(
+          `Atlas page written: ${result.atlas.page} group ${result.atlas.group}`
+        )
+      );
+    }
   }
   return result;
 }
