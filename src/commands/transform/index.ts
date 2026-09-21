@@ -298,6 +298,7 @@ async function handleScriptsMode(options: TransformCommandOptions) {
         options.dataGroup.toLowerCase() !== 'property improvement'
       ) {
         await generateFactSheet(tempRoot);
+        await writeSeedGroup(path.join(tempRoot, OUTPUT_DIR));
       }
     }
     const zip = new AdmZip();
@@ -392,28 +393,6 @@ async function handleSeedTransform(tempRoot: string) {
     skip_empty_lines: true,
   });
   const seedRow = parsed[0] as SeedRow;
-
-  // New schema relationship: address_has_parcel (address -> parcel)
-  const relAddressHasParcel = {
-    from: {
-      '/': './address.json',
-    },
-    to: {
-      '/': './parcel.json',
-    },
-  };
-  const relAddressHasParcelJson = JSON.stringify(relAddressHasParcel);
-
-  // Seed data group with only address_has_parcel relationship
-  // Relationships use IPLD link objects pointing to relationship files
-  const seedJson = JSON.stringify({
-    label: 'Seed',
-    relationships: {
-      address_has_parcel: {
-        '/': './address_has_parcel.json',
-      },
-    },
-  });
 
   const sourceHttpRequest: SourceHttpRequest = {
     url: seedRow.url,
@@ -545,8 +524,6 @@ async function handleSeedTransform(tempRoot: string) {
   const propertySeedJson = JSON.stringify(propertySeedData);
 
   await fs.mkdir(path.join(tempRoot, OUTPUT_DIR), { recursive: true });
-  const schemaManifest = await fetchSchemaManifest();
-  const seedDataGroupCid = schemaManifest['Seed']!.ipfsCid;
 
   // Check for Property Improvement files in input
   let propertyImprovementFiles: string[] = [];
@@ -562,9 +539,7 @@ async function handleSeedTransform(tempRoot: string) {
   }
 
   const fileNameContent: { name: string; content: string }[] = [
-    { name: `${seedDataGroupCid}.json`, content: seedJson },
     // New schema files
-    { name: 'address_has_parcel.json', content: relAddressHasParcelJson },
     { name: 'address.json', content: addressJson },
     { name: 'parcel.json', content: parcelJson },
     // Backward compatibility files
@@ -603,6 +578,45 @@ async function handleSeedTransform(tempRoot: string) {
       await fs.writeFile(absPath, file.content, 'utf-8');
     })
   );
+  await writeSeedGroup(path.join(tempRoot, OUTPUT_DIR));
+}
+
+/**
+ * The Seed data-group root and its `address_has_parcel` relationship next to
+ * the `address.json` and `parcel.json` in `dir`, so `hash` derives the
+ * property CID from the bundle as it is, with no seed bundle merged in by
+ * hand. A file already there (written by the county scripts or a previous
+ * run) is kept as it is.
+ */
+async function writeSeedGroup(dir: string): Promise<void> {
+  const missing = ['address.json', 'parcel.json'].filter(
+    (name) => !existsSync(path.join(dir, name))
+  );
+  if (missing.length > 0) {
+    logger.warn(`No Seed data group: ${missing.join(' and ')} not in ${dir}`);
+    return;
+  }
+  const schemaManifest = await fetchSchemaManifest();
+  const files: Record<string, unknown> = {
+    [`${schemaManifest['Seed']!.ipfsCid}.json`]: {
+      label: 'Seed',
+      relationships: {
+        address_has_parcel: { '/': './address_has_parcel.json' },
+      },
+    },
+    'address_has_parcel.json': {
+      from: { '/': './address.json' },
+      to: { '/': './parcel.json' },
+    },
+  };
+  for (const [name, content] of Object.entries(files)) {
+    const file = path.join(dir, name);
+    if (existsSync(file)) {
+      logger.info(`Keeping ${name} already in ${dir}`);
+      continue;
+    }
+    await fs.writeFile(file, JSON.stringify(content), 'utf-8');
+  }
 }
 
 async function handleDataGroupTransform(

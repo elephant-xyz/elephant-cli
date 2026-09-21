@@ -715,6 +715,7 @@ elephant-cli transform \
 - Normalizes inputs to `input.html`/`input.json`, `property_seed.json`, and `unnormalized_address.json` in a temporary workspace.
 - Executes the generated scripts, adding `source_http_request` metadata to every datagroup.
 - Builds county relationships and fact-sheet artifacts, then bundles the results.
+- Writes the Seed data-group root and its `address_has_parcel` relationship next to the `address.json` and `parcel.json` the scripts produced (keeping any the scripts already wrote), so `hash` derives the property CID from this bundle alone.
 
 **Inputs**
 
