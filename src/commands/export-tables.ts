@@ -23,20 +23,17 @@ export interface ExportTablesServiceOverrides {
   schemaCacheService?: SchemaCacheService;
 }
 
-const UNITS: Record<string, number> = {
-  '': 1,
-  k: 1 << 10,
-  m: 1 << 20,
-  g: 1 << 30,
-};
+const UNITS: Record<string, number> = { k: 2 ** 10, m: 2 ** 20, g: 2 ** 30 };
 
-/** `1g` -> 1073741824; undefined when the text is not a positive size. */
-export function parsePartSize(text: string | number): number | undefined {
-  const match = String(text)
-    .trim()
-    .toLowerCase()
-    .match(/^(\d+)([kmg]?)$/);
-  const bytes = match ? Number(match[1]) * UNITS[match[2]] : 0;
+/** `1g` -> 1073741824; undefined unless the text is a positive size. Absent means `1g`. */
+export function parsePartSize(
+  text: string | number = '1g'
+): number | undefined {
+  const [, digits, unit] =
+    String(text)
+      .toLowerCase()
+      .match(/^(\d+)([kmg]?)$/) ?? [];
+  const bytes = Number(digits) * (UNITS[unit] ?? 1);
   return bytes > 0 ? bytes : undefined;
 }
 
@@ -86,7 +83,7 @@ export async function handleExportTables(
     console.error(chalk.red(`❌ ${message}`));
     process.exit(1);
   };
-  const partSize = parsePartSize(options.partSize ?? '1g');
+  const partSize = parsePartSize(options.partSize);
   if (!partSize) {
     return fail(
       `--part-size must be a positive byte count such as 1g, got ${options.partSize}`

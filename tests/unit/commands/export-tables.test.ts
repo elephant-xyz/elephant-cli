@@ -3,17 +3,23 @@ import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
 import { zstdDecompressSync } from 'zlib';
-import { CarReader, CarWriter } from '@ipld/car';
+import { CarReader } from '@ipld/car';
 import * as dagJSON from '@ipld/dag-json';
-import * as raw from 'multiformats/codecs/raw';
 import { CID } from 'multiformats/cid';
-import { sha256 } from 'multiformats/hashes/sha2';
 import { importer } from 'ipfs-unixfs-importer';
 import { MemoryBlockstore } from 'blockstore-core/memory';
 import { parquetMetadata, parquetReadObjects } from 'hyparquet';
 import { handleExportTables } from '../../../src/commands/export-tables.js';
 import { handleUpload } from '../../../src/commands/upload.js';
-import { SchemaCacheService } from '../../../src/services/schema-cache.service.js';
+import {
+  buildCountyCar,
+  GROUP,
+  OTHER_PROPERTY,
+  PROPERTY,
+  schemaCacheService,
+  text,
+  Tweaks,
+} from '../../helpers/county-car.js';
 
 vi.mock('../../../src/utils/logger.js', () => ({
   logger: {
@@ -25,187 +31,6 @@ vi.mock('../../../src/utils/logger.js', () => ({
     technical: vi.fn(),
   },
 }));
-
-interface Block {
-  cid: CID;
-  bytes: Uint8Array;
-}
-
-async function json(value: unknown): Promise<Block> {
-  const bytes = dagJSON.encode(value);
-  return {
-    cid: CID.create(1, dagJSON.code, await sha256.digest(bytes)),
-    bytes,
-  };
-}
-
-async function text(value: string): Promise<CID> {
-  return CID.create(
-    1,
-    raw.code,
-    await sha256.digest(new TextEncoder().encode(value))
-  );
-}
-
-const GROUP = (await text('county data group schema')).toString();
-const LINK = (await text('property_to_address schema')).toString();
-const PROPERTY = (await text('property class schema')).toString();
-const ADDRESS = (await text('address class schema')).toString();
-const OTHER_GROUP = (await text('other data group schema')).toString();
-const OTHER_LINK = (await text('property_to_property schema')).toString();
-const OTHER_PROPERTY = (await text('another property class schema')).toString();
-
-const SCHEMAS: Record<string, object> = {
-  [GROUP]: {
-    type: 'object',
-    title: 'County',
-    properties: {
-      label: { type: 'string' },
-      relationships: {
-        type: 'object',
-        properties: {
-          property_has_address: {
-            type: ['array', 'null'],
-            items: { type: 'string', cid: LINK },
-          },
-        },
-      },
-    },
-  },
-  [LINK]: {
-    type: 'object',
-    title: 'property_to_address',
-    properties: {
-      from: { type: 'string', cid: PROPERTY },
-      to: { type: 'string', cid: ADDRESS },
-    },
-  },
-  [PROPERTY]: {
-    type: 'object',
-    title: 'property',
-    properties: {
-      parcel_identifier: { type: 'string' },
-      units: { type: ['integer', 'null'] },
-      area: { type: 'number' },
-      historic: { type: 'boolean' },
-      source_http_request: { type: 'object' },
-      request_identifier: { type: 'string' },
-    },
-  },
-  [ADDRESS]: {
-    type: 'object',
-    title: 'Address',
-    properties: {
-      city: { type: 'string' },
-      request_identifier: { type: 'string' },
-    },
-  },
-  // A second class schema titled `property` with other columns, reached through another data group.
-  [OTHER_GROUP]: {
-    type: 'object',
-    title: 'Other',
-    properties: {
-      label: { type: 'string' },
-      relationships: {
-        type: 'object',
-        properties: { property_has_twin: { type: 'string', cid: OTHER_LINK } },
-      },
-    },
-  },
-  [OTHER_LINK]: {
-    type: 'object',
-    title: 'property_to_property',
-    properties: {
-      from: { type: 'string', cid: PROPERTY },
-      to: { type: 'string', cid: OTHER_PROPERTY },
-    },
-  },
-  [OTHER_PROPERTY]: {
-    type: 'object',
-    title: 'property',
-    properties: { nickname: { type: 'string' } },
-  },
-};
-
-const schemaCacheService = {
-  get: async (cid: string) => SCHEMAS[cid],
-} as unknown as SchemaCacheService;
-
-interface Tweaks {
-  /** No properties at all: an index with zero shards. */
-  empty?: boolean;
-  /** Property `b` also carries a second data group whose class is another schema titled `property`. */
-  twin?: boolean;
-}
-
-/** Two properties; each links one property entity to one address entity. */
-async function build(
-  file: string,
-  tweaks: Tweaks = {}
-): Promise<{ root: CID; entities: CID[] }> {
-  const blocks: Block[] = [];
-  const entries: { property_cid: CID; data_groups: Record<string, CID> }[] = [];
-  const entities: CID[] = [];
-  for (const [index, suffix] of tweaks.empty ? [] : ['a', 'b'].entries()) {
-    const property = await json({
-      parcel_identifier: `parcel-${suffix}`,
-      units: index === 0 ? 3 : null,
-      area: 12.5 + index,
-      historic: index === 1,
-      source_http_request: { method: 'GET', url: `https://x/${suffix}` },
-      request_identifier: `req-${suffix}`,
-    });
-    const address = await json({
-      city: `City ${suffix}`,
-      request_identifier: `req-${suffix}`,
-    });
-    const link = await json({ from: property.cid, to: address.cid });
-    const root = await json({
-      label: 'County',
-      relationships: { property_has_address: [link.cid] },
-    });
-    blocks.push(root, link, property, address);
-    entities.push(property.cid, address.cid);
-    const twin = await json({ nickname: `twin-${suffix}` });
-    const twinLink = await json({ from: property.cid, to: twin.cid });
-    const other = await json({
-      label: 'Other',
-      relationships: { property_has_twin: twinLink.cid },
-    });
-    if (tweaks.twin && suffix === 'b') {
-      blocks.push(other, twinLink, twin);
-    }
-    entries.push({
-      property_cid: root.cid,
-      data_groups: {
-        [GROUP]: root.cid,
-        ...(tweaks.twin && suffix === 'b' ? { [OTHER_GROUP]: other.cid } : {}),
-      },
-    });
-  }
-  const shard = await json({ properties: entries });
-  const index = await json({
-    label: 'CountyIndex',
-    version: 1,
-    properties: entries.length,
-    shards: tweaks.empty ? [] : [shard.cid],
-  });
-  blocks.push(...(tweaks.empty ? [] : [shard]), index);
-  const channel = CarWriter.create([index.cid]);
-  const chunks: Uint8Array[] = [];
-  const drained = (async () => {
-    for await (const chunk of channel.out) {
-      chunks.push(chunk);
-    }
-  })();
-  for (const block of blocks) {
-    await channel.writer.put(block);
-  }
-  await channel.writer.close();
-  await drained;
-  await fsPromises.writeFile(file, Buffer.concat(chunks));
-  return { root: index.cid, entities };
-}
 
 async function unixfs(file: string): Promise<string> {
   const store = new MemoryBlockstore();
@@ -281,7 +106,7 @@ async function fixture(tweaks: Tweaks = {}) {
   );
   made.push(tmp);
   const car = path.join(tmp, 'county.car');
-  const built = await build(car, tweaks);
+  const built = await buildCountyCar(car, tweaks);
   const run = (output: string, partSize?: string) =>
     handleExportTables(
       { input: car, output, partSize, silent: true, cwd: tmp },
@@ -520,7 +345,7 @@ describe('export-tables <county.car>', () => {
       `http://127.0.0.1:8080/ipfs/${result.root}/tables/${Object.keys(index.tables)[0]}/parts/0/cid`
     );
 
-    const other = await text('someone else');
+    const other = (await text('someone else')).cid;
     fetchMock.mockImplementationOnce(async () => ({
       ok: true,
       status: 200,
