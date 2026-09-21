@@ -1,13 +1,13 @@
-import { createReadStream, openAsBlob } from 'fs';
+import { createReadStream, openAsBlob, promises as fsPromises } from 'fs';
 import path from 'path';
 import { setTimeout as sleep } from 'timers/promises';
-import { CarCIDIterator } from '@ipld/car';
+import { CarCIDIterator, CarReader } from '@ipld/car';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { equals as u8eq } from 'uint8arrays/equals';
 import { logger } from '../utils/logger.js';
 import { DEFAULT_IPFS_GATEWAYS } from '../config/constants.js';
-import { sameDigest } from './cid-calculator.service.js';
+import { decodeDagJson, sameDigest } from './cid-calculator.service.js';
 
 export interface CarImportOptions {
   input: string;
@@ -27,6 +27,29 @@ export interface CarImportResult {
   blocks: number;
   gatewayUrl: string;
   uploadedAt: string;
+}
+
+export interface TablesImportResult {
+  api: string;
+  /** CID of the `CountyTables` block, the root of `tables.car`. */
+  root: string;
+  countyRoot: string;
+  /** Part files added and pinned. */
+  parts: number;
+  gatewayUrl: string;
+  uploadedAt: string;
+}
+
+/** One NDJSON line of `add`. */
+interface AddLine {
+  Hash?: string;
+}
+
+/** A part as `export-tables` records it in the `CountyTables` block. */
+interface PartLink {
+  cid: CID;
+  rows: number;
+  bytes: number;
 }
 
 /** One NDJSON line of `dag/import?stats=true`. */
@@ -64,6 +87,31 @@ async function poll<T>(
   return poll(deadline, what, step, reason);
 }
 
+/** Validated API origin, gateway origin and readback timeout in seconds. */
+function target(options: CarImportOptions): {
+  api: string;
+  gateway: string;
+  timeout: number;
+} {
+  const timeout = Number(options.timeout ?? 300);
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    throw new Error(
+      `--timeout must be a number of seconds greater than zero, got ${options.timeout}`
+    );
+  }
+  const api = (options.api ?? 'http://127.0.0.1:5001').replace(/\/+$/, '');
+  if (!URL.canParse(api)) {
+    throw new Error(`--api must be a URL with a scheme, got ${options.api}`);
+  }
+  const gateway = (
+    options.gateway ??
+    (new URL(api).host === 'rpc.filebase.io'
+      ? DEFAULT_IPFS_GATEWAYS[0]
+      : 'http://127.0.0.1:8080')
+  ).replace(/\/+$/, '');
+  return { api, gateway, timeout };
+}
+
 /** Read the header roots only; the stream is closed before any block. */
 async function roots(input: string): Promise<CID[]> {
   const stream = createReadStream(input);
@@ -82,23 +130,7 @@ async function roots(input: string): Promise<CID[]> {
 export async function importCar(
   options: CarImportOptions
 ): Promise<CarImportResult> {
-  const timeout = Number(options.timeout ?? 300);
-  if (!Number.isFinite(timeout) || timeout <= 0) {
-    throw new Error(
-      `--timeout must be a number of seconds greater than zero, got ${options.timeout}`
-    );
-  }
-  const api = (options.api ?? 'http://127.0.0.1:5001').replace(/\/+$/, '');
-  if (!URL.canParse(api)) {
-    throw new Error(`--api must be a URL with a scheme, got ${options.api}`);
-  }
-  const url = new URL(api);
-  const gateway = (
-    options.gateway ??
-    (url.host === 'rpc.filebase.io'
-      ? DEFAULT_IPFS_GATEWAYS[0]
-      : 'http://127.0.0.1:8080')
-  ).replace(/\/+$/, '');
+  const { api, gateway, timeout } = target(options);
 
   const header = await roots(options.input);
   if (header.length !== 1) {
@@ -183,4 +215,139 @@ export async function importCar(
   }
 
   return { api, root: root.toString(), blocks, gatewayUrl, uploadedAt };
+}
+
+/** Byte length a gateway reports for `url`: the `Content-Range` total of a one-byte range, or the full body when ranges are not honoured. */
+async function served(
+  url: string,
+  signal: AbortSignal
+): Promise<number | undefined> {
+  const response = await fetch(url, {
+    headers: { Range: 'bytes=0-0' },
+    signal,
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    return undefined;
+  }
+  const total = response.headers.get('content-range')?.match(/\/(\d+)$/);
+  if (total) {
+    await response.body?.cancel();
+    return Number(total[1]);
+  }
+  // ponytail: a gateway that ignores Range gets the whole part read into memory; stream-count if one is measured too big
+  return (await response.arrayBuffer()).byteLength;
+}
+
+/**
+ * Uploads a tables directory written by `export-tables`: every part is added
+ * through `add?pin=true&cid-version=1&raw-leaves=true` and must come back with
+ * the CID the `CountyTables` block records, then `tables.car` is imported and
+ * read back exactly like a county CAR, and finally the first part is fetched
+ * from the gateway and its size compared with the recorded bytes.
+ */
+export async function importTables(
+  options: CarImportOptions
+): Promise<TablesImportResult> {
+  const { api, gateway, timeout } = target(options);
+  const car = path.join(options.input, 'tables.car');
+  const reader = await CarReader.fromBytes(await fsPromises.readFile(car));
+  const roots = await reader.getRoots();
+  const head = roots.length === 1 ? await reader.get(roots[0]) : undefined;
+  const index = head ? decodeDagJson(head.bytes) : undefined;
+  const tables = (
+    index as Partial<{ label: unknown; county_root: unknown; tables: unknown }>
+  )?.tables;
+  const countyRoot = CID.asCID(
+    (index as Partial<{ county_root: unknown }>)?.county_root
+  );
+  if (
+    (index as Partial<{ label: unknown }>)?.label !== 'CountyTables' ||
+    !countyRoot ||
+    !tables ||
+    typeof tables !== 'object'
+  ) {
+    throw new Error(`${car} does not hold a CountyTables root`);
+  }
+  const listed = Object.entries(
+    tables as Record<string, { parts?: unknown }>
+  ).flatMap(([table, entry]) =>
+    (Array.isArray(entry.parts) ? entry.parts : []).map(
+      (part: Partial<PartLink>, position) => ({
+        table,
+        position,
+        cid: CID.asCID(part.cid),
+        bytes: Number(part.bytes),
+        file: path.join(
+          options.input,
+          table,
+          `part-${String(position).padStart(5, '0')}.parquet`
+        ),
+      })
+    )
+  );
+  const headers: Record<string, string> = options.token
+    ? { Authorization: `Bearer ${options.token}` }
+    : {};
+  for (const part of listed) {
+    if (!part.cid) {
+      throw new Error(
+        `${car} records no CID for ${part.table} part ${part.position}`
+      );
+    }
+    logger.info(`Adding ${part.file} through ${api}`);
+    const form = new FormData();
+    form.append('file', await openAsBlob(part.file), path.basename(part.file));
+    const response = await fetch(
+      `${api}/api/v0/add?pin=true&cid-version=1&raw-leaves=true`,
+      { method: 'POST', headers, body: form }
+    );
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `add failed for ${part.file}: ${response.status} ${response.statusText}: ${text}`
+      );
+    }
+    const added: AddLine | undefined = text
+      .split('\n')
+      .filter((line) => line.trimStart().startsWith('{'))
+      .map((line): AddLine => JSON.parse(line))
+      .find((line) => line.Hash);
+    if (!added?.Hash || !sameDigest(added.Hash, part.cid.toString())) {
+      throw new Error(
+        `add returned ${added?.Hash ?? 'no CID'} for ${part.file} but the index records ${part.cid}`
+      );
+    }
+  }
+
+  const imported = await importCar({ ...options, input: car });
+  const first = listed[0];
+  if (first?.cid) {
+    // --timeout bounds this readback on its own, as it does the root readback inside importCar.
+    const deadline = Date.now() + timeout * 1000;
+    const what = `${first.table} part ${first.position} to resolve on ${gateway}`;
+    logger.info(`Waiting for ${what}`);
+    const size = await poll(deadline, what, async () => {
+      const signal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+      return (
+        (await served(
+          `${imported.gatewayUrl}/tables/${first.table}/parts/${first.position}/cid`,
+          signal
+        )) ?? (await served(`${gateway}/ipfs/${first.cid}`, signal))
+      );
+    });
+    if (size !== first.bytes) {
+      throw new Error(
+        `Gateway serves ${size} bytes for ${first.cid} but the index records ${first.bytes}`
+      );
+    }
+  }
+  return {
+    api,
+    root: imported.root,
+    countyRoot: countyRoot.toString(),
+    parts: listed.length,
+    gatewayUrl: imported.gatewayUrl,
+    uploadedAt: imported.uploadedAt,
+  };
 }

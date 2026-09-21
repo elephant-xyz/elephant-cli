@@ -9,15 +9,15 @@ import { PinataDirectoryUploadService } from '../services/pinata-directory-uploa
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isMediaFile } from '../utils/file-type-helpers.js';
-import { importCar } from '../services/car-import.service.js';
-import { isCarInput } from '../utils/car-input.js';
+import { importCar, importTables } from '../services/car-import.service.js';
+import { isCarInput, isTablesInput } from '../utils/car-input.js';
 
 export interface UploadCommandOptions {
   input: string;
   pinataJwt?: string;
   silent?: boolean;
   cwd?: string;
-  /** CAR options, used only when `input` is a `.car` file. */
+  /** Kubo RPC options, used when `input` is a `.car` file or a tables directory. */
   api?: string;
   token?: string;
   gateway?: string;
@@ -41,7 +41,7 @@ export function registerUploadCommand(program: Command) {
   program
     .command('upload <input>')
     .description(
-      'Upload property data from the output of hash command to IPFS. A ZIP of property directories with CID-named JSON files is uploaded to Pinata; a .car file from hash --output-car is imported through a Kubo RPC API (local kubo, Filebase, ...) and its root read back from the gateway.'
+      'Upload property data from the output of hash command to IPFS. A ZIP of property directories with CID-named JSON files is uploaded to Pinata; a .car file from hash --output-car is imported through a Kubo RPC API (local kubo, Filebase, ...) and its root read back from the gateway; a directory from export-tables has every Parquet part added and pinned, then its tables.car imported the same way.'
     )
     .option(
       '--pinata-jwt <jwt>',
@@ -49,7 +49,7 @@ export function registerUploadCommand(program: Command) {
     )
     .option(
       '--api <url>',
-      'Kubo RPC API for a .car input. If not provided, uses IPFS_API environment variable or http://127.0.0.1:5001.'
+      'Kubo RPC API for a .car or tables-directory input. If not provided, uses IPFS_API environment variable or http://127.0.0.1:5001.'
     )
     .option(
       '--token <bearer>',
@@ -57,16 +57,16 @@ export function registerUploadCommand(program: Command) {
     )
     .option(
       '--gateway <url>',
-      'Gateway origin (no trailing slash) used to read the CAR root back. If not provided, uses ELEPHANT_CAR_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
+      'Gateway origin (no trailing slash) used to read the CAR or tables root back. If not provided, uses ELEPHANT_CAR_GATEWAY; defaults to https://ipfs.filebase.io for rpc.filebase.io, otherwise http://127.0.0.1:8080.'
     )
     .option(
       '--timeout <seconds>',
-      'Seconds to wait for the CAR root to resolve on the gateway.',
+      'Seconds to wait for the CAR root (and, for tables, the first part) to resolve on the gateway.',
       '300'
     )
     .option(
       '--output-json <path>',
-      'Write the CAR upload summary (api, root, blocks, gateway URL) as JSON.'
+      'Write the CAR or tables upload summary (api, root, blocks or parts, gateway URL) as JSON.'
     )
     .action(async (input, options) => {
       const workingDir = options.cwd || process.cwd();
@@ -77,7 +77,11 @@ export function registerUploadCommand(program: Command) {
         cwd: workingDir,
       };
 
-      if (!isCarInput(commandOptions.input) && !commandOptions.pinataJwt) {
+      if (
+        !isCarInput(commandOptions.input) &&
+        !(await isTablesInput(commandOptions.input)) &&
+        !commandOptions.pinataJwt
+      ) {
         console.error(
           chalk.red(
             '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
@@ -102,9 +106,12 @@ export interface UploadServiceOverrides {
   schemaManifestService?: SchemaManifestService;
 }
 
-/** `.car` input: one `dag/import` through the Kubo RPC API, then read the root back from the gateway. */
-async function handleCarUpload(options: UploadCommandOptions) {
-  const result = await importCar({
+/** `.car` or tables-directory input: Kubo RPC API import, then read the root back from the gateway. */
+async function handleCarUpload(
+  options: UploadCommandOptions,
+  run: typeof importCar | typeof importTables
+) {
+  const result = await run({
     input: options.input,
     api: options.api || process.env.IPFS_API,
     token:
@@ -156,7 +163,10 @@ export async function handleUpload(
   }
 
   if (isCarInput(options.input)) {
-    return handleCarUpload(options);
+    return handleCarUpload(options, importCar);
+  }
+  if (await isTablesInput(options.input)) {
+    return handleCarUpload(options, importTables);
   }
 
   const zipExtractorService =

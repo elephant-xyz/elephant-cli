@@ -18,6 +18,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
+- [Export County Tables](#export-county-tables)
 - [Upload Datagroups to IPFS](#upload-datagroups-to-ipfs)
 - [Submit Hashes to the Contract](#submit-hashes-to-the-contract)
 - [Utility Commands](#utility-commands)
@@ -135,7 +136,7 @@ The Property Improvement workflow extracts structured data from permit websites 
 The Property Improvement workflow consists of three main steps:
 
 1. **Prepare**: Fetch HTML content from permit websites using HTTP requests
-2. **Extract**: Run extraction scripts to parse HTML and create structured JSON files  
+2. **Extract**: Run extraction scripts to parse HTML and create structured JSON files
 3. **Transform**: Create Property Improvement data group with relationships
 
 ### Step 1: Prepare HTML Content
@@ -155,6 +156,7 @@ elephant-cli prepare input.zip --output-zip prepared-property-improvement.zip
 ```
 
 **What this does:**
+
 - Reads HTTP request details from `input.csv`
 - Fetches HTML content from the permit website
 - Creates `prepared-property-improvement.zip` containing both `input.csv` and the fetched HTML file
@@ -162,12 +164,14 @@ elephant-cli prepare input.zip --output-zip prepared-property-improvement.zip
 ### Step 2: Create Extraction Scripts
 
 Create a `property-improvement-extractor.js` script that:
+
 - Reads HTML files from the input directory
 - Extracts Property Improvement data (permit details, contractors, inspections, etc.)
 - Creates structured JSON files for each entity type
 - Outputs files to the data directory
 
 Example script structure:
+
 ```javascript
 // property-improvement-extractor.js
 const fs = require('fs');
@@ -185,11 +189,18 @@ const propertyImprovement = {
 };
 
 // Write JSON files
-fs.writeFileSync('data/property_improvement.json', JSON.stringify(propertyImprovement));
-fs.writeFileSync('data/property_improvement_has_contractor_1.json', JSON.stringify(contractorRelationship));
+fs.writeFileSync(
+  'data/property_improvement.json',
+  JSON.stringify(propertyImprovement)
+);
+fs.writeFileSync(
+  'data/property_improvement_has_contractor_1.json',
+  JSON.stringify(contractorRelationship)
+);
 ```
 
 Package your script into `property-improvement-scripts.zip`:
+
 ```
 property-improvement-scripts.zip
 └── scripts/
@@ -410,20 +421,20 @@ prepared-site.zip
 
 **Options**
 
-| Option                               | Description                                                                     | Default  |
-| ------------------------------------ | ------------------------------------------------------------------------------- | -------- |
-| `--output-zip <path>`                | Destination ZIP containing the fetched response.                                | Required |
-| `--use-browser`                      | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
-| `--no-continue`                      | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
-| `--continue-button <selector>`       | CSS selector for a simple continue/agree button to click.                       | None     |
-| `--ignore-captcha`                   | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
-| `--browser-flow-template <name>`     | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
-| `--browser-flow-parameters <json>`   | JSON parameters for the browser flow template.                                  | None     |
-| `--browser-flow-file <path>`         | Path to custom browser flow JSON file (takes precedence over template).         | None     |
-| `--browser-flow-version <version>`   | Set to `2` to run a packaged Browser Flow v2 handler.                           | None     |
-| `--browser-flow-zip <path>`          | Path to a Browser Flow v2 ZIP containing `handler.js`.                          | None     |
-| `--multi-request-flow-file <path>`   | Path to JSON file defining a multi-request flow (sequence of HTTP requests).    | None     |
-| `--proxy <url>`                      | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
+| Option                             | Description                                                                     | Default  |
+| ---------------------------------- | ------------------------------------------------------------------------------- | -------- |
+| `--output-zip <path>`              | Destination ZIP containing the fetched response.                                | Required |
+| `--use-browser`                    | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
+| `--no-continue`                    | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
+| `--continue-button <selector>`     | CSS selector for a simple continue/agree button to click.                       | None     |
+| `--ignore-captcha`                 | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
+| `--browser-flow-template <name>`   | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
+| `--browser-flow-parameters <json>` | JSON parameters for the browser flow template.                                  | None     |
+| `--browser-flow-file <path>`       | Path to custom browser flow JSON file (takes precedence over template).         | None     |
+| `--browser-flow-version <version>` | Set to `2` to run a packaged Browser Flow v2 handler.                           | None     |
+| `--browser-flow-zip <path>`        | Path to a Browser Flow v2 ZIP containing `handler.js`.                          | None     |
+| `--multi-request-flow-file <path>` | Path to JSON file defining a multi-request flow (sequence of HTTP requests).    | None     |
+| `--proxy <url>`                    | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
 
 ### Browser Flow Templates
 
@@ -813,6 +824,59 @@ elephant-cli hash ./county-transformed \
 | `--max-concurrent-tasks <number>` | Target concurrency for hashing (fallback determined automatically).           | Auto                       |
 | `--property-cid <cid>`            | Override the property CID used for the output folder and CSV.                 | Seed CID or inferred value |
 
+## Export County Tables
+
+Turn a validated county CAR into Parquet tables with `export-tables`: one table per lexicon class, one per relationship type, and a `properties` table from the index, plus a `tables.car` whose single root records every part.
+
+```bash
+elephant-cli export-tables county.car \
+  --output ./county-tables \
+  --output-json tables-summary.json
+```
+
+**What it does**
+
+- Walks the CAR from the county index through every shard, property, data-group root and relationship block, in file order.
+- Places each entity in the table of the lexicon class its relationship schema names for that end (`from`/`to` `cid` -> class schema `title`, snake_case), never by file name. Every schema is fetched once per CID.
+- Closes a part when the next row would push it past `--part-size` (default `1g`), so small tables are one part and the same CAR always yields byte-identical parts and the same tables root (no timestamps inside the files).
+- Computes each part's CID as a UnixFS file with CIDv1, raw leaves and sha2-256, so `ipfs add --cid-version 1 --raw-leaves <part>` returns the recorded CID.
+
+**Inputs**
+
+- A county CAR written by `hash --output-car`, ideally after `validate county.car` passed.
+- Class, relationship and data-group schemas, resolved through the schema cache and the lexicon manifest.
+
+**Outputs**
+
+```
+county-tables/
+├── tables.car                     (one dag-json CountyTables block, the root)
+├── properties/part-00000.parquet  (property_cid, one column per data-group schema CID holding the data-group root CID)
+├── property/part-00000.parquet    (one table per class: schema columns, then cid, property_cid, data_group_cid, request_identifier)
+├── address/part-00000.parquet
+├── property_has_address/part-00000.parquet   (one table per relationship type: relationship_cid, from_cid, to_cid, property_cid, data_group_cid)
+└── ...
+```
+
+Column types follow the class schema: `string` -> UTF8, `number` -> DOUBLE, `integer` -> INT64, `boolean` -> BOOLEAN, every column nullable; `source_http_request`, `source_payload` and any other object or array value are UTF8 JSON strings. Every part carries the key-value metadata `elephant.county_root`, `elephant.manifest_url`, `elephant.table`, `elephant.part` and `elephant.part_size_bytes`.
+
+The `CountyTables` root links every part:
+
+```
+{"label":"CountyTables","version":1,"county_root":{"/":"<county index cid>"},"part_size_bytes":1073741824,
+ "tables":{"<table>":{"rows":<n>,"parts":[{"cid":{"/":"<unixfs file cid>"},"rows":<n>,"bytes":<n>},...]},...}}
+```
+
+The command prints `Tables written: <dir> (<tables> tables, <parts> parts, root <cid>)` and, with `--output-json`, writes the same with per-table row and part counts, the county root and an `exportedAt` timestamp.
+
+**Options**
+
+| Option                 | Description                                                                  | Default     |
+| ---------------------- | ---------------------------------------------------------------------------- | ----------- |
+| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
+| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
+| `--output-json <path>` | Write the export summary as JSON.                                            | Not written |
+
 ## Upload Datagroups to IPFS
 
 Upload the hashed bundle to Pinata with the `upload` command. Provide a Pinata JWT via `--pinata-jwt` or `PINATA_JWT`.
@@ -824,6 +888,15 @@ elephant-cli upload hashed-data.zip \
 ```
 
 A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway (`--gateway` or `ELEPHANT_CAR_GATEWAY`, an origin with no trailing slash) and its bytes verified against the root CID; `--timeout` bounds that readback, not the upload.
+
+A tables directory (from `export-tables`, recognised by its `tables.car`) goes through the same API: every Parquet part is added and pinned with `add?pin=true&cid-version=1&raw-leaves=true`, one request per part, and the CID the node returns must equal the one `tables.car` records; then `tables.car` is imported and its root read back exactly as for a county CAR, and the first part is fetched from the gateway (`<root>/tables/<table>/parts/0/cid`, falling back to its bare CID) and its size compared with the recorded bytes.
+
+```bash
+# tables directory to Filebase
+elephant-cli upload ./county-tables \
+  --api https://rpc.filebase.io \
+  --output-json tables-upload.json
+```
 
 ```bash
 # local kubo daemon (API on 127.0.0.1:5001, gateway on 127.0.0.1:8080)
@@ -863,16 +936,18 @@ elephant-cli upload county.car \
 }
 ```
 
+- For a tables directory: `api`, `root` (the `CountyTables` CID), `countyRoot`, `parts` (part files added), `gatewayUrl`, `uploadedAt`.
+
 **Options**
 
 | Option                 | Description                                                                                                                             | Default                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `--pinata-jwt <jwt>`   | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.                                                               | Required if env var absent                                                          |
-| `--api <url>`          | Kubo RPC API for a CAR input (falls back to `IPFS_API`).                                                                                | `http://127.0.0.1:5001`                                                             |
+| `--api <url>`          | Kubo RPC API for a CAR or tables-directory input (falls back to `IPFS_API`).                                                            | `http://127.0.0.1:5001`                                                             |
 | `--token <bearer>`     | Bearer token for the API (falls back to `IPFS_API_TOKEN`, then to base64 of `FILEBASE_ACCESS_KEY:FILEBASE_SECRET_KEY:FILEBASE_BUCKET`). | None                                                                                |
-| `--gateway <url>`      | Gateway origin, no trailing slash, used to read the CAR root back (falls back to `ELEPHANT_CAR_GATEWAY`).                                                             | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
-| `--timeout <seconds>`  | Seconds to wait for the root to resolve on the gateway.                                                                                 | `300`                                                                               |
-| `--output-json <path>` | Write the CAR upload summary as JSON.                                                                                                   | Not written                                                                         |
+| `--gateway <url>`      | Gateway origin, no trailing slash, used to read the CAR or tables root back (falls back to `ELEPHANT_CAR_GATEWAY`).                     | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
+| `--timeout <seconds>`  | Seconds to wait for the root (and, for tables, the first part) to resolve on the gateway.                                               | `300`                                                                               |
+| `--output-json <path>` | Write the CAR or tables upload summary as JSON.                                                                                         | Not written                                                                         |
 
 ## Submit Hashes to the Contract
 
@@ -1027,9 +1102,9 @@ EIP-1559 (Type 2) Transaction:
 
 **Options**
 
-| Option                | Description                                                      | Default                    |
-| --------------------- | ---------------------------------------------------------------- | -------------------------- |
-| `--rpc-url <url>`     | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`  |
+| Option            | Description                                                       | Default                   |
+| ----------------- | ----------------------------------------------------------------- | ------------------------- |
+| `--rpc-url <url>` | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com` |
 
 **Use as Library**
 
@@ -1082,11 +1157,11 @@ transactionHash,batchIndex,itemCount,timestamp,status,blockNumber,gasUsed,checkT
 
 **Options**
 
-| Option                    | Description                                                      | Default                                    |
-| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------ |
-| `--rpc-url <url>`         | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`                  |
-| `--output-csv <path>`     | Output CSV file path.                                            | `transaction-status-checked-{timestamp}.csv` |
-| `--max-concurrent <num>`  | Maximum concurrent status checks.                                | `10`                                       |
+| Option                   | Description                                                       | Default                                      |
+| ------------------------ | ----------------------------------------------------------------- | -------------------------------------------- |
+| `--rpc-url <url>`        | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`                    |
+| `--output-csv <path>`    | Output CSV file path.                                             | `transaction-status-checked-{timestamp}.csv` |
+| `--max-concurrent <num>` | Maximum concurrent status checks.                                 | `10`                                         |
 
 **Use as Library**
 
@@ -1157,4 +1232,3 @@ When media assets are referenced and accessible through the gateway, they are do
 | `-r, --rpc-url <url>`     | Polygon RPC endpoint used when resolving transaction hashes (falls back to `RPC_URL`). | Elephant default                    |
 
 Set `--gateway` to match the provider used during uploads if you need consistent access controls. Provide an RPC endpoint with access to Elephant submissions when fetching by transaction hash.
-
