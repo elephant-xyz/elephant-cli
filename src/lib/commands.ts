@@ -12,7 +12,15 @@ import type { CarSummary } from '../services/car-validator.service.js';
 export type { CarSummary };
 import { handleHash, HashCommandOptions } from '../commands/hash.js';
 import { handleUpload, UploadCommandOptions } from '../commands/upload.js';
-import type { CarImportResult } from '../services/car-import.service.js';
+import type {
+  CarImportResult,
+  TablesImportResult,
+} from '../services/car-import.service.js';
+import {
+  handleExportTables,
+  ExportTablesCommandOptions,
+} from '../commands/export-tables.js';
+import type { ExportTablesResult as ExportTablesSummary } from '../services/tables-export.service.js';
 import {
   handleSubmitToContract,
   SubmitToContractCommandOptions,
@@ -112,13 +120,22 @@ export interface HashResult {
   error?: string;
 }
 
+// Export-tables function interface
+export type ExportTablesOptions = Omit<ExportTablesCommandOptions, 'silent'>;
+
+/** The `ExportTablesSummary` fields are set on success only. */
+export interface ExportTablesResult extends Partial<ExportTablesSummary> {
+  success: boolean;
+  error?: string;
+}
+
 // Upload function interface
 export interface UploadOptions {
   input: string;
   /** Required for a ZIP input (Pinata). */
   pinataJwt?: string;
   cwd?: string;
-  /** Kubo RPC API settings, used when `input` is a `.car` file. */
+  /** Kubo RPC API settings, used when `input` is a `.car` file or a tables directory from `exportTables`. */
   api?: string;
   token?: string;
   gateway?: string;
@@ -126,8 +143,10 @@ export interface UploadOptions {
   outputJson?: string;
 }
 
-/** The `CarImportResult` fields are set for a CAR input only. */
-export interface UploadResult extends Partial<CarImportResult> {
+/** The `CarImportResult` fields are set for a CAR input, the `TablesImportResult` fields for a tables directory. */
+export interface UploadResult
+  extends Partial<CarImportResult>,
+    Partial<TablesImportResult> {
   success: boolean;
   cid?: string;
   error?: string;
@@ -347,6 +366,21 @@ export async function hash(options: HashOptions): Promise<HashResult> {
       totalFiles: 0,
       processed: 0,
       errors: 1,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// Export-tables function wrapper
+export async function exportTables(
+  options: ExportTablesOptions
+): Promise<ExportTablesResult> {
+  try {
+    const summary = await handleExportTables({ ...options, silent: true });
+    return { success: true, ...summary };
+  } catch (error) {
+    return {
+      success: false,
       error: error instanceof Error ? error.message : String(error),
     };
   }

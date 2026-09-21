@@ -35,7 +35,7 @@ export interface CarSummary {
   errors: Record<CarCheck, number>;
 }
 
-interface Row {
+export interface Row {
   block: string;
   message: string;
   property?: string;
@@ -44,9 +44,143 @@ interface Row {
   value?: string;
 }
 
-interface Entry {
-  property: string;
+export interface IndexEntry {
+  property: CID;
   groups: { schema: string; data: CID }[];
+}
+
+/**
+ * Decode the county index at the single CAR root and walk its shards in file
+ * order. Every malformed piece goes to `report` and every link to `resolve`,
+ * which says whether the walk keeps it; the walk continues past both, so a
+ * validator can collect findings while an exporter can throw on the first.
+ * Returns nothing when the root itself is unusable.
+ */
+export async function walkIndex(
+  reader: CarIndexedReader,
+  report: (check: 'root' | 'index', row: Row) => Promise<void>,
+  resolve: (
+    check: 'index',
+    link: CID,
+    from: string,
+    context?: Partial<Row>
+  ) => Promise<boolean>
+): Promise<{ root: CID; entries: IndexEntry[] } | undefined> {
+  const roots = await reader.getRoots();
+  if (roots.length !== 1) {
+    await report('root', {
+      block: roots.map(String).join(' '),
+      message: `expected exactly one root, found ${roots.length}`,
+    });
+    return;
+  }
+  const root = roots[0];
+  if (root.code !== dagJSON.code) {
+    await report('root', {
+      block: root.toString(),
+      message: 'root must be a dag-json block',
+    });
+    return;
+  }
+  const head = await reader.get(root);
+  const index = head ? decodeDagJson(head.bytes) : undefined;
+  if (!index || typeof index !== 'object') {
+    await report('root', {
+      block: root.toString(),
+      message: head
+        ? 'root block is not dag-json'
+        : 'root block is not in the car',
+    });
+    return;
+  }
+  const county = index as Partial<{
+    label: unknown;
+    version: unknown;
+    properties: unknown;
+    shards: unknown;
+  }>;
+  const shards = Array.isArray(county.shards)
+    ? county.shards.map((shard) => CID.asCID(shard))
+    : [];
+  const shape: [boolean, string][] = [
+    [county.label === 'CountyIndex', 'label must be "CountyIndex"'],
+    [county.version === 1, 'version must be 1'],
+    [typeof county.properties === 'number', 'properties must be a number'],
+    [
+      Array.isArray(county.shards) && shards.every((shard) => shard !== null),
+      'shards must be an array of links',
+    ],
+  ];
+  for (const [ok, message] of shape) {
+    if (!ok) {
+      await report('root', { block: root.toString(), message });
+    }
+  }
+
+  logger.info(`Reading the county index across ${shards.length} shards`);
+  const entries: IndexEntry[] = [];
+  for (const shard of shards) {
+    if (!shard || !(await resolve('index', shard, root.toString()))) {
+      continue;
+    }
+    const block = await reader.get(shard);
+    const body = block ? decodeDagJson(block.bytes) : undefined;
+    const listed = (body as { properties?: unknown } | undefined)?.properties;
+    if (!Array.isArray(listed)) {
+      await report('index', {
+        block: shard.toString(),
+        message: 'shard must decode to {"properties": [...]}',
+      });
+      continue;
+    }
+    for (const item of listed as Partial<{
+      property_cid: unknown;
+      data_groups: unknown;
+    }>[]) {
+      const property = CID.asCID(item?.property_cid);
+      const pointers = item?.data_groups;
+      if (!property || !pointers || typeof pointers !== 'object') {
+        await report('index', {
+          block: shard.toString(),
+          message:
+            'shard entry must hold a property_cid link and a data_groups object',
+        });
+        continue;
+      }
+      await resolve('index', property, shard.toString(), {
+        property: property.toString(),
+      });
+      const groups: IndexEntry['groups'] = [];
+      for (const [schema, pointer] of Object.entries(pointers)) {
+        const data = CID.asCID(pointer);
+        if (!data) {
+          await report('index', {
+            block: shard.toString(),
+            property: property.toString(),
+            group: schema,
+            message: `data_groups.${schema} must be a link`,
+          });
+          continue;
+        }
+        await resolve('index', data, shard.toString(), {
+          property: property.toString(),
+          group: schema,
+        });
+        groups.push({ schema, data });
+      }
+      entries.push({ property, groups });
+    }
+  }
+  if (
+    typeof county.properties === 'number' &&
+    entries.length !== county.properties
+  ) {
+    await report('index', {
+      block: root.toString(),
+      message: `index declares ${county.properties} properties but shards hold ${entries.length}`,
+    });
+  }
+  return { root, entries };
 }
 
 function links(value: unknown, into: CID[] = []): CID[] {
@@ -136,57 +270,6 @@ export async function validateCar(
 
   const reader = await CarIndexedReader.fromFile(file);
   const walk = async () => {
-    const roots = await reader.getRoots();
-    if (roots.length !== 1) {
-      await report('root', {
-        block: roots.map(String).join(' '),
-        message: `expected exactly one root, found ${roots.length}`,
-      });
-      return;
-    }
-    const root = roots[0];
-    if (root.code !== dagJSON.code) {
-      await report('root', {
-        block: root.toString(),
-        message: 'root must be a dag-json block',
-      });
-      return;
-    }
-    const head = await reader.get(root);
-    const index = head ? decodeDagJson(head.bytes) : undefined;
-    if (!index || typeof index !== 'object') {
-      await report('root', {
-        block: root.toString(),
-        message: head
-          ? 'root block is not dag-json'
-          : 'root block is not in the car',
-      });
-      return;
-    }
-    const county = index as Partial<{
-      label: unknown;
-      version: unknown;
-      properties: unknown;
-      shards: unknown;
-    }>;
-    const shards = Array.isArray(county.shards)
-      ? county.shards.map((shard) => CID.asCID(shard))
-      : [];
-    const shape: [boolean, string][] = [
-      [county.label === 'CountyIndex', 'label must be "CountyIndex"'],
-      [county.version === 1, 'version must be 1'],
-      [typeof county.properties === 'number', 'properties must be a number'],
-      [
-        Array.isArray(county.shards) && shards.every((shard) => shard !== null),
-        'shards must be an array of links',
-      ],
-    ];
-    for (const [ok, message] of shape) {
-      if (!ok) {
-        await report('root', { block: root.toString(), message });
-      }
-    }
-
     const missing = new Set<string>();
     const resolve = async (
       check: CarCheck,
@@ -209,70 +292,12 @@ export async function validateCar(
       return false;
     };
 
-    logger.info(`Checking index closure across ${shards.length} shards`);
-    const entries: Entry[] = [];
-    for (const shard of shards) {
-      if (!shard || !(await resolve('index', shard, root.toString()))) {
-        continue;
-      }
-      const block = await reader.get(shard);
-      const body = block ? decodeDagJson(block.bytes) : undefined;
-      const listed = (body as { properties?: unknown } | undefined)?.properties;
-      if (!Array.isArray(listed)) {
-        await report('index', {
-          block: shard.toString(),
-          message: 'shard must decode to {"properties": [...]}',
-        });
-        continue;
-      }
-      for (const item of listed as Partial<{
-        property_cid: unknown;
-        data_groups: unknown;
-      }>[]) {
-        const property = CID.asCID(item?.property_cid);
-        const pointers = item?.data_groups;
-        if (!property || !pointers || typeof pointers !== 'object') {
-          await report('index', {
-            block: shard.toString(),
-            message:
-              'shard entry must hold a property_cid link and a data_groups object',
-          });
-          continue;
-        }
-        summary.properties += 1;
-        await resolve('index', property, shard.toString(), {
-          property: property.toString(),
-        });
-        const groups: Entry['groups'] = [];
-        for (const [schema, pointer] of Object.entries(pointers)) {
-          const data = CID.asCID(pointer);
-          if (!data) {
-            await report('index', {
-              block: shard.toString(),
-              property: property.toString(),
-              group: schema,
-              message: `data_groups.${schema} must be a link`,
-            });
-            continue;
-          }
-          await resolve('index', data, shard.toString(), {
-            property: property.toString(),
-            group: schema,
-          });
-          groups.push({ schema, data });
-        }
-        entries.push({ property: property.toString(), groups });
-      }
+    const index = await walkIndex(reader, report, resolve);
+    if (!index) {
+      return;
     }
-    if (
-      typeof county.properties === 'number' &&
-      summary.properties !== county.properties
-    ) {
-      await report('index', {
-        block: root.toString(),
-        message: `index declares ${county.properties} properties but shards hold ${summary.properties}`,
-      });
-    }
+    const { root, entries } = index;
+    summary.properties = entries.length;
 
     logger.info('Checking graph closure from the root');
     const reachable = new Set<string>();
@@ -318,7 +343,7 @@ export async function validateCar(
         for (const group of item.groups) {
           const context = {
             block: group.data.toString(),
-            property: item.property,
+            property: item.property.toString(),
             group: group.schema,
           };
           const block = await reader.get(group.data);

@@ -30,7 +30,7 @@
 
 ## Current CLI Commands
 
-- Registered in `src/index.ts`: `validate`, `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `hex-to-cid`, `cid-to-hex`, `hash`, `upload`, `fetch-data`, `transform`, `generate-transform`, `prepare`, and `create-keystore`.
+- Registered in `src/index.ts`: `validate`, `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `hex-to-cid`, `cid-to-hex`, `hash`, `export-tables`, `upload`, `fetch-data`, `transform`, `generate-transform`, `prepare`, and `create-keystore`.
 - Before proposing a new command, check whether the behavior belongs in `prepare`, `generate-transform`, `transform`, `hash`, `upload`, `validate`, or `submit-to-contract`; these are the main workflow extension points.
 - If the user asks for a capability that sounds like a new command, recommend the smallest change to an existing command first and ask for confirmation before adding a new command surface.
 

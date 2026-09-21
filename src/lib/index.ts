@@ -3,6 +3,7 @@ export { generateTransform } from './commands.js';
 export { transform } from './commands.js';
 export { validate } from './commands.js';
 export { hash } from './commands.js';
+export { exportTables } from './commands.js';
 export { upload } from './commands.js';
 export { submitToContract } from './commands.js';
 export { checkGasPrice } from './commands.js';
@@ -21,6 +22,8 @@ export type {
   CarSummary,
   HashOptions,
   HashResult,
+  ExportTablesOptions,
+  ExportTablesResult,
   UploadOptions,
   UploadResult,
   SubmitToContractOptions,
