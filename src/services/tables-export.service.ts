@@ -59,6 +59,8 @@ interface Column {
 interface Table {
   name: string;
   columns: Column[];
+  /** What defined the table: a class schema CID, `relationship <key>` or `the county index`. */
+  source: string;
 }
 
 interface Part {
@@ -128,6 +130,7 @@ function cell(value: unknown, column: Column, where: string): Cell {
 
 /** UnixFS file CID of `file` as kubo's `add --cid-version 1 --raw-leaves` computes it; blocks are hashed, not kept. */
 async function fileCid(file: string): Promise<CID> {
+  // ponytail: parts are re-read to hash; hash the writer's flushed chunks if a county export is measured disk-bound
   const sink = { put: async (cid: CID) => cid };
   const source = [{ content: createReadStream(file) }];
   for await (const entry of importer(source, sink, {
@@ -280,6 +283,7 @@ export async function exportTables(
   services: { schemaCacheService: SchemaCacheService }
 ): Promise<ExportTablesResult> {
   const cap = options.partSize ?? 1 << 30;
+  await fsPromises.mkdir(options.output, { recursive: true });
   const reader = await CarIndexedReader.fromFile(options.input);
   const run = async (): Promise<ExportTablesResult> => {
     const fail = (message: string): never => {
@@ -313,6 +317,7 @@ export async function exportTables(
     };
 
     // Schemas are resolved once per CID; the class chain comes from the schema, never from a name.
+    // The same chain is walked on transform output files in fact-sheet-relationship.service.ts (processDatagroup).
     const classes = new Map<string, Table>();
     const clazz = async (cid: string): Promise<Table> => {
       const known = classes.get(cid);
@@ -333,7 +338,7 @@ export async function exportTables(
           columns.push({ name: extra, kind: 'STRING' });
         }
       }
-      const table = { name, columns };
+      const table = { name, columns, source: cid };
       classes.set(cid, table);
       return table;
     };
@@ -370,8 +375,18 @@ export async function exportTables(
 
     // ponytail: one writer per table, parts split by size; add parallel writers if a county export is measured too slow
     const writers = new Map<string, TableWriter>();
+    // Keyed by name; a second definition with other columns (two class schemas
+    // with one title, or a class named like a relationship key or `properties`)
+    // fails before any misaligned row is written.
+    const signature = (table: Table) =>
+      table.columns.map((column) => `${column.name}:${column.kind}`).join(',');
     const writer = (table: Table): TableWriter => {
       const known = writers.get(table.name);
+      if (known && signature(known.table) !== signature(table)) {
+        return fail(
+          `table ${table.name} has two schemas in this car: ${known.table.source} and ${table.source}`
+        );
+      }
       if (known) {
         return known;
       }
@@ -407,8 +422,9 @@ export async function exportTables(
         name,
         kind: 'STRING',
       })),
+      source: 'the county index',
     });
-    // ponytail: entity CIDs seen, so a block shared by several relationships lands in one row; spill to disk if a county export is measured too big
+    // ponytail: entity and relationship CIDs seen, so a block shared by several groups lands in one row; spill to disk if a county export is measured too big
     const seen = new Set<string>();
     const entity = async (
       table: Table,
@@ -469,16 +485,21 @@ export async function exportTables(
           }
           for (const item of ([] as unknown[]).concat(value)) {
             const link = CID.asCID(item);
-            if (!link) {
+            if (!link || seen.has(link.toString())) {
               continue;
             }
+            seen.add(link.toString());
             const relationship = await block(link);
             const from = CID.asCID(relationship.from);
             const to = CID.asCID(relationship.to);
             if (!from || !to) {
               return fail(`relationship ${link} does not link from and to`);
             }
-            await writer({ name: key, columns: RELATIONSHIP }).push([
+            await writer({
+              name: key,
+              columns: RELATIONSHIP,
+              source: `relationship ${key}`,
+            }).push([
               link.toString(),
               from.toString(),
               to.toString(),

@@ -838,6 +838,7 @@ elephant-cli export-tables county.car \
 
 - Walks the CAR from the county index through every shard, property, data-group root and relationship block, in file order.
 - Places each entity in the table of the lexicon class its relationship schema names for that end (`from`/`to` `cid` -> class schema `title`, snake_case), never by file name. Every schema is fetched once per CID.
+- Writes each entity and relationship block once, however many groups or relationships reach it; `property_cid` and `data_group_cid` on such a shared block name the first property and data group that reached it in walk order.
 - Closes a part when the next row would push it past `--part-size` (default `1g`), so small tables are one part and the same CAR always yields byte-identical parts and the same tables root (no timestamps inside the files).
 - Compresses every Parquet page with Zstd level 3 (the `node:zlib` implementation); the index records `"codec":"zstd"`.
 - Computes each part's CID as a UnixFS file with CIDv1, raw leaves and sha2-256, so `ipfs add --cid-version 1 --raw-leaves <part>` returns the recorded CID.

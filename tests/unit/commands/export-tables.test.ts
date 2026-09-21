@@ -51,6 +51,9 @@ const GROUP = (await text('county data group schema')).toString();
 const LINK = (await text('property_to_address schema')).toString();
 const PROPERTY = (await text('property class schema')).toString();
 const ADDRESS = (await text('address class schema')).toString();
+const OTHER_GROUP = (await text('other data group schema')).toString();
+const OTHER_LINK = (await text('property_to_property schema')).toString();
+const OTHER_PROPERTY = (await text('another property class schema')).toString();
 
 const SCHEMAS: Record<string, object> = {
   [GROUP]: {
@@ -97,18 +100,53 @@ const SCHEMAS: Record<string, object> = {
       request_identifier: { type: 'string' },
     },
   },
+  // A second class schema titled `property` with other columns, reached through another data group.
+  [OTHER_GROUP]: {
+    type: 'object',
+    title: 'Other',
+    properties: {
+      label: { type: 'string' },
+      relationships: {
+        type: 'object',
+        properties: { property_has_twin: { type: 'string', cid: OTHER_LINK } },
+      },
+    },
+  },
+  [OTHER_LINK]: {
+    type: 'object',
+    title: 'property_to_property',
+    properties: {
+      from: { type: 'string', cid: PROPERTY },
+      to: { type: 'string', cid: OTHER_PROPERTY },
+    },
+  },
+  [OTHER_PROPERTY]: {
+    type: 'object',
+    title: 'property',
+    properties: { nickname: { type: 'string' } },
+  },
 };
 
 const schemaCacheService = {
   get: async (cid: string) => SCHEMAS[cid],
 } as unknown as SchemaCacheService;
 
+interface Tweaks {
+  /** No properties at all: an index with zero shards. */
+  empty?: boolean;
+  /** Property `b` also carries a second data group whose class is another schema titled `property`. */
+  twin?: boolean;
+}
+
 /** Two properties; each links one property entity to one address entity. */
-async function build(file: string): Promise<{ root: CID; entities: CID[] }> {
+async function build(
+  file: string,
+  tweaks: Tweaks = {}
+): Promise<{ root: CID; entities: CID[] }> {
   const blocks: Block[] = [];
   const entries: { property_cid: CID; data_groups: Record<string, CID> }[] = [];
   const entities: CID[] = [];
-  for (const [index, suffix] of ['a', 'b'].entries()) {
+  for (const [index, suffix] of tweaks.empty ? [] : ['a', 'b'].entries()) {
     const property = await json({
       parcel_identifier: `parcel-${suffix}`,
       units: index === 0 ? 3 : null,
@@ -128,9 +166,21 @@ async function build(file: string): Promise<{ root: CID; entities: CID[] }> {
     });
     blocks.push(root, link, property, address);
     entities.push(property.cid, address.cid);
+    const twin = await json({ nickname: `twin-${suffix}` });
+    const twinLink = await json({ from: property.cid, to: twin.cid });
+    const other = await json({
+      label: 'Other',
+      relationships: { property_has_twin: twinLink.cid },
+    });
+    if (tweaks.twin && suffix === 'b') {
+      blocks.push(other, twinLink, twin);
+    }
     entries.push({
       property_cid: root.cid,
-      data_groups: { [GROUP]: root.cid },
+      data_groups: {
+        [GROUP]: root.cid,
+        ...(tweaks.twin && suffix === 'b' ? { [OTHER_GROUP]: other.cid } : {}),
+      },
     });
   }
   const shard = await json({ properties: entries });
@@ -138,9 +188,9 @@ async function build(file: string): Promise<{ root: CID; entities: CID[] }> {
     label: 'CountyIndex',
     version: 1,
     properties: entries.length,
-    shards: [shard.cid],
+    shards: tweaks.empty ? [] : [shard.cid],
   });
-  blocks.push(shard, index);
+  blocks.push(...(tweaks.empty ? [] : [shard]), index);
   const channel = CarWriter.create([index.cid]);
   const chunks: Uint8Array[] = [];
   const drained = (async () => {
@@ -221,32 +271,37 @@ async function part(dir: string, table: string, index = 0) {
   };
 }
 
-describe('export-tables <county.car>', () => {
-  let tmp: string;
-  let car: string;
-  let root: CID;
-  let entities: CID[];
+/** Every fixture directory made in a test; removed after it. */
+const made: string[] = [];
 
+/** A fresh temp directory with a county CAR and an export runner bound to it. */
+async function fixture(tweaks: Tweaks = {}) {
+  const tmp = await fsPromises.mkdtemp(
+    path.join(path.resolve(os.tmpdir()), 'export-tables-')
+  );
+  made.push(tmp);
+  const car = path.join(tmp, 'county.car');
+  const built = await build(car, tweaks);
   const run = (output: string, partSize?: string) =>
     handleExportTables(
       { input: car, output, partSize, silent: true, cwd: tmp },
       { schemaCacheService }
     );
+  return { tmp, car, run, ...built };
+}
 
-  beforeEach(async () => {
-    tmp = await fsPromises.mkdtemp(
-      path.join(path.resolve(os.tmpdir()), 'export-tables-')
-    );
-    car = path.join(tmp, 'county.car');
-    ({ root, entities } = await build(car));
-  });
-
+describe('export-tables <county.car>', () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
-    await fsPromises.rm(tmp, { recursive: true, force: true });
+    await Promise.all(
+      made
+        .splice(0)
+        .map((dir) => fsPromises.rm(dir, { recursive: true, force: true }))
+    );
   });
 
   it('writes one table per class, relationship type and the index, rooted at a CountyTables block with UnixFS part links', async () => {
+    const { tmp, run, root, entities } = await fixture();
     const out = path.join(tmp, 'tables');
     const result = await run(out);
 
@@ -341,6 +396,7 @@ describe('export-tables <county.car>', () => {
   });
 
   it('yields byte-identical parts and the same root when run twice', async () => {
+    const { tmp, run } = await fixture();
     const first = await run(path.join(tmp, 'one'));
     const second = await run(path.join(tmp, 'two'));
 
@@ -353,6 +409,7 @@ describe('export-tables <county.car>', () => {
   });
 
   it('splits a table into parts when the cap is small', async () => {
+    const { tmp, run } = await fixture();
     const out = path.join(tmp, 'small');
     const result = await run(out, '300');
 
@@ -366,7 +423,28 @@ describe('export-tables <county.car>', () => {
     expect((await part(out, 'property', 1)).meta['elephant.part']).toBe('1');
   });
 
+  it('fails before writing a row when two class schemas share a title with other columns', async () => {
+    const { tmp, run } = await fixture({ twin: true });
+
+    await expect(run(path.join(tmp, 'tables'))).rejects.toThrow(
+      `table property has two schemas in this car: ${PROPERTY} and ${OTHER_PROPERTY}`
+    );
+  });
+
+  it('exports an index with zero properties as a valid empty tables.car', async () => {
+    const { tmp, run, root } = await fixture({ empty: true });
+    const out = path.join(tmp, 'none');
+
+    const result = await run(out);
+
+    expect(result).toMatchObject({ countyRoot: root.toString(), parts: 0 });
+    const { index } = await tablesRoot(out);
+    expect(index).toMatchObject({ label: 'CountyTables', tables: {} });
+    expect(index.county_root.toString()).toBe(root.toString());
+  });
+
   it('upload <dir> adds every part, imports tables.car and reads the root and one part back', async () => {
+    const { tmp, run, root } = await fixture();
     const out = path.join(tmp, 'tables');
     const result = await run(out);
     const { root: tables, index } = await tablesRoot(out);
@@ -434,7 +512,7 @@ describe('export-tables <county.car>', () => {
     );
     expect(adds).toHaveLength(4);
     expect(adds[0][0]).toBe(
-      'http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&raw-leaves=true'
+      'http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&raw-leaves=true&chunker=size-262144'
     );
     expect(adds[0][1]?.headers).toEqual({ Authorization: 'Bearer t' });
     expect((adds[0][1]?.body as FormData).get('file')).toBeInstanceOf(Blob);
@@ -456,5 +534,94 @@ describe('export-tables <county.car>', () => {
     });
     expect(failed.error).toContain(`add returned ${other}`);
     expect(failed.error).toContain('but the index records');
+  });
+
+  it('upload <dir> measures the whole part when the range probe has no Content-Range total, and rejects a part whose size differs from the index before any add', async () => {
+    const { tmp, run } = await fixture();
+    const out = path.join(tmp, 'tables');
+    const result = await run(out);
+    const { root: tables, index } = await tablesRoot(out);
+    const head = (await CarReader.fromBytes(
+      await fsPromises.readFile(path.join(out, 'tables.car'))
+    ).then((reader) => reader.get(tables)))!.bytes;
+    const [name, first] = Object.entries(index.tables)[0];
+    const part = await fsPromises.readFile(
+      path.join(out, name, 'part-00000.parquet')
+    );
+    const expected = Object.values(index.tables).map((table) => table.parts[0]);
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/api/v0/add')) {
+        const next = expected.shift()!;
+        return {
+          ok: true,
+          status: 200,
+          text: async () => `{"Hash":"${next.cid}"}\n`,
+        };
+      }
+      if (url.includes('/api/v0/dag/import')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            `{"Root":{"Cid":{"/":"${tables}"},"PinErrorMsg":""}}\n`,
+        };
+      }
+      if (url.endsWith('?format=raw')) {
+        return {
+          ok: true,
+          arrayBuffer: async () =>
+            head.buffer.slice(
+              head.byteOffset,
+              head.byteOffset + head.byteLength
+            ),
+        };
+      }
+      // The probe answers 200 with one byte and no Content-Range; the plain fetch answers the file.
+      const probe = (init?.headers as Record<string, string>)?.Range;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: { cancel: async () => undefined },
+        arrayBuffer: async () =>
+          probe
+            ? new Uint8Array([part[0]]).buffer
+            : part.buffer.slice(
+                part.byteOffset,
+                part.byteOffset + part.byteLength
+              ),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const uploaded = await handleUpload({
+      input: out,
+      api: 'http://127.0.0.1:5001',
+      silent: true,
+      timeout: 30,
+    });
+
+    expect(uploaded).toMatchObject({ success: true, root: result.root });
+    const reads = fetchMock.mock.calls.filter(([url]) =>
+      url.includes(`/tables/${name}/parts/0/cid`)
+    );
+    expect(reads.map(([, init]) => init?.headers)).toEqual([
+      { Range: 'bytes=0-0' },
+      undefined,
+    ]);
+
+    await fsPromises.appendFile(
+      path.join(out, name, 'part-00000.parquet'),
+      'x'
+    );
+    fetchMock.mockClear();
+    const failed = await handleUpload({
+      input: out,
+      api: 'http://127.0.0.1:5001',
+      silent: true,
+      timeout: 30,
+    });
+    expect(failed.error).toContain(`is ${first.parts[0].bytes + 1} bytes but`);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

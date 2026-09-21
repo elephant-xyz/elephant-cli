@@ -231,17 +231,23 @@ async function served(
     return undefined;
   }
   const total = response.headers.get('content-range')?.match(/\/(\d+)$/);
+  await response.body?.cancel();
   if (total) {
-    await response.body?.cancel();
     return Number(total[1]);
   }
+  // No usable total (no header, or `/*`): the probe body is one byte at most, so fetch the whole file.
   // ponytail: a gateway that ignores Range gets the whole part read into memory; stream-count if one is measured too big
-  return (await response.arrayBuffer()).byteLength;
+  const whole = await fetch(url, { signal });
+  if (!whole.ok) {
+    await whole.body?.cancel();
+    return undefined;
+  }
+  return (await whole.arrayBuffer()).byteLength;
 }
 
 /**
  * Uploads a tables directory written by `export-tables`: every part is added
- * through `add?pin=true&cid-version=1&raw-leaves=true` and must come back with
+ * through `add` (pinned, CIDv1, raw leaves, the importer's 256 KiB chunker) and must come back with
  * the CID the `CountyTables` block records, then `tables.car` is imported and
  * read back exactly like a county CAR, and finally the first part is fetched
  * from the gateway and its size compared with the recorded bytes.
@@ -286,20 +292,34 @@ export async function importTables(
       })
     )
   );
-  const headers: Record<string, string> = options.token
-    ? { Authorization: `Bearer ${options.token}` }
-    : {};
+  // The whole index is checked against the directory before the first add.
   for (const part of listed) {
     if (!part.cid) {
       throw new Error(
         `${car} records no CID for ${part.table} part ${part.position}`
       );
     }
+    const size = await fsPromises.stat(part.file).then(
+      (stats) => stats.size,
+      () => undefined
+    );
+    if (size !== part.bytes) {
+      throw new Error(
+        size === undefined
+          ? `${part.file} is missing but ${car} records it`
+          : `${part.file} is ${size} bytes but ${car} records ${part.bytes}`
+      );
+    }
+  }
+  const headers: Record<string, string> = options.token
+    ? { Authorization: `Bearer ${options.token}` }
+    : {};
+  for (const part of listed) {
     logger.info(`Adding ${part.file} through ${api}`);
     const form = new FormData();
     form.append('file', await openAsBlob(part.file), path.basename(part.file));
     const response = await fetch(
-      `${api}/api/v0/add?pin=true&cid-version=1&raw-leaves=true`,
+      `${api}/api/v0/add?pin=true&cid-version=1&raw-leaves=true&chunker=size-262144`,
       { method: 'POST', headers, body: form }
     );
     const text = await response.text();
@@ -313,7 +333,7 @@ export async function importTables(
       .filter((line) => line.trimStart().startsWith('{'))
       .map((line): AddLine => JSON.parse(line))
       .find((line) => line.Hash);
-    if (!added?.Hash || !sameDigest(added.Hash, part.cid.toString())) {
+    if (!added?.Hash || !sameDigest(added.Hash, String(part.cid))) {
       throw new Error(
         `add returned ${added?.Hash ?? 'no CID'} for ${part.file} but the index records ${part.cid}`
       );

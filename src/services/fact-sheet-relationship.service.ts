@@ -112,6 +112,7 @@ export class FactSheetRelationshipService {
   /**
    * Process a single datagroup and collect class mappings
    */
+  // The same data group -> relationship -> class schema chain is walked on CAR blocks in tables-export.service.ts (chain).
   private async processDatagroup(
     datagroupFile: DatagroupFile,
     outputDir: string

@@ -77,20 +77,14 @@ export function registerUploadCommand(program: Command) {
         cwd: workingDir,
       };
 
-      if (
-        !isCarInput(commandOptions.input) &&
-        !(await isTablesInput(commandOptions.input)) &&
-        !commandOptions.pinataJwt
-      ) {
+      await handleUpload(commandOptions).catch((error: unknown) => {
         console.error(
           chalk.red(
-            '❌ Pinata JWT is required. Provide it via --pinata-jwt option or PINATA_JWT environment variable.'
+            `❌ ${error instanceof Error ? error.message : String(error)}`
           )
         );
         process.exit(1);
-      }
-
-      await handleUpload(commandOptions);
+      });
     });
 }
 
