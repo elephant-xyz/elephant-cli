@@ -839,6 +839,7 @@ elephant-cli export-tables county.car \
 - Walks the CAR from the county index through every shard, property, data-group root and relationship block, in file order.
 - Places each entity in the table of the lexicon class its relationship schema names for that end (`from`/`to` `cid` -> class schema `title`, snake_case), never by file name. Every schema is fetched once per CID.
 - Closes a part when the next row would push it past `--part-size` (default `1g`), so small tables are one part and the same CAR always yields byte-identical parts and the same tables root (no timestamps inside the files).
+- Compresses every Parquet page with Zstd level 3 (the `node:zlib` implementation); the index records `"codec":"zstd"`.
 - Computes each part's CID as a UnixFS file with CIDv1, raw leaves and sha2-256, so `ipfs add --cid-version 1 --raw-leaves <part>` returns the recorded CID.
 
 **Inputs**
@@ -871,12 +872,11 @@ The command prints `Tables written: <dir> (<tables> tables, <parts> parts, root 
 
 **Options**
 
-| Option                   | Description                                                                  | Default     |
-| ------------------------ | ---------------------------------------------------------------------------- | ----------- |
-| `--output <dir>`         | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
-| `--part-size <bytes>`    | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
-| `--codec <zstd\|snappy>` | Page compression of every column; `zstd` is level 3 through `node:zlib`.     | `zstd`      |
-| `--output-json <path>`   | Write the export summary as JSON.                                            | Not written |
+| Option                 | Description                                                                  | Default     |
+| ---------------------- | ---------------------------------------------------------------------------- | ----------- |
+| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
+| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
+| `--output-json <path>` | Write the export summary as JSON.                                            | Not written |
 
 ## Upload Datagroups to IPFS
 
