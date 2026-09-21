@@ -14,6 +14,8 @@ export interface ExportTablesCommandOptions {
   output: string;
   /** Bytes, or a number with a `k`, `m` or `g` suffix; default `1g`. */
   partSize?: string | number;
+  /** `zstd` (default) or `snappy`. */
+  codec?: string;
   outputJson?: string;
   silent?: boolean;
   cwd?: string;
@@ -56,6 +58,11 @@ export function registerExportTablesCommand(program: Command) {
       '1g'
     )
     .option(
+      '--codec <zstd|snappy>',
+      'Page compression of every Parquet column; zstd is level 3 through node:zlib.',
+      'zstd'
+    )
+    .option(
       '--output-json <path>',
       'Write the export summary (tables root, county root, per-table rows and parts) as JSON.'
     )
@@ -92,6 +99,10 @@ export async function handleExportTables(
       `--part-size must be a positive byte count such as 1g, got ${options.partSize}`
     );
   }
+  const codec = (options.codec ?? 'zstd').toLowerCase();
+  if (codec !== 'zstd' && codec !== 'snappy') {
+    return fail(`--codec must be zstd or snappy, got ${options.codec}`);
+  }
   const stats = await fsPromises.stat(options.input).catch(() => undefined);
   if (!stats?.isFile()) {
     return fail(
@@ -99,7 +110,7 @@ export async function handleExportTables(
     );
   }
   const result = await exportTables(
-    { input: options.input, output: options.output, partSize },
+    { input: options.input, output: options.output, partSize, codec },
     {
       schemaCacheService:
         serviceOverrides.schemaCacheService ?? new SchemaCacheService(),

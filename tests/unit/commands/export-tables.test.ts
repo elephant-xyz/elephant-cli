@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
+import { zstdDecompressSync } from 'zlib';
 import { CarReader, CarWriter } from '@ipld/car';
 import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
@@ -173,6 +174,7 @@ interface Tables {
   version: number;
   county_root: CID;
   part_size_bytes: number;
+  codec: string;
   tables: Record<
     string,
     { rows: number; parts: { cid: CID; rows: number; bytes: number }[] }
@@ -209,7 +211,13 @@ async function part(dir: string, table: string, index = 0) {
     meta: Object.fromEntries(
       (metadata.key_value_metadata ?? []).map((item) => [item.key, item.value])
     ),
-    rows: await parquetReadObjects({ file: buffer }),
+    codecs: metadata.row_groups.flatMap((group) =>
+      group.columns.map((column) => column.meta_data?.codec)
+    ),
+    rows: await parquetReadObjects({
+      file: buffer,
+      compressors: { ZSTD: (input) => zstdDecompressSync(input) },
+    }),
   };
 }
 
@@ -259,6 +267,7 @@ describe('export-tables <county.car>', () => {
       label: 'CountyTables',
       version: 1,
       part_size_bytes: 1 << 30,
+      codec: 'zstd',
     });
     expect(index.county_root.toString()).toBe(root.toString());
     for (const [name, table] of Object.entries(index.tables)) {
@@ -291,6 +300,7 @@ describe('export-tables <county.car>', () => {
       data_group_cid: GROUP,
     });
     expect(property.rows[1]).toMatchObject({ units: null, historic: true });
+    expect(new Set(property.codecs)).toEqual(new Set(['ZSTD']));
     expect(property.meta).toEqual({
       'elephant.county_root': root.toString(),
       'elephant.manifest_url': 'https://lexicon.elephant.xyz/api/manifest',

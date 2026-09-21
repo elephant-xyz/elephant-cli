@@ -37,7 +37,7 @@ Each section below explains what a command does, the inputs it expects, the resu
 
 ## Prerequisites
 
-- Node.js 20.0 or later (includes `npm`).
+- Node.js 22.15 or later (includes `npm`); `export-tables` compresses Parquet pages with the Zstd support built into `node:zlib` from that release.
 - Ability to create and extract ZIP archives (`zip`/`unzip`).
 - Access to a Polygon RPC endpoint (e.g., Alchemy, Infura, or internal infrastructure).
 - Oracle private key to be stored in an encrypted keystore file.
@@ -863,7 +863,7 @@ Column types follow the class schema: `string` -> UTF8, `number` -> DOUBLE, `int
 The `CountyTables` root links every part:
 
 ```
-{"label":"CountyTables","version":1,"county_root":{"/":"<county index cid>"},"part_size_bytes":1073741824,
+{"label":"CountyTables","version":1,"county_root":{"/":"<county index cid>"},"part_size_bytes":1073741824,"codec":"zstd",
  "tables":{"<table>":{"rows":<n>,"parts":[{"cid":{"/":"<unixfs file cid>"},"rows":<n>,"bytes":<n>},...]},...}}
 ```
 
@@ -871,11 +871,12 @@ The command prints `Tables written: <dir> (<tables> tables, <parts> parts, root 
 
 **Options**
 
-| Option                 | Description                                                                  | Default     |
-| ---------------------- | ---------------------------------------------------------------------------- | ----------- |
-| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
-| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
-| `--output-json <path>` | Write the export summary as JSON.                                            | Not written |
+| Option                   | Description                                                                  | Default     |
+| ------------------------ | ---------------------------------------------------------------------------- | ----------- |
+| `--output <dir>`         | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`. | Required    |
+| `--part-size <bytes>`    | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.     | `1g`        |
+| `--codec <zstd\|snappy>` | Page compression of every column; `zstd` is level 3 through `node:zlib`.     | `zstd`      |
+| `--output-json <path>`   | Write the export summary as JSON.                                            | Not written |
 
 ## Upload Datagroups to IPFS
 

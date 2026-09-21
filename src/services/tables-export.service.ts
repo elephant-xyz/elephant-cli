@@ -6,6 +6,7 @@ import {
 import path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
+import { constants as zlib, zstdCompressSync } from 'zlib';
 // @ipld/car is pinned to 5.4.4, the last release on multiformats 13 (what the rest of the tree uses).
 import { CarIndexedReader, CarWriter } from '@ipld/car';
 import * as dagJSON from '@ipld/dag-json';
@@ -26,7 +27,11 @@ export interface ExportTablesOptions {
   output: string;
   /** Cap on the bytes of one part; default 1 GiB. */
   partSize?: number;
+  /** Page compression; default `zstd` (level 3 through node:zlib). */
+  codec?: Codec;
 }
+
+export type Codec = 'zstd' | 'snappy';
 
 export interface ExportTablesResult {
   output: string;
@@ -35,6 +40,7 @@ export interface ExportTablesResult {
   root: string;
   countyRoot: string;
   partSizeBytes: number;
+  codec: Codec;
   tables: Record<string, { rows: number; parts: number }>;
   parts: number;
   exportedAt: string;
@@ -42,7 +48,8 @@ export interface ExportTablesResult {
 
 type Kind = 'STRING' | 'DOUBLE' | 'INT64' | 'BOOLEAN';
 type Cell = string | number | bigint | boolean | null;
-type Schema = ConstructorParameters<typeof ParquetWriter>[0]['schema'];
+type Options = ConstructorParameters<typeof ParquetWriter>[0];
+type Schema = Options['schema'];
 type Meta = NonNullable<
   ConstructorParameters<typeof ParquetWriter>[0]['kvMetadata']
 >;
@@ -62,6 +69,20 @@ interface Part {
   rows: number;
   bytes: number;
 }
+
+/** Parquet codec name and page compressor per `--codec`; snappy is the writer's built-in. */
+const CODECS: Record<Codec, Pick<Options, 'codec' | 'compressors'>> = {
+  zstd: {
+    codec: 'ZSTD',
+    compressors: {
+      ZSTD: (input) =>
+        zstdCompressSync(input, {
+          params: { [zlib.ZSTD_c_compressionLevel]: 3 },
+        }),
+    },
+  },
+  snappy: { codec: 'SNAPPY' },
+};
 
 const KINDS: Record<string, Kind> = {
   number: 'DOUBLE',
@@ -146,7 +167,8 @@ class TableWriter {
     private readonly dir: string,
     readonly table: Table,
     private readonly cap: number,
-    private readonly meta: Meta
+    private readonly meta: Meta,
+    private readonly codec: Codec
   ) {
     this.schema = [
       { name: 'root', num_children: table.columns.length },
@@ -197,6 +219,7 @@ class TableWriter {
       columnData: this.table.columns.map((column, index) => ({
         name: column.name,
         data: this.rows.map((row) => row[index]),
+        codec: CODECS[this.codec].codec,
       })),
       rowGroupSize: this.rows.length,
     });
@@ -218,6 +241,7 @@ class TableWriter {
       file,
       writer,
       parquet: new ParquetWriter({
+        ...CODECS[this.codec],
         writer,
         schema: this.schema,
         kvMetadata: [
@@ -256,12 +280,14 @@ class TableWriter {
  * `cid` -> class schema `title`), never the file name. `tables.car` holds one
  * dag-json `CountyTables` block whose part links are UnixFS file CIDs, so a
  * kubo `add --cid-version 1 --raw-leaves` of a part returns the recorded CID.
+ * Pages are Zstd level 3 through node:zlib unless `codec` says snappy.
  */
 export async function exportTables(
   options: ExportTablesOptions,
   services: { schemaCacheService: SchemaCacheService }
 ): Promise<ExportTablesResult> {
   const cap = options.partSize ?? 1 << 30;
+  const codec = options.codec ?? 'zstd';
   const reader = await CarIndexedReader.fromFile(options.input);
   const run = async (): Promise<ExportTablesResult> => {
     const fail = (message: string): never => {
@@ -357,7 +383,7 @@ export async function exportTables(
       if (known) {
         return known;
       }
-      const made = new TableWriter(options.output, table, cap, meta);
+      const made = new TableWriter(options.output, table, cap, meta, codec);
       writers.set(table.name, made);
       return made;
     };
@@ -485,6 +511,7 @@ export async function exportTables(
       version: 1,
       county_root: index.root,
       part_size_bytes: cap,
+      codec,
       tables,
     });
     const root = CID.create(1, dagJSON.code, await sha256.digest(bytes));
@@ -503,6 +530,7 @@ export async function exportTables(
       root: root.toString(),
       countyRoot,
       partSizeBytes: cap,
+      codec,
       tables: Object.fromEntries(
         Object.entries(tables).map(([name, table]) => [
           name,
