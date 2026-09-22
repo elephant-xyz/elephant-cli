@@ -9,8 +9,7 @@ const isSchemaMatchError = (msg: string) =>
 
 // Check if error path is related to address entity (not property)
 const isAddressPath = (path: string) =>
-  (path.includes('property_has_address') && path.includes('/to')) ||
-  (path.includes('address_has_fact_sheet') && path.includes('/from'));
+  path.includes('property_has_address') && path.includes('/to');
 
 /** Render a validation error's offending value for the CSV `currentValue` column. */
 export function formatCurrentValue(data: unknown): string {
@@ -30,7 +29,7 @@ export function formatCurrentValue(data: unknown): string {
  * The error filter every `validate` path applies before deciding pass/fail:
  * drop bare type and anyOf/oneOf mismatch rows, consolidate address rows on
  * files whose address entity failed its oneOf into one row, then dedupe by
- * message + last path segment (preferring paths without `has_fact_sheet`).
+ * message + last path segment.
  * Apply per property so a ZIP and a CAR holding the same property agree.
  */
 export function filterErrorRows(entries: ErrorEntry[]): ErrorEntry[] {
@@ -88,7 +87,6 @@ export function filterErrorRows(entries: ErrorEntry[]): ErrorEntry[] {
   const filteredRows = [...nonAddressRows, ...addressConsolidatedRows];
 
   // Deduplicate by errorMessage + lastPathSegment
-  // Prefer paths without has_fact_sheet
   const dedupeMap = new Map<string, ErrorEntry>();
 
   for (const row of filteredRows) {
@@ -97,17 +95,7 @@ export function filterErrorRows(entries: ErrorEntry[]): ErrorEntry[] {
       pathParts.length > 0 ? pathParts[pathParts.length - 1] : 'root';
     const key = `${row.errorMessage}::${lastSegment}`;
 
-    const existing = dedupeMap.get(key);
-    if (!existing) {
-      dedupeMap.set(key, row);
-      continue;
-    }
-
-    // Prefer paths without has_fact_sheet
-    const existingHasFactSheet = existing.errorPath.includes('has_fact_sheet');
-    const currentHasFactSheet = row.errorPath.includes('has_fact_sheet');
-
-    if (existingHasFactSheet && !currentHasFactSheet) {
+    if (!dedupeMap.has(key)) {
       dedupeMap.set(key, row);
     }
   }

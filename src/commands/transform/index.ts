@@ -12,10 +12,7 @@ import { extractZipToTemp } from '../../utils/zip.js';
 import { createCountyDataGroup } from './county-datagroup.js';
 import { createPropertyImprovementDataGroup as createPropertyImprovementDataGroupFromModule } from './property-improvement-datagroup.js';
 import { fetchSchemaManifest } from '../../utils/schema-fetcher.js';
-import { generateHTMLFiles } from '../../utils/fact-sheet.js';
 import { SchemaManifestService } from '../../services/schema-manifest.service.js';
-import { FactSheetRelationshipService } from '../../services/fact-sheet-relationship.service.js';
-import { SchemaCacheService } from '../../services/schema-cache.service.js';
 import { executeTransformV2 } from '../../lib/transform-v2.js';
 import {
   parseMultiValueQueryString,
@@ -85,7 +82,7 @@ export function registerTransformCommand(program: Command) {
   program
     .command('transform')
     .description(
-      'Transform property data to Lexicon schema-valid format and generate HTML, or run generated scripts'
+      'Transform property data to Lexicon schema-valid format, or run generated scripts'
     )
     .allowUnknownOption()
     .option(
@@ -291,15 +288,11 @@ async function handleScriptsMode(options: TransformCommandOptions) {
       isSeedMode = true;
     }
 
-    if (!isSeedMode) {
-      // Only generate fact sheets for County data groups, not Property Improvement
-      if (
-        !options.dataGroup ||
-        options.dataGroup.toLowerCase() !== 'property improvement'
-      ) {
-        await generateFactSheet(tempRoot);
-        await writeSeedGroup(path.join(tempRoot, OUTPUT_DIR));
-      }
+    if (
+      !isSeedMode &&
+      options.dataGroup?.toLowerCase() !== 'property improvement'
+    ) {
+      await writeSeedGroup(path.join(tempRoot, OUTPUT_DIR));
     }
     const zip = new AdmZip();
     for (const rel of await fs.readdir(path.join(tempRoot, OUTPUT_DIR))) {
@@ -333,56 +326,6 @@ async function handleScriptsMode(options: TransformCommandOptions) {
   }
 }
 
-async function generateFactSheet(tempRoot: string) {
-  const outputPath = path.join(tempRoot, OUTPUT_DIR);
-  const htmlOutputDir = path.join(tmpdir(), 'generated-htmls');
-  await generateHTMLFiles(tempRoot, htmlOutputDir);
-  const htmlEntries = await fs.readdir(htmlOutputDir, {
-    withFileTypes: true,
-  });
-  const propertySubDirs = htmlEntries.filter((entry) => entry.isDirectory());
-  const htmlPropertyDir = path.join(htmlOutputDir, propertySubDirs[0].name);
-  const htmlPropertyEntries = await fs.readdir(htmlPropertyDir, {
-    withFileTypes: true,
-  });
-  for (const entry of htmlPropertyEntries) {
-    const srcPath = path.join(htmlPropertyDir, entry.name);
-    const destPath = path.join(outputPath, entry.name);
-
-    if (entry.isFile()) {
-      await fs.rename(srcPath, destPath);
-      logger.debug(`Copied ${entry.name} to property directory`);
-    } else if (entry.isDirectory()) {
-      await moveDirectory(srcPath, destPath);
-      logger.debug(`Copied directory ${entry.name} to property directory`);
-    }
-  }
-
-  const schemaManifestService = new SchemaManifestService();
-  const schemaCacheService = new SchemaCacheService();
-  const factSheetRelationshipService = new FactSheetRelationshipService(
-    schemaManifestService,
-    schemaCacheService
-  );
-
-  await factSheetRelationshipService.generateFactSheetRelationships(outputPath);
-
-  logger.success('Successfully generated fact_sheet relationships');
-}
-
-async function moveDirectory(src: string, dest: string): Promise<void> {
-  await fs.mkdir(dest, { recursive: true });
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      await moveDirectory(srcPath, destPath);
-    } else {
-      await fs.rename(srcPath, destPath);
-    }
-  }
-}
 async function handleSeedTransform(tempRoot: string) {
   const seedCsv = await fs.readFile(
     path.join(tempRoot, INPUT_DIR, 'seed.csv'),

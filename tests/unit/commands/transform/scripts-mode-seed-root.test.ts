@@ -57,16 +57,6 @@ vi.mock(
 vi.mock('../../../../src/utils/node-modules.js', () => ({
   linkNodeModulesIntoTemp: () => {},
 }));
-// The fact sheet needs a browser and the live lexicon; here it yields one empty property directory.
-vi.mock('../../../../src/utils/fact-sheet.js', () => ({
-  generateHTMLFiles: async (_input: string, output: string) =>
-    fsPromises.mkdir(path.join(output, 'property'), { recursive: true }),
-}));
-vi.mock('../../../../src/services/fact-sheet-relationship.service.js', () => ({
-  FactSheetRelationshipService: class {
-    async generateFactSheetRelationships() {}
-  },
-}));
 
 const overrides = {
   schemaCacheService: { get: async () => ({}) },

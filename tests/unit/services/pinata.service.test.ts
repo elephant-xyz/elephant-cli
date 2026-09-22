@@ -298,10 +298,10 @@ describe('PinataService', () => {
       });
 
       const metadata = {
-        name: 'test-property-html',
+        name: 'test-property-dir',
         keyvalues: {
           propertyCid: 'bafkreitest123',
-          dataGroupCid: 'html-fact-sheet',
+          dataGroupCid: 'directory-upload',
         },
       };
 
@@ -315,7 +315,7 @@ describe('PinataService', () => {
       expect(result.success).toBe(true);
       expect(result.cid).toBe('bafyDirectoryHash');
       expect(result.propertyCid).toBe('bafkreitest123');
-      expect(result.dataGroupCid).toBe('html-fact-sheet');
+      expect(result.dataGroupCid).toBe('directory-upload');
 
       // Verify the request was made with proper form data
       const fetchCall = mockFetch.mock.calls[0];
