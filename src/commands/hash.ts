@@ -1123,7 +1123,6 @@ async function calculateCIDForFile(
     canonicalizerService: IPLDCanonicalizerService;
     cidCalculatorService: CidCalculatorService;
   },
-  isIpfsUriFormat: boolean,
   linkedFiles?: Array<{
     path: string;
     cid: string;
@@ -1142,8 +1141,7 @@ async function calculateCIDForFile(
     resolvedPath = path.join(currentDir, filePath);
   }
 
-  // Check if it's an image file and schema expects IPFS URI
-  const isImage = isImageFile(resolvedPath) && isIpfsUriFormat;
+  const isImage = isImageFile(resolvedPath);
 
   // Read the file (binary for images, utf-8 for text)
   const fileContent = isImage
@@ -1240,7 +1238,6 @@ async function getCidForFilePath(
     filePath,
     currentFilePath,
     services,
-    false, // not necessarily an ipfs_uri format
     linkedFilesData
   );
   linkedCIDs.push(cid);
