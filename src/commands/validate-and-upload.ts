@@ -590,11 +590,11 @@ export async function handleValidateAndUpload(
 
     try {
       const csvHeader =
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink\n';
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt\n';
       const csvContent = uploadRecords
         .map(
           (record) =>
-            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt},`
+            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt}`
         )
         .join('\n');
 

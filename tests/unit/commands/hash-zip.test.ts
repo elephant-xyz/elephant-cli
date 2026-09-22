@@ -344,11 +344,11 @@ describe('Hash Command - ZIP Input', () => {
 
       // validateStructure is no longer called for single property processing
 
-      // Verify CSV was written with correct headers including filePath, uploadedAt, and htmlLink
+      // Verify CSV was written with correct headers including filePath and uploadedAt
       expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledWith(
         testOutputCsv,
         expect.stringContaining(
-          'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
+          'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
         ),
         'utf-8'
       );
@@ -443,11 +443,11 @@ describe('Hash Command - ZIP Input', () => {
         mockCidCalculatorService.calculateCidFromCanonicalJson
       ).toHaveBeenCalledTimes(3);
 
-      // Verify CSV contains both entries with filePath, uploadedAt, and htmlLink columns
+      // Verify CSV contains both entries with filePath and uploadedAt columns
       const csvContent = vi.mocked(fsPromises.writeFile).mock
         .calls[0][1] as string;
       expect(csvContent).toContain(
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
       );
 
       // Verify ZIP was created

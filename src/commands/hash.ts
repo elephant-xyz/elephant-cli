@@ -525,7 +525,7 @@ async function hashProperty(
     // Generate CSV with hash results
     logger.info('Generating CSV with hash results...');
     const csvData: string[] = [
-      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink', // Headers compatible with submit-to-contract and upload
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt', // Headers compatible with submit-to-contract and upload
     ];
 
     // Process hashed files to generate CSV entries
@@ -556,9 +556,9 @@ async function hashProperty(
         // Normalize the path separators for consistency (use forward slashes)
         relativePath = relativePath.replace(/\\/g, '/');
 
-        // uploadedAt is filled by upload; htmlLink stays for CSV compatibility
+        // uploadedAt is filled by upload
         csvData.push(
-          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,`
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},`
         );
       }
     }
