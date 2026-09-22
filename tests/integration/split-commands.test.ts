@@ -98,11 +98,11 @@ describe('Split Commands Integration Tests', () => {
       // Read and verify CSV content - should be empty except for headers since schema fetching fails
       const csvContent = await fs.promises.readFile(csvOutputPath, 'utf-8');
       expect(csvContent).toContain(
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
       );
       // CSV should only contain headers since schema downloads fail with fake CIDs
       expect(csvContent.trim()).toBe(
-        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink'
+        'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
       );
     });
 
