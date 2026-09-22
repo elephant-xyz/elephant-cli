@@ -148,4 +148,23 @@ describe('hash with linked media files', () => {
     expect(out.text).toContain(JSON.stringify({ ipfs_url: './index.html' }));
     expect(out.blocks.every(([name]) => name.endsWith('.json'))).toBe(true);
   });
+
+  it('writes hash-results.csv as propertyCid,dataGroupCid,dataCid,filePath,uploadedAt', async () => {
+    const out = await run(BASE);
+    const lines = out.csv.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe(
+      'propertyCid,dataGroupCid,dataCid,filePath,uploadedAt'
+    );
+    const [propertyCid, dataGroupCid, dataCid, filePath, uploadedAt, ...rest] =
+      lines[1].split(',');
+    expect(rest).toEqual([]);
+    expect(uploadedAt).toBe('');
+    expect(dataGroupCid).toBe(SEED_DATAGROUP_SCHEMA_CID);
+    expect(filePath).toBe(`${SEED_DATAGROUP_SCHEMA_CID}.json`);
+    expect(propertyCid).toBe(dataCid);
+    expect(out.blocks.map(([name]) => name)).toContain(
+      `${propertyCid}/${dataCid}.json`
+    );
+  });
 });
