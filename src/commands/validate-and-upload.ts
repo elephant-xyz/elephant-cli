@@ -1,11 +1,10 @@
 import { Command } from 'commander';
-import { promises as fsPromises, writeFileSync, existsSync } from 'fs';
+import { promises as fsPromises, writeFileSync } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { Semaphore } from 'async-mutex';
 import { execSync } from 'child_process';
 import * as os from 'os';
-import { generateHTMLFiles } from '../utils/fact-sheet.js';
 import { createSubmitConfig } from '../config/submit.config.js';
 import { logger } from '../utils/logger.js';
 import { FileScannerService } from '../services/file-scanner.service.js';
@@ -23,147 +22,6 @@ import { SimpleProgress } from '../utils/simple-progress.js';
 import { ProcessedFile, FileEntry } from '../types/submit.types.js';
 import { IPLDConverterService } from '../services/ipld-converter.service.js';
 import { SEED_DATAGROUP_SCHEMA_CID } from '../config/constants.js';
-
-interface HTMLUploadResult {
-  propertyCid: string;
-  htmlCid: string;
-  htmlLink: string;
-}
-
-async function scanAndUploadHTMLFiles(
-  htmlDir: string,
-  pinataService: PinataService | undefined,
-  progressTracker: SimpleProgress,
-  dryRun: boolean,
-  maxConcurrentUploads: number = 5 // Default to 5 concurrent uploads
-): Promise<Map<string, HTMLUploadResult>> {
-  const htmlUploadMap = new Map<string, HTMLUploadResult>();
-  const uploadSemaphore = new Semaphore(maxConcurrentUploads);
-
-  try {
-    // Get all directories in the HTML output directory
-    const entries = await fsPromises.readdir(htmlDir, { withFileTypes: true });
-    const directories = entries.filter((entry) => entry.isDirectory());
-
-    logger.info(
-      `Found ${directories.length} property directories with HTML files`
-    );
-
-    // Process directories with controlled concurrency
-    const uploadPromises = directories.map((dir) =>
-      uploadSemaphore.runExclusive(async () => {
-        const dirName = dir.name;
-        const dirPath = path.join(htmlDir, dirName);
-
-        try {
-          // Check if directory has any files
-          const dirContents = await fsPromises.readdir(dirPath);
-          if (dirContents.length === 0) {
-            logger.warn(`Directory ${dirName} is empty`);
-            progressTracker.increment('errors');
-            return null;
-          }
-
-          // Check if index.html exists
-          const indexPath = path.join(dirPath, 'index.html');
-          if (!existsSync(indexPath)) {
-            logger.warn(`No index.html found in directory ${dirName}`);
-            progressTracker.increment('errors');
-            return null;
-          }
-
-          if (dryRun) {
-            // In dry-run mode, simulate uploads
-            const calculatedCid = `bafybeig${dirName.toLowerCase().substring(0, 20).padEnd(20, '0')}htmldryrun`;
-            const htmlLink = `http://dweb.link/ipfs/${calculatedCid}`;
-
-            logger.info(
-              `[DRY RUN] Would upload HTML directory for property ${dirName}`
-            );
-
-            const result: HTMLUploadResult = {
-              propertyCid: dirName,
-              htmlCid: calculatedCid,
-              htmlLink,
-            };
-
-            progressTracker.increment('processed');
-            return { dirName, result };
-          } else {
-            if (!pinataService) {
-              throw new Error('Pinata service not available for HTML upload');
-            }
-
-            // Upload the entire directory
-            logger.debug(`Uploading HTML directory for property ${dirName}`);
-
-            const metadata = {
-              name: `${dirName}-html`,
-              keyvalues: {
-                propertyCid: dirName,
-                dataGroupCid: 'html-fact-sheet',
-                type: 'property-fact-sheet',
-              },
-            };
-
-            const uploadResult = await pinataService.uploadDirectory(
-              dirPath,
-              metadata
-            );
-
-            if (uploadResult.success && uploadResult.cid) {
-              // For directory uploads, the link points to the directory root
-              // The gateway will automatically serve index.html
-              const htmlLink = `http://dweb.link/ipfs/${uploadResult.cid}`;
-
-              const result: HTMLUploadResult = {
-                propertyCid: dirName,
-                htmlCid: uploadResult.cid,
-                htmlLink,
-              };
-
-              logger.debug(
-                `Uploaded HTML directory for ${dirName}: ${uploadResult.cid}`
-              );
-              progressTracker.increment('processed');
-              return { dirName, result };
-            } else {
-              logger.error(
-                `Failed to upload HTML directory for ${dirName}: ${uploadResult.error}`
-              );
-              progressTracker.increment('errors');
-              return null;
-            }
-          }
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : String(error);
-          logger.error(
-            `Error processing HTML directory ${dirName}: ${errorMsg}`
-          );
-          progressTracker.increment('errors');
-          return null;
-        }
-      })
-    );
-
-    // Wait for all uploads to complete
-    const results = await Promise.all(uploadPromises);
-
-    // Populate the map with successful results
-    results.forEach((result) => {
-      if (result && result.dirName && result.result) {
-        htmlUploadMap.set(result.dirName, result.result);
-      }
-    });
-
-    return htmlUploadMap;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Error scanning HTML directory: ${errorMsg}`);
-    return htmlUploadMap;
-  }
-}
 
 function validateDataGroupSchema(schema: any): {
   valid: boolean;
@@ -231,7 +89,6 @@ interface UploadRecord {
   dataCid: string;
   filePath: string;
   uploadedAt: string;
-  htmlLink?: string;
 }
 
 export function registerValidateAndUploadCommand(program: Command) {
@@ -671,98 +528,6 @@ export async function handleValidateAndUpload(
       await Promise.all(allOperationPromises);
     }
 
-    // Phase 3: Generate and upload HTML files
-    let htmlUploadMap: Map<string, HTMLUploadResult> = new Map();
-
-    if (uploadRecords.length > 0) {
-      try {
-        // Install or update fact-sheet tool (skip in dry-run mode)
-        if (!options.dryRun) {
-          progressTracker.setPhase('Installing/Updating Fact Sheet Tool', 1);
-
-          progressTracker.increment('processed');
-        }
-
-        // Generate HTML files
-        progressTracker.setPhase('Generating HTML Files', 1);
-        const htmlOutputDir = path.join(
-          path.dirname(options.inputDir),
-          'htmls'
-        );
-        await generateHTMLFiles(options.inputDir, htmlOutputDir);
-        progressTracker.increment('processed');
-
-        // Upload HTML files
-        const htmlDirs = await fsPromises.readdir(htmlOutputDir, {
-          withFileTypes: true,
-        });
-        const htmlDirCount = htmlDirs.filter((d) => d.isDirectory()).length;
-
-        if (htmlDirCount > 0) {
-          progressTracker.setPhase('Uploading HTML Files', htmlDirCount);
-          htmlUploadMap = await scanAndUploadHTMLFiles(
-            htmlOutputDir,
-            pinataService,
-            progressTracker,
-            options.dryRun,
-            effectiveConcurrency // Use the same concurrency limit as file processing
-          );
-        }
-
-        // Update upload records with HTML links
-        // Create a map of directory paths to property CIDs for matching
-        const dirToPropertyMap = new Map<string, string>();
-        for (const record of uploadRecords) {
-          const dirName = path.basename(path.dirname(record.filePath));
-          dirToPropertyMap.set(dirName, record.propertyCid);
-        }
-
-        // Match HTML results to upload records
-        for (const record of uploadRecords) {
-          // Try to find HTML result by property CID first
-          let htmlResult = htmlUploadMap.get(record.propertyCid);
-
-          // If not found, try to find by directory name
-          if (!htmlResult) {
-            const dirName = path.basename(path.dirname(record.filePath));
-            htmlResult = htmlUploadMap.get(dirName);
-          }
-
-          if (htmlResult) {
-            record.htmlLink = htmlResult.htmlLink;
-          }
-        }
-
-        // Clean up HTML directory after upload
-        if (!options.dryRun && existsSync(htmlOutputDir)) {
-          try {
-            await fsPromises.rm(htmlOutputDir, {
-              recursive: true,
-              force: true,
-            });
-            logger.debug('Cleaned up temporary HTML directory');
-          } catch (cleanupError) {
-            logger.warn(
-              `Failed to clean up HTML directory: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
-            );
-          }
-        }
-      } catch (htmlError) {
-        const errorMsg =
-          htmlError instanceof Error ? htmlError.message : String(htmlError);
-        const errorStack =
-          htmlError instanceof Error && htmlError.stack
-            ? htmlError.stack
-            : 'No stack trace available';
-        logger.error(`HTML generation/upload failed: ${errorMsg}`);
-        logger.debug(`HTML generation error details: ${errorStack}`);
-        logger.warn(
-          'Continuing with the process despite HTML generation failure'
-        );
-        // Continue with the process even if HTML generation fails
-      }
-    }
-
     if (progressTracker) {
       progressTracker.stop();
     }
@@ -829,63 +594,12 @@ export async function handleValidateAndUpload(
       const csvContent = uploadRecords
         .map(
           (record) =>
-            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt},${record.htmlLink || ''}`
+            `${record.propertyCid},${record.dataGroupCid},${record.dataCid},"${record.filePath}",${record.uploadedAt},`
         )
         .join('\n');
 
       writeFileSync(options.outputCsv, csvHeader + csvContent);
       logger.success(`Upload results saved to: ${options.outputCsv}`);
-
-      // Display first 5 unique HTML links (based on the link itself, not property CID)
-      const uniqueHtmlLinks = new Map<
-        string,
-        { propertyCid: string; dirName: string }
-      >();
-      for (const record of uploadRecords) {
-        if (record.htmlLink && !uniqueHtmlLinks.has(record.htmlLink)) {
-          const dirName = path.basename(path.dirname(record.filePath));
-          uniqueHtmlLinks.set(record.htmlLink, {
-            propertyCid: record.propertyCid,
-            dirName: dirName,
-          });
-        }
-      }
-
-      if (uniqueHtmlLinks.size > 0) {
-        console.log(chalk.bold('\n🌐 Property Fact Sheet Links:'));
-        console.log(
-          chalk.gray(
-            '  (Note: It may take a few minutes for pages to propagate through IPFS gateways)\n'
-          )
-        );
-
-        const linksArray = Array.from(uniqueHtmlLinks.entries());
-        const displayCount = Math.min(5, linksArray.length);
-
-        for (let i = 0; i < displayCount; i++) {
-          const [htmlLink, info] = linksArray[i];
-          // Display directory name and property CID on one line and full URL on the next
-          console.log(`  ${i + 1}. Directory: ${info.dirName}`);
-          console.log(`     ${chalk.cyan(htmlLink)}\n`);
-        }
-
-        if (linksArray.length > 5) {
-          console.log(
-            chalk.yellow(`  ... and ${linksArray.length - 5} more fact sheets.`)
-          );
-        }
-
-        console.log(
-          chalk.bold(
-            `\n📄 All HTML links have been saved to: ${chalk.green(options.outputCsv)}`
-          )
-        );
-        console.log(
-          chalk.gray(
-            '  Please check this file for the complete list of property fact sheet URLs.'
-          )
-        );
-      }
     } catch (writeCsvError) {
       const errMsg =
         writeCsvError instanceof Error

@@ -401,7 +401,6 @@ export async function exportTables(
     };
 
     // Schemas are resolved once per CID; the class chain comes from the schema, never from a name.
-    // The same chain is walked on transform output files in fact-sheet-relationship.service.ts (processDatagroup).
     const classes = new Map<string, Table>();
     const clazz = async (cid: string): Promise<Table> => {
       const known = classes.get(cid);

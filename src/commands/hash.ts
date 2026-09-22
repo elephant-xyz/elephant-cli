@@ -19,7 +19,7 @@ import { processSinglePropertyInput } from '../utils/single-property-processor.j
 import { calculateEffectiveConcurrency } from '../utils/concurrency-calculator.js';
 import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-scanner-v2.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
-import { isHtmlFile, isImageFile } from '../utils/file-type-helpers.js';
+import { isImageFile } from '../utils/file-type-helpers.js';
 import { CarOutputService } from '../services/car-output.service.js';
 import {
   bail,
@@ -41,7 +41,6 @@ interface MediaFile {
   originalPath: string;
   fileName: string;
   content: Buffer;
-  isHtml: boolean;
 }
 
 export interface HashCommandOptions {
@@ -243,8 +242,7 @@ async function hashProperty(
     serviceOverrides.progressTracker;
   const hashedFiles: HashedFile[] = [];
   const cidToFileMap = new Map<string, HashedFile>(); // Map CID to file for link replacement
-  const mediaFiles: MediaFile[] = []; // Collect HTML and image files
-  let mediaDirectoryCid: string | undefined; // CID for the media directory
+  const mediaFiles: MediaFile[] = []; // Image files copied into the output ZIP
 
   try {
     // Initialize csvReporterServiceInstance if not overridden
@@ -281,7 +279,6 @@ async function hashProperty(
     });
     const allFiles = entries.filter((entry) => entry.isFile());
     const jsonFiles = allFiles.filter((file) => file.name.endsWith('.json'));
-    const htmlFiles = allFiles.filter((file) => isHtmlFile(file.name));
     const imageFiles = allFiles.filter((file) => isImageFile(file.name));
 
     if (jsonFiles.length === 0) {
@@ -292,20 +289,8 @@ async function hashProperty(
     }
 
     logger.success(
-      `Found ${jsonFiles.length} JSON files, ${htmlFiles.length} HTML files, and ${imageFiles.length} image files in property directory`
+      `Found ${jsonFiles.length} JSON files and ${imageFiles.length} image files in property directory`
     );
-
-    // Collect HTML and image files as media files
-    for (const htmlFile of htmlFiles) {
-      const filePath = path.join(actualInputDir, htmlFile.name);
-      const content = await fsPromises.readFile(filePath);
-      mediaFiles.push({
-        originalPath: filePath,
-        fileName: htmlFile.name,
-        content,
-        isHtml: true,
-      });
-    }
 
     for (const imageFile of imageFiles) {
       const filePath = path.join(actualInputDir, imageFile.name);
@@ -314,7 +299,6 @@ async function hashProperty(
         originalPath: filePath,
         fileName: imageFile.name,
         content,
-        isHtml: false,
       });
     }
 
@@ -397,11 +381,6 @@ async function hashProperty(
       );
     }
 
-    // We need to calculate the media directory CID after determining the final property CID
-    // So we'll move this calculation to after the property CID determination
-
-    // The scannedJsonFiles array is already populated from scanSinglePropertyDirectory
-
     // Phase 2: Processing Files
     progressTracker.setPhase('Processing Files', scannedJsonFiles.length);
     const localProcessingSemaphore = new Semaphore(effectiveConcurrency);
@@ -475,48 +454,7 @@ async function hashProperty(
       throw new Error(errorMsg);
     }
 
-    // Now calculate directory CID for media files if any exist
-    // We use the final property CID to match what the upload command does
-    if (mediaFiles.length > 0) {
-      logger.info('Calculating directory CID for HTML and image files...');
-      try {
-        const mediaFilesForCid = mediaFiles.map((file) => ({
-          name: file.fileName,
-          content: file.content,
-        }));
-
-        // Use the final property CID for the directory name to match upload command
-        const directoryName = `${finalPropertyCid}_media`;
-
-        // Sort files alphabetically to ensure deterministic CID
-        const sortedMediaFiles = [...mediaFilesForCid].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
-
-        // Calculate the directory CID
-        mediaDirectoryCid = await cidCalculatorService.calculateDirectoryCid(
-          sortedMediaFiles,
-          directoryName
-        );
-
-        // Log details for debugging
-        logger.info(`Media directory details:
-  Directory name: ${directoryName}
-  Number of files: ${sortedMediaFiles.length}
-  Files: ${sortedMediaFiles.map((f) => `${f.name} (${f.content.length} bytes)`).join(', ')}
-  Calculated CID: ${mediaDirectoryCid}`);
-
-        logger.success(`Calculated media directory CID: ${mediaDirectoryCid}`);
-      } catch (error) {
-        logger.error(
-          `Failed to calculate media directory CID: ${error instanceof Error ? error.message : String(error)}`
-        );
-        // Continue without media directory CID
-      }
-    }
-
     // Phase 2: Process ALL files including the seed datagroup WITH links
-    // Now that we have the media directory CID, we can properly process all files
 
     // First, process the seed datagroup WITH its links converted
     if (seedDatagroupFile) {
@@ -532,8 +470,7 @@ async function hashProperty(
         updatedSeedFile,
         servicesForProcessing,
         hashedFiles,
-        cidToFileMap,
-        mediaDirectoryCid // Now we have media CID for any HTML references
+        cidToFileMap
       );
 
       // Verify the seed CID matches what we calculated
@@ -580,9 +517,7 @@ async function hashProperty(
     }));
 
     if (updatedFiles.length > 0) {
-      logger.info(
-        `Processing ${updatedFiles.length} remaining files with media CID available...`
-      );
+      logger.info(`Processing ${updatedFiles.length} remaining files...`);
 
       const allOperationPromises: Promise<void>[] = [];
       for (const fileEntry of updatedFiles) {
@@ -592,8 +527,7 @@ async function hashProperty(
               fileEntry,
               servicesForProcessing,
               hashedFiles,
-              cidToFileMap,
-              mediaDirectoryCid // Now all files have access to media CID
+              cidToFileMap
             )
           )
         );
@@ -639,12 +573,9 @@ async function hashProperty(
         // Normalize the path separators for consistency (use forward slashes)
         relativePath = relativePath.replace(/\\/g, '/');
 
-        // Add empty uploadedAt field and htmlLink with media directory CID if available
-        const htmlLink = mediaDirectoryCid
-          ? `https://ipfs.io/ipfs/${mediaDirectoryCid}`
-          : '';
+        // uploadedAt is filled by upload; htmlLink stays for CSV compatibility
         csvData.push(
-          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,${htmlLink}`
+          `${hashedFile.propertyCid},${hashedFile.dataGroupCid},${hashedFile.calculatedCid},${relativePath},,`
         );
       }
     }
@@ -707,7 +638,7 @@ async function hashProperty(
       )
     );
 
-    // Add media files (HTML and images) with their original names
+    // Add image files with their original names
     for (const mediaFile of mediaFiles) {
       const zipPath = path.join(propertyFolderName, mediaFile.fileName);
       zip.addFile(zipPath, mediaFile.content);
@@ -827,8 +758,7 @@ async function processFileForHashing(
     ipldConverterService: IPLDConverterService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>,
-  mediaDirectoryCid?: string
+  cidToFileMap: Map<string, HashedFile>
 ): Promise<void> {
   let jsonData;
   try {
@@ -877,7 +807,7 @@ async function processFileForHashing(
         return;
       }
     } else {
-      // No schema for non-datagroup files like fact_sheet.json
+      // No schema for files that are not data-group roots
       // We still need to process them for IPLD links
       logger.debug(
         `No dataGroupCid for ${fileEntry.filePath}, processing without schema validation`
@@ -903,13 +833,6 @@ async function processFileForHashing(
       schema
     );
 
-    // Special debug for fact_sheet.json
-    if (fileEntry.filePath.includes('fact_sheet')) {
-      logger.info(
-        `Processing fact_sheet.json: hasLinks=${hasLinks}, ipfs_url="${jsonData.ipfs_url}", mediaDirectoryCid=${mediaDirectoryCid}`
-      );
-    }
-
     if (services.ipldConverterService && hasLinks) {
       logger.debug(
         `Data has IPLD links, converting file paths to CIDs for ${fileEntry.filePath}`
@@ -924,8 +847,7 @@ async function processFileForHashing(
           schema,
           services,
           hashedFiles,
-          cidToFileMap,
-          mediaDirectoryCid
+          cidToFileMap
         );
         dataToProcess = conversionResult.convertedData;
         linkedFilesFromConversion = conversionResult.linkedFiles;
@@ -1018,8 +940,7 @@ async function convertToIPLDWithCIDCalculation(
     cidCalculatorService: CidCalculatorService;
   },
   hashedFiles: HashedFile[],
-  cidToFileMap: Map<string, HashedFile>,
-  mediaDirectoryCid?: string
+  cidToFileMap: Map<string, HashedFile>
 ): Promise<{
   convertedData: any;
   hasLinks: boolean;
@@ -1048,8 +969,7 @@ async function convertToIPLDWithCIDCalculation(
     hashedFiles,
     cidToFileMap,
     undefined,
-    linkedFilesData,
-    mediaDirectoryCid
+    linkedFilesData
   );
 
   return {
@@ -1077,8 +997,7 @@ async function processDataForIPLD(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>,
-  mediaDirectoryCid?: string
+  }>
 ): Promise<any> {
   // Handle string values for ipfs_url fields or ipfs_uri format
   if (
@@ -1100,13 +1019,12 @@ async function processDataForIPLD(
     }
 
     // It's a local path
-    if (isImageFile(data) || isHtmlFile(data)) {
+    if (isImageFile(data)) {
       const cid = await getCidForFilePath(
         data,
         currentFilePath,
         services,
         linkedCIDs,
-        mediaDirectoryCid,
         linkedFilesData
       );
       return `ipfs://${cid}`;
@@ -1148,7 +1066,6 @@ async function processDataForIPLD(
         currentFilePath,
         services,
         linkedCIDs,
-        mediaDirectoryCid,
         linkedFilesData
       );
       return { '/': cid };
@@ -1169,8 +1086,7 @@ async function processDataForIPLD(
           hashedFiles,
           cidToFileMap,
           fieldName,
-          linkedFilesData,
-          mediaDirectoryCid
+          linkedFilesData
         )
       )
     );
@@ -1190,8 +1106,7 @@ async function processDataForIPLD(
         hashedFiles,
         cidToFileMap,
         key, // Pass the field name
-        linkedFilesData,
-        mediaDirectoryCid
+        linkedFilesData
       );
     }
   }
@@ -1214,8 +1129,7 @@ async function calculateCIDForFile(
     cid: string;
     canonicalJson: string;
     processedData: any;
-  }>,
-  mediaDirectoryCid?: string
+  }>
 ): Promise<string> {
   let resolvedPath: string;
 
@@ -1261,8 +1175,7 @@ async function calculateCIDForFile(
         [], // Don't track in hashedFiles yet
         new Map(), // Don't track in cidToFileMap yet
         undefined, // No field name context
-        linkedFiles, // Pass the same linkedFiles collection to track nested files
-        mediaDirectoryCid // Pass through the media directory CID
+        linkedFiles // Pass the same linkedFiles collection to track nested files
       );
 
       const canonicalJson =
@@ -1306,7 +1219,7 @@ async function calculateCIDForFile(
 }
 
 /**
- * Get CID for a file path, using media directory CID for HTML files if available
+ * Get CID for a file path
  */
 async function getCidForFilePath(
   filePath: string,
@@ -1316,7 +1229,6 @@ async function getCidForFilePath(
     cidCalculatorService: CidCalculatorService;
   },
   linkedCIDs: string[],
-  mediaDirectoryCid?: string,
   linkedFilesData?: Array<{
     path: string;
     cid: string;
@@ -1324,33 +1236,12 @@ async function getCidForFilePath(
     processedData: any;
   }>
 ): Promise<string> {
-  // For HTML files, always use the media directory CID
-  if (isHtmlFile(filePath)) {
-    if (!mediaDirectoryCid) {
-      // This should only happen if the seed datagroup file references HTML, which is unusual
-      // Log a warning and throw an error to make this explicit
-      logger.error(
-        `HTML file ${filePath} referenced but media directory CID not available. ` +
-          `This typically happens when the seed datagroup file references HTML files. ` +
-          `The seed datagroup should not reference HTML files directly.`
-      );
-      throw new Error(
-        `Cannot process HTML reference in seed datagroup file. ` +
-          `HTML files should only be referenced by other data files, not the seed datagroup.`
-      );
-    }
-    linkedCIDs.push(mediaDirectoryCid);
-    return mediaDirectoryCid;
-  }
-
-  // For non-HTML files (JSON and images), calculate individual CID
   const cid = await calculateCIDForFile(
     filePath,
     currentFilePath,
     services,
     false, // not necessarily an ipfs_uri format
-    linkedFilesData,
-    mediaDirectoryCid
+    linkedFilesData
   );
   linkedCIDs.push(cid);
   return cid;

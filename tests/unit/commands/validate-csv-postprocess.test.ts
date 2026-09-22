@@ -336,7 +336,6 @@ prop1,dg1,file1.json,/label,label error,,2024-01-01
     const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
 prop1,dg1,file1.json,/relationships/property_has_address/0/to,must match a schema in anyOf,value,2024-01-01
 prop1,dg1,file1.json,/relationships/property_has_address/0/to/street,is required,,2024-01-01
-prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another address error,,2024-01-01
 `;
     await fsPromises.writeFile(csvPath, csv);
 
@@ -351,7 +350,6 @@ prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another addres
     );
     // Should NOT show individual address errors
     expect(result).not.toContain('is required');
-    expect(result).not.toContain('another address error');
   });
 
   it('should consolidate address errors when oneOf error is on /to side', async () => {
@@ -360,7 +358,6 @@ prop1,dg1,file1.json,/relationships/address_has_fact_sheet/0/from,another addres
 prop1,dg1,file1.json,/relationships/property_has_address/to,must match exactly one schema in oneOf,value,2024-01-01
 prop1,dg1,file1.json,/relationships/property_has_address/to,unexpected property 'street_number',,2024-01-01
 prop1,dg1,file1.json,/relationships/property_has_address/to,missing required property 'city_name',,2024-01-01
-prop1,dg1,file1.json,/relationships/address_has_fact_sheet/1/from,unexpected property 'unnormalized_address',,2024-01-01
 `;
     await fsPromises.writeFile(csvPath, csv);
 
@@ -394,21 +391,6 @@ prop3,dg3,file3.json,/data/street,is required,,2024-01-01
       .split('\n')
       .filter((l) => l && !l.startsWith('property_cid'));
     expect(dataLines).toHaveLength(1);
-  });
-
-  it('should prefer paths without has_fact_sheet when deduplicating', async () => {
-    const csv = `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
-prop1,dg1,file1.json,/relationships/data_has_fact_sheet/0/value,is required,,2024-01-01
-prop2,dg2,file2.json,/data/value,is required,,2024-01-01
-`;
-    await fsPromises.writeFile(csvPath, csv);
-
-    const count = await postProcessErrorCsv(csvPath);
-    expect(count).toBe(1);
-
-    const result = await fsPromises.readFile(csvPath, 'utf-8');
-    expect(result).toContain('/data/value');
-    expect(result).not.toContain('has_fact_sheet');
   });
 
   it('should handle CSV with quoted values correctly', async () => {

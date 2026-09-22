@@ -10,7 +10,7 @@ vi.mock('../../../src/utils/single-property-file-scanner-v2.js');
 vi.mock('../../../src/services/schema-manifest.service.js');
 vi.mock('../../../src/utils/single-property-processor.js');
 
-describe('Hash Command - Simple Media Files Test', () => {
+describe('Hash Command - image files', () => {
   const testExtractedDir = '/tmp/extracted';
 
   beforeEach(async () => {
@@ -37,8 +37,7 @@ describe('Hash Command - Simple Media Files Test', () => {
     vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
   });
 
-  it('should process media files and calculate directory CID', async () => {
-    // Mock files: 1 JSON, 1 HTML, 1 image
+  it('copies image files into the output ZIP and ignores HTML files', async () => {
     vi.mocked(fsPromises.readdir).mockResolvedValue([
       { name: 'data.json', isDirectory: () => false, isFile: () => true },
       { name: 'index.html', isDirectory: () => false, isFile: () => true },
@@ -59,9 +58,6 @@ describe('Hash Command - Simple Media Files Test', () => {
       return '';
     });
 
-    // Track if directory CID was calculated
-    let directoryCidCalculated = false;
-
     const mockServices = {
       schemaCacheService: {
         getSchema: vi.fn().mockResolvedValue({
@@ -75,10 +71,6 @@ describe('Hash Command - Simple Media Files Test', () => {
       cidCalculatorService: {
         calculateCidFromCanonicalJson: vi.fn().mockResolvedValue('bafkreijson'),
         calculateCidV1ForRawData: vi.fn().mockResolvedValue('bafkreiimage'),
-        calculateDirectoryCid: vi.fn().mockImplementation(() => {
-          directoryCidCalculated = true;
-          return Promise.resolve('bafybeimediadir');
-        }),
       },
       csvReporterService: {
         initialize: vi.fn(),
@@ -128,12 +120,9 @@ describe('Hash Command - Simple Media Files Test', () => {
 
     // Mock AdmZip
     const AdmZip = (await import('adm-zip')).default;
+    const addFile = vi.fn();
     vi.mocked(AdmZip).mockImplementation(
-      () =>
-        ({
-          addFile: vi.fn(),
-          writeZip: vi.fn(),
-        }) as any
+      () => ({ addFile, writeZip: vi.fn() }) as any
     );
 
     // Run the hash command
@@ -147,16 +136,8 @@ describe('Hash Command - Simple Media Files Test', () => {
       mockServices as any
     );
 
-    // Check that directory CID was calculated
-    expect(directoryCidCalculated).toBe(true);
-    expect(
-      mockServices.cidCalculatorService.calculateDirectoryCid
-    ).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'index.html' }),
-        expect.objectContaining({ name: 'image.png' }),
-      ]),
-      'bafkreiproperty_media' // The directory name based on property CID
-    );
+    const zipped = addFile.mock.calls.map(([name]) => name);
+    expect(zipped).toContain('bafkreiproperty/image.png');
+    expect(zipped).not.toContain('bafkreiproperty/index.html');
   });
 });

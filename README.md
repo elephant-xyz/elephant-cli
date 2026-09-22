@@ -108,7 +108,7 @@ seed-input.zip
 | Column                  | Required | Purpose                                                                            |
 | ----------------------- | -------- | ---------------------------------------------------------------------------------- |
 | `parcel_id`             | ✅       | Parcel identifier used across Elephant datasets.                                   |
-| `address`               | ✅       | Human-readable street address for logging and fact sheets.                         |
+| `address`               | ✅       | Human-readable street address for logging.                                         |
 | `method`                | ✅       | HTTP method (`GET` or `POST`).                                                     |
 | `url`                   | ✅       | Base URL to request during `prepare`.                                              |
 | `multiValueQueryString` | ➖       | JSON string mapping query keys to string arrays (e.g. `{"parcel":["0745"]}`).      |
@@ -249,7 +249,6 @@ property-improvement-output.zip
 
 **Key Differences from County Workflow:**
 
-- **No fact sheet generation**: Property Improvement data groups don't include fact sheet relationships
 - **Custom extraction**: Uses `property-improvement-extractor.js` instead of County mapping scripts
 - **HTML-based**: Extracts data from HTML content rather than structured CSV data
 - **Single script**: Runs one extraction script instead of multiple mapping scripts
@@ -301,7 +300,7 @@ elephant-cli transform \
 **What it does**
 
 - Parses `seed.csv` and constructs canonical `property_seed.json`, `unnormalized_address.json`, and relationship scaffolding.
-- Generates a seed datagroup JSON (named by the Seed schema CID) and related fact-sheet relationships.
+- Generates a seed datagroup JSON (named by the Seed schema CID).
 - Packages everything inside a top-level `data/` directory.
 
 **Inputs**
@@ -316,8 +315,7 @@ seed-bundle.zip
     ├── <seed_schema_cid>.json
     ├── property_seed.json
     ├── relationship_property_to_address.json
-    ├── unnormalized_address.json
-    └── relationship_unnormalized_address_to_fact_sheet.json
+    └── unnormalized_address.json
 ```
 
 For the next step, extract `data/property_seed.json` and `data/unnormalized_address.json` into a new working folder (no subdirectories) and zip them as `prepare-input.zip`.
@@ -714,7 +712,7 @@ elephant-cli transform \
 
 - Normalizes inputs to `input.html`/`input.json`, `property_seed.json`, and `unnormalized_address.json` in a temporary workspace.
 - Executes the generated scripts, adding `source_http_request` metadata to every datagroup.
-- Builds county relationships and fact-sheet artifacts, then bundles the results.
+- Builds county relationships, then bundles the results.
 - Writes the Seed data-group root and its `address_has_parcel` relationship next to the `address.json` and `parcel.json` the scripts produced (keeping any the scripts already wrote), so `hash` derives the property CID from this bundle alone.
 
 **Inputs**
@@ -729,9 +727,7 @@ transformed-data.zip
 └── data/
     ├── property.json
     ├── *.json (cleaned datagroups named by schema CIDs)
-    ├── relationship_*.json
-    ├── fact_sheet.json
-    └── *.html / media assets for the fact sheet
+    └── relationship_*.json
 ```
 
 **Options**
@@ -770,16 +766,16 @@ elephant-cli hash transformed-data.zip \
 hashed-data.zip
 └── <property_cid>/
     ├── <data_cid>.json (canonicalized datagroups)
-    └── *.html / media copied from the transform bundle
+    └── image files copied from the transform bundle
 
 hash-results.csv
 propertyCid,dataGroupCid,dataCid,filePath,uploadedAt,htmlLink
 ...
 ```
 
-The CSV leaves `uploadedAt` empty (populated after IPFS upload) and populates `htmlLink` when fact-sheet media assets are present.
+The CSV leaves `uploadedAt` empty (populated after IPFS upload); `htmlLink` is always empty and kept only so existing CSV consumers keep parsing.
 
-With `--output-car`, every hashed JSON block of the run (HTML and image files excluded) is also written into one CAR file whose single root is a county index; a consumer walks root -> shard -> property -> data group:
+With `--output-car`, every hashed JSON block of the run (image files excluded) is also written into one CAR file whose single root is a county index; a consumer walks root -> shard -> property -> data group:
 
 ```
 <index>   {"label":"CountyIndex","version":1,"properties":<count>,"shards":[{"/":"<shard cid>"},...]}
@@ -948,8 +944,8 @@ elephant-cli upload county.car \
 **What it does**
 
 - Extracts the single property directory from the hashed ZIP.
-- Uploads JSON datagroups (and HTML/image assets) to IPFS via Pinata.
-- Writes a CSV in the same format as `hash-results.csv`, including upload timestamps and media links when available.
+- Uploads JSON datagroups (and image assets) to IPFS via Pinata.
+- Writes a CSV in the same format as `hash-results.csv`, including upload timestamps.
 
 **Inputs**
 
@@ -959,7 +955,7 @@ elephant-cli upload county.car \
 
 - IPFS CID for the JSON directory (printed in the CLI).
 - Optional CID for media files when present.
-- `upload-results.csv` mirroring the hash CSV headers with populated `uploadedAt` (ISO 8601) and `htmlLink` columns.
+- `upload-results.csv` mirroring the hash CSV headers with a populated `uploadedAt` (ISO 8601) column.
 - For a `.car` input: the upload summary, printed and (with `--output-json`) written as JSON:
 
 ```json

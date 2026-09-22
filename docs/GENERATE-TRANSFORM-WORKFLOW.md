@@ -5,7 +5,7 @@
 **Overview**
 
 - **generate-transform**: Creates JavaScript extraction scripts from a minimal input ZIP. Runs an LLM pipeline and can leverage prior scripts and error CSVs for iterative improvement.
-- **transform**: Runs the generated scripts against your inputs, enriches outputs, generates relationships and fact-sheet assets, and bundles everything.
+- **transform**: Runs the generated scripts against your inputs, enriches outputs, generates relationships, and bundles everything.
 - **validate**: Validates the single-property output ZIP against schema CIDs and reports errors to CSV.
 
 **Inputs For generate-transform**
@@ -69,7 +69,7 @@
   - Runs the four mapping scripts in parallel, then `data_extractor.js`.
   - Enriches each produced JSON with `source_http_request` and `request_identifier` from `property_seed.json`.
   - Auto-generates relationship JSONs between `property.json` and other entities.
-  - Creates a County data group descriptor and runs fact-sheet generation (assets copied into `data/`).
+  - Creates a County data group descriptor.
   - Bundles everything as `transformed-data.zip` with a top-level `data/` directory.
 
 **Unpacking and fixing scripts**
