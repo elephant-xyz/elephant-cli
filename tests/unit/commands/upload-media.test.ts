@@ -456,8 +456,6 @@ describe('Upload Command - Media Files Support', () => {
   describe('Media File Types', () => {
     it('should correctly identify all supported media file types', async () => {
       const mediaFiles = [
-        'index.html',
-        'page.htm',
         'image.png',
         'photo.jpg',
         'picture.jpeg',
@@ -482,7 +480,7 @@ describe('Upload Command - Media Files Support', () => {
             isFile: () => true,
             parentPath: testExtractedPath,
           },
-          ...mediaFiles.map((name) => ({
+          ...[...mediaFiles, 'index.html', 'page.htm'].map((name) => ({
             name,
             isDirectory: () => false,
             isFile: () => true,
@@ -520,6 +518,9 @@ describe('Upload Command - Media Files Support', () => {
       );
 
       expect(mediaCopyCalls).toHaveLength(mediaFiles.length);
+      expect(mediaCopyCalls.map((call) => path.basename(call[0]))).toEqual(
+        mediaFiles
+      );
 
       // Verify result
       expect(result).toEqual({

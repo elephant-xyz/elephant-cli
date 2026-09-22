@@ -8,7 +8,7 @@ import { ZipExtractorService } from '../services/zip-extractor.service.js';
 import { PinataDirectoryUploadService } from '../services/pinata-directory-upload.service.js';
 import { SimpleProgress } from '../utils/simple-progress.js';
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
-import { isMediaFile } from '../utils/file-type-helpers.js';
+import { isImageFile } from '../utils/file-type-helpers.js';
 import { importCar, importTables } from '../services/car-import.service.js';
 import { isCarInput, isTablesInput } from '../utils/car-input.js';
 
@@ -271,7 +271,7 @@ export async function handleUpload(
         );
 
         const mediaFiles = propertyFiles.filter(
-          (entry) => entry.isFile() && isMediaFile(entry.name)
+          (entry) => entry.isFile() && isImageFile(entry.name)
         );
 
         if (jsonFiles.length === 0) {
