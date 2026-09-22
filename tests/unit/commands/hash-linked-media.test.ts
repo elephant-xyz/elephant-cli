@@ -118,4 +118,34 @@ describe('hash with linked media files', () => {
       out.blocks.find(([name]) => name.endsWith('/photo.png'))?.[1]
     ).toEqual(PNG);
   });
+
+  it('rejects a pointer link to an html file', async () => {
+    const out = await run({
+      ...BASE,
+      [`${COUNTY_CID}.json`]: county({
+        property_has_page: { '/': './page.json' },
+      }),
+      'page.json': JSON.stringify({ page: { '/': './index.html' } }),
+      'index.html': '<html></html>',
+    });
+    expect(out.errors).toContain(
+      'cannot link ./index.html: only JSON and image files can be linked'
+    );
+    expect(out.blocks.every(([name]) => name.endsWith('.json'))).toBe(true);
+    expect(out.text.some((body) => body.includes('<html>'))).toBe(false);
+  });
+
+  it('leaves a string ipfs_url to an html file as-is', async () => {
+    const out = await run({
+      ...BASE,
+      [`${COUNTY_CID}.json`]: county({
+        property_has_page: { '/': './page.json' },
+      }),
+      'page.json': JSON.stringify({ ipfs_url: './index.html' }),
+      'index.html': '<html></html>',
+    });
+    expect(out.errors).not.toMatch(/\n.+/);
+    expect(out.text).toContain(JSON.stringify({ ipfs_url: './index.html' }));
+    expect(out.blocks.every(([name]) => name.endsWith('.json'))).toBe(true);
+  });
 });

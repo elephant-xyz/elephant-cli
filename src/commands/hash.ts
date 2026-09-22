@@ -838,35 +838,23 @@ async function processFileForHashing(
         `Data has IPLD links, converting file paths to CIDs for ${fileEntry.filePath}`
       );
 
-      try {
-        // Create a custom IPLD converter that calculates CIDs without uploading
-        // Use a placeholder property CID for now
-        const conversionResult = await convertToIPLDWithCIDCalculation(
-          jsonData,
-          fileEntry.filePath,
-          schema,
-          services,
-          hashedFiles,
-          cidToFileMap
-        );
-        dataToProcess = conversionResult.convertedData;
-        linkedFilesFromConversion = conversionResult.linkedFiles;
+      // Calculate CIDs for linked files without uploading. A link that cannot
+      // be resolved fails this file; the caller records it in the errors CSV.
+      const conversionResult = await convertToIPLDWithCIDCalculation(
+        jsonData,
+        fileEntry.filePath,
+        schema,
+        services,
+        hashedFiles,
+        cidToFileMap
+      );
+      dataToProcess = conversionResult.convertedData;
+      linkedFilesFromConversion = conversionResult.linkedFiles;
 
-        if (conversionResult.hasLinks) {
-          logger.debug(
-            `Converted ${conversionResult.linkedCIDs.length} file paths to CIDs`
-          );
-        }
-      } catch (conversionError) {
-        const errorMsg =
-          conversionError instanceof Error
-            ? conversionError.message
-            : String(conversionError);
-        logger.error(
-          `Failed to convert IPLD links for ${fileEntry.filePath}: ${errorMsg}`
+      if (conversionResult.hasLinks) {
+        logger.debug(
+          `Converted ${conversionResult.linkedCIDs.length} file paths to CIDs`
         );
-        // Continue with original data
-        dataToProcess = jsonData;
       }
     }
 
@@ -1141,73 +1129,52 @@ async function calculateCIDForFile(
     resolvedPath = path.join(currentDir, filePath);
   }
 
-  const isImage = isImageFile(resolvedPath);
+  if (isImageFile(resolvedPath)) {
+    // Images are content-addressed by their bytes and never emitted as JSON blocks
+    return services.cidCalculatorService.calculateCidV1ForRawData(
+      await fsPromises.readFile(resolvedPath)
+    );
+  }
 
-  // Read the file (binary for images, utf-8 for text)
-  const fileContent = isImage
-    ? await fsPromises.readFile(resolvedPath)
-    : await fsPromises.readFile(resolvedPath, 'utf-8');
+  if (path.extname(resolvedPath).toLowerCase() !== '.json') {
+    throw new Error(
+      `cannot link ${filePath}: only JSON and image files can be linked`
+    );
+  }
 
-  // Handle based on file type
-  let calculatedCid: string;
+  const parsedData = JSON.parse(
+    await fsPromises.readFile(resolvedPath, 'utf-8')
+  );
+  // Recursively process the parsed data to convert any nested file path links
+  // Use the same linkedFiles collection to track nested files
+  const nestedLinkedCIDs: string[] = [];
+  const processedData = await processDataForIPLD(
+    parsedData,
+    nestedLinkedCIDs,
+    resolvedPath,
+    undefined, // No schema for nested files
+    services,
+    [], // Don't track in hashedFiles yet
+    new Map(), // Don't track in cidToFileMap yet
+    undefined, // No field name context
+    linkedFiles // Pass the same linkedFiles collection to track nested files
+  );
 
-  if (isImage) {
-    // For images, calculate CID v1 with raw codec
-    calculatedCid =
-      await services.cidCalculatorService.calculateCidV1ForRawData(
-        fileContent as Buffer
-      );
-  } else {
-    // Try to parse as JSON
-    try {
-      const parsedData = JSON.parse(fileContent as string);
-      // Recursively process the parsed data to convert any nested file path links
-      // Use the same linkedFiles collection to track nested files
-      const nestedLinkedCIDs: string[] = [];
-      const processedData = await processDataForIPLD(
-        parsedData,
-        nestedLinkedCIDs,
-        resolvedPath,
-        undefined, // No schema for nested files
-        services,
-        [], // Don't track in hashedFiles yet
-        new Map(), // Don't track in cidToFileMap yet
-        undefined, // No field name context
-        linkedFiles // Pass the same linkedFiles collection to track nested files
-      );
+  const canonicalJson =
+    services.canonicalizerService.canonicalize(processedData);
+  const calculatedCid =
+    await services.cidCalculatorService.calculateCidFromCanonicalJson(
+      canonicalJson
+    );
 
-      const canonicalJson =
-        services.canonicalizerService.canonicalize(processedData);
-      calculatedCid =
-        await services.cidCalculatorService.calculateCidFromCanonicalJson(
-          canonicalJson
-        );
-
-      // Track this linked file if we have a collection
-      if (linkedFiles) {
-        linkedFiles.push({
-          path: resolvedPath,
-          cid: calculatedCid,
-          canonicalJson,
-          processedData,
-        });
-      }
-    } catch {
-      // If not JSON, treat as raw text and calculate CID using raw codec
-      const buffer = Buffer.from(fileContent as string, 'utf-8');
-      calculatedCid =
-        await services.cidCalculatorService.calculateCidV1ForRawData(buffer);
-
-      // Track this linked file if we have a collection
-      if (linkedFiles) {
-        linkedFiles.push({
-          path: resolvedPath,
-          cid: calculatedCid,
-          canonicalJson: buffer.toString('utf-8'),
-          processedData: buffer.toString('utf-8'),
-        });
-      }
-    }
+  // Track this linked file if we have a collection
+  if (linkedFiles) {
+    linkedFiles.push({
+      path: resolvedPath,
+      cid: calculatedCid,
+      canonicalJson,
+      processedData,
+    });
   }
 
   logger.debug(
