@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -11,17 +11,6 @@ import { SEED_DATAGROUP_SCHEMA_CID } from '../../../src/config/constants.js';
 import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 
 const COUNTY_CID = 'bafkreicountyschemacidfortestsonlyxxxxxxxxxxxxxxxxxxxxxxxx';
-
-vi.mock('../../../src/utils/logger.js', () => ({
-  logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    success: vi.fn(),
-    technical: vi.fn(),
-  },
-}));
 
 const overrides = {
   schemaCacheService: { get: async () => ({}) },
@@ -78,11 +67,11 @@ describe('hash with linked media files', () => {
     const blocks = new AdmZip(outputZip)
       .getEntries()
       .map((entry) => [entry.entryName, entry.getData()] as const);
-    const json = blocks.filter(([name]) => name.endsWith('.json'));
     return {
       blocks,
-      json,
-      text: json.map(([, body]) => body.toString('utf-8')),
+      text: blocks
+        .filter(([name]) => name.endsWith('.json'))
+        .map(([, body]) => body.toString('utf-8')),
       csv: await fsPromises.readFile(outputCsv, 'utf-8'),
       errors: await fsPromises.readFile(
         path.join(tmp, 'submit_errors.csv'),
@@ -113,7 +102,7 @@ describe('hash with linked media files', () => {
     expect(out.errors).not.toMatch(/\n.+/);
     expect(out.text).toContain(JSON.stringify({ ipfs_url: `ipfs://${raw}` }));
     // seed, address, parcel, address_has_parcel, county, photo_link
-    expect(out.json).toHaveLength(6);
+    expect(out.text).toHaveLength(6);
     expect(
       out.blocks.find(([name]) => name.endsWith('/photo.png'))?.[1]
     ).toEqual(PNG);

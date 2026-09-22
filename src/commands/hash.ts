@@ -835,12 +835,6 @@ async function processFileForHashing(
       );
       dataToProcess = conversionResult.convertedData;
       linkedFilesFromConversion = conversionResult.linkedFiles;
-
-      if (conversionResult.hasLinks) {
-        logger.debug(
-          `Converted ${conversionResult.linkedCIDs.length} file paths to CIDs`
-        );
-      }
     }
 
     // Calculate canonical JSON and CID for the final transformed data
@@ -1132,10 +1126,9 @@ async function calculateCIDForFile(
   );
   // Recursively process the parsed data to convert any nested file path links
   // Use the same linkedFiles collection to track nested files
-  const nestedLinkedCIDs: string[] = [];
   const processedData = await processDataForIPLD(
     parsedData,
-    nestedLinkedCIDs,
+    [],
     resolvedPath,
     undefined, // No schema for nested files
     services,
@@ -1152,15 +1145,12 @@ async function calculateCIDForFile(
       canonicalJson
     );
 
-  // Track this linked file if we have a collection
-  if (linkedFiles) {
-    linkedFiles.push({
-      path: resolvedPath,
-      cid: calculatedCid,
-      canonicalJson,
-      processedData,
-    });
-  }
+  linkedFiles?.push({
+    path: resolvedPath,
+    cid: calculatedCid,
+    canonicalJson,
+    processedData,
+  });
 
   logger.debug(
     `Calculated CID for linked file ${resolvedPath}: ${calculatedCid}`
