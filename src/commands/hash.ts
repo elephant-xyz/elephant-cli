@@ -37,12 +37,6 @@ interface HashedFile {
   canonicalJson: string;
 }
 
-interface MediaFile {
-  originalPath: string;
-  fileName: string;
-  content: Buffer;
-}
-
 export interface HashCommandOptions {
   input: string;
   outputZip: string;
@@ -242,7 +236,6 @@ async function hashProperty(
     serviceOverrides.progressTracker;
   const hashedFiles: HashedFile[] = [];
   const cidToFileMap = new Map<string, HashedFile>(); // Map CID to file for link replacement
-  const mediaFiles: MediaFile[] = []; // Image files copied into the output ZIP
 
   try {
     // Initialize csvReporterServiceInstance if not overridden
@@ -291,16 +284,6 @@ async function hashProperty(
     logger.success(
       `Found ${jsonFiles.length} JSON files and ${imageFiles.length} image files in property directory`
     );
-
-    for (const imageFile of imageFiles) {
-      const filePath = path.join(actualInputDir, imageFile.name);
-      const content = await fsPromises.readFile(filePath);
-      mediaFiles.push({
-        originalPath: filePath,
-        fileName: imageFile.name,
-        content,
-      });
-    }
 
     // Scan the single property directory using the new approach
     const propertyDirName = path.basename(actualInputDir);
@@ -639,9 +622,11 @@ async function hashProperty(
     );
 
     // Add image files with their original names
-    for (const mediaFile of mediaFiles) {
-      const zipPath = path.join(propertyFolderName, mediaFile.fileName);
-      zip.addFile(zipPath, mediaFile.content);
+    for (const imageFile of imageFiles) {
+      zip.addLocalFile(
+        path.join(actualInputDir, imageFile.name),
+        propertyFolderName
+      );
     }
 
     // Write the ZIP file

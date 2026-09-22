@@ -50,10 +50,6 @@ describe('Hash Command - image files', () => {
           label: 'Test',
           relationships: {},
         });
-      } else if (path.endsWith('.html')) {
-        return Buffer.from('<html></html>');
-      } else if (path.endsWith('.png')) {
-        return Buffer.from('PNG');
       }
       return '';
     });
@@ -121,8 +117,9 @@ describe('Hash Command - image files', () => {
     // Mock AdmZip
     const AdmZip = (await import('adm-zip')).default;
     const addFile = vi.fn();
+    const addLocalFile = vi.fn();
     vi.mocked(AdmZip).mockImplementation(
-      () => ({ addFile, writeZip: vi.fn() }) as any
+      () => ({ addFile, addLocalFile, writeZip: vi.fn() }) as any
     );
 
     // Run the hash command
@@ -136,8 +133,11 @@ describe('Hash Command - image files', () => {
       mockServices as any
     );
 
-    const zipped = addFile.mock.calls.map(([name]) => name);
-    expect(zipped).toContain('bafkreiproperty/image.png');
-    expect(zipped).not.toContain('bafkreiproperty/index.html');
+    expect(addLocalFile.mock.calls).toEqual([
+      [expect.stringMatching(/image\.png$/), 'bafkreiproperty'],
+    ]);
+    expect(addFile.mock.calls.map(([name]) => name)).not.toContain(
+      'bafkreiproperty/index.html'
+    );
   });
 });
