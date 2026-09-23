@@ -1,7 +1,8 @@
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import { fetchFromIpfs } from '../utils/schema-fetcher.js';
+import pLimit from 'p-limit';
+import { fetchFromIpfs, fetchSchemaManifest } from '../utils/schema-fetcher.js';
 import { logger } from '../utils/logger.js';
 
 export type JSONSchema = {
@@ -76,6 +77,21 @@ export class SchemaCacheService {
     );
     return schema;
   }
+  /**
+   * Fetch every lexicon manifest schema that is not cached yet, 16 at a time.
+   * A schema that fails here is fetched again, and reported, by get().
+   */
+  async warm(): Promise<void> {
+    const manifest = await fetchSchemaManifest().catch(() => ({}));
+    const limit = pLimit(16);
+    await Promise.all(
+      Object.values(manifest)
+        .map((meta) => meta.ipfsCid)
+        .filter((cid) => !this.cache.has(cid))
+        .map((cid) => limit(() => this.fetchSchema(cid).catch(() => undefined)))
+    );
+  }
+
   async get(cid: string): Promise<JSONSchema> {
     return this.cache.get(cid) || (await this.fetchSchema(cid));
   }

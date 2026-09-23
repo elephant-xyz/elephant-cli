@@ -123,6 +123,7 @@ export const SCHEMAS: Record<string, object> = {
 
 export const schemaCacheService = {
   get: async (cid: string) => SCHEMAS[cid],
+  warm: async () => undefined,
 } as unknown as SchemaCacheService;
 
 export interface Tweaks {

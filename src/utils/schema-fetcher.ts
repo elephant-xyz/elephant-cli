@@ -88,7 +88,10 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
   logger.info(`Fetching ${cid}`);
   for (const gateway of ipfsGateways()) {
     try {
-      const response = await fetch(`${gateway}/ipfs/${cid}`);
+      // ponytail: fixed 15 s per gateway, so a slow gateway falls through to the next one
+      const response = await fetch(`${gateway}/ipfs/${cid}`, {
+        signal: AbortSignal.timeout(15_000),
+      });
       if (response.ok) {
         const buffer = await response.arrayBuffer();
         const content = new Uint8Array(buffer);
