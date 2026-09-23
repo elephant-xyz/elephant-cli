@@ -334,6 +334,7 @@ export async function validateCar(
     logger.info(
       `Validating data-group roots of ${entries.length} properties against lexicon`
     );
+    await services.schemaCacheService.warm();
     services.jsonValidatorService.setBlockSource(
       async (cid) => (await reader.get(CID.parse(cid)))?.bytes
     );

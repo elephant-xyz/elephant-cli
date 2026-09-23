@@ -5,6 +5,7 @@ import path from 'path';
 vi.mock('../../../src/utils/schema-fetcher.js', () => {
   return {
     fetchFromIpfs: vi.fn(),
+    fetchSchemaManifest: vi.fn(),
   };
 });
 
@@ -12,7 +13,10 @@ import {
   SchemaCacheService,
   JSONSchema,
 } from '../../../src/services/schema-cache.service';
-import { fetchFromIpfs } from '../../../src/utils/schema-fetcher.js';
+import {
+  fetchFromIpfs,
+  fetchSchemaManifest,
+} from '../../../src/utils/schema-fetcher.js';
 
 describe('SchemaCacheService', () => {
   let schemaCacheService: SchemaCacheService;
@@ -127,6 +131,47 @@ describe('SchemaCacheService', () => {
       await expect(schemaCacheService.get('null-cid')).rejects.toThrow(
         'Invalid JSON schema: not an object'
       );
+    });
+  });
+
+  describe('warm method', () => {
+    it('fetches every uncached manifest schema once and survives a failing one', async () => {
+      const cached: JSONSchema = { type: 'object' };
+      (fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(JSON.stringify(cached))
+        .mockImplementation(async (cid: string) =>
+          cid === 'bad'
+            ? Promise.reject(new Error('504'))
+            : JSON.stringify({ type: 'object', title: cid })
+        );
+      await schemaCacheService.get('already');
+      (
+        fetchSchemaManifest as unknown as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({
+        A: { type: 'class', ipfsCid: 'already' },
+        B: { type: 'class', ipfsCid: 'one' },
+        C: { type: 'relationship', ipfsCid: 'two' },
+        D: { type: 'dataGroup', ipfsCid: 'bad' },
+      });
+
+      await schemaCacheService.warm();
+
+      const calls = (
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mock.calls.map(([cid]) => cid);
+      expect(calls.sort()).toEqual(['already', 'bad', 'one', 'two']);
+      expect(schemaCacheService.has('one')).toBe(true);
+      expect(schemaCacheService.has('two')).toBe(true);
+      expect(schemaCacheService.has('bad')).toBe(false);
+      expect(fs.existsSync(path.join(cacheDir, 'one.json'))).toBe(true);
+    });
+
+    it('does nothing when the manifest cannot be fetched', async () => {
+      (
+        fetchSchemaManifest as unknown as ReturnType<typeof vi.fn>
+      ).mockRejectedValueOnce(new Error('offline'));
+      await schemaCacheService.warm();
+      expect(fetchFromIpfs).not.toHaveBeenCalled();
     });
   });
 });
