@@ -1,0 +1,2 @@
+property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+prop1,dg1,file1,/label,Label is required,null,2024-01-01

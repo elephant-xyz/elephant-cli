@@ -26,7 +26,9 @@ describe('schema fetch configuration', () => {
       'https://lexicon.elephant.xyz/api/manifest'
     );
     expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
-    expect(DEFAULT_IPFS_GATEWAYS[0]).toBe('https://ipfs.filebase.io');
+    expect(DEFAULT_IPFS_GATEWAYS[0]).toBe(
+      'https://striped-pink-anaconda.myfilebase.com'
+    );
   });
 
   it('honours the environment overrides', () => {
