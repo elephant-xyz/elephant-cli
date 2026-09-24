@@ -6,7 +6,6 @@ import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
 import { equals as u8eq } from 'uint8arrays/equals';
 import { logger } from '../utils/logger.js';
-import { DEFAULT_IPFS_GATEWAYS } from '../config/constants.js';
 import { decodeDagJson, sameDigest } from './cid-calculator.service.js';
 
 export interface CarImportOptions {
@@ -106,7 +105,7 @@ function target(options: CarImportOptions): {
   const gateway = (
     options.gateway ??
     (new URL(api).host === 'rpc.filebase.io'
-      ? DEFAULT_IPFS_GATEWAYS[0]
+      ? 'https://ipfs.filebase.io'
       : 'http://127.0.0.1:8080')
   ).replace(/\/+$/, '');
   return { api, gateway, timeout };
