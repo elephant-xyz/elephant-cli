@@ -79,3 +79,6 @@ input.zip
 output.zip
 
 keystore.json
+
+# written by the test suite
+test_errors.csv
