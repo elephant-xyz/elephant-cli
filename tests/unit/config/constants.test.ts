@@ -21,24 +21,28 @@ describe('schema fetch configuration', () => {
     delete process.env.ELEPHANT_IPFS_GATEWAYS;
   });
 
-  it('uses the live manifest and the Filebase-first gateway list by default', () => {
+  it('uses the live manifest and the public gateway list by default', () => {
     expect(schemaManifestUrl()).toBe(
       'https://lexicon.elephant.xyz/api/manifest'
     );
     expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
-    expect(DEFAULT_IPFS_GATEWAYS[0]).toBe(
-      'https://striped-pink-anaconda.myfilebase.com'
-    );
+    expect(DEFAULT_IPFS_GATEWAYS).toEqual([
+      'https://ipfs.filebase.io',
+      'https://gateway.pinata.cloud',
+      'https://trustless-gateway.link',
+    ]);
   });
 
-  it('honours the environment overrides', () => {
+  it('puts custom gateways before the defaults', () => {
     process.env.ELEPHANT_SCHEMA_MANIFEST_URL = 'http://127.0.0.1:9/manifest';
     process.env.ELEPHANT_IPFS_GATEWAYS =
-      ' http://127.0.0.1:8080 , https://ipfs.filebase.io,, ';
+      ' http://127.0.0.1:8080/ , https://ipfs.filebase.io,, ';
     expect(schemaManifestUrl()).toBe('http://127.0.0.1:9/manifest');
     expect(ipfsGateways()).toEqual([
       'http://127.0.0.1:8080',
       'https://ipfs.filebase.io',
+      'https://gateway.pinata.cloud',
+      'https://trustless-gateway.link',
     ]);
     process.env.ELEPHANT_IPFS_GATEWAYS = ' , ';
     expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
