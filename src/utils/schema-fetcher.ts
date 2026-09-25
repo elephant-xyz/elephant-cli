@@ -89,7 +89,9 @@ export async function fetchFromIpfs(cid: string): Promise<string> {
   for (const gateway of ipfsGateways()) {
     try {
       // ponytail: fixed 15 s per gateway, so a slow gateway falls through to the next one
-      const response = await fetch(`${gateway}/ipfs/${cid}`, {
+      // Trustless raw block: every default gateway accepts it; the hash is checked below
+      const response = await fetch(`${gateway}/ipfs/${cid}?format=raw`, {
+        headers: { accept: 'application/vnd.ipld.raw' },
         signal: AbortSignal.timeout(15_000),
       });
       if (response.ok) {

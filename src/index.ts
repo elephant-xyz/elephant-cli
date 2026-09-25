@@ -34,7 +34,15 @@ const program = new Command();
 program
   .name('elephant-cli')
   .description('CLI tool for Elephant Network on Polygon')
-  .version(packageJson.version);
+  .version(packageJson.version)
+  .option(
+    '--ipfs-gateway <origins>',
+    'IPFS gateway origin(s), comma-separated, used instead of the public defaults when fetching lexicon schemas; list the defaults after your own to keep them as fallback (same as ELEPHANT_IPFS_GATEWAYS)'
+  )
+  .hook('preAction', () => {
+    const gateway = program.opts().ipfsGateway;
+    if (gateway) process.env.ELEPHANT_IPFS_GATEWAYS = gateway;
+  });
 
 registerValidateCommand(program);
 registerValidateAndUploadCommand(program);

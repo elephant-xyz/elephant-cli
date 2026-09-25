@@ -5,14 +5,15 @@ export const DEFAULT_ASSIGNMENTS_CONTRACT_ADDRESS =
 export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
 export const DEFAULT_IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
 /**
- * Elephant's dedicated Filebase gateway first: it is public (fetches any CID
- * from the network), caches, and does not rate-limit. ipfs.io, dweb.link and
- * w3s.link are not listed because they refuse plain /ipfs/<cid> requests.
+ * Public gateways that answer trustless `?format=raw` requests. ipfs.io,
+ * dweb.link and w3s.link are left out: they only redirect trustless requests
+ * to trustless-gateway.link. Put your own gateway first with --ipfs-gateway
+ * or ELEPHANT_IPFS_GATEWAYS.
  */
 export const DEFAULT_IPFS_GATEWAYS = [
-  'https://striped-pink-anaconda.myfilebase.com',
   'https://ipfs.filebase.io',
   'https://gateway.pinata.cloud',
+  'https://trustless-gateway.link',
 ];
 
 /** Schema manifest URL; override with ELEPHANT_SCHEMA_MANIFEST_URL. */
@@ -23,13 +24,17 @@ export function schemaManifestUrl(): string {
   );
 }
 
-/** Gateways tried in order for schema fetches; override with a comma-separated ELEPHANT_IPFS_GATEWAYS. */
+/**
+ * Gateways tried in order for schema fetches: the comma-separated
+ * ELEPHANT_IPFS_GATEWAYS (set by --ipfs-gateway) replaces the defaults; list
+ * the public ones after your own to keep them as fallback.
+ */
 export function ipfsGateways(): string[] {
-  const list = (process.env.ELEPHANT_IPFS_GATEWAYS || '')
+  const custom = (process.env.ELEPHANT_IPFS_GATEWAYS || '')
     .split(',')
-    .map((gateway) => gateway.trim())
+    .map((gateway) => gateway.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  return list.length > 0 ? list : DEFAULT_IPFS_GATEWAYS;
+  return custom.length > 0 ? custom : DEFAULT_IPFS_GATEWAYS;
 }
 export const MAX_CONCURRENT_DOWNLOADS = 25;
 export const BLOCKS_PER_QUERY = 10000;
