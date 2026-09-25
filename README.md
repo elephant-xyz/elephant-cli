@@ -43,7 +43,7 @@ Each section below explains what a command does, the inputs it expects, the resu
 - Oracle private key to be stored in an encrypted keystore file.
 - Pinata JWT (`PINATA_JWT`) for IPFS uploads.
 - OpenAI API key (`OPENAI_API_KEY`) for script generation.
-- Optional: `ELEPHANT_SCHEMA_MANIFEST_URL` to override the lexicon schema manifest endpoint (default `https://lexicon.elephant.xyz/api/manifest`), and `ELEPHANT_IPFS_GATEWAYS` (or the global `--ipfs-gateway <origins>` option) as a comma-separated list of your own gateway origins, no trailing slash, tried before the public defaults when fetching lexicon schemas. Defaults: `https://ipfs.filebase.io`, `https://gateway.pinata.cloud`, `https://trustless-gateway.link`. Schemas are fetched as trustless raw blocks (`?format=raw`) and hash-verified, so any gateway that supports the trustless gateway spec works.
+- Optional: `ELEPHANT_SCHEMA_MANIFEST_URL` to override the lexicon schema manifest endpoint (default `https://lexicon.elephant.xyz/api/manifest`), and `ELEPHANT_IPFS_GATEWAYS` (or the global `--ipfs-gateway <origins>` option) as a comma-separated list of gateway origins, no trailing slash, used instead of the public defaults when fetching lexicon schemas; list the defaults after your own to keep them as fallback. Defaults: `https://ipfs.filebase.io`, `https://gateway.pinata.cloud`, `https://trustless-gateway.link`. Schemas are fetched as trustless raw blocks (`?format=raw`) and hash-verified, so any gateway that supports the trustless gateway spec works.
 - Stable network connection and sufficient disk space for ZIP artifacts.
 
 ## Installation

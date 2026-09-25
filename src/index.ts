@@ -37,7 +37,7 @@ program
   .version(packageJson.version)
   .option(
     '--ipfs-gateway <origins>',
-    'IPFS gateway origin(s), comma-separated, tried before the public defaults when fetching lexicon schemas (same as ELEPHANT_IPFS_GATEWAYS)'
+    'IPFS gateway origin(s), comma-separated, used instead of the public defaults when fetching lexicon schemas; list the defaults after your own to keep them as fallback (same as ELEPHANT_IPFS_GATEWAYS)'
   )
   .hook('preAction', () => {
     const gateway = program.opts().ipfsGateway;

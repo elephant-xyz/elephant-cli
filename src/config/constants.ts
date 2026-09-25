@@ -26,14 +26,15 @@ export function schemaManifestUrl(): string {
 
 /**
  * Gateways tried in order for schema fetches: the comma-separated
- * ELEPHANT_IPFS_GATEWAYS (set by --ipfs-gateway) first, then the defaults.
+ * ELEPHANT_IPFS_GATEWAYS (set by --ipfs-gateway) replaces the defaults; list
+ * the public ones after your own to keep them as fallback.
  */
 export function ipfsGateways(): string[] {
   const custom = (process.env.ELEPHANT_IPFS_GATEWAYS || '')
     .split(',')
     .map((gateway) => gateway.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  return [...new Set([...custom, ...DEFAULT_IPFS_GATEWAYS])];
+  return custom.length > 0 ? custom : DEFAULT_IPFS_GATEWAYS;
 }
 export const MAX_CONCURRENT_DOWNLOADS = 25;
 export const BLOCKS_PER_QUERY = 10000;

@@ -33,7 +33,7 @@ describe('schema fetch configuration', () => {
     ]);
   });
 
-  it('puts custom gateways before the defaults', () => {
+  it('replaces the defaults with custom gateways', () => {
     process.env.ELEPHANT_SCHEMA_MANIFEST_URL = 'http://127.0.0.1:9/manifest';
     process.env.ELEPHANT_IPFS_GATEWAYS =
       ' http://127.0.0.1:8080/ , https://ipfs.filebase.io,, ';
@@ -41,8 +41,6 @@ describe('schema fetch configuration', () => {
     expect(ipfsGateways()).toEqual([
       'http://127.0.0.1:8080',
       'https://ipfs.filebase.io',
-      'https://gateway.pinata.cloud',
-      'https://trustless-gateway.link',
     ]);
     process.env.ELEPHANT_IPFS_GATEWAYS = ' , ';
     expect(ipfsGateways()).toEqual(DEFAULT_IPFS_GATEWAYS);
