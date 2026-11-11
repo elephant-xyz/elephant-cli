@@ -412,7 +412,23 @@ export async function exportTables(
       if (!name) {
         return fail(`class schema ${cid} has no title`);
       }
-      const columns = Object.entries(schema.properties ?? {}).map(
+      // A class whose fields live in oneOf/anyOf variants (address: an unnormalized form or a
+      // structured form) has no top-level `properties`; take the union of its variants' fields,
+      // or its table gets no data columns and every value is dropped from the export.
+      const variants = [schema.oneOf, schema.anyOf].flatMap((list) =>
+        Array.isArray(list) ? (list as JSONSchema[]) : []
+      );
+      const fields: Record<string, JSONSchema> = {
+        ...(schema.properties ?? {}),
+      };
+      for (const variant of variants) {
+        for (const [field, property] of Object.entries(
+          variant?.properties ?? {}
+        )) {
+          fields[field] ??= property;
+        }
+      }
+      const columns = Object.entries(fields).map(
         ([field, property]): Column => ({ name: field, kind: kind(property) })
       );
       for (const extra of EXTRAS) {

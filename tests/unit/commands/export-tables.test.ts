@@ -15,10 +15,12 @@ import {
 } from '../../../src/commands/export-tables.js';
 import { handleUpload } from '../../../src/commands/upload.js';
 import {
+  ADDRESS,
   buildCountyCar,
   GROUP,
   OTHER_PROPERTY,
   PROPERTY,
+  SCHEMAS,
   schemaCacheService,
   text,
   Tweaks,
@@ -225,6 +227,55 @@ describe('export-tables <county.car>', () => {
     const properties = await part(out, 'properties');
     expect(properties.columns).toEqual(['property_cid', GROUP]);
     expect(properties.rows[0].property_cid).toBe(properties.rows[0][GROUP]);
+  });
+
+  it('takes the columns of a class whose fields live in oneOf variants, like the lexicon address', async () => {
+    const { tmp, car } = await fixture();
+    const out = path.join(tmp, 'tables');
+    const variants = {
+      ...SCHEMAS,
+      [ADDRESS]: {
+        type: 'object',
+        title: 'Address',
+        oneOf: [
+          {
+            properties: {
+              city: { type: 'string' },
+              request_identifier: { type: 'string' },
+            },
+          },
+          {
+            properties: {
+              street_name: { type: 'string' },
+              city: { type: 'integer' },
+            },
+          },
+        ],
+      },
+    };
+    await handleExportTables(
+      { input: car, output: out, silent: true, cwd: tmp },
+      {
+        schemaCacheService: {
+          get: async (cid: string) => variants[cid],
+          warm: async () => undefined,
+        } as unknown as typeof schemaCacheService,
+      }
+    );
+
+    const address = await part(out, 'address');
+    expect(address.columns).toEqual([
+      'city',
+      'request_identifier',
+      'street_name',
+      'cid',
+      'property_cid',
+      'data_group_cid',
+    ]);
+    expect(address.rows[0]).toMatchObject({
+      city: 'City a',
+      street_name: null,
+    });
   });
 
   it('yields byte-identical parts and the same root when run twice', async () => {
