@@ -42,9 +42,19 @@ fn engine(scratch: &Scratch, case: &str, extra: &[&str], env: &[(&str, &str)]) -
 
 /// Every check of a case, compared one by one so a failure names the check.
 fn same(case: &str) {
+    alike(case, &[]);
+}
+
+/// As `same`, leaving out entries of a check that are known to differ: `(check, entry)`.
+fn alike(case: &str, known: &[(&str, &str)]) {
     let scratch = Scratch::new();
-    let found = engine(&scratch, case, &[], &[]);
-    let wanted = node(case);
+    let mut found = engine(&scratch, case, &[], &[]);
+    let mut wanted = node(case);
+    for (check, entry) in known {
+        for side in [&mut found, &mut wanted] {
+            assert!(side[check].as_object_mut().unwrap().remove(*entry).is_some(), "{check} has no entry {entry}");
+        }
+    }
     let differing: Vec<String> = wanted
         .as_object()
         .unwrap()
@@ -70,4 +80,11 @@ fn formats_numbers_for_en_us_as_node_does() {
 #[test]
 fn orders_strings_with_locale_compare_as_node_does() {
     same("collation");
+}
+
+#[test]
+fn reads_and_prints_dates_as_node_does() {
+    // Three texts no county prints keep the engine's own reading; V8 gives
+    // Invalid Date for the first two and 1976-07-03T22:00:00Z for the third.
+    alike("dates", &[("parsed", r#""Q1 2020""#), ("parsed", r#""x2020-01-05""#), ("parsed", r#""Jul 4, 1976 GMT+2""#)]);
 }

@@ -394,8 +394,81 @@
       (level === 'case' || level === 'variant' ? by((part) => part.cased) : 0)
     );
   }
+  // Dates. The engine reads the same texts V8 does, but takes a month or day
+  // of zero and a day above 31 as a date where V8 says Invalid Date; scripts
+  // rely on that answer to drop what is not a date.
+  const NativeDate = Date;
+  const parseDate = (value) => {
+    const text = String(value).trim();
+    const us = /^(\d{1,2})[/-](\d{1,2})[/-]\d{2,4}(?!\d)/.exec(text);
+    const iso = /^[+-]?\d{4,6}-(\d{2})(?:-(\d{2}))?(?!\d)/.exec(text);
+    const within = (part, most) => part === undefined || (Number(part) >= 1 && Number(part) <= most);
+    if (us && !(within(us[1], 12) && within(us[2], 31))) return NaN;
+    if (iso && !(within(iso[1], 12) && within(iso[2], 31))) return NaN;
+    if (/^\d{1,2}\/\d{4}$/.test(text)) return NaN;
+    return NativeDate.parse(text);
+  };
+  const DateProxy = new Proxy(NativeDate, {
+    construct: (target, args, fresh) =>
+      Reflect.construct(target, args.length === 1 && typeof args[0] === 'string' ? [parseDate(args[0])] : args, fresh === DateProxy ? target : fresh),
+    get: (target, name) => (name === 'parse' ? parseDate : target[name]),
+  });
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const two = (value) => String(value).padStart(2, '0');
+  // What toLocaleDateString, toLocaleTimeString and toLocaleString print: `wants` is 'date', 'time' or both.
+  const localeDate = (date, wants, locales, options = {}) => {
+    if (Number.isNaN(date.getTime())) return 'Invalid Date';
+    const locale = (Array.isArray(locales) ? locales[0] : locales) || 'en-US';
+    const refuse = (what) => {
+      throw new RangeError(`${what} is not available in elephant-cli's JavaScript engine, which formats dates for en-US, en-CA and en-GB in local time or UTC`);
+    };
+    if (!['en', 'en-US', 'en-CA', 'en-GB'].includes(locale)) refuse(`The locale ${locale}`);
+    for (const name of Object.keys(options)) {
+      if (!['weekday', 'year', 'month', 'day', 'timeZone'].includes(name) || (name !== 'timeZone' && wants !== 'date')) refuse(`The option ${name}`);
+    }
+    if (options.timeZone !== undefined && options.timeZone !== 'UTC') refuse(`The time zone ${options.timeZone}`);
+    const get = (part) => date[`get${options.timeZone ? 'UTC' : ''}${part}`]();
+    const hour = get('Hours');
+    const time = `${hour % 12 || 12}:${two(get('Minutes'))}:${two(get('Seconds'))} ${hour < 12 ? 'AM' : 'PM'}`;
+    if (wants !== 'date' && !locale.endsWith('US') && locale !== 'en') refuse(`The time in ${locale}`);
+    if (wants === 'time') return time;
+    const year = get('FullYear');
+    const month = get('Month');
+    const day = get('Date');
+    const chosen = ['weekday', 'year', 'month', 'day'].some((name) => options[name] !== undefined);
+    let text = `${month + 1}/${day}/${year}`;
+    if (locale === 'en-CA') text = `${year}-${two(month + 1)}-${two(day)}`;
+    if (locale === 'en-GB') text = `${two(day)}/${two(month + 1)}/${year}`;
+    if (chosen && (locale === 'en-CA' || locale === 'en-GB')) refuse(`Date options in ${locale}`);
+    if (chosen) {
+      const short = (name, style) => (style === 'long' ? name : name.slice(0, 3));
+      const digits = (value, style) => (style === '2-digit' ? two(value % 100) : String(value));
+      const named = options.month === 'long' || options.month === 'short';
+      const parts = [
+        options.month && (named ? short(MONTHS[month], options.month) : digits(month + 1, options.month)),
+        options.day && digits(day, options.day),
+        options.year && digits(year, options.year),
+      ];
+      const [m, d, y] = parts;
+      text = named ? [[m, d].filter(Boolean).join(' '), y].filter(Boolean).join(d ? ', ' : ' ') : parts.filter(Boolean).join('/');
+      if (options.weekday) text = [short(DAYS[get('Day')], options.weekday), text].filter(Boolean).join(', ');
+    }
+    return wants === 'date' ? text : `${text}, ${time}`;
+  };
   if (typeof globalThis.Intl === 'undefined') {
     Number.prototype.toLocaleString = localeNumber;
+    NativeDate.prototype.constructor = DateProxy;
+    globalThis.Date = DateProxy;
+    NativeDate.prototype.toLocaleDateString = function (locales, options) {
+      return localeDate(this, 'date', locales, options);
+    };
+    NativeDate.prototype.toLocaleTimeString = function (locales, options) {
+      return localeDate(this, 'time', locales, options);
+    };
+    NativeDate.prototype.toLocaleString = function (locales, options) {
+      return localeDate(this, 'both', locales, options);
+    };
     String.prototype.localeCompare = localeCompare;
     BigInt.prototype.toLocaleString = function () {
       return String(this).replace(/\d+/, group);
