@@ -1,0 +1,35 @@
+{
+  "requests": [
+    {
+      "key": "Owner",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18765/api/owner",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "parid={{=it.request_identifier}}"
+      }
+    },
+    {
+      "key": "Sales",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18765/api/sales?parid={{=it.request_identifier}}",
+        "multiValueQueryString": {
+          "year": [
+            "2024",
+            "2025"
+          ]
+        }
+      }
+    },
+    {
+      "key": "Page",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18765/html/{{=it.request_identifier}}"
+      }
+    }
+  ]
+}

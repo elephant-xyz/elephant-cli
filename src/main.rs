@@ -9,13 +9,16 @@
 //!   input, network failure).
 //! - Nothing prompts, nothing needs a terminal.
 
+mod browser;
 mod canonical;
 mod car;
 mod cids;
 mod county;
+mod flow;
 mod hash;
 mod js;
 mod lexicon;
+mod prepare;
 mod property;
 mod report;
 mod schemas;
@@ -61,6 +64,63 @@ enum Command {
     Upload(Upload),
     /// Turn prepared source content into lexicon data-group files with county scripts or a handler package
     Transform(Transform),
+    /// Fetch the source content for a parcel and add it to its seed ZIP
+    Prepare(Prepare),
+}
+
+#[derive(Args)]
+#[command(after_help = "The first mechanism that applies answers the seed's request:\n  --browser-flow-zip            a Browser Flow v2 package saves named captures\n  --multi-request-flow-file     several HTTP requests into one JSON file\n  (county Orange)               the Orange County, FL appraiser API\n  --browser-flow-file           a browser flow written as JSON\n  --browser-flow-template       a built-in flow, with --browser-flow-parameters\n  --use-browser                 a plain page load in the browser (GET only)\n  otherwise                     one HTTP request\n\nBrowser mechanisms need the obscura headless browser (https://github.com/h4ckf0r0day/obscura):\n`obscura` on PATH, --browser/OBSCURA_BIN, or --cdp-url/ELEPHANT_CDP_URL for a running browser.\n\nExamples:\n  elephant-cli prepare seed.zip --output-zip prepared.zip\n  elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip\n  elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip")]
+struct Prepare {
+    /// The seed ZIP: parcel.json or property_seed.json, and address.json or unnormalized_address.json
+    input_zip: Option<PathBuf>,
+    /// ZIP to write: the seed files plus what was fetched
+    #[arg(long, value_name = "PATH")]
+    output_zip: PathBuf,
+    /// Instead of a seed ZIP: a CSV with a request_identifier column, one output file per row
+    #[arg(long, value_name = "PATH")]
+    input_csv: Option<PathBuf>,
+    /// A multi-request flow: several HTTP requests answered into one JSON file
+    #[arg(long, value_name = "PATH")]
+    multi_request_flow_file: Option<PathBuf>,
+    /// A browser flow written as JSON
+    #[arg(long, value_name = "PATH")]
+    browser_flow_file: Option<PathBuf>,
+    /// A built-in browser flow; the only one is SEARCH_BY_PARCEL_ID
+    #[arg(long, value_name = "NAME", requires = "browser_flow_parameters")]
+    browser_flow_template: Option<String>,
+    /// The template's parameters, as JSON
+    #[arg(long, value_name = "JSON", requires = "browser_flow_template")]
+    browser_flow_parameters: Option<String>,
+    /// A Browser Flow v2 package (handler.js)
+    #[arg(long, value_name = "PATH")]
+    browser_flow_zip: Option<PathBuf>,
+    /// Accepted for compatibility: `2` with --browser-flow-zip
+    #[arg(long, value_name = "VERSION")]
+    browser_flow_version: Option<String>,
+    /// Load the page in the browser instead of fetching it (GET requests)
+    #[arg(long)]
+    use_browser: bool,
+    /// With --use-browser: do not click the "Continue" notice some county sites show first
+    #[arg(long)]
+    no_continue: bool,
+    /// With --use-browser: click this element once the page has loaded
+    #[arg(long, value_name = "SELECTOR")]
+    continue_button: Option<String>,
+    /// With --use-browser: do not wait for a reCAPTCHA redirect or treat the word as an error page
+    #[arg(long)]
+    ignore_captcha: bool,
+    /// Proxy for the browser: http://user:password@host:port
+    #[arg(long, value_name = "URL")]
+    proxy: Option<String>,
+    /// The obscura binary to start
+    #[arg(long, value_name = "PATH", env = "OBSCURA_BIN")]
+    browser: Option<PathBuf>,
+    /// Attach to a running browser's DevTools WebSocket instead of starting obscura
+    #[arg(long, value_name = "WS_URL", env = "ELEPHANT_CDP_URL")]
+    cdp_url: Option<String>,
+    /// Accepted for compatibility: the browser has no window to show
+    #[arg(long, hide = true)]
+    no_headless: bool,
 }
 
 #[derive(Args)]
@@ -523,6 +583,44 @@ fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
     })
 }
 
+fn prepare(args: &Prepare) -> Result<Done, Fail> {
+    match (args.browser_flow_version.as_deref(), &args.browser_flow_zip) {
+        (Some("2"), None) => return Err("--browser-flow-zip is required for browser flow v2".into()),
+        (Some(other), _) if other != "2" => return Err(format!("--browser-flow-version {other} is not supported; only 2 is").into()),
+        _ => {}
+    }
+    if let Some(proxy) = args.proxy.as_deref().filter(|proxy| !proxy.contains('@') && !proxy.contains("://")) {
+        return Err(format!("Invalid proxy format: {proxy}. Expected http://user:password@host:port").into());
+    }
+    let template = args.browser_flow_template.as_deref().zip(args.browser_flow_parameters.as_deref());
+    let options = prepare::Options {
+        input: args.input_zip.as_deref(),
+        csv: args.input_csv.as_deref(),
+        output: &args.output_zip,
+        multi: args.multi_request_flow_file.as_deref(),
+        flow: args.browser_flow_file.as_deref(),
+        template,
+        package: args.browser_flow_zip.as_deref(),
+        browse: args.use_browser,
+        proceed: !args.no_continue,
+        button: args.continue_button.as_deref(),
+        captcha: args.ignore_captcha,
+        launch: browser::Launch { binary: args.browser.clone(), endpoint: args.cdp_url.clone(), proxy: args.proxy.clone() },
+    };
+    let done = prepare::run(&options).map_err(|error| format!("Prepare failed: {error}"))?;
+    let text = format!(
+        "Prepare finished ({})\n  Files written:  {}\n  Output ZIP:     {}\n",
+        done.mechanism,
+        done.files.len(),
+        args.output_zip.display()
+    );
+    Ok(Done {
+        json: json!({ "command": "prepare", "mechanism": done.mechanism, "output_zip": args.output_zip, "files": done.files }),
+        text,
+        passed: true,
+    })
+}
+
 fn run(cli: &Cli) -> Result<Done, Fail> {
     match &cli.command {
         Command::Validate(args) => validate(args, cli),
@@ -530,6 +628,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
         Command::ExportTables(args) => export_tables(args, cli),
         Command::Upload(args) => upload(args).map_err(|error| format!("Upload failed: {error}").into()),
         Command::Transform(args) => transform(args, cli),
+        Command::Prepare(args) => prepare(args),
     }
 }
 
@@ -537,7 +636,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
 fn piped(cli: &Cli) -> bool {
     match &cli.command {
         Command::Validate(args) => args.output_csv == Path::new("-"),
-        Command::Hash(_) | Command::ExportTables(_) | Command::Upload(_) | Command::Transform(_) => false,
+        Command::Hash(_) | Command::ExportTables(_) | Command::Upload(_) | Command::Transform(_) | Command::Prepare(_) => false,
     }
 }
 

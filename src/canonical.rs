@@ -87,6 +87,42 @@ pub fn stringify(value: &Value) -> String {
     out
 }
 
+fn indented(value: &Value, depth: usize, out: &mut String) {
+    let pad = |depth: usize, out: &mut String| out.push_str(&"  ".repeat(depth));
+    match value {
+        Value::Array(items) if !items.is_empty() => {
+            out.push_str("[\n");
+            for (at, item) in items.iter().enumerate() {
+                pad(depth + 1, out);
+                indented(item, depth + 1, out);
+                out.push_str(if at + 1 < items.len() { ",\n" } else { "\n" });
+            }
+            pad(depth, out);
+            out.push(']');
+        }
+        Value::Object(fields) if !fields.is_empty() => {
+            out.push_str("{\n");
+            for (at, (key, item)) in fields.iter().enumerate() {
+                pad(depth + 1, out);
+                out.push_str(&Value::String(key.clone()).to_string());
+                out.push_str(": ");
+                indented(item, depth + 1, out);
+                out.push_str(if at + 1 < fields.len() { ",\n" } else { "\n" });
+            }
+            pad(depth, out);
+            out.push('}');
+        }
+        other => plain(other, out),
+    }
+}
+
+/// A value as JavaScript's `JSON.stringify(value, null, 2)` prints it.
+pub fn pretty(value: &Value) -> String {
+    let mut out = String::new();
+    indented(value, 0, &mut out);
+    out
+}
+
 pub fn canonical(value: &Value) -> String {
     let mut out = String::new();
     write(value, &mut out);
@@ -130,6 +166,13 @@ mod tests {
         let value = json!([3, {"/": "b"}, "x", {"/": "a"}, {"/": "a", "more": 1}]);
         assert_eq!(canonical(&value), r#"[{"/":"a"},{"/":"b"},3,"x",{"/":"a","more":1}]"#);
         assert_eq!(canonical(&json!([2, 1, "b", "a"])), r#"[2,1,"b","a"]"#);
+    }
+
+    #[test]
+    fn prints_indented_json_as_json_stringify_does() {
+        let value = json!({"a": [1.0, {"b": []}, {}], "c": 1e21, "d": "x"});
+        assert_eq!(super::pretty(&value), "{\n  \"a\": [\n    1,\n    {\n      \"b\": []\n    },\n    {}\n  ],\n  \"c\": 1e+21,\n  \"d\": \"x\"\n}");
+        assert_eq!(super::stringify(&value), r#"{"a":[1,{"b":[]},{}],"c":1e+21,"d":"x"}"#);
     }
 
     #[test]

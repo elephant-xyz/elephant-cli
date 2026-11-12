@@ -29,6 +29,22 @@ pub struct Sandbox {
     pub timeout: Duration,
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fills_dot_templates_as_dot_does() {
+        let it = serde_json::json!({ "request_identifier": "12-34" });
+        let filled = super::fill(&["id={{=it.request_identifier}}".to_string(), "{{=it.request_identifier.replace(/-/g, '')}}".to_string()], &it);
+        assert_eq!(filled.unwrap(), ["id=12-34", "1234"]);
+    }
+
+    #[test]
+    fn cleans_html_of_scripts_and_styles() {
+        let html = "<!DOCTYPE html><html><head><style>b{}</style><link rel=\"stylesheet\" href=\"a.css\"></head><body><p style=\"color:red\">Hi</p><script>1</script></body></html>";
+        assert_eq!(super::clean(html).unwrap(), "<!DOCTYPE html>\n<html><head></head><body><p>Hi</p></body></html>");
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct Ran {
     pub stdout: String,
@@ -199,6 +215,53 @@ impl Loader for Files {
         );
         Module::declare(ctx.clone(), name, source)
     }
+}
+
+/// doT 1.1.3 (MIT), the template engine flow files are written for.
+const DOT: &str = include_str!("../../assets/doT.js");
+
+/// Call a JavaScript function, given as source text, with one JSON argument; returns its JSON result.
+/// The function sees no host: no files, no network, only the language and `prelude`.
+fn compute(prelude: &str, function: &str, input: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let runtime = Runtime::new().map_err(|error| error.to_string())?;
+    runtime.set_memory_limit(1 << 30);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    runtime.set_interrupt_handler(Some(Box::new(move || Instant::now() > deadline)));
+    let context = Context::full(&runtime).map_err(|error| error.to_string())?;
+    context.with(|ctx| {
+        let explain = |error: rquickjs::Error| {
+            let thrown = ctx.catch();
+            let message = thrown.as_exception().and_then(|error| error.message());
+            message.unwrap_or_else(|| format!("{error}: {thrown:?}"))
+        };
+        let source = format!("(function (input) {{ {prelude}\n return JSON.stringify(({function})(JSON.parse(input))); }})");
+        let call: Function = ctx.eval(source).map_err(explain)?;
+        let answer: String = call.call((input.to_string(),)).map_err(explain)?;
+        serde_json::from_str(&answer).map_err(|error| error.to_string())
+    })
+}
+
+/// Fill doT templates (`{{=it.request_identifier}}`) with the values of `it`.
+pub fn fill(templates: &[String], it: &serde_json::Value) -> Result<Vec<String>, String> {
+    let prelude = format!("const module = {{ exports: {{}} }}; (function (module) {{ {DOT}\n }}).call(module.exports, module); const doT = module.exports;");
+    let filled = compute(&prelude, "(input) => input.templates.map((text) => doT.template(text)(input.it))", &serde_json::json!({ "templates": templates, "it": it }))?;
+    serde_json::from_value(filled).map_err(|error| error.to_string())
+}
+
+/// Clean captured HTML as 1.x did before formatting it: scripts, styles and
+/// inline styles removed, top-level elements kept, the doctype put back.
+pub fn clean(html: &str) -> Result<String, String> {
+    let prelude = format!("const module = {{ exports: {{}} }}; (function (module, exports) {{ {CHEERIO}\n }})(module, module.exports); const cheerio = module.exports;");
+    let function = r#"(html) => {
+        const doctype = (/<!DOCTYPE[^>]*>/i.exec(html) || ['<!DOCTYPE html>'])[0];
+        const $ = cheerio.load(html, { xmlMode: false });
+        $('script, style, noscript').remove();
+        $('link[rel~="stylesheet"]').remove();
+        $('[style]').removeAttr('style');
+        return doctype + '\n' + $.root().children().toArray().map((element) => $.html(element)).join('');
+    }"#;
+    let cleaned = compute(&prelude, function, &serde_json::Value::String(html.to_string()))?;
+    cleaned.as_str().map(str::to_string).ok_or_else(|| "cleaning returned no text".to_string())
 }
 
 /// What a run is asked to do once the built-ins are in place.
