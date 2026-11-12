@@ -12,8 +12,10 @@
 mod car;
 mod county;
 mod lexicon;
+mod property;
 mod report;
 mod schemas;
+mod validate;
 
 use clap::{Args, Parser, Subcommand};
 use serde_json::{json, Value};
@@ -46,9 +48,9 @@ enum Command {
 }
 
 #[derive(Args)]
-#[command(after_help = "Examples:\n  elephant-cli validate county.car --output-csv errors.csv\n  elephant-cli --json validate county.car | jq .errors\n  elephant-cli validate county.car --output-csv - > findings.csv")]
+#[command(after_help = "Examples:\n  elephant-cli validate ./property-dir\n  elephant-cli validate ./county-outputs --output-csv errors.csv\n  elephant-cli validate county.car --output-csv errors.csv\n  elephant-cli --json validate county.car | jq .errors\n  elephant-cli validate county.car --output-csv - > findings.csv")]
 struct Validate {
-    /// A county CAR written by `hash --output-car` or exported by a gateway
+    /// A property directory or ZIP, a directory of properties, or a county CAR (`.car`)
     input: PathBuf,
     /// CSV file for the findings, one row each; `-` writes them to stdout
     #[arg(short, long, value_name = "PATH", default_value = "submit_errors.csv")]
@@ -65,14 +67,125 @@ struct Done {
     passed: bool,
 }
 
+fn threads(asked: Option<usize>) -> usize {
+    asked.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from)).max(1)
+}
+
+/// The names of properties that failed, shortened for a terminal.
+fn listed(names: &[String]) -> String {
+    match names.len() {
+        0..=20 => names.join(", "),
+        more => format!("{}, and {} more", names[..20].join(", "), more - 20),
+    }
+}
+
 fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
+    if !args.input.exists() {
+        return Err(format!("{} is not a readable file", args.input.display()).into());
+    }
+    if args.input.to_string_lossy().to_lowercase().ends_with(".car") {
+        return county(args, cli);
+    }
+    let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
+    let children = property::children(&args.input);
+    if children.is_empty() {
+        let opened = property::Property::open(&args.input)?;
+        let checked = validate::property(&opened, &shared)?;
+        let mut report = report::Report::create(&args.output_csv)?;
+        for row in &checked.rows {
+            report.write(row)?;
+        }
+        report.finish()?;
+        let count = checked.rows.len();
+        let mut text = String::from("Validation report\n");
+        text += &format!("  Data groups validated:  {}\n", checked.groups);
+        text += &format!("  Errors:                 {count}\n");
+        text += &match count {
+            0 => "All data groups passed validation\n".to_string(),
+            _ => format!("{count} errors found. Check {} for details.\n", args.output_csv.display()),
+        };
+        return Ok(Done {
+            json: json!({
+                "command": "validate",
+                "input": args.input,
+                "kind": "property",
+                "valid": count == 0,
+                "data_groups": checked.groups,
+                "error_count": count,
+                "output_csv": args.output_csv,
+            }),
+            text,
+            passed: count == 0,
+        });
+    }
+    let names: Vec<String> = children.iter().map(|child| property::stem(child)).collect();
+    let mut seen = std::collections::HashSet::new();
+    let repeated: Vec<&str> =
+        names.iter().filter(|name| !seen.insert(name.to_lowercase())).map(String::as_str).collect();
+    if !repeated.is_empty() {
+        return Err(format!("Duplicate property names in {}: {}", args.input.display(), repeated.join(", ")).into());
+    }
+    let results = validate::batch(&children, &shared, threads(args.threads));
+    let mut report = report::Report::create(&args.output_csv)?;
+    let mut failed = Vec::new();
+    let mut groups = 0;
+    for (name, result) in names.iter().zip(results) {
+        let rows = match result {
+            Ok(checked) => {
+                groups += checked.groups;
+                checked.rows
+            }
+            // A property that could not be checked gets a row of its own, so the CSV explains every failure.
+            Err(reason) => vec![report::Row {
+                property: name.clone(),
+                path: "root".to_string(),
+                message: reason,
+                ..report::Row::default()
+            }],
+        };
+        if !rows.is_empty() {
+            failed.push(name.clone());
+        }
+        for row in &rows {
+            report.write(row)?;
+        }
+    }
+    report.finish()?;
+    let mut text = format!(
+        "Properties processed: {}, succeeded: {}, failed: {}\n",
+        names.len(),
+        names.len() - failed.len(),
+        failed.len()
+    );
+    if !failed.is_empty() {
+        eprintln!("{} of {} properties failed: {}", failed.len(), names.len(), listed(&failed));
+        text += &format!("{} errors found. Check {} for details.\n", report.rows, args.output_csv.display());
+    }
+    Ok(Done {
+        json: json!({
+            "command": "validate",
+            "input": args.input,
+            "kind": "batch",
+            "valid": failed.is_empty(),
+            "properties": names.len(),
+            "succeeded": names.len() - failed.len(),
+            "failed": failed,
+            "data_groups": groups,
+            "error_count": report.rows,
+            "output_csv": args.output_csv,
+        }),
+        text,
+        passed: failed.is_empty(),
+    })
+}
+
+fn county(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
     if !args.input.is_file() {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
     let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
     let mut report = report::Report::create(&args.output_csv)?;
-    let threads = args.threads.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from));
-    let summary = county::validate(&args.input, &mut schemas, &mut report, threads.max(1))?;
+    let summary = county::validate(&args.input, &mut schemas, &mut report, threads(args.threads))?;
     report.finish()?;
     let failed: u64 = summary.errors.iter().sum();
     let errors: serde_json::Map<String, Value> =

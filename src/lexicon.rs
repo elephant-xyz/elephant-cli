@@ -30,8 +30,11 @@ struct Linked {
     allowed: Vec<String>,
 }
 
-enum Group {
-    Missing,
+/// A data group schema, ready to validate data against.
+pub enum Group {
+    /// The schema could not be loaded; the reason.
+    Missing(String),
+    /// Not shaped like a data group schema (`label` and `relationships`, nothing else).
     Invalid,
     Broken(String),
     Ready { schema: Value, allowed: HashSet<String>, validator: Box<Validator> },
@@ -234,13 +237,17 @@ fn property<'a>(schema: &'a Value, key: &str) -> Option<&'a Value> {
     schema.get("properties")?.get(key).filter(truthy)
 }
 
-/// Replace the `{"/": cid}` pointers the schema allows by the blocks they name.
+/// What a pointer `{"/": "<cid or ./file>"}` names: the value to put in its
+/// place, or why it cannot be had.
+pub type Source<'s, 'a> = &'s dyn Fn(&str) -> Result<Cow<'a, Value>, String>;
+
+/// Replace the pointers the schema allows by the values they name.
 fn pointers<'a>(
     data: &Value,
     schema: Option<&Value>,
     allowed: &HashSet<String>,
     path: &str,
-    source: &dyn Fn(&Cid) -> Option<Cow<'a, Value>>,
+    source: Source<'_, 'a>,
 ) -> Result<Value, String> {
     match data {
         Value::Object(fields) => {
@@ -259,16 +266,12 @@ fn pointers<'a>(
                 if pointer.is_empty() {
                     return Err("Failed to resolve pointer - empty string is not a valid CID or file path".to_string());
                 }
-                let Ok(cid) = Cid::try_from(pointer.as_str()) else {
-                    return Err(format!(
-                        "Failed to resolve pointer - not a valid CID and no base directory provided for relative path: {pointer}"
-                    ));
-                };
-                return match source(&cid) {
-                    None => Err(format!("block {pointer} is not in the car")),
-                    Some(value) => pointers(&value, schema, allowed, path, source),
+                let resolved =
+                    source(pointer).and_then(|value| pointers(&value, schema, allowed, path, source));
+                if Cid::try_from(pointer.as_str()).is_err() {
+                    return resolved;
                 }
-                .map_err(|error| format!("Failed to resolve CID pointer: {error}"));
+                return resolved.map_err(|error| format!("Failed to resolve CID pointer: {error}"));
             }
             let mut resolved = Map::with_capacity(fields.len());
             for (key, value) in fields {
@@ -363,18 +366,19 @@ impl Lexicon {
         Ok(linked)
     }
 
-    /// Resolve and compile a data group schema, once per CID.
-    pub fn prepare(&mut self, cid: &str, schemas: &mut Schemas) {
-        if self.groups.contains_key(cid) {
-            return;
+    /// A data group schema resolved and compiled, once per CID.
+    pub fn group(&mut self, cid: &str, schemas: &mut Schemas) -> Arc<Group> {
+        if let Some(known) = self.groups.get(cid) {
+            return known.clone();
         }
         let group = Arc::new(match schemas.get(cid) {
-            Err(_) => Group::Missing,
+            Err(reason) => Group::Missing(reason),
             Ok(raw) => {
-                let properties = raw.get("properties").filter(|properties| properties.is_object());
+                let properties = raw.get("properties").and_then(Value::as_object);
                 let shaped = raw.get("type").is_some_and(|kind| kind == "object")
                     && properties.is_some_and(|properties| {
-                        properties.get("label").as_ref().is_some_and(truthy)
+                        properties.len() == 2
+                            && properties.get("label").as_ref().is_some_and(truthy)
                             && properties.get("relationships").as_ref().is_some_and(truthy)
                     });
                 let mut allowed = Vec::new();
@@ -403,34 +407,31 @@ impl Lexicon {
                 }
             }
         });
-        self.groups.insert(cid.to_string(), group);
+        self.groups.insert(cid.to_string(), group.clone());
+        group
     }
+}
 
-    /// Validate one data group root against a prepared schema. `Err` is a
-    /// schema that cannot be used at all; `Ok` lists the schema errors.
-    pub fn validate<'a>(
-        &self,
-        cid: &str,
-        data: &Value,
-        source: &dyn Fn(&Cid) -> Option<Cow<'a, Value>>,
-    ) -> Result<Vec<Finding>, String> {
+impl Group {
+    /// Validate one data group root. `None` when the schema cannot be used at
+    /// all (`Missing` or `Invalid`); otherwise the schema errors found.
+    pub fn validate<'a>(&self, data: &Value, source: Source<'_, 'a>) -> Option<Vec<Finding>> {
         let thrown = |error: &str| Finding {
             path: "root".to_string(),
             message: format!("Validation error: {error}"),
             value: text(data),
         };
-        match self.groups.get(cid).map_or(&Group::Missing, |group| group) {
-            Group::Missing => Err(format!("could not load schema {cid}")),
-            Group::Invalid => Err(format!("schema {cid} is not a valid data group schema")),
-            Group::Broken(error) => Ok(vec![thrown(error)]),
+        match self {
+            Group::Missing(_) | Group::Invalid => None,
+            Group::Broken(error) => Some(vec![thrown(error)]),
             Group::Ready { schema, allowed, validator } => {
                 let resolved = match pointers(data, Some(schema), allowed, "", source) {
-                    Err(error) => return Ok(vec![thrown(&error)]),
+                    Err(error) => return Some(vec![thrown(&error)]),
                     Ok(resolved) => resolved,
                 };
                 let mut findings = Vec::new();
                 validator.iter_errors(&resolved).for_each(|error| collect(&error, &mut findings));
-                Ok(findings)
+                Some(findings)
             }
         }
     }
@@ -516,12 +517,13 @@ mod tests {
     #[test]
     fn replaces_a_pointer_only_where_the_schema_links() {
         let allowed: HashSet<String> = ["a".to_string()].into();
-        let source = |_: &Cid| Some(Cow::Owned(json!({ "x": 1 })));
+        let source = |_: &str| Ok(Cow::Owned(json!({ "x": 1 })));
         let cid = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku";
         let data = json!({ "a": { "/": cid }, "b": { "/": cid } });
         let resolved = pointers(&data, None, &allowed, "", &source).unwrap();
         assert_eq!(resolved, json!({ "a": { "x": 1 }, "b": { "/": cid } }));
-        let missing = pointers(&data, None, &allowed, "", &|_| None).unwrap_err();
+        let gone = |pointer: &str| Err(format!("block {pointer} is not in the car"));
+        let missing = pointers(&data, None, &allowed, "", &gone).unwrap_err();
         assert_eq!(missing, format!("Failed to resolve CID pointer: block {cid} is not in the car"));
     }
 }

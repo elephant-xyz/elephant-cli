@@ -14,7 +14,7 @@
 //! index of the whole file, built on first use; that is the slow path.
 
 use crate::car::{Car, Place};
-use crate::lexicon::{self, Lexicon};
+use crate::lexicon::{self, Group, Lexicon};
 use crate::report::{Report, Row};
 use crate::schemas::Schemas;
 use crate::Fail;
@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 pub const CHECKS: [&str; 6] = ["integrity", "root", "index", "graph", "lexicon", "orphans"];
 const INTEGRITY: usize = 0;
@@ -179,7 +179,14 @@ struct Checked {
 /// Check one shard entry on its own: follow every link below it, then
 /// validate its data groups. Touches no shared state, so entries are checked
 /// on several threads; decoded blocks live only as long as the entry.
-fn property(lexicon: &Lexicon, view: &View, shard: &Cid, item: &Value, entry: Option<&Entry>, times: usize) -> Checked {
+fn property(
+    groups: &HashMap<String, Arc<Group>>,
+    view: &View,
+    shard: &Cid,
+    item: &Value,
+    entry: Option<&Entry>,
+    times: usize,
+) -> Checked {
     let mut found = Checked::default();
     let mut seen = HashSet::new();
     let mut values: HashMap<Cid, Value> = HashMap::new();
@@ -220,14 +227,19 @@ fn property(lexicon: &Lexicon, view: &View, shard: &Cid, item: &Value, entry: Op
         stack.extend(below.iter().map(|to| (*to, cid)));
         values.insert(cid, value);
     }
-    let source = |cid: &Cid| -> Option<Cow<'_, Value>> {
-        if let Some(value) = values.get(cid) {
-            return Some(Cow::Borrowed(value));
-        }
-        let (Found::Near(bytes) | Found::Far(bytes)) = view.find(cid) else {
-            return None;
+    let source = |pointer: &str| -> Result<Cow<'_, Value>, String> {
+        let Ok(cid) = Cid::try_from(pointer) else {
+            return Err(format!(
+                "Failed to resolve pointer - not a valid CID and no base directory provided for relative path: {pointer}"
+            ));
         };
-        Some(Cow::Owned(
+        if let Some(value) = values.get(&cid) {
+            return Ok(Cow::Borrowed(value));
+        }
+        let (Found::Near(bytes) | Found::Far(bytes)) = view.find(&cid) else {
+            return Err(format!("block {pointer} is not in the car"));
+        };
+        Ok(Cow::Owned(
             serde_json::from_slice(bytes)
                 .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(bytes).into_owned())),
         ))
@@ -253,9 +265,13 @@ fn property(lexicon: &Lexicon, view: &View, shard: &Cid, item: &Value, entry: Op
                 found.rows.push(row("lexicon", message.to_string()));
                 continue;
             };
-            match lexicon.validate(schema, value, &source) {
-                Err(message) => found.rows.push(row("lexicon", message)),
-                Ok(errors) => {
+            let group = &groups[schema];
+            match group.validate(value, &source) {
+                None if matches!(**group, Group::Invalid) => {
+                    found.rows.push(row("lexicon", format!("schema {schema} is not a valid data group schema")));
+                }
+                None => found.rows.push(row("lexicon", format!("could not load schema {schema}"))),
+                Some(errors) => {
                     found.validated += 1;
                     rows.extend(
                         errors.into_iter().map(|error| Row { value: error.value, ..row(&error.path, error.message) }),
@@ -449,21 +465,24 @@ impl Check<'_> {
             entries = self.entries(view, cid, body.as_ref())?;
         }
         self.properties += (entries.iter().flatten().count() * times) as u64;
+        let mut groups = HashMap::new();
         for (schema, _) in entries.iter().flatten().flat_map(|entry| &entry.groups) {
-            lexicon.prepare(schema, schemas);
+            if !groups.contains_key(schema) {
+                groups.insert(schema.clone(), lexicon.group(schema, schemas));
+            }
         }
+        let groups = &groups;
         let items = body.as_ref().and_then(|body| body.get("properties")).and_then(Value::as_array);
         let listed = items.map_or(&[][..], Vec::as_slice);
         // Last entry first: the order of one depth-first walk from the shard block.
         let work: Vec<(&Value, Option<&Entry>)> = listed.iter().zip(entries.iter().map(Option::as_ref)).rev().collect();
-        let lexicon = &*lexicon;
         let checked: Vec<Checked> = std::thread::scope(|scope| {
             let workers: Vec<_> = work
                 .chunks(work.len().div_ceil(threads).max(1))
                 .map(|chunk| {
                     scope.spawn(move || {
                         let check = |(item, entry): &(&Value, Option<&Entry>)| {
-                            property(lexicon, view, cid, item, *entry, times)
+                            property(groups, view, cid, item, *entry, times)
                         };
                         chunk.iter().map(check).collect::<Vec<_>>()
                     })

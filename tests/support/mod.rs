@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 pub mod county;
+pub mod http;
 
 use cid::multihash::Multihash;
 use cid::Cid;
@@ -39,22 +40,82 @@ impl Scratch {
 
     /// Run the CLI offline, with this directory as cwd and `schemas/` as the schema cache.
     pub fn run(&self, args: &[&str]) -> Ran {
+        self.run_with(args, &[])
+    }
+
+    /// As `run`, with extra environment variables (which may switch the network back on).
+    pub fn run_with(&self, args: &[&str], env: &[(&str, &str)]) -> Ran {
         let output = Command::new(env!("CARGO_BIN_EXE_elephant-cli"))
             .args(args)
             .current_dir(&self.0)
             .env("ELEPHANT_SCHEMA_CACHE_DIR", self.path("schemas"))
             .env("ELEPHANT_OFFLINE", "1")
             .env("NO_COLOR", "1")
+            .envs(env.iter().copied())
             .output()
             .unwrap();
         Ran::from(output)
     }
 
-    /// The data rows of a CSV the CLI wrote, split on commas (test rows hold no quoted commas).
+    /// The data rows of a CSV the CLI wrote.
     pub fn rows(&self, name: &str) -> Vec<Vec<String>> {
-        let text = self.text(name);
-        text.lines().skip(1).map(|line| line.split(',').map(str::to_string).collect()).collect()
+        csv(&self.text(name))
     }
+
+    /// Copy a directory of fixtures (relative to `tests/fixtures`) into this scratch directory.
+    pub fn copy(&self, fixture: &str, name: &str) {
+        fn tree(from: &Path, to: &Path) {
+            std::fs::create_dir_all(to).unwrap();
+            for entry in std::fs::read_dir(from).unwrap() {
+                let entry = entry.unwrap();
+                let target = to.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    tree(&entry.path(), &target);
+                } else {
+                    std::fs::copy(entry.path(), target).unwrap();
+                }
+            }
+        }
+        tree(&fixtures().join(fixture), &self.path(name));
+    }
+
+    /// Fill the schema cache with the lexicon snapshot the fixtures were made against.
+    pub fn lexicon(&self) {
+        self.copy("lexicon", "schemas");
+    }
+}
+
+pub fn fixtures() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures")
+}
+
+/// The data rows of CSV text: fields may be quoted, with `""` for a quote.
+pub fn csv(text: &str) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    let mut row = Vec::new();
+    let mut field = String::new();
+    let mut quoted = false;
+    let mut chars = text.chars().peekable();
+    while let Some(next) = chars.next() {
+        match next {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                field.push('"');
+                chars.next();
+            }
+            '"' => quoted = !quoted,
+            ',' if !quoted => row.push(std::mem::take(&mut field)),
+            '\n' if !quoted => {
+                row.push(std::mem::take(&mut field));
+                rows.push(std::mem::take(&mut row));
+            }
+            other => field.push(other),
+        }
+    }
+    if !field.is_empty() || !row.is_empty() {
+        row.push(field);
+        rows.push(row);
+    }
+    rows.into_iter().skip(1).collect()
 }
 
 impl Drop for Scratch {
