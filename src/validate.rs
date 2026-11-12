@@ -45,15 +45,25 @@ fn root(value: &Value) -> Option<&str> {
     fields.get("label")?.as_str()
 }
 
-/// Validate one property. `Err` means it could not be checked at all.
-pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, String> {
+/// The JSON files of a property and which of them are data-group roots.
+pub struct Scan {
+    /// Every `.json` file directly in the property, in byte order.
+    pub names: Vec<String>,
+    /// Those that parse.
+    pub parsed: BTreeMap<String, Value>,
+    /// Data-group roots the manifest knows: file name and schema CID.
+    pub roots: Vec<(String, String)>,
+}
+
+/// Find a property's data-group roots. `Err` means it has none to work on.
+pub fn scan(property: &Property, shared: &Mutex<Shared>) -> Result<Scan, String> {
     let names: Vec<String> = property.names().into_iter().filter(|name| name.ends_with(".json")).collect();
     if names.is_empty() {
         return Err("No data group JSON files found in the property directory".to_string());
     }
-    let parsed: BTreeMap<&str, Value> = names
+    let parsed: BTreeMap<String, Value> = names
         .iter()
-        .filter_map(|name| Some((name.as_str(), serde_json::from_slice(&property.read(name)?).ok()?)))
+        .filter_map(|name| Some((name.clone(), serde_json::from_slice(&property.read(name)?).ok()?)))
         .collect();
     let mut roots = Vec::new();
     for (name, value) in &parsed {
@@ -61,12 +71,20 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             continue;
         };
         if let Some(cid) = shared.lock().expect("shared state").schemas.group(label)? {
-            roots.push((*name, value, cid));
+            roots.push((name.clone(), cid));
         }
     }
     if roots.is_empty() {
         return Err("No files found to validate".to_string());
     }
+    Ok(Scan { names, parsed, roots })
+}
+
+/// Validate one property. `Err` means it could not be checked at all.
+pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, String> {
+    let Scan { names, parsed, roots } = scan(property, shared)?;
+    let roots: Vec<(&str, &Value, &String)> =
+        roots.iter().map(|(name, cid)| (name.as_str(), &parsed[name], cid)).collect();
 
     // Files reached from a root: its relationship files and the two entities each one links.
     let mut used: HashSet<&str> = roots.iter().map(|root| root.0).collect();
@@ -77,7 +95,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             let Some((name, relation)) = parsed.get_key_value(name) else {
                 continue;
             };
-            used.insert(name);
+            used.insert(name.as_str());
             used.extend([&relation["from"], &relation["to"]].into_iter().filter_map(target));
         }
     }
@@ -122,7 +140,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
         };
         let row = |path: &str, message: String| Row {
             property: property.name.clone(),
-            group: cid.clone(),
+            group: (*cid).clone(),
             file: property.path(name),
             path: path.to_string(),
             message,

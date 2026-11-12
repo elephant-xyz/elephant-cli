@@ -17,6 +17,7 @@ clap = { version = "4", features = ["derive", "env"] }
 jsonschema = { version = "0.61", default-features = false }
 memmap2 = "0.9"
 regex = "1"
+ryu-js = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 ureq = "3"

@@ -9,8 +9,11 @@
 //!   input, network failure).
 //! - Nothing prompts, nothing needs a terminal.
 
+mod canonical;
 mod car;
+mod cids;
 mod county;
+mod hash;
 mod lexicon;
 mod property;
 mod report;
@@ -45,6 +48,27 @@ struct Cli {
 enum Command {
     /// Check property outputs or a county CAR against the lexicon
     Validate(Validate),
+    /// Give property outputs their CIDs and pack them into hashed ZIPs, a CSV and a county CAR
+    Hash(Hash),
+}
+
+#[derive(Args)]
+#[command(after_help = "Examples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid")]
+struct Hash {
+    /// A property directory or ZIP, or a directory of properties
+    input: PathBuf,
+    /// Hashed ZIP to write; for a directory of properties, a directory that receives one ZIP each
+    #[arg(short = 'o', long, value_name = "PATH", default_value = "hashed-data.zip")]
+    output_zip: PathBuf,
+    /// CSV listing each data group's CID
+    #[arg(short = 'c', long, value_name = "PATH", default_value = "hash-results.csv")]
+    output_csv: PathBuf,
+    /// County CAR to write: every JSON block, shard blocks and the county index as root
+    #[arg(long, value_name = "PATH")]
+    output_car: Option<PathBuf>,
+    /// Threads to hash with [default: number of cores]
+    #[arg(long, value_name = "N")]
+    threads: Option<usize>,
 }
 
 #[derive(Args)]
@@ -118,13 +142,7 @@ fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
             passed: count == 0,
         });
     }
-    let names: Vec<String> = children.iter().map(|child| property::stem(child)).collect();
-    let mut seen = std::collections::HashSet::new();
-    let repeated: Vec<&str> =
-        names.iter().filter(|name| !seen.insert(name.to_lowercase())).map(String::as_str).collect();
-    if !repeated.is_empty() {
-        return Err(format!("Duplicate property names in {}: {}", args.input.display(), repeated.join(", ")).into());
-    }
+    let names = property::stems(&children, &args.input)?;
     let results = validate::batch(&children, &shared, threads(args.threads));
     let mut report = report::Report::create(&args.output_csv)?;
     let mut failed = Vec::new();
@@ -226,9 +244,70 @@ fn county(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
     })
 }
 
+fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
+    if !args.input.exists() {
+        return Err(format!("{} is not a readable file", args.input.display()).into());
+    }
+    let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
+    let outcome = hash::run(
+        &args.input,
+        &args.output_zip,
+        &args.output_csv,
+        args.output_car.as_deref(),
+        &shared,
+        threads(args.threads),
+    )?;
+    for error in &outcome.errors {
+        eprintln!("error: {error}");
+    }
+    let batch = outcome.cid.is_none() && !(outcome.properties == 1 && outcome.failed.len() == 1);
+    let mut text = String::new();
+    if let Some(cid) = &outcome.cid {
+        text += "Hash report\n";
+        text += &format!("  Property CID:        {cid}\n");
+        text += &format!("  Data groups hashed:  {}\n", outcome.groups);
+        text += &format!("  Output ZIP:          {}\n", args.output_zip.display());
+        text += &format!("  Output CSV:          {}\n", args.output_csv.display());
+    }
+    if let (Some((blocks, root)), Some(path)) = (&outcome.car, &args.output_car) {
+        text += &format!("CAR written: {} ({blocks} blocks, root {root})\n", path.display());
+    }
+    if batch {
+        text += &format!(
+            "Properties processed: {}, succeeded: {}, failed: {}\n",
+            outcome.properties,
+            outcome.properties - outcome.failed.len(),
+            outcome.failed.len()
+        );
+    }
+    if !outcome.failed.is_empty() {
+        eprintln!("{} of {} properties failed: {}", outcome.failed.len(), outcome.properties, listed(&outcome.failed));
+    }
+    Ok(Done {
+        json: json!({
+            "command": "hash",
+            "input": args.input,
+            "kind": if batch { "batch" } else { "property" },
+            "ok": outcome.failed.is_empty(),
+            "properties": outcome.properties,
+            "succeeded": outcome.properties - outcome.failed.len(),
+            "failed": outcome.failed,
+            "errors": outcome.errors,
+            "data_groups": outcome.groups,
+            "property_cid": outcome.cid,
+            "output_zip": args.output_zip,
+            "output_csv": args.output_csv,
+            "car": outcome.car.as_ref().map(|(blocks, root)| json!({ "path": args.output_car, "blocks": blocks, "root": root })),
+        }),
+        text,
+        passed: outcome.failed.is_empty(),
+    })
+}
+
 fn run(cli: &Cli) -> Result<Done, Fail> {
     match &cli.command {
         Command::Validate(args) => validate(args, cli),
+        Command::Hash(args) => hash(args, cli),
     }
 }
 
@@ -236,6 +315,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
 fn piped(cli: &Cli) -> bool {
     match &cli.command {
         Command::Validate(args) => args.output_csv == Path::new("-"),
+        Command::Hash(_) => false,
     }
 }
 

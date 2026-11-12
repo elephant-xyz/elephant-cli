@@ -1,0 +1,4 @@
+{
+  "to": { "/": "./parcel.json" },
+  "from": { "/": "./address.json" }
+}

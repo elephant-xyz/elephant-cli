@@ -55,6 +55,17 @@ pub fn stem(path: &Path) -> String {
     }
 }
 
+/// The names of a batch's children; two that differ only by case or by `.zip` are refused.
+pub fn stems(children: &[PathBuf], input: &Path) -> Result<Vec<String>, String> {
+    let names: Vec<String> = children.iter().map(|child| stem(child)).collect();
+    let mut seen = std::collections::HashSet::new();
+    let repeated: Vec<&str> = names.iter().filter(|name| !seen.insert(name.to_lowercase())).map(String::as_str).collect();
+    if !repeated.is_empty() {
+        return Err(format!("Duplicate property names in {}: {}", input.display(), repeated.join(", ")));
+    }
+    Ok(names)
+}
+
 impl Property {
     pub fn open(path: &Path) -> Result<Property, String> {
         let base = std::path::absolute(path).map_err(|error| format!("{}: {error}", path.display()))?;

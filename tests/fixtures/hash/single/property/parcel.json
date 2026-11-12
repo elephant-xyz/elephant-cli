@@ -1,0 +1,8 @@
+{
+  "parcel_identifier": "10-20-30-40",
+  "source_http_request": {
+    "method": "GET",
+    "url": "https://example.com/parcel"
+  },
+  "request_identifier": "10203040"
+}
