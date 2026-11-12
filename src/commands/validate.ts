@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import chalk from 'chalk';
@@ -38,6 +38,8 @@ export interface ValidateCommandOptions {
   input: string;
   outputCsv?: string;
   maxConcurrentTasks?: number;
+  /** Megabytes of block data a county CAR check may hold in memory at once. */
+  carMemory?: number;
   silent?: boolean;
   cwd?: string;
 }
@@ -57,6 +59,18 @@ export function registerValidateCommand(program: Command) {
       '--max-concurrent-tasks <number>',
       "Target maximum concurrent validation tasks. If not provided, an OS-dependent limit (Unix: based on 'ulimit -n', Windows: CPU-based heuristic) is used, with a fallback of 10.",
       undefined
+    )
+    .option(
+      '--car-memory <megabytes>',
+      'County CAR only: megabytes of block data to hold in memory at once. Blocks beyond it are read back from the file when needed, which is slower.',
+      (value) => {
+        const megabytes = Number(value);
+        if (!(megabytes >= 0)) {
+          throw new InvalidArgumentError('Expected a number, 0 or more.');
+        }
+        return megabytes;
+      },
+      1024
     )
     .action(async (input, options) => {
       options.maxConcurrentTasks =
@@ -155,11 +169,15 @@ async function validateCounty(
     new CsvReporterService(errorCsvPath, warningCsvPath);
   await csvReporterService.initialize();
   logger.technical(`Validation errors will be saved to: ${errorCsvPath}`);
-  const summary = await validateCar(options.input, {
-    schemaCacheService,
-    jsonValidatorService,
-    csvReporterService,
-  })
+  const summary = await validateCar(
+    options.input,
+    {
+      schemaCacheService,
+      jsonValidatorService,
+      csvReporterService,
+    },
+    options.carMemory === undefined ? undefined : options.carMemory * 2 ** 20
+  )
     .finally(async () => {
       await csvReporterService.finalize();
       if (
@@ -182,6 +200,20 @@ async function validateCounty(
     console.log(`  Data groups validated:  ${summary.groups}`);
     for (const check of CAR_CHECKS) {
       console.log(`  ${`${check} errors:`.padEnd(24)}${summary.errors[check]}`);
+    }
+    if (summary.lookups > 0) {
+      console.log(
+        chalk.gray(
+          `  ${summary.lookups} blocks are not stored with the shard that links to them; the whole file was indexed to look them up by CID, which is slower and takes more memory`
+        )
+      );
+    }
+    if (summary.spilled > 0) {
+      console.log(
+        chalk.gray(
+          `  ${summary.spilled} blocks did not fit in the memory budget and were read back from the file when needed; a larger --car-memory is faster`
+        )
+      );
     }
     console.log(
       failed > 0
