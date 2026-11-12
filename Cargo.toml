@@ -16,12 +16,16 @@ cid = "0.11"
 clap = { version = "4", features = ["derive", "env"] }
 jsonschema = { version = "0.61", default-features = false }
 memmap2 = "0.9"
+parquet = { version = "60", default-features = false, features = ["zstd"] }
 regex = "1"
 ryu-js = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 ureq = "3"
 zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+parquet = { version = "60", default-features = false, features = ["zstd", "json"] }
 
 [profile.dev]
 debug = false

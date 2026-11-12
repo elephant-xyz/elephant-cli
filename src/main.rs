@@ -18,6 +18,8 @@ mod lexicon;
 mod property;
 mod report;
 mod schemas;
+mod tables;
+mod unixfs;
 mod validate;
 
 use clap::{Args, Parser, Subcommand};
@@ -50,6 +52,36 @@ enum Command {
     Validate(Validate),
     /// Give property outputs their CIDs and pack them into hashed ZIPs, a CSV and a county CAR
     Hash(Hash),
+    /// Turn a county CAR into Parquet tables and, optionally, its Atlas page entry
+    ExportTables(ExportTables),
+}
+
+#[derive(Args)]
+#[command(after_help = "Examples:\n  elephant-cli export-tables county.car --output ./tables --output-json tables.json \\\n    --atlas-page ./atlas/counties/IL/rock-island.json --county rock-island --state IL --fips 17161\n  elephant-cli --json export-tables county.car --output ./tables | jq -r .root")]
+struct ExportTables {
+    /// A county CAR written by `hash --output-car`
+    input: PathBuf,
+    /// Directory that receives <table>/part-NNNNN.parquet files and tables.car
+    #[arg(long, value_name = "DIR")]
+    output: PathBuf,
+    /// Largest part file, as a byte count with an optional k, m or g
+    #[arg(long, value_name = "BYTES", default_value = "1g")]
+    part_size: String,
+    /// Also write the summary (the same document --json prints) to this file
+    #[arg(long, value_name = "PATH")]
+    output_json: Option<PathBuf>,
+    /// Create or update the Atlas county page with this archive's root, schema and tables root
+    #[arg(long, value_name = "PATH")]
+    atlas_page: Option<PathBuf>,
+    /// County key for a new Atlas page
+    #[arg(long, value_name = "KEY")]
+    county: Option<String>,
+    /// Two-letter state code for a new Atlas page
+    #[arg(long, value_name = "ST")]
+    state: Option<String>,
+    /// Five-digit county FIPS code for a new Atlas page
+    #[arg(long, value_name = "CODE")]
+    fips: Option<String>,
 }
 
 #[derive(Args)]
@@ -304,10 +336,73 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
     })
 }
 
+/// `300`, `64m`, `1g`: a positive byte count.
+fn size(text: &str) -> Option<u64> {
+    let lower = text.to_lowercase();
+    let (digits, unit) = match lower.strip_suffix(['k', 'm', 'g']) {
+        Some(digits) => (digits, 1u64 << (10 * (1 + "kmg".find(&lower[digits.len()..])? as u32))),
+        None => (lower.as_str(), 1),
+    };
+    let count: u64 = digits.parse().ok().filter(|_| digits.bytes().all(|byte| byte.is_ascii_digit()))?;
+    count.checked_mul(unit).filter(|bytes| *bytes > 0)
+}
+
+fn export_tables(args: &ExportTables, cli: &Cli) -> Result<Done, Fail> {
+    let Some(cap) = size(&args.part_size) else {
+        return Err(format!("--part-size must be a positive byte count such as 1g, got {}", args.part_size).into());
+    };
+    if !args.input.is_file() {
+        return Err(format!("{} is not a readable file", args.input.display()).into());
+    }
+    let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
+    let atlas = args.atlas_page.as_ref().map(|page| tables::Atlas {
+        page: page.clone(),
+        county: args.county.clone(),
+        state: args.state.clone(),
+        fips: args.fips.clone(),
+    });
+    let exported = tables::export(&args.input, &args.output, cap, atlas.as_ref(), &mut schemas)
+        .map_err(|error| format!("Failed to export tables: {error}"))?;
+    let whole = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let listed: serde_json::Map<String, Value> = exported
+        .tables
+        .iter()
+        .map(|(name, rows, parts)| (name.clone(), json!({ "rows": rows, "parts": parts })))
+        .collect();
+    let parts: usize = exported.tables.iter().map(|table| table.2).sum();
+    let mut summary = json!({
+        "output": whole(&args.output),
+        "car": whole(&args.output).join("tables.car"),
+        "root": exported.root,
+        "countyRoot": exported.county_root,
+        "partSizeBytes": cap,
+        "codec": "zstd",
+        "tables": listed,
+        "parts": parts,
+        "exportedAt": report::now(),
+    });
+    let mut text = format!(
+        "Tables written: {} ({} tables, {parts} parts, root {})\n",
+        args.output.display(),
+        exported.tables.len(),
+        exported.root
+    );
+    if let (Some(page), Some(group)) = (&args.atlas_page, &exported.group) {
+        summary["atlas"] = json!({ "page": whole(page), "group": group });
+        text += &format!("Atlas page written: {} group {group}\n", page.display());
+    }
+    if let Some(path) = &args.output_json {
+        std::fs::write(path, serde_json::to_string_pretty(&summary)?)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    }
+    Ok(Done { json: summary, text, passed: true })
+}
+
 fn run(cli: &Cli) -> Result<Done, Fail> {
     match &cli.command {
         Command::Validate(args) => validate(args, cli),
         Command::Hash(args) => hash(args, cli),
+        Command::ExportTables(args) => export_tables(args, cli),
     }
 }
 
@@ -315,7 +410,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
 fn piped(cli: &Cli) -> bool {
     match &cli.command {
         Command::Validate(args) => args.output_csv == Path::new("-"),
-        Command::Hash(_) => false,
+        Command::Hash(_) | Command::ExportTables(_) => false,
     }
 }
 

@@ -1,0 +1,732 @@
+{
+ "columns": {
+  "address": [
+   [
+    "block",
+    "BYTE_ARRAY"
+   ],
+   [
+    "city_name",
+    "BYTE_ARRAY"
+   ],
+   [
+    "country_code",
+    "BYTE_ARRAY"
+   ],
+   [
+    "county_name",
+    "BYTE_ARRAY"
+   ],
+   [
+    "latitude",
+    "DOUBLE"
+   ],
+   [
+    "longitude",
+    "DOUBLE"
+   ],
+   [
+    "lot",
+    "BYTE_ARRAY"
+   ],
+   [
+    "municipality_name",
+    "BYTE_ARRAY"
+   ],
+   [
+    "plus_four_postal_code",
+    "BYTE_ARRAY"
+   ],
+   [
+    "postal_code",
+    "BYTE_ARRAY"
+   ],
+   [
+    "range",
+    "BYTE_ARRAY"
+   ],
+   [
+    "request_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "route_number",
+    "BYTE_ARRAY"
+   ],
+   [
+    "section",
+    "BYTE_ARRAY"
+   ],
+   [
+    "source_http_request",
+    "BYTE_ARRAY"
+   ],
+   [
+    "state_code",
+    "BYTE_ARRAY"
+   ],
+   [
+    "township",
+    "BYTE_ARRAY"
+   ],
+   [
+    "unit_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "unnormalized_address",
+    "BYTE_ARRAY"
+   ],
+   [
+    "street_name",
+    "BYTE_ARRAY"
+   ],
+   [
+    "street_number",
+    "BYTE_ARRAY"
+   ],
+   [
+    "street_post_directional_text",
+    "BYTE_ARRAY"
+   ],
+   [
+    "street_pre_directional_text",
+    "BYTE_ARRAY"
+   ],
+   [
+    "street_suffix_type",
+    "BYTE_ARRAY"
+   ],
+   [
+    "cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "address_has_parcel": [
+   [
+    "relationship_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "from_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "to_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "parcel": [
+   [
+    "parcel_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "request_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "source_http_request",
+    "BYTE_ARRAY"
+   ],
+   [
+    "cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "properties": [
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq",
+    "BYTE_ARRAY"
+   ],
+   [
+    "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "property": [
+   [
+    "area_under_air",
+    "BYTE_ARRAY"
+   ],
+   [
+    "build_status",
+    "BYTE_ARRAY"
+   ],
+   [
+    "historic_designation",
+    "BOOLEAN"
+   ],
+   [
+    "hoa_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "livable_floor_area",
+    "BYTE_ARRAY"
+   ],
+   [
+    "number_of_units",
+    "INT64"
+   ],
+   [
+    "number_of_units_type",
+    "BYTE_ARRAY"
+   ],
+   [
+    "ownership_estate_type",
+    "BYTE_ARRAY"
+   ],
+   [
+    "parcel_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_effective_built_year",
+    "INT64"
+   ],
+   [
+    "property_legal_description_text",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_manager_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_structure_built_year",
+    "INT64"
+   ],
+   [
+    "property_type",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_usage_type",
+    "BYTE_ARRAY"
+   ],
+   [
+    "request_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "source_http_request",
+    "BYTE_ARRAY"
+   ],
+   [
+    "structure_form",
+    "BYTE_ARRAY"
+   ],
+   [
+    "subdivision",
+    "BYTE_ARRAY"
+   ],
+   [
+    "total_area",
+    "BYTE_ARRAY"
+   ],
+   [
+    "zoning",
+    "BYTE_ARRAY"
+   ],
+   [
+    "cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "property_has_address": [
+   [
+    "relationship_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "from_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "to_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "property_has_tax": [
+   [
+    "relationship_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "from_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "to_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ],
+  "tax": [
+   [
+    "agricultural_valuation_amount",
+    "DOUBLE"
+   ],
+   [
+    "building_depreciated_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "building_replacement_cost_amount",
+    "DOUBLE"
+   ],
+   [
+    "city_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "college_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "county_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "first_year_building_on_tax_roll",
+    "INT64"
+   ],
+   [
+    "first_year_on_tax_roll",
+    "INT64"
+   ],
+   [
+    "homestead_cap_loss_amount",
+    "DOUBLE"
+   ],
+   [
+    "hospital_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "millage_rate",
+    "DOUBLE"
+   ],
+   [
+    "monthly_tax_amount",
+    "DOUBLE"
+   ],
+   [
+    "period_end_date",
+    "BYTE_ARRAY"
+   ],
+   [
+    "period_start_date",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_assessed_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "property_building_amount",
+    "DOUBLE"
+   ],
+   [
+    "property_exemption_amount",
+    "DOUBLE"
+   ],
+   [
+    "property_land_amount",
+    "DOUBLE"
+   ],
+   [
+    "property_market_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "property_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "request_identifier",
+    "BYTE_ARRAY"
+   ],
+   [
+    "school_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "source_http_request",
+    "BYTE_ARRAY"
+   ],
+   [
+    "special_district_taxable_value_amount",
+    "DOUBLE"
+   ],
+   [
+    "tax_year",
+    "INT64"
+   ],
+   [
+    "yearly_tax_amount",
+    "DOUBLE"
+   ],
+   [
+    "cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "property_cid",
+    "BYTE_ARRAY"
+   ],
+   [
+    "data_group_cid",
+    "BYTE_ARRAY"
+   ]
+  ]
+ },
+ "rows": {
+  "address": [
+   {
+    "block": null,
+    "city_name": "ROCK ISLAND",
+    "country_code": null,
+    "county_name": "Rock Island",
+    "latitude": 41.5,
+    "longitude": -90,
+    "lot": null,
+    "municipality_name": null,
+    "plus_four_postal_code": null,
+    "postal_code": "61201",
+    "range": null,
+    "request_identifier": "req-a",
+    "route_number": null,
+    "section": null,
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/a\"}",
+    "state_code": "IL",
+    "township": null,
+    "unit_identifier": null,
+    "unnormalized_address": null,
+    "street_name": "First",
+    "street_number": "100",
+    "street_post_directional_text": null,
+    "street_pre_directional_text": null,
+    "street_suffix_type": "St",
+    "cid": "baguqeeracknamifdbtyyaz45ayvjweh3aioqaruakeoddastihi3yoxgif4q",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "block": null,
+    "city_name": null,
+    "country_code": null,
+    "county_name": "Rock Island",
+    "latitude": null,
+    "longitude": null,
+    "lot": null,
+    "municipality_name": null,
+    "plus_four_postal_code": null,
+    "postal_code": null,
+    "range": null,
+    "request_identifier": "req-b",
+    "route_number": null,
+    "section": null,
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/b\"}",
+    "state_code": null,
+    "township": null,
+    "unit_identifier": null,
+    "unnormalized_address": "200 Second Ave, Rock Island, IL 61201",
+    "street_name": null,
+    "street_number": null,
+    "street_post_directional_text": null,
+    "street_pre_directional_text": null,
+    "street_suffix_type": null,
+    "cid": "baguqeerajvvbqt57s4kn4adb2egvplrwmfg2xdnb53klzpckizs5esu2g5rq",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   }
+  ],
+  "address_has_parcel": [
+   {
+    "relationship_cid": "baguqeerarx6v5ljqoqvwhj5ks5vfc554jun4t7sfx4rg276xizpudupb6fia",
+    "from_cid": "baguqeeracknamifdbtyyaz45ayvjweh3aioqaruakeoddastihi3yoxgif4q",
+    "to_cid": "baguqeeralycv7iml2sak72oxa27raj64wwwsztdrchefxmq54iukxhcax5oa",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu"
+   },
+   {
+    "relationship_cid": "baguqeerar4vyk5tubcqivahqbfrq2s5vyrstpjecn27xijusg3ec62aaomfa",
+    "from_cid": "baguqeerajvvbqt57s4kn4adb2egvplrwmfg2xdnb53klzpckizs5esu2g5rq",
+    "to_cid": "baguqeera2cgaw23xbxxfmhoox7zyiw5kqt7dnp6fcfggfhln53t32hd26y3a",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu"
+   }
+  ],
+  "parcel": [
+   {
+    "parcel_identifier": "17-161-0001",
+    "request_identifier": "req-a",
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/a\"}",
+    "cid": "baguqeeralycv7iml2sak72oxa27raj64wwwsztdrchefxmq54iukxhcax5oa",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu"
+   },
+   {
+    "parcel_identifier": "17-161-0002",
+    "request_identifier": "req-b",
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/b\"}",
+    "cid": "baguqeera2cgaw23xbxxfmhoox7zyiw5kqt7dnp6fcfggfhln53t32hd26y3a",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu"
+   }
+  ],
+  "properties": [
+   {
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq": "baguqeera4lbshfjk7pvhwt2jvfcdvgkxdx5l7g2inrm3rpaeybhetwcuh4aa",
+    "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka"
+   },
+   {
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq": "baguqeerarqblzsbtkcmueirkjloa5ox2u2v3zmhuh3znsj3wyc6mrowuptpq",
+    "bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq"
+   }
+  ],
+  "property": [
+   {
+    "area_under_air": null,
+    "build_status": null,
+    "historic_designation": false,
+    "hoa_cid": null,
+    "livable_floor_area": null,
+    "number_of_units": "1n",
+    "number_of_units_type": null,
+    "ownership_estate_type": null,
+    "parcel_identifier": "17-161-0001",
+    "property_effective_built_year": null,
+    "property_legal_description_text": "LOT 1 BLOCK 2 \"OLD TOWN\" ADD",
+    "property_manager_cid": null,
+    "property_structure_built_year": "1987n",
+    "property_type": "SingleFamily",
+    "property_usage_type": null,
+    "request_identifier": "req-a",
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/a\"}",
+    "structure_form": null,
+    "subdivision": null,
+    "total_area": "1,250",
+    "zoning": null,
+    "cid": "baguqeera6xdblzeh2o5ahz23v7e3keqkjao6hi5zg7vahniduiiecj4faodq",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "area_under_air": null,
+    "build_status": null,
+    "historic_designation": true,
+    "hoa_cid": null,
+    "livable_floor_area": null,
+    "number_of_units": null,
+    "number_of_units_type": null,
+    "ownership_estate_type": null,
+    "parcel_identifier": "17-161-0002",
+    "property_effective_built_year": null,
+    "property_legal_description_text": null,
+    "property_manager_cid": null,
+    "property_structure_built_year": null,
+    "property_type": "VacantLand",
+    "property_usage_type": null,
+    "request_identifier": "req-b",
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/b\"}",
+    "structure_form": null,
+    "subdivision": null,
+    "total_area": null,
+    "zoning": null,
+    "cid": "baguqeera2l3wtzxwk3kc4crbvcztvtmvk62okwtvcbducsetbwnieqr6cefq",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   }
+  ],
+  "property_has_address": [
+   {
+    "relationship_cid": "baguqeera4or5yuvgetpfcxxta2yt2vc2fkwdmdpunezf4wwxzw32hmfdemlq",
+    "from_cid": "baguqeera6xdblzeh2o5ahz23v7e3keqkjao6hi5zg7vahniduiiecj4faodq",
+    "to_cid": "baguqeeracknamifdbtyyaz45ayvjweh3aioqaruakeoddastihi3yoxgif4q",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "relationship_cid": "baguqeeraserjfhr43ntvhoggwqgo4tevygebz4pxzuk5fq75mc3lqciic4va",
+    "from_cid": "baguqeera2l3wtzxwk3kc4crbvcztvtmvk62okwtvcbducsetbwnieqr6cefq",
+    "to_cid": "baguqeerajvvbqt57s4kn4adb2egvplrwmfg2xdnb53klzpckizs5esu2g5rq",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   }
+  ],
+  "property_has_tax": [
+   {
+    "relationship_cid": "baguqeerawjfgeiefxwngyqmtyzecy7znfa6py3y6sqtiyws4caydnw3oyfnq",
+    "from_cid": "baguqeera6xdblzeh2o5ahz23v7e3keqkjao6hi5zg7vahniduiiecj4faodq",
+    "to_cid": "baguqeerad5kclcm3pllpylyphxb2hpvvwipywxwxgxmpawhf74ki2wbeakba",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "relationship_cid": "baguqeeraz7scgthvxow4uwt4v4jzcf7rbg7jpdplrxutyoxqix7xeedgy2ra",
+    "from_cid": "baguqeera6xdblzeh2o5ahz23v7e3keqkjao6hi5zg7vahniduiiecj4faodq",
+    "to_cid": "baguqeeraabguouna35fx6ye36xad5yt5uktjxj5g54uohvzkkeg3y4esu6ca",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "relationship_cid": "baguqeerafg2anh46zhdwwzcfww3mhcr7uyus57izfmaerxmxlv36zqf5elma",
+    "from_cid": "baguqeera2l3wtzxwk3kc4crbvcztvtmvk62okwtvcbducsetbwnieqr6cefq",
+    "to_cid": "baguqeeradeoufzguzf4lzyzkne42xf7bhzgbyxoqtgi4fmneypzkcq3yikdq",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   }
+  ],
+  "tax": [
+   {
+    "agricultural_valuation_amount": null,
+    "building_depreciated_value_amount": null,
+    "building_replacement_cost_amount": null,
+    "city_taxable_value_amount": null,
+    "college_taxable_value_amount": null,
+    "county_taxable_value_amount": null,
+    "first_year_building_on_tax_roll": null,
+    "first_year_on_tax_roll": null,
+    "homestead_cap_loss_amount": null,
+    "hospital_taxable_value_amount": null,
+    "millage_rate": null,
+    "monthly_tax_amount": null,
+    "period_end_date": "2024-12-31",
+    "period_start_date": "2024-01-01",
+    "property_assessed_value_amount": 41251.5,
+    "property_building_amount": null,
+    "property_exemption_amount": null,
+    "property_land_amount": null,
+    "property_market_value_amount": 123750,
+    "property_taxable_value_amount": null,
+    "request_identifier": "req-a",
+    "school_taxable_value_amount": null,
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/a\"}",
+    "special_district_taxable_value_amount": null,
+    "tax_year": "2024n",
+    "yearly_tax_amount": 3210.99,
+    "cid": "baguqeerad5kclcm3pllpylyphxb2hpvvwipywxwxgxmpawhf74ki2wbeakba",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "agricultural_valuation_amount": null,
+    "building_depreciated_value_amount": null,
+    "building_replacement_cost_amount": null,
+    "city_taxable_value_amount": null,
+    "college_taxable_value_amount": null,
+    "county_taxable_value_amount": null,
+    "first_year_building_on_tax_roll": null,
+    "first_year_on_tax_roll": null,
+    "homestead_cap_loss_amount": null,
+    "hospital_taxable_value_amount": null,
+    "millage_rate": null,
+    "monthly_tax_amount": null,
+    "period_end_date": "2023-12-31",
+    "period_start_date": "2023-01-01",
+    "property_assessed_value_amount": 41250.5,
+    "property_building_amount": null,
+    "property_exemption_amount": null,
+    "property_land_amount": null,
+    "property_market_value_amount": 123750,
+    "property_taxable_value_amount": null,
+    "request_identifier": "req-a",
+    "school_taxable_value_amount": null,
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/a\"}",
+    "special_district_taxable_value_amount": null,
+    "tax_year": "2023n",
+    "yearly_tax_amount": 3210.99,
+    "cid": "baguqeeraabguouna35fx6ye36xad5yt5uktjxj5g54uohvzkkeg3y4esu6ca",
+    "property_cid": "baguqeeraetbmhuazg4zwzuufnojfr24l2lago2v2hzgh73o5ro77jform7ka",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   },
+   {
+    "agricultural_valuation_amount": null,
+    "building_depreciated_value_amount": null,
+    "building_replacement_cost_amount": null,
+    "city_taxable_value_amount": null,
+    "college_taxable_value_amount": null,
+    "county_taxable_value_amount": null,
+    "first_year_building_on_tax_roll": null,
+    "first_year_on_tax_roll": null,
+    "homestead_cap_loss_amount": null,
+    "hospital_taxable_value_amount": null,
+    "millage_rate": null,
+    "monthly_tax_amount": null,
+    "period_end_date": "2024-12-31",
+    "period_start_date": "2024-01-01",
+    "property_assessed_value_amount": 9000,
+    "property_building_amount": null,
+    "property_exemption_amount": null,
+    "property_land_amount": null,
+    "property_market_value_amount": 27000,
+    "property_taxable_value_amount": null,
+    "request_identifier": "req-b",
+    "school_taxable_value_amount": null,
+    "source_http_request": "{\"method\":\"GET\",\"url\":\"https://example.test/parcel/b\"}",
+    "special_district_taxable_value_amount": null,
+    "tax_year": "2024n",
+    "yearly_tax_amount": null,
+    "cid": "baguqeeradeoufzguzf4lzyzkne42xf7bhzgbyxoqtgi4fmneypzkcq3yikdq",
+    "property_cid": "baguqeerae5jkoyxqxlhrb3pox67rcacaxa7g63rb4vto23c2bnzlb3fuc2tq",
+    "data_group_cid": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq"
+   }
+  ]
+ }
+}

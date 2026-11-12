@@ -1,0 +1,48 @@
+{
+  "output": "/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/export-tables/tables",
+  "car": "/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/export-tables/tables/tables.car",
+  "root": "baguqeeraxd5sf4mjxsq7la4x3ia65o7uytlu6g7fzv5oo3r4nfs5obiv7naa",
+  "countyRoot": "baguqeerai2wamycgxkpzd7wyncncl4srp4ykab4aw62bcb3mvcrlkknzo57a",
+  "partSizeBytes": 1073741824,
+  "codec": "zstd",
+  "tables": {
+    "properties": {
+      "rows": 2,
+      "parts": 1
+    },
+    "property_has_address": {
+      "rows": 2,
+      "parts": 1
+    },
+    "property": {
+      "rows": 2,
+      "parts": 1
+    },
+    "address": {
+      "rows": 2,
+      "parts": 1
+    },
+    "property_has_tax": {
+      "rows": 3,
+      "parts": 1
+    },
+    "tax": {
+      "rows": 3,
+      "parts": 1
+    },
+    "address_has_parcel": {
+      "rows": 2,
+      "parts": 1
+    },
+    "parcel": {
+      "rows": 2,
+      "parts": 1
+    }
+  },
+  "parts": 8,
+  "exportedAt": "2026-11-12T21:02:12.957Z",
+  "atlas": {
+    "page": "/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/export-tables/page.json",
+    "group": "county"
+  }
+}
