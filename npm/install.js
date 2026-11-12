@@ -3,7 +3,9 @@
 // A published release carries npm/release.json and downloads the binary built
 // for this platform. Anything else (a git install such as
 // `npm i github:elephant-xyz/elephant-cli#main`, a checkout) builds it from
-// the Rust sources in the package with cargo.
+// the Rust sources in the package with cargo. For a git install npm runs this
+// once in its clone, packs the result (npm/native/ is in "files"), and the
+// run in node_modules then finds the binary in place.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

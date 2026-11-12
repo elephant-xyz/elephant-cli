@@ -27,6 +27,7 @@
     "npm/*.js",
     "npm/*.d.ts",
     "npm/release.json",
+    "npm/native/",
     "src/",
     "assets/",
     "Cargo.toml",
