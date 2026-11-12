@@ -26,6 +26,11 @@ export interface ValidationResult {
 export class JsonValidatorService {
   private ajv: Ajv;
   private validators: Map<string, ValidateFunction> = new Map();
+  private prepared = new WeakMap<
+    JSONSchema,
+    Promise<{ schema: JSONSchema; allowed: Map<string, boolean> }>
+  >();
+  private compiled = new WeakMap<JSONSchema, ValidateFunction>();
   private schemaCacheService: SchemaCacheService;
   private baseDirectory: string;
   private blockSource?: (cid: string) => Promise<Uint8Array | undefined>;
@@ -218,11 +223,7 @@ export class JsonValidatorService {
       }
 
       // Resolve any CID references in the schema first and create a map of which schema parts allow CID resolution
-      const cidAllowedMap = new Map<string, boolean>();
-      const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
-        schema,
-        cidAllowedMap
-      );
+      const prepared = await this.prepare(schema);
 
       // Resolve CID pointers in data if present, but only where schema allows it
       if (skipCIDResolution) {
@@ -231,15 +232,15 @@ export class JsonValidatorService {
         resolvedData = await this.resolveCIDPointers(
           data,
           currentFilePath,
-          resolvedSchema,
-          cidAllowedMap
+          prepared.schema,
+          prepared.allowed
         );
       }
 
       logger.debug(`resolved data type: ${typeof resolvedData}`);
 
       // Get or compile validator
-      const validator = await this.getValidator(resolvedSchema);
+      const validator = await this.getValidator(prepared.schema);
 
       // Validate the data (handle both sync and async validators)
       const result = validator(resolvedData);
@@ -269,6 +270,31 @@ export class JsonValidatorService {
         ],
       };
     }
+  }
+
+  /**
+   * Resolve a schema's CID links once per schema object and keep the result:
+   * a county CAR validates every data group against the same few schemas, and
+   * resolving one rebuilds the whole lexicon tree. A failed resolve is dropped
+   * so the next call retries.
+   */
+  private prepare(
+    schema: JSONSchema
+  ): Promise<{ schema: JSONSchema; allowed: Map<string, boolean> }> {
+    const known = this.prepared.get(schema);
+    if (known) {
+      return known;
+    }
+    const allowed = new Map<string, boolean>();
+    const fresh = this.resolveCIDSchemasAndTrackPaths(schema, allowed).then(
+      (resolved) => ({ schema: resolved, allowed })
+    );
+    // A WeakMap only takes objects; anything else is resolved on every call.
+    if (schema && typeof schema === 'object') {
+      this.prepared.set(schema, fresh);
+      fresh.catch(() => this.prepared.delete(schema));
+    }
+    return fresh;
   }
 
   /**
@@ -643,24 +669,19 @@ export class JsonValidatorService {
    * Get or compile a validator for a schema
    */
   private async getValidator(schema: JSONSchema): Promise<ValidateFunction> {
-    // Create a cache key from the schema
-    const cacheKey = JSON.stringify(schema);
-
-    // Check if we already have a compiled validator
-    let validator = this.validators.get(cacheKey);
-
-    if (!validator) {
-      // Schema has already been resolved by resolveCIDSchemas, compile directly
-      validator = this.ajv.compile(schema);
-      this.validators.set(cacheKey, validator);
-
-      if (!validator) {
-        throw new Error('Failed to compile schema validator');
-      }
+    // The same resolved schema object comes back from prepare() on every call
+    const known = this.compiled.get(schema);
+    if (known) {
+      return known;
     }
 
-    if (!validator) {
-      throw new Error('Failed to compile or retrieve validator');
+    // Schemas that are equal but not the same object still share one validator
+    const cacheKey = JSON.stringify(schema);
+    // Schema has already been resolved by resolveCIDSchemas, compile directly
+    const validator = this.validators.get(cacheKey) ?? this.ajv.compile(schema);
+    this.validators.set(cacheKey, validator);
+    if (schema && typeof schema === 'object') {
+      this.compiled.set(schema, validator);
     }
     return validator;
   }

@@ -841,6 +841,48 @@ describe('JsonValidatorService', () => {
       expect(fetchFromIpfs).toHaveBeenCalledWith(schemaCID);
     });
 
+    it('should resolve a schema once and still resolve CID pointers on later calls', async () => {
+      const first = 'QmRhVwVfENfzsT9gWZnQY9C8w2cpNyuyUKUpc8mNGaW1MG';
+      const second = 'QmSrPcBnqggGvvRgCi3LoLSLd6gtfbTVgfvktKKpJmtLGr';
+      const broken = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ name: 'first' }))
+        .mockResolvedValueOnce(JSON.stringify({ name: 'second' }))
+        .mockResolvedValueOnce(JSON.stringify({ name: 3 }));
+      const get = vi.spyOn(schemaCacheService, 'get');
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: { user: { type: 'string', cid: schemaCID } },
+      };
+
+      const results = [
+        await jsonValidator.validate({ user: { '/': first } }, schema),
+        await jsonValidator.validate({ user: { '/': second } }, schema),
+        await jsonValidator.validate({ user: { '/': broken } }, schema),
+      ];
+
+      expect(results.map((result) => result.valid)).toEqual([
+        true,
+        true,
+        false,
+      ]);
+      expect(results[2].errors![0].path).toBe('/user/name');
+      expect(fetchFromIpfs).toHaveBeenCalledWith(second);
+      expect(fetchFromIpfs).toHaveBeenCalledWith(broken);
+      // The schema tree is walked for the first data group only
+      expect(get).toHaveBeenCalledTimes(1);
+    });
+
     it('should reject root schema that is a CID link', async () => {
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
