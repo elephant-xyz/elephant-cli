@@ -23,8 +23,7 @@ pub struct Schemas {
 }
 
 fn http(url: &str, accept: &str, seconds: u64) -> Result<Vec<u8>, String> {
-    let agent: ureq::Agent =
-        ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(seconds))).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(seconds))).build().into();
     let mut response = agent.get(url).header("accept", accept).call().map_err(|error| error.to_string())?;
     response.body_mut().with_config().limit(64 << 20).read_to_vec().map_err(|error| error.to_string())
 }

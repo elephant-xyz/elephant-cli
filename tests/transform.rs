@@ -31,7 +31,16 @@ fn runs_the_five_county_scripts_and_builds_the_county_and_seed_groups() {
     scratch.lexicon();
     pack("transform/scripts-mode/input", &scratch.path("prepared.zip"));
     pack("transform/scripts-mode/scripts", &scratch.path("scripts.zip"));
-    let ran = scratch.run(&["--json", "transform", "--input-zip", "prepared.zip", "--scripts-zip", "scripts.zip", "--output-zip", "out.zip"]);
+    let ran = scratch.run(&[
+        "--json",
+        "transform",
+        "--input-zip",
+        "prepared.zip",
+        "--scripts-zip",
+        "scripts.zip",
+        "--output-zip",
+        "out.zip",
+    ]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     assert_eq!(text(&entries(&scratch.path("out.zip"))), text(&expected("scripts-mode")));
     assert_eq!(ran.json()["mode"], "scripts");
@@ -46,7 +55,8 @@ fn reports_the_script_that_failed_with_what_it_threw() {
     scratch.lexicon();
     pack("transform/scripts-mode/input", &scratch.path("prepared.zip"));
     pack("transform/failing-scripts/scripts", &scratch.path("scripts.zip"));
-    let ran = scratch.run(&["transform", "--input-zip", "prepared.zip", "--scripts-zip", "scripts.zip", "--output-zip", "out.zip"]);
+    let ran =
+        scratch.run(&["transform", "--input-zip", "prepared.zip", "--scripts-zip", "scripts.zip", "--output-zip", "out.zip"]);
     assert_eq!(ran.code, 2);
     assert!(ran.stderr.contains("Script failed (script=data_extractor.js code=1 durationMs="), "{}", ran.stderr);
     // the unmapped-value convention: the thrown message is the JSON the caller parses
@@ -77,7 +87,16 @@ fn runs_a_handler_package_and_builds_the_root_from_its_relationships() {
     pack("transform/v2/handler", &scratch.path("handler.zip"));
     // `--transform-version 2` is what 1.x required; the package alone is enough now
     for extra in [&["--transform-version", "2"][..], &[]] {
-        let mut args = vec!["--json", "transform", "--input-zip", "prepared.zip", "--transform-zip", "handler.zip", "--output-zip", "out.zip"];
+        let mut args = vec![
+            "--json",
+            "transform",
+            "--input-zip",
+            "prepared.zip",
+            "--transform-zip",
+            "handler.zip",
+            "--output-zip",
+            "out.zip",
+        ];
         args.extend(extra);
         let ran = scratch.run(&args);
         assert_eq!((ran.code, &ran.json()["mode"]), (0, &json!("handler")), "{}", ran.stderr);
@@ -90,7 +109,16 @@ fn handle(scratch: &Scratch, source: &str) -> support::Ran {
     scratch.lexicon();
     pack("transform/v2/input", &scratch.path("prepared.zip"));
     zip_of(&[("handler.js", source)], &scratch.path("handler.zip"));
-    scratch.run(&["--json", "transform", "--input-zip", "prepared.zip", "--transform-zip", "handler.zip", "--output-zip", "out.zip"])
+    scratch.run(&[
+        "--json",
+        "transform",
+        "--input-zip",
+        "prepared.zip",
+        "--transform-zip",
+        "handler.zip",
+        "--output-zip",
+        "out.zip",
+    ])
 }
 
 #[test]
@@ -115,7 +143,9 @@ fn gives_handlers_cheerio() {
 
 #[test]
 fn keeps_a_handler_inside_its_working_directory() {
-    for read in ["fs.readFileSync('/etc/hostname', 'utf8')", "fs.readFileSync('../../../../etc/hostname', 'utf8')", "fs.readdirSync('/')"] {
+    for read in
+        ["fs.readFileSync('/etc/hostname', 'utf8')", "fs.readFileSync('../../../../etc/hostname', 'utf8')", "fs.readdirSync('/')"]
+    {
         let scratch = Scratch::new();
         let ran = handle(&scratch, &format!("import fs from 'node:fs';\nexport async function handler() {{ {read}; }}\n"));
         assert_eq!(ran.code, 2, "{read}");
@@ -184,7 +214,10 @@ fn refuses_option_combinations_that_make_no_sense() {
     pack("transform/seed/input", &scratch.path("seed.zip"));
     for (args, reason) in [
         (vec!["--input-zip", "seed.zip", "--transform-version", "2"], "--transform-zip is required for transform v2"),
-        (vec!["--input-zip", "seed.zip", "--transform-zip", "seed.zip", "--scripts-zip", "seed.zip"], "--scripts-zip cannot be used with --transform-zip"),
+        (
+            vec!["--input-zip", "seed.zip", "--transform-zip", "seed.zip", "--scripts-zip", "seed.zip"],
+            "--scripts-zip cannot be used with --transform-zip",
+        ),
         (vec!["--input-zip", "missing.zip"], "input-zip not found: missing.zip"),
     ] {
         let mut all = vec!["transform"];

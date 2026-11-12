@@ -37,7 +37,11 @@ pub enum Group {
     /// Not shaped like a data group schema (`label` and `relationships`, nothing else).
     Invalid,
     Broken(String),
-    Ready { schema: Value, allowed: HashSet<String>, validator: Box<Validator> },
+    Ready {
+        schema: Value,
+        allowed: HashSet<String>,
+        validator: Box<Validator>,
+    },
 }
 
 pub struct Lexicon {
@@ -45,9 +49,8 @@ pub struct Lexicon {
     groups: HashMap<String, Arc<Group>>,
 }
 
-static URI: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?-u)^https?://([\w-]+@)?[\w-]+(\.[\w-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$").unwrap()
-});
+static URI: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)^https?://([\w-]+@)?[\w-]+(\.[\w-]+)+([\w\-.,@?^=%&:/~+#]*[\w\-@?^=%&/~+#])?$").unwrap());
 static IPFS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^ipfs://[A-Za-z0-9]{46,64}$").unwrap());
 static RATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)^\d+\.\d{3}$").unwrap());
 
@@ -57,9 +60,7 @@ fn ipfs_uri(value: &str) -> bool {
     }
     IPFS.is_match(value.as_bytes())
         && Cid::try_from(&value[7..]).is_ok_and(|cid| {
-            cid.version() == cid::Version::V1
-                && [0x55, 0x70, 0x0129].contains(&cid.codec())
-                && cid.hash().code() == 0x12
+            cid.version() == cid::Version::V1 && [0x55, 0x70, 0x0129].contains(&cid.codec()) && cid.hash().code() == 0x12
         })
 }
 
@@ -74,9 +75,7 @@ fn currency(value: &Value) -> bool {
     // ponytail: counts decimals in Rust's shortest form; JavaScript switches to
     // exponent notation below 1e-6, where the original accepts some values
     // this rejects.
-    number.is_finite()
-        && number >= 0.0
-        && format!("{number}").split_once('.').is_none_or(|(_, decimals)| decimals.len() <= 2)
+    number.is_finite() && number >= 0.0 && format!("{number}").split_once('.').is_none_or(|(_, decimals)| decimals.len() <= 2)
 }
 
 impl<'i> Keyword<'i> for Currency {
@@ -266,8 +265,7 @@ fn pointers<'a>(
                 if pointer.is_empty() {
                     return Err("Failed to resolve pointer - empty string is not a valid CID or file path".to_string());
                 }
-                let resolved =
-                    source(pointer).and_then(|value| pointers(&value, schema, allowed, path, source));
+                let resolved = source(pointer).and_then(|value| pointers(&value, schema, allowed, path, source));
                 if Cid::try_from(pointer.as_str()).is_err() {
                     return resolved;
                 }
@@ -302,22 +300,15 @@ impl Lexicon {
     }
 
     /// Replace every schema link below `schema`, noting the paths that hold one.
-    fn resolve(
-        &mut self,
-        schema: &Value,
-        allowed: &mut Vec<String>,
-        path: &str,
-        schemas: &mut Schemas,
-    ) -> Result<Value, String> {
+    fn resolve(&mut self, schema: &Value, allowed: &mut Vec<String>, path: &str, schemas: &mut Schemas) -> Result<Value, String> {
         match schema {
             Value::Object(fields) => {
                 if let Some(cid) = cid_link(fields) {
                     allowed.push(path.to_string());
                     let linked = self.link(cid, schemas).map_err(|error| format!("Failed to resolve schema CID: {error}"))?;
                     allowed.extend(linked.allowed.iter().map(|inner| join(path, inner)));
-                    let nullable = fields["type"]
-                        .as_array()
-                        .is_some_and(|kinds| kinds.len() > 1 && kinds.iter().any(|kind| kind == "null"));
+                    let nullable =
+                        fields["type"].as_array().is_some_and(|kinds| kinds.len() > 1 && kinds.iter().any(|kind| kind == "null"));
                     return Ok(if nullable {
                         json!({ "anyOf": [{ "type": "null" }, linked.schema] })
                     } else {
@@ -397,11 +388,9 @@ impl Lexicon {
                             .build(&schema);
                         match built {
                             Err(error) => Group::Broken(error.to_string()),
-                            Ok(validator) => Group::Ready {
-                                schema,
-                                allowed: allowed.into_iter().collect(),
-                                validator: Box::new(validator),
-                            },
+                            Ok(validator) => {
+                                Group::Ready { schema, allowed: allowed.into_iter().collect(), validator: Box::new(validator) }
+                            }
                         }
                     }
                 }
@@ -416,11 +405,8 @@ impl Group {
     /// Validate one data group root. `None` when the schema cannot be used at
     /// all (`Missing` or `Invalid`); otherwise the schema errors found.
     pub fn validate<'a>(&self, data: &Value, source: Source<'_, 'a>) -> Option<Vec<Finding>> {
-        let thrown = |error: &str| Finding {
-            path: "root".to_string(),
-            message: format!("Validation error: {error}"),
-            value: text(data),
-        };
+        let thrown =
+            |error: &str| Finding { path: "root".to_string(), message: format!("Validation error: {error}"), value: text(data) };
         match self {
             Group::Missing(_) | Group::Invalid => None,
             Group::Broken(error) => Some(vec![thrown(error)]),
@@ -441,11 +427,8 @@ impl Group {
 /// fold address rows of a failed address into one, then dedupe by message and
 /// last path segment.
 pub fn filter(entries: Vec<Row>) -> Vec<Row> {
-    let mismatch =
-        |message: &str| matches!(message, "must match a schema in anyOf" | "must match exactly one schema in oneOf");
-    let address = |row: &Row| {
-        row.path.contains("property_has_address") && row.path.contains("/to")
-    };
+    let mismatch = |message: &str| matches!(message, "must match a schema in anyOf" | "must match exactly one schema in oneOf");
+    let address = |row: &Row| row.path.contains("property_has_address") && row.path.contains("/to");
     let mut failed = HashSet::new();
     let mut rows = Vec::new();
     for row in entries {
@@ -469,7 +452,8 @@ pub fn filter(entries: Vec<Row>) -> Vec<Row> {
         if folded.iter().all(|other| other.file != row.file) {
             folded.push(Row {
                 path: "/relationships/property_has_address".to_string(),
-                message: "Address should provide either unnormalized_address or normalized version distributed to other fields".to_string(),
+                message: "Address should provide either unnormalized_address or normalized version distributed to other fields"
+                    .to_string(),
                 ..row
             });
         }
@@ -478,7 +462,7 @@ pub fn filter(entries: Vec<Row>) -> Vec<Row> {
     kept.into_iter()
         .chain(folded)
         .filter(|row| {
-            let last = row.path.split('/').filter(|part| !part.is_empty()).next_back().unwrap_or("root");
+            let last = row.path.split('/').rfind(|part| !part.is_empty()).unwrap_or("root");
             seen.insert(format!("{}::{last}", row.message))
         })
         .collect()

@@ -144,11 +144,13 @@ fn seed(data: &Path, schemas: &mut Schemas) -> Result<(), Fail> {
 
 /// Seed mode: the first row of `seed.csv` as the four seed records.
 fn seeded(input: &Path, data: &Path) -> Result<(), Fail> {
-    let text = std::fs::read(input.join("seed.csv")).map_err(|_| "seed.csv is required in the input ZIP when no scripts or handler package is given")?;
+    let text = std::fs::read(input.join("seed.csv"))
+        .map_err(|_| "seed.csv is required in the input ZIP when no scripts or handler package is given")?;
     let mut reader = csv::Reader::from_reader(text.as_slice());
     let headers = reader.headers()?.clone();
     let row = reader.records().next().ok_or("seed.csv has no data row")??;
-    let field = |name: &str| headers.iter().position(|header| header == name).and_then(|at| row.get(at)).unwrap_or("").to_string();
+    let field =
+        |name: &str| headers.iter().position(|header| header == name).and_then(|at| row.get(at)).unwrap_or("").to_string();
     let filled = |name: &str| Some(field(name)).filter(|value| !value.is_empty());
     let county = filled("county").ok_or("County field is required in seed.csv and cannot be empty")?;
     // `{'a':['b']}` is accepted as well as JSON
@@ -163,11 +165,16 @@ fn seeded(input: &Path, data: &Path) -> Result<(), Fail> {
     request.insert("method".to_string(), json!(field("method")));
     request.insert("multiValueQueryString".to_string(), query);
     if let Some(headers) = filled("headers") {
-        request.insert("headers".to_string(), serde_json::from_str(&headers).map_err(|error| format!("headers in seed.csv is not JSON: {error}"))?);
+        request.insert(
+            "headers".to_string(),
+            serde_json::from_str(&headers).map_err(|error| format!("headers in seed.csv is not JSON: {error}"))?,
+        );
     }
     match (filled("json"), filled("body")) {
         (Some(_), Some(_)) => {
-            return Err("Both json and body fields are present in seed.csv. Only one of these fields can be processed at a time.".into())
+            return Err(
+                "Both json and body fields are present in seed.csv. Only one of these fields can be processed at a time.".into()
+            )
         }
         (Some(text), None) => {
             let parsed: Value = serde_json::from_str(&text).map_err(|error| format!("json in seed.csv is not JSON: {error}"))?;
@@ -183,16 +190,18 @@ fn seeded(input: &Path, data: &Path) -> Result<(), Fail> {
     }
     let request = Value::Object(request);
     let identifier = field("source_identifier");
-    let street: Vec<String> = ["street_pre_directional", "street_number", "street_name", "street_suffix", "street_post_directional", "unit_identifier"]
-        .iter()
-        .filter_map(|name| filled(name))
-        .collect();
+    let street: Vec<String> =
+        ["street_pre_directional", "street_number", "street_name", "street_suffix", "street_post_directional", "unit_identifier"]
+            .iter()
+            .filter_map(|name| filled(name))
+            .collect();
     let zip = filled("postal_code").map(|code| match filled("plus_four_postal_code") {
         Some(plus) => format!("{code}-{plus}"),
         None => code,
     });
     let region: Vec<String> = [filled("state_code"), zip].into_iter().flatten().collect();
-    let locality: Vec<String> = [filled("city_name"), Some(region.join(" ")).filter(|region| !region.is_empty())].into_iter().flatten().collect();
+    let locality: Vec<String> =
+        [filled("city_name"), Some(region.join(" ")).filter(|region| !region.is_empty())].into_iter().flatten().collect();
     let composed: Vec<String> = [street.join(" "), locality.join(", ")].into_iter().filter(|part| !part.is_empty()).collect();
     let address = filled("address").unwrap_or_else(|| composed.join(", "));
     let place = match (filled("longitude"), filled("latitude")) {
@@ -207,14 +216,20 @@ fn seeded(input: &Path, data: &Path) -> Result<(), Fail> {
             "unnormalized_address": address, "longitude": coordinate(0), "latitude": coordinate(1),
         }),
     )?;
-    save(&data.join("parcel.json"), &json!({ "source_http_request": request, "request_identifier": identifier, "parcel_identifier": field("parcel_id") }))?;
+    save(
+        &data.join("parcel.json"),
+        &json!({ "source_http_request": request, "request_identifier": identifier, "parcel_identifier": field("parcel_id") }),
+    )?;
     let mut unnormalized = json!({ "source_http_request": request, "request_identifier": identifier, "full_address": address, "county_jurisdiction": county });
     if place.is_some() {
         unnormalized["longitude"] = coordinate(0);
         unnormalized["latitude"] = coordinate(1);
     }
     save(&data.join("unnormalized_address.json"), &unnormalized)?;
-    save(&data.join("property_seed.json"), &json!({ "source_http_request": request, "request_identifier": identifier, "parcel_id": field("parcel_id") }))?;
+    save(
+        &data.join("property_seed.json"),
+        &json!({ "source_http_request": request, "request_identifier": identifier, "parcel_id": field("parcel_id") }),
+    )?;
     Ok(())
 }
 
@@ -240,7 +255,9 @@ fn tail(text: &str) -> String {
 fn scripts(work: &Path, wanted: &[&str]) -> Result<(), Fail> {
     let found: Vec<(&str, PathBuf)> = wanted
         .iter()
-        .map(|name| find(&work.join("scripts"), name).map(|file| (*name, file)).ok_or(format!("Required script not found: {name}")))
+        .map(|name| {
+            find(&work.join("scripts"), name).map(|file| (*name, file)).ok_or(format!("Required script not found: {name}"))
+        })
         .collect::<Result<_, _>>()?;
     for (name, file) in found {
         let began = Instant::now();
@@ -268,16 +285,37 @@ fn scripts(work: &Path, wanted: &[&str]) -> Result<(), Fail> {
 /// stands for. The rules, their order and the key order are those of 1.x.
 fn county(files: &[String]) -> Value {
     const SINGLE: [&str; 6] = [
-        "property_has_address", "property_has_lot", "property_has_flood_storm_information", "address_has_geometry",
-        "property_has_structure", "property_has_utility",
+        "property_has_address",
+        "property_has_lot",
+        "property_has_flood_storm_information",
+        "address_has_geometry",
+        "property_has_structure",
+        "property_has_utility",
     ];
     const ORDER: [&str; 24] = [
-        "person_has_mailing_address", "company_has_mailing_address", "property_has_address", "property_has_lot",
-        "property_has_tax", "property_has_sales_history", "property_has_layout", "property_has_flood_storm_information",
-        "parcel_has_geometry", "address_has_geometry", "layout_has_geometry", "property_has_file",
-        "property_has_structure", "property_has_utility", "property_has_property_improvement",
-        "sales_history_has_person", "sales_history_has_company", "deed_has_file", "sales_history_has_deed",
-        "layout_has_layout", "layout_has_utility", "layout_has_structure", "tax_has_tax_jurisdiction",
+        "person_has_mailing_address",
+        "company_has_mailing_address",
+        "property_has_address",
+        "property_has_lot",
+        "property_has_tax",
+        "property_has_sales_history",
+        "property_has_layout",
+        "property_has_flood_storm_information",
+        "parcel_has_geometry",
+        "address_has_geometry",
+        "layout_has_geometry",
+        "property_has_file",
+        "property_has_structure",
+        "property_has_utility",
+        "property_has_property_improvement",
+        "sales_history_has_person",
+        "sales_history_has_company",
+        "deed_has_file",
+        "sales_history_has_deed",
+        "layout_has_layout",
+        "layout_has_utility",
+        "layout_has_structure",
+        "tax_has_tax_jurisdiction",
         "tax_jurisdiction_has_tax_exemption",
     ];
     let mut filed: BTreeMap<&str, Vec<Value>> = BTreeMap::new();
@@ -444,7 +482,9 @@ fn handled(work: &Path, label: &str, schemas: &mut Schemas) -> Result<(), Fail> 
         match name {
             "limit" => {
                 let asked = arguments[0].as_f64();
-                if asked.is_some_and(|asked| asked.fract() != 0.0 || !(1000.0..=600_000.0).contains(&asked)) || !(arguments[0].is_null() || asked.is_some()) {
+                if asked.is_some_and(|asked| asked.fract() != 0.0 || !(1000.0..=600_000.0).contains(&asked))
+                    || !(arguments[0].is_null() || asked.is_some())
+                {
                     return Err("Transform v2 timeoutMs must be between 1000ms and 600000ms".to_string());
                 }
                 timeout = asked.map_or(timeout, |asked| asked as u64);
@@ -463,7 +503,7 @@ fn handled(work: &Path, label: &str, schemas: &mut Schemas) -> Result<(), Fail> 
                 let found = listed.clone().find(|capture| capture["name"] == wanted.as_str());
                 let path = found.and_then(|capture| capture["path"].as_str()).ok_or(format!("Unknown capture: {wanted}"))?;
                 let inside = !path.starts_with('/') && !path.split(['/', '\\']).any(|part| part == "..");
-                let bytes = Some(path).filter(|_| inside).and_then(|path| std::fs::read(input.join(path)).ok());
+                let bytes = inside.then_some(path).and_then(|path| std::fs::read(input.join(path)).ok());
                 let bytes = bytes.ok_or(format!("Invalid capture path: {path}"))?;
                 Ok(json!(String::from_utf8_lossy(&bytes)))
             }
@@ -502,7 +542,8 @@ fn handled(work: &Path, label: &str, schemas: &mut Schemas) -> Result<(), Fail> 
             return Err(format!("Transform v2 timed out after {timeout}ms").into());
         }
         // the error's own line first, then whatever the handler printed
-        let reason = failed.stderr.trim_end().rsplit("\n\n").next().unwrap_or_default().lines().next().unwrap_or("the handler failed");
+        let reason =
+            failed.stderr.trim_end().rsplit("\n\n").next().unwrap_or_default().lines().next().unwrap_or("the handler failed");
         return Err(format!("{}\n--- stderr (tail) ---\n{}", reason.trim_start_matches("Error: "), tail(&failed.stderr)).into());
     }
     if relations.is_empty() {
@@ -516,7 +557,8 @@ fn handled(work: &Path, label: &str, schemas: &mut Schemas) -> Result<(), Fail> 
         if !declared.is_object() {
             return Err(format!("Relationship type \"{kind}\" is not valid for {label}").into());
         }
-        let many = declared["type"] == "array" || declared["type"].as_array().is_some_and(|kinds| kinds.iter().any(|kind| kind == "array"));
+        let many = declared["type"] == "array"
+            || declared["type"].as_array().is_some_and(|kinds| kinds.iter().any(|kind| kind == "array"));
         if !many && files.len() > 1 {
             return Err(format!("Relationship type \"{kind}\" only allows one relationship").into());
         }

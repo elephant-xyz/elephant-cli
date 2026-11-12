@@ -118,8 +118,17 @@ fn imports_a_car_and_reads_its_root_back() {
     county(&scratch);
     let node = node(Fault::None);
     let ran = scratch.run(&[
-        "--json", "upload", "in/county.car", "--api", &format!("{}/", node.url), "--gateway", &node.url,
-        "--token", "secret", "--output-json", "upload.json",
+        "--json",
+        "upload",
+        "in/county.car",
+        "--api",
+        &format!("{}/", node.url),
+        "--gateway",
+        &node.url,
+        "--token",
+        "secret",
+        "--output-json",
+        "upload.json",
     ]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let summary = ran.json();
@@ -170,7 +179,8 @@ fn fails_when_the_node_or_the_gateway_disagrees() {
         (Fault::NotServed, format!("/ipfs/{COUNTY} to resolve")),
     ] {
         let node = node(fault);
-        let ran = scratch.run(&["--json", "upload", "in/county.car", "--api", &node.url, "--gateway", &node.url, "--timeout", "0.2"]);
+        let ran =
+            scratch.run(&["--json", "upload", "in/county.car", "--api", &node.url, "--gateway", &node.url, "--timeout", "0.2"]);
         assert_eq!(ran.code, 2);
         assert!(ran.stderr.contains(&reason), "{}", ran.stderr);
         assert!(ran.json()["error"].as_str().unwrap().starts_with("Upload failed: "));

@@ -96,7 +96,8 @@ pub fn serve(handler: impl Fn(&Request) -> Reply + Send + 'static) -> Server {
             };
             let reply = handler(&request);
             record.lock().unwrap().push(request);
-            let mut head = format!("HTTP/1.1 {} X\r\ncontent-length: {}\r\nconnection: close\r\n", reply.status, reply.body.len());
+            let mut head =
+                format!("HTTP/1.1 {} X\r\ncontent-length: {}\r\nconnection: close\r\n", reply.status, reply.body.len());
             for (name, value) in &reply.headers {
                 head += &format!("{name}: {value}\r\n");
             }

@@ -90,7 +90,8 @@ impl Browser {
                 (Some(child), format!("ws://127.0.0.1:{port}{path}"))
             }
         };
-        let connected = tungstenite::connect(&endpoint).map_err(|error| format!("cannot connect to the browser at {endpoint}: {error}"));
+        let connected =
+            tungstenite::connect(&endpoint).map_err(|error| format!("cannot connect to the browser at {endpoint}: {error}"));
         let (socket, _) = match connected {
             Ok(connected) => connected,
             Err(error) => {
@@ -181,7 +182,7 @@ impl Browser {
         let answer = self.call("Runtime.evaluate", params)?;
         if let Some(thrown) = answer.get("exceptionDetails") {
             let described = thrown["exception"]["description"].as_str().or(thrown["text"].as_str()).unwrap_or("the page threw");
-            return Err(format!("{described}").into());
+            return Err(described.into());
         }
         Ok(answer["result"]["value"].clone())
     }
@@ -216,9 +217,17 @@ impl Browser {
             return Ok(());
         }
         loop {
-            let before = self.events.iter().filter(|event| event["method"].as_str().is_some_and(|method| method.starts_with("Network."))).count();
+            let before = self
+                .events
+                .iter()
+                .filter(|event| event["method"].as_str().is_some_and(|method| method.starts_with("Network.")))
+                .count();
             self.pump(Duration::from_millis(500))?;
-            let after = self.events.iter().filter(|event| event["method"].as_str().is_some_and(|method| method.starts_with("Network."))).count();
+            let after = self
+                .events
+                .iter()
+                .filter(|event| event["method"].as_str().is_some_and(|method| method.starts_with("Network.")))
+                .count();
             if after == before || began.elapsed() > timeout {
                 return Ok(());
             }
@@ -234,7 +243,11 @@ impl Browser {
             return Err(format!("{problem} at {target}").into());
         }
         self.settle(until, timeout)?;
-        let document = self.events.iter().rev().find(|event| event["method"] == "Network.responseReceived" && event["params"]["type"] == "Document");
+        let document = self
+            .events
+            .iter()
+            .rev()
+            .find(|event| event["method"] == "Network.responseReceived" && event["params"]["type"] == "Document");
         Ok(document.map(|event| {
             let response = &event["params"]["response"];
             (response["status"].as_u64().unwrap_or(0) as u16, response["statusText"].as_str().unwrap_or_default().to_string())
@@ -278,7 +291,10 @@ impl Browser {
             down["text"] = json!(text);
         }
         self.call("Input.dispatchKeyEvent", down)?;
-        self.call("Input.dispatchKeyEvent", json!({ "type": "keyUp", "key": named, "code": code, "windowsVirtualKeyCode": number }))?;
+        self.call(
+            "Input.dispatchKeyEvent",
+            json!({ "type": "keyUp", "key": named, "code": code, "windowsVirtualKeyCode": number }),
+        )?;
         Ok(())
     }
 

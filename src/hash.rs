@@ -218,8 +218,7 @@ impl Archive {
             self.blocks += 1;
         }
         // One entry per schema; of two roots with the same schema the later file wins.
-        let groups: BTreeMap<&str, &str> =
-            hashed.groups.iter().map(|(group, cid, _)| (group.as_str(), cid.as_str())).collect();
+        let groups: BTreeMap<&str, &str> = hashed.groups.iter().map(|(group, cid, _)| (group.as_str(), cid.as_str())).collect();
         let listed: Vec<String> = groups.iter().map(|(group, cid)| format!("\"{group}\":{}", linked(cid))).collect();
         self.pending.push(format!("{{\"data_groups\":{{{}}},\"property_cid\":{}}}", listed.join(","), linked(&hashed.cid)));
         self.properties += 1;
@@ -292,7 +291,9 @@ pub fn run(
     }
     let inputs: Vec<(PathBuf, PathBuf)> = match single {
         true => vec![(input.to_path_buf(), output_zip.to_path_buf())],
-        false => children.iter().zip(&names).map(|(child, name)| (child.clone(), output_zip.join(format!("{name}.zip")))).collect(),
+        false => {
+            children.iter().zip(&names).map(|(child, name)| (child.clone(), output_zip.join(format!("{name}.zip")))).collect()
+        }
     };
     let work = |(from, to): &(PathBuf, PathBuf)| -> Result<Hashed, String> {
         let opened = Property::open(from)?;
@@ -303,10 +304,12 @@ pub fn run(
     if let Some(parent) = output_csv.parent().filter(|parent| !parent.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)?;
     }
-    let mut csv = BufWriter::new(File::create(output_csv).map_err(|error| format!("cannot write {}: {error}", output_csv.display()))?);
+    let mut csv =
+        BufWriter::new(File::create(output_csv).map_err(|error| format!("cannot write {}: {error}", output_csv.display()))?);
     writeln!(csv, "propertyCid,dataGroupCid,dataCid,filePath,uploadedAt")?;
     let mut archive = output_car.map(Archive::create).transpose()?;
-    let mut outcome = Outcome { properties: names.len(), failed: Vec::new(), errors: Vec::new(), groups: 0, cid: None, car: None };
+    let mut outcome =
+        Outcome { properties: names.len(), failed: Vec::new(), errors: Vec::new(), groups: 0, cid: None, car: None };
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
     for slice in inputs.chunks(threads * 64) {
@@ -348,7 +351,7 @@ pub fn run(
             if !hashed.errors.is_empty() {
                 outcome.failed.push(name.clone());
             }
-            outcome.cid = Some(hashed.cid).filter(|_| single);
+            outcome.cid = single.then_some(hashed.cid);
         }
     }
     csv.flush()?;

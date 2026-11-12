@@ -166,10 +166,9 @@ fn send(method: &str, target: &str, headers: &[(String, String)], body: Option<&
     let request = request.body(body.unwrap_or_default().to_string())?;
     let failed = |error: ureq::Error| -> Fail {
         match error {
-            ureq::Error::Timeout(_) | ureq::Error::ConnectionFailed | ureq::Error::HostNotFound => format!(
-                "{error} for {target}. If the site restricts by location, try from an address in its region."
-            )
-            .into(),
+            ureq::Error::Timeout(_) | ureq::Error::ConnectionFailed | ureq::Error::HostNotFound => {
+                format!("{error} for {target}. If the site restricts by location, try from an address in its region.").into()
+            }
             other => format!("{other} for {target}").into(),
         }
     };
@@ -230,7 +229,8 @@ fn fill(value: &mut Value, identifier: &str) -> Result<(), Fail> {
 /// Read a multi-request flow file and check it the way 1.x did.
 fn flow_file(file: &Path) -> Result<Vec<(String, Value)>, Fail> {
     let text = std::fs::read(file).map_err(|error| format!("Failed to read multi-request flow file: {error}"))?;
-    let flow: Value = serde_json::from_slice(&text).map_err(|error| format!("Failed to parse multi-request flow JSON: {error}"))?;
+    let flow: Value =
+        serde_json::from_slice(&text).map_err(|error| format!("Failed to parse multi-request flow JSON: {error}"))?;
     if !flow.is_object() {
         return Err("Multi-request flow must be a JSON object".into());
     }
@@ -356,7 +356,11 @@ fn orange(identifier: &str) -> Result<Fetched, Fail> {
     let parsed = |answer: &Answer| serde_json::from_str::<Value>(&answer.text).unwrap_or(Value::Null);
     let digits: String = identifier.chars().filter(char::is_ascii_digit).collect();
     if digits.len() > 15 {
-        return Err(format!("Orange County parcel id \"{identifier}\" cleaned to {} digits (> 15); cannot resolve", digits.len()).into());
+        return Err(format!(
+            "Orange County parcel id \"{identifier}\" cleaned to {} digits (> 15); cannot resolve",
+            digits.len()
+        )
+        .into());
     }
     let padded = format!("{digits:0>15}");
     // The search sometimes answers an empty list for a parcel it knows.
@@ -563,7 +567,10 @@ pub fn run(options: &Options) -> Result<Done, Fail> {
         for name in SEEDS.into_iter().filter(|name| exists(name)) {
             let mut record = load(&work.0.join(name))?;
             let had = record.get("source_http_request").cloned();
-            if let Some(fields) = record.as_object_mut().filter(|_| had.is_some() || name == parcel || name == "property_seed.json" || name == "parcel.json") {
+            if let Some(fields) = record
+                .as_object_mut()
+                .filter(|_| had.is_some() || name == parcel || name == "property_seed.json" || name == "parcel.json")
+            {
                 fields.insert("entry_http_request".to_string(), had.unwrap_or(Value::Null));
                 fields.insert("source_http_request".to_string(), request.clone());
             }

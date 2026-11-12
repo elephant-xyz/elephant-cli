@@ -61,10 +61,8 @@ pub fn scan(property: &Property, shared: &Mutex<Shared>) -> Result<Scan, String>
     if names.is_empty() {
         return Err("No data group JSON files found in the property directory".to_string());
     }
-    let parsed: BTreeMap<String, Value> = names
-        .iter()
-        .filter_map(|name| Some((name.clone(), serde_json::from_slice(&property.read(name)?).ok()?)))
-        .collect();
+    let parsed: BTreeMap<String, Value> =
+        names.iter().filter_map(|name| Some((name.clone(), serde_json::from_slice(&property.read(name)?).ok()?))).collect();
     let mut roots = Vec::new();
     for (name, value) in &parsed {
         let Some(label) = root(value) else {
@@ -83,8 +81,7 @@ pub fn scan(property: &Property, shared: &Mutex<Shared>) -> Result<Scan, String>
 /// Validate one property. `Err` means it could not be checked at all.
 pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, String> {
     let Scan { names, parsed, roots } = scan(property, shared)?;
-    let roots: Vec<(&str, &Value, &String)> =
-        roots.iter().map(|(name, cid)| (name.as_str(), &parsed[name], cid)).collect();
+    let roots: Vec<(&str, &Value, &String)> = roots.iter().map(|(name, cid)| (name.as_str(), &parsed[name], cid)).collect();
 
     // Files reached from a root: its relationship files and the two entities each one links.
     let mut used: HashSet<&str> = roots.iter().map(|root| root.0).collect();
@@ -101,9 +98,8 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
     }
     let mut rows = Vec::new();
     for name in &names {
-        let relation = parsed
-            .get(name.as_str())
-            .is_some_and(|value| target(&value["from"]).is_some() && target(&value["to"]).is_some());
+        let relation =
+            parsed.get(name.as_str()).is_some_and(|value| target(&value["from"]).is_some() && target(&value["to"]).is_some());
         if used.contains(name.as_str()) || SEEDS.contains(&name.as_str()) || relation {
             continue;
         }
@@ -122,14 +118,11 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             Ok(_) => shared.lock().expect("shared state").schemas.fetch(pointer)?,
             Err(_) => property
                 .read(pointer)
-                .ok_or_else(|| {
-                    format!("Failed to resolve pointer - not a valid CID or accessible file path: {pointer}")
-                })?
+                .ok_or_else(|| format!("Failed to resolve pointer - not a valid CID or accessible file path: {pointer}"))?
                 .into_owned(),
         };
         Ok(Cow::Owned(
-            serde_json::from_slice(&bytes)
-                .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned())),
+            serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned())),
         ))
     };
     for (name, value, cid) in &roots {

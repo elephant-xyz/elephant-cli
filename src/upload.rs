@@ -45,9 +45,11 @@ impl Target {
     pub fn new(api: Option<&str>, token: Option<&str>, gateway: Option<&str>, timeout: &str) -> Result<Target, Fail> {
         let set = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
         let given = |option: Option<&str>| option.filter(|value| !value.is_empty()).map(str::to_string);
-        let seconds: f64 = timeout.parse().ok().filter(|seconds: &f64| seconds.is_finite() && *seconds > 0.0).ok_or_else(
-            || format!("--timeout must be a number of seconds greater than zero, got {timeout}"),
-        )?;
+        let seconds: f64 = timeout
+            .parse()
+            .ok()
+            .filter(|seconds: &f64| seconds.is_finite() && *seconds > 0.0)
+            .ok_or_else(|| format!("--timeout must be a number of seconds greater than zero, got {timeout}"))?;
         let api = given(api).or_else(|| set("IPFS_API")).unwrap_or_else(|| "http://127.0.0.1:5001".to_string());
         let api = api.trim_end_matches('/').to_string();
         let Some((_, rest)) = api.split_once("://").filter(|(scheme, rest)| !scheme.is_empty() && !rest.is_empty()) else {
@@ -100,8 +102,11 @@ impl Target {
     }
 }
 
-/// GET from a gateway. `None` for anything but a 2xx answer; otherwise the `Content-Range` header and the body.
-fn get(url: &str, range: bool, within: Duration) -> Result<Option<(Option<String>, Vec<u8>)>, Fail> {
+/// What a gateway answered: its `Content-Range` header and the body.
+type Served = (Option<String>, Vec<u8>);
+
+/// GET from a gateway. `None` for anything but a 2xx answer.
+fn get(url: &str, range: bool, within: Duration) -> Result<Option<Served>, Fail> {
     let agent: ureq::Agent =
         ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(within)).build().into();
     let request = agent.get(url);
@@ -219,7 +224,9 @@ pub fn tables(dir: &Path, target: &Target) -> Result<Tables, Fail> {
     };
     let link = |value: &Value| value["/"].as_str().and_then(|text| Cid::try_from(text).ok());
     let held = document.as_ref().filter(|document| document["label"] == "CountyTables");
-    let (Some(county), Some(listed)) = (held.and_then(|held| link(&held["county_root"])), held.and_then(|held| held["tables"].as_object())) else {
+    let (Some(county), Some(listed)) =
+        (held.and_then(|held| link(&held["county_root"])), held.and_then(|held| held["tables"].as_object()))
+    else {
         return Err(format!("{} does not hold a CountyTables root", index.display()).into());
     };
     // Every part is checked on disk before anything is sent.
@@ -235,7 +242,9 @@ pub fn tables(dir: &Path, target: &Target) -> Result<Tables, Fail> {
             };
             let recorded = part["bytes"].as_u64().unwrap_or(0);
             if found.len() != recorded {
-                return Err(format!("{} is {} bytes but {} records {recorded}", file.display(), found.len(), index.display()).into());
+                return Err(
+                    format!("{} is {} bytes but {} records {recorded}", file.display(), found.len(), index.display()).into()
+                );
             }
             parts.push((table.clone(), at, file, cid, recorded));
         }
@@ -247,12 +256,9 @@ pub fn tables(dir: &Path, target: &Target) -> Result<Tables, Fail> {
         let answers = lines(&text)?;
         let hash = answers.iter().find_map(|answer| answer["Hash"].as_str());
         if !hash.is_some_and(|hash| same(hash, cid)) {
-            return Err(format!(
-                "add returned {} for {} but the index records {cid}",
-                hash.unwrap_or("no CID"),
-                file.display()
-            )
-            .into());
+            return Err(
+                format!("add returned {} for {} but the index records {cid}", hash.unwrap_or("no CID"), file.display()).into()
+            );
         }
     }
     let imported = car(&index, target)?;

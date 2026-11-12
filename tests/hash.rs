@@ -20,7 +20,14 @@ fn hashes_one_property_to_the_same_bytes_as_elephant_cli_1() {
     scratch.copy("hash/single/property", "property");
     let expected = fixtures().join("hash/single/expected");
     let ran = scratch.run(&[
-        "hash", "property", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv", "--output-car", "out/county.car",
+        "hash",
+        "property",
+        "--output-zip",
+        "out/hashed.zip",
+        "--output-csv",
+        "out/hash.csv",
+        "--output-car",
+        "out/county.car",
     ]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     assert_eq!(std::fs::read(scratch.path("out/county.car")).unwrap(), std::fs::read(expected.join("county.car")).unwrap());
@@ -29,7 +36,9 @@ fn hashes_one_property_to_the_same_bytes_as_elephant_cli_1() {
     assert_eq!(entries(&scratch.path("out/hashed.zip")), entries(&expected.join("hashed.zip")));
     // the line the publication workflow records
     assert!(
-        ran.stdout.contains("CAR written: out/county.car (9 blocks, root baguqeeravrfftlcbyywadhwayvslzxzsbko7zekvxll2izwcxqggykouhtlq)"),
+        ran.stdout.contains(
+            "CAR written: out/county.car (9 blocks, root baguqeeravrfftlcbyywadhwayvslzxzsbko7zekvxll2izwcxqggykouhtlq)"
+        ),
         "{}",
         ran.stdout
     );
@@ -42,7 +51,14 @@ fn hashes_a_directory_of_properties_to_the_same_bytes_as_elephant_cli_1() {
     scratch.copy("hash/batch/county", "county");
     let expected = fixtures().join("hash/batch/expected");
     let ran = scratch.run(&[
-        "hash", "county", "--output-zip", "out/hashed", "--output-csv", "out/hash.csv", "--output-car", "out/county.car",
+        "hash",
+        "county",
+        "--output-zip",
+        "out/hashed",
+        "--output-csv",
+        "out/hash.csv",
+        "--output-car",
+        "out/county.car",
     ]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     assert_eq!(std::fs::read(scratch.path("out/county.car")).unwrap(), std::fs::read(expected.join("county.car")).unwrap());
@@ -66,7 +82,17 @@ fn writes_a_car_that_validate_accepts() {
     scratch.lexicon();
     scratch.copy("validate/clean", "county/first");
     scratch.copy("validate/clean", "county/second");
-    let ran = scratch.run(&["--json", "hash", "county", "--output-zip", "hashed", "--output-csv", "hash.csv", "--output-car", "county.car"]);
+    let ran = scratch.run(&[
+        "--json",
+        "hash",
+        "county",
+        "--output-zip",
+        "hashed",
+        "--output-csv",
+        "hash.csv",
+        "--output-car",
+        "county.car",
+    ]);
     let summary = ran.json();
     assert_eq!((ran.code, &summary["properties"], &summary["data_groups"]), (0, &json!(2), &json!(4)), "{}", ran.stderr);
     let checked = scratch.run(&["--json", "validate", "county.car", "--output-csv", "errors.csv"]);
@@ -90,9 +116,16 @@ fn fails_a_property_whose_link_cannot_be_followed() {
     assert_eq!((ran.code, &summary["ok"], &summary["data_groups"]), (1, &json!(false), &json!(0)));
     let errors: Vec<&str> = summary["errors"].as_array().unwrap().iter().map(|error| error.as_str().unwrap()).collect();
     assert_eq!(errors.len(), 2);
-    assert!(errors[0].starts_with("property: seed.json: Processing error: ENOENT: no such file or directory, open '"), "{}", errors[0]);
+    assert!(
+        errors[0].starts_with("property: seed.json: Processing error: ENOENT: no such file or directory, open '"),
+        "{}",
+        errors[0]
+    );
     assert!(errors[0].ends_with("/property/parcel.json'"), "{}", errors[0]);
-    assert_eq!(errors[1], "property: county.json: Processing error: cannot link ./page.html: only JSON and image files can be linked");
+    assert_eq!(
+        errors[1],
+        "property: county.json: Processing error: cannot link ./page.html: only JSON and image files can be linked"
+    );
     assert!(ran.stderr.contains("error: property: county.json: Processing error: cannot link"), "{}", ran.stderr);
 }
 
@@ -103,7 +136,17 @@ fn keeps_going_past_a_property_without_a_seed_and_leaves_it_out_of_the_car() {
     scratch.copy("hash/single/property", "county/good");
     scratch.copy("hash/single/property", "county/bad");
     std::fs::remove_file(scratch.path("county/bad/seed.json")).unwrap();
-    let ran = scratch.run(&["--json", "hash", "county", "--output-zip", "hashed", "--output-csv", "hash.csv", "--output-car", "county.car"]);
+    let ran = scratch.run(&[
+        "--json",
+        "hash",
+        "county",
+        "--output-zip",
+        "hashed",
+        "--output-csv",
+        "hash.csv",
+        "--output-car",
+        "county.car",
+    ]);
     let summary = ran.json();
     assert_eq!((ran.code, &summary["failed"], &summary["succeeded"]), (1, &json!(["bad"]), &json!(1)));
     assert!(ran.stderr.contains("1 of 2 properties failed: bad"), "{}", ran.stderr);

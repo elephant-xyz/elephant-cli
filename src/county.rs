@@ -109,7 +109,7 @@ struct View<'a> {
 impl View<'_> {
     fn near(&self, cid: &Cid) -> Option<&[u8]> {
         let place = self.current.get(cid).or_else(|| self.previous.get(cid));
-        let place = place.or_else(|| Some(&self.top.1).filter(|_| *cid == self.top.0));
+        let place = place.or_else(|| (*cid == self.top.0).then_some(&self.top.1));
         place.map(|place| self.car.bytes(*place))
     }
 
@@ -240,8 +240,7 @@ fn property(
             return Err(format!("block {pointer} is not in the car"));
         };
         Ok(Cow::Owned(
-            serde_json::from_slice(bytes)
-                .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(bytes).into_owned())),
+            serde_json::from_slice(bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(bytes).into_owned())),
         ))
     };
     // Once per listing: an index that names a shard twice holds its properties twice.
@@ -273,9 +272,7 @@ fn property(
                 None => found.rows.push(row("lexicon", format!("could not load schema {schema}"))),
                 Some(errors) => {
                     found.validated += 1;
-                    rows.extend(
-                        errors.into_iter().map(|error| Row { value: error.value, ..row(&error.path, error.message) }),
-                    );
+                    rows.extend(errors.into_iter().map(|error| Row { value: error.value, ..row(&error.path, error.message) }));
                 }
             }
         }
@@ -481,9 +478,7 @@ impl Check<'_> {
                 .chunks(work.len().div_ceil(threads).max(1))
                 .map(|chunk| {
                     scope.spawn(move || {
-                        let check = |(item, entry): &(&Value, Option<&Entry>)| {
-                            property(groups, view, cid, item, *entry, times)
-                        };
+                        let check = |(item, entry): &(&Value, Option<&Entry>)| property(groups, view, cid, item, *entry, times);
                         chunk.iter().map(check).collect::<Vec<_>>()
                     })
                 })
@@ -493,8 +488,8 @@ impl Check<'_> {
         let mut seen = HashSet::new();
         for found in checked {
             for (to, from) in found.dangling {
-                if !self.absent.contains_key(&to) {
-                    self.absent.insert(to, Some(from));
+                if let std::collections::hash_map::Entry::Vacant(slot) = self.absent.entry(to) {
+                    slot.insert(Some(from));
                     self.order.push(to);
                 }
             }
@@ -562,8 +557,7 @@ fn head(roots: &[Cid], bytes: Option<&[u8]>, check: &mut Check) -> Result<Option
     }
     let index: Option<Value> = bytes.and_then(|bytes| serde_json::from_slice(bytes).ok());
     let Some(index) = index.filter(|index| index.is_object() || index.is_array()) else {
-        let message =
-            if bytes.is_some() { "root block is not dag-json" } else { "root block is not in the car" };
+        let message = if bytes.is_some() { "root block is not dag-json" } else { "root block is not in the car" };
         check.note(ROOT, &root.to_string(), message.to_string())?;
         return Ok(None);
     };

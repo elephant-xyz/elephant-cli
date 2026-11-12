@@ -116,7 +116,10 @@ fn splits_tables_into_parts_where_elephant_cli_1_did() {
     assert_eq!((&summary["tables"], &summary["parts"]), (&golden["tables"], &golden["parts"]));
     let expected = fixture("expected-tables.json");
     let (_, rows) = table(&scratch.path("tables/tax"));
-    assert_eq!(rows.iter().map(plain).collect::<Vec<_>>(), expected["rows"]["tax"].as_array().unwrap().iter().map(plain).collect::<Vec<_>>());
+    assert_eq!(
+        rows.iter().map(plain).collect::<Vec<_>>(),
+        expected["rows"]["tax"].as_array().unwrap().iter().map(plain).collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -125,8 +128,18 @@ fn writes_a_new_atlas_page() {
     scratch.lexicon();
     scratch.copy("export-tables", "in");
     let ran = scratch.run(&[
-        "export-tables", "in/county.car", "--output", "tables", "--atlas-page", "atlas/counties/IL/test.json",
-        "--county", "test", "--state", "IL", "--fips", "17161",
+        "export-tables",
+        "in/county.car",
+        "--output",
+        "tables",
+        "--atlas-page",
+        "atlas/counties/IL/test.json",
+        "--county",
+        "test",
+        "--state",
+        "IL",
+        "--fips",
+        "17161",
     ]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let lines: Vec<&str> = ran.stdout.lines().collect();
@@ -158,8 +171,14 @@ fn refuses_bad_options_before_writing_tables() {
     for (extra, reason) in [
         (vec!["--part-size", "1.5g"], "--part-size must be a positive byte count such as 1g, got 1.5g"),
         (vec!["--atlas-page", "page.json", "--county", "test", "--state", "IL"], "--fips is required to create page.json"),
-        (vec!["--atlas-page", "page.json", "--county", "t", "--state", "il", "--fips", "17161"], "--state must be a two-letter code, got il"),
-        (vec!["--atlas-page", "in/existing.before.json", "--fips", "99999"], "--fips 99999 does not match fips \"17161\" in in/existing.before.json"),
+        (
+            vec!["--atlas-page", "page.json", "--county", "t", "--state", "il", "--fips", "17161"],
+            "--state must be a two-letter code, got il",
+        ),
+        (
+            vec!["--atlas-page", "in/existing.before.json", "--fips", "99999"],
+            "--fips 99999 does not match fips \"17161\" in in/existing.before.json",
+        ),
     ] {
         let ran = export(&scratch, &extra);
         assert_eq!(ran.code, 2, "{extra:?}");

@@ -171,7 +171,10 @@ mod tests {
     #[test]
     fn prints_indented_json_as_json_stringify_does() {
         let value = json!({"a": [1.0, {"b": []}, {}], "c": 1e21, "d": "x"});
-        assert_eq!(super::pretty(&value), "{\n  \"a\": [\n    1,\n    {\n      \"b\": []\n    },\n    {}\n  ],\n  \"c\": 1e+21,\n  \"d\": \"x\"\n}");
+        assert_eq!(
+            super::pretty(&value),
+            "{\n  \"a\": [\n    1,\n    {\n      \"b\": []\n    },\n    {}\n  ],\n  \"c\": 1e+21,\n  \"d\": \"x\"\n}"
+        );
         assert_eq!(super::stringify(&value), r#"{"a":[1,{"b":[]},{}],"c":1e+21,"d":"x"}"#);
     }
 

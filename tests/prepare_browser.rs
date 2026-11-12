@@ -13,7 +13,8 @@ use support::{entries, zip_of, Scratch};
 
 fn obscura() -> Option<PathBuf> {
     let named = std::env::var_os("OBSCURA_BIN").map(PathBuf::from);
-    let found = named.or_else(|| std::env::split_paths(&std::env::var_os("PATH")?).map(|dir| dir.join("obscura")).find(|file| file.is_file()));
+    let found = named
+        .or_else(|| std::env::split_paths(&std::env::var_os("PATH")?).map(|dir| dir.join("obscura")).find(|file| file.is_file()));
     if found.is_none() {
         eprintln!("skipped: the obscura browser is not installed (set OBSCURA_BIN to run this test)");
     }
@@ -38,7 +39,11 @@ fn site() -> Server {
             "/detail" => DETAIL,
             _ => return support::http::status(404),
         };
-        Reply { status: 200, headers: vec![("content-type".to_string(), "text/html; charset=utf-8".to_string())], body: page.as_bytes().to_vec() }
+        Reply {
+            status: 200,
+            headers: vec![("content-type".to_string(), "text/html; charset=utf-8".to_string())],
+            body: page.as_bytes().to_vec(),
+        }
     })
 }
 
@@ -55,7 +60,7 @@ fn seed(scratch: &Scratch, site: &Server, path: &str, query: Value) -> Value {
 }
 
 /// Run `prepare seed.zip --output-zip out.zip` with obscura allowed to reach the local site.
-fn prepare(scratch: &Scratch, binary: &PathBuf, extra: &[&str]) -> support::Ran {
+fn prepare(scratch: &Scratch, binary: &std::path::Path, extra: &[&str]) -> support::Ran {
     let mut args = vec!["--json", "prepare", "seed.zip", "--output-zip", "out.zip"];
     args.extend(extra);
     scratch.run_with(&args, &[("OBSCURA_BIN", binary.to_str().unwrap()), ("OBSCURA_ALLOW_PRIVATE_NETWORK", "1")])
@@ -118,7 +123,8 @@ fn runs_a_browser_flow_and_points_the_seed_at_where_it_ended() {
     for name in ["parcel.json", "address.json"] {
         let record: Value = serde_json::from_str(&text(&scratch, name)).unwrap();
         assert_eq!(record["entry_http_request"], asked, "{name}");
-        let landed = json!({ "url": format!("{}/detail", site.url), "method": "GET", "multiValueQueryString": { "parcel": ["12345"] } });
+        let landed =
+            json!({ "url": format!("{}/detail", site.url), "method": "GET", "multiValueQueryString": { "parcel": ["12345"] } });
         assert_eq!(record["source_http_request"], landed, "{name}");
     }
 }
@@ -129,8 +135,11 @@ fn builds_a_flow_from_the_search_by_parcel_id_template() {
     let scratch = Scratch::new();
     let site = site();
     seed(&scratch, &site, "/search", Value::Null);
-    let parameters = json!({ "search_form_selector": "#parcel", "search_result_selector": "#title", "continue_button_selector": "#agree" }).to_string();
-    let ran = prepare(&scratch, &binary, &["--browser-flow-template", "SEARCH_BY_PARCEL_ID", "--browser-flow-parameters", &parameters]);
+    let parameters =
+        json!({ "search_form_selector": "#parcel", "search_result_selector": "#title", "continue_button_selector": "#agree" })
+            .to_string();
+    let ran =
+        prepare(&scratch, &binary, &["--browser-flow-template", "SEARCH_BY_PARCEL_ID", "--browser-flow-parameters", &parameters]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     assert!(text(&scratch, "12345.html").contains("<h1 id=\"title\">Parcel 12345</h1>"));
 }
@@ -180,7 +189,8 @@ fn runs_a_browser_flow_package_whose_captures_a_transform_handler_reads() {
           await writeJson('person', { name: $('.owner').text() });\n\
         }\n";
     zip_of(&[("handler.js", transform)], &scratch.path("transform.zip"));
-    let ran = scratch.run(&["transform", "--input-zip", "out.zip", "--transform-zip", "transform.zip", "--output-zip", "data.zip"]);
+    let ran =
+        scratch.run(&["transform", "--input-zip", "out.zip", "--transform-zip", "transform.zip", "--output-zip", "data.zip"]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let person: Value = serde_json::from_slice(&entries(&scratch.path("data.zip"))["data/person.json"]).unwrap();
     assert_eq!((&person["name"], &person["request_identifier"]), (&json!("JANE DOE"), &json!("12345")));
@@ -190,15 +200,27 @@ fn runs_a_browser_flow_package_whose_captures_a_transform_handler_reads() {
 fn says_what_a_flow_handler_did_wrong() {
     let Some(binary) = obscura() else { return };
     for (body, reason) in [
-        ("await saveHtml({ name: 'Bad Name', html: '<p></p>' });", "Invalid capture name \"Bad Name\". Capture names must be kebab-case."),
+        (
+            "await saveHtml({ name: 'Bad Name', html: '<p></p>' });",
+            "Invalid capture name \"Bad Name\". Capture names must be kebab-case.",
+        ),
         ("await saveHtml({ name: 'a', html: '<p></p>' });", "Browser flow v2 handler must call saveSourceUrl"),
         ("await saveSourceUrl('https://x');", "Browser flow v2 handler must save at least one capture"),
-        ("await page.goto(input.url); await page.waitForSelector('#never', { timeout: 300 });", "Waiting for selector `#never` failed: 300ms exceeded"),
+        (
+            "await page.goto(input.url); await page.waitForSelector('#never', { timeout: 300 });",
+            "Waiting for selector `#never` failed: 300ms exceeded",
+        ),
     ] {
         let scratch = Scratch::new();
         let site = site();
         seed(&scratch, &site, "/search", Value::Null);
-        zip_of(&[("handler.js", &format!("export async function handler({{ page, input, saveHtml, saveSourceUrl }}) {{ {body} }}\n"))], &scratch.path("flow.zip"));
+        zip_of(
+            &[(
+                "handler.js",
+                &format!("export async function handler({{ page, input, saveHtml, saveSourceUrl }}) {{ {body} }}\n"),
+            )],
+            &scratch.path("flow.zip"),
+        );
         let ran = prepare(&scratch, &binary, &["--browser-flow-zip", "flow.zip"]);
         assert_eq!(ran.code, 2, "{body}");
         assert!(ran.stderr.contains(reason), "{body}: {}", ran.stderr);

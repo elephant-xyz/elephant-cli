@@ -149,8 +149,14 @@ pub struct County {
 /// extra block last).
 pub fn build(file: &Path, ids: &Schemas, tweaks: Tweaks) -> County {
     let nowhere = text("nowhere").cid;
-    let split =
-        tweaks.split || tweaks.shared || tweaks.spare || tweaks.trailing || tweaks.late || tweaks.gone || tweaks.claimed || tweaks.exported;
+    let split = tweaks.split
+        || tweaks.shared
+        || tweaks.spare
+        || tweaks.trailing
+        || tweaks.late
+        || tweaks.gone
+        || tweaks.claimed
+        || tweaks.exported;
     let mut blocks: Vec<Block> = Vec::new();
     let mut entries: Vec<Value> = Vec::new();
     let mut shards: Vec<Block> = Vec::new();
@@ -180,8 +186,7 @@ pub fn build(file: &Path, ids: &Schemas, tweaks: Tweaks) -> County {
         let address = addresses[if tweaks.shared { 0 } else { index }].clone();
         let relation = node(&json!({ "from": link(&property.cid), "to": link(&address.cid) }));
         let target = if tweaks.lost && b { nowhere } else { relation.cid };
-        let root =
-            node(&json!({ "label": "County", "relationships": { "property_has_address": [link(&target)] } }));
+        let root = node(&json!({ "label": "County", "relationships": { "property_has_address": [link(&target)] } }));
         blocks.extend([root.clone(), relation.clone(), property.clone()]);
         if !(b && (tweaks.shared || tweaks.late)) && !(!b && tweaks.trailing) {
             blocks.push(address.clone());

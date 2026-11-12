@@ -339,9 +339,7 @@ impl Export<'_> {
             let relation = pointer.map(|pointer| self.schemas.get(pointer)).transpose()?.unwrap_or(Value::Null);
             let sides = (relation["properties"]["from"]["cid"].as_str(), relation["properties"]["to"]["cid"].as_str());
             let (Some(from), Some(to)) = sides else {
-                return Err(
-                    format!("relationship {key} of data group {group} does not name from/to class schemas").into()
-                );
+                return Err(format!("relationship {key} of data group {group} does not name from/to class schemas").into());
             };
             ends.insert(key.clone(), (self.class(from)?, self.class(to)?));
         }
@@ -428,7 +426,8 @@ fn entries(car: &Car, index: &HashMap<Cid, Place>) -> Result<(Cid, Vec<Entry>), 
     let Some(place) = index.get(&root) else {
         return Err(format!("root: root block is not in the car ({root})").into());
     };
-    let head: Value = serde_json::from_slice(car.bytes(*place)).map_err(|_| format!("root: root block is not dag-json ({root})"))?;
+    let head: Value =
+        serde_json::from_slice(car.bytes(*place)).map_err(|_| format!("root: root block is not dag-json ({root})"))?;
     let shards: Option<Vec<Cid>> = head["shards"].as_array().and_then(|shards| shards.iter().map(link).collect());
     let shape = [
         (head["label"] == "CountyIndex", "label must be \"CountyIndex\""),
@@ -452,9 +451,7 @@ fn entries(car: &Car, index: &HashMap<Cid, Place>) -> Result<(Cid, Vec<Entry>), 
         };
         for item in listed {
             let (Some(property), Some(pointers)) = (link(&item["property_cid"]), item["data_groups"].as_object()) else {
-                return Err(
-                    format!("index: shard entry must hold a property_cid link and a data_groups object ({shard})").into()
-                );
+                return Err(format!("index: shard entry must hold a property_cid link and a data_groups object ({shard})").into());
             };
             present(&property, &shard)?;
             let mut groups = Vec::new();
@@ -469,12 +466,9 @@ fn entries(car: &Car, index: &HashMap<Cid, Place>) -> Result<(Cid, Vec<Entry>), 
         }
     }
     if head["properties"].as_f64() != Some(found.len() as f64) {
-        return Err(format!(
-            "index: index declares {} properties but shards hold {} ({root})",
-            head["properties"],
-            found.len()
-        )
-        .into());
+        return Err(
+            format!("index: index declares {} properties but shards hold {} ({root})", head["properties"], found.len()).into()
+        );
     }
     Ok((root, found))
 }
@@ -503,13 +497,7 @@ fn identity(atlas: &Atlas, page: Option<&Value>) -> Result<[String; 3], Fail> {
     Ok([county, state, fips])
 }
 
-pub fn export(
-    file: &Path,
-    output: &Path,
-    cap: u64,
-    atlas: Option<&Atlas>,
-    schemas: &mut Schemas,
-) -> Result<Exported, Fail> {
+pub fn export(file: &Path, output: &Path, cap: u64, atlas: Option<&Atlas>, schemas: &mut Schemas) -> Result<Exported, Fail> {
     std::fs::create_dir_all(output)?;
     let car = Car::open(file)?;
     // ponytail: every block is indexed in memory, as 1.x did; walk shard by
@@ -559,18 +547,17 @@ pub fn export(
             }
         }
         let [(label, group)] = &labelled[..] else {
-            return Err(format!(
-                "archive carries {} data groups; Atlas registers one group per archive",
-                labelled.len()
-            )
-            .into());
+            return Err(format!("archive carries {} data groups; Atlas registers one group per archive", labelled.len()).into());
         };
         registered = Some((named, label.clone(), group.clone()));
     }
 
     let properties = Table {
         name: "properties".to_string(),
-        columns: std::iter::once("property_cid").chain(groups.iter().map(String::as_str)).map(|name| (name.to_string(), Kind::Text)).collect(),
+        columns: std::iter::once("property_cid")
+            .chain(groups.iter().map(String::as_str))
+            .map(|name| (name.to_string(), Kind::Text))
+            .collect(),
         source: "the county index".to_string(),
     };
     export.writer(&properties)?;
@@ -660,8 +647,13 @@ pub fn export(
         page.insert("county".to_string(), json!(county));
         page.insert("state".to_string(), json!(state));
         page.insert("fips".to_string(), json!(fips));
-        let mut groups: BTreeMap<String, Value> =
-            page.get("groups").and_then(Value::as_object).into_iter().flatten().map(|(key, value)| (key.clone(), value.clone())).collect();
+        let mut groups: BTreeMap<String, Value> = page
+            .get("groups")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
         groups.insert(label.clone(), json!({ "cid": root.to_string(), "schema": schema, "tables": tables_root.to_string() }));
         // ponytail: byte order of group keys; 1.x used locale collation, the same for snake_case labels
         page.insert("groups".to_string(), Value::Object(groups.into_iter().collect()));

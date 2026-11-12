@@ -13,8 +13,14 @@ use std::time::Duration;
 
 /// Text that marks a page as an error page, in lower case.
 const BLOCKED: [&str; 8] = [
-    "403 - forbidden", "access is denied", "server error 403", "404 not found", "request blocked", "access denied",
-    "captcha", "verify you are human",
+    "403 - forbidden",
+    "access is denied",
+    "server error 403",
+    "404 not found",
+    "request blocked",
+    "access denied",
+    "captcha",
+    "verify you are human",
 ];
 
 fn quoted(text: &str) -> String {
@@ -58,7 +64,14 @@ fn click(browser: &mut Browser, selector: &str, frame: Option<&str>) -> Result<(
 }
 
 /// Type into a field: real key events in the page itself, a set value inside an iframe.
-fn enter(browser: &mut Browser, selector: &str, text: &str, delay: Duration, clear: bool, frame: Option<&str>) -> Result<(), Fail> {
+fn enter(
+    browser: &mut Browser,
+    selector: &str,
+    text: &str,
+    delay: Duration,
+    clear: bool,
+    frame: Option<&str>,
+) -> Result<(), Fail> {
     let script = match frame {
         Some(_) => format!(
             "(() => {{ const found = {}; if (!found) return false; found.value = {}; for (const kind of ['input', 'change']) found.dispatchEvent(new Event(kind, {{ bubbles: true }})); return true; }})()",
@@ -125,9 +138,13 @@ pub fn origin(flow: &Value, identifier: &str) -> Option<String> {
 /// "agree" buttons, type the parcel id, press Enter, wait for the result.
 pub fn template(name: &str, parameters: &str, address: &str) -> Result<Value, Fail> {
     if name != "SEARCH_BY_PARCEL_ID" {
-        return Err(format!("Failed to create workflow from template: unknown template {name} (the only one is SEARCH_BY_PARCEL_ID)").into());
+        return Err(format!(
+            "Failed to create workflow from template: unknown template {name} (the only one is SEARCH_BY_PARCEL_ID)"
+        )
+        .into());
     }
-    let given: Value = serde_json::from_str(parameters).map_err(|error| format!("Failed to create workflow from template: --browser-flow-parameters is not JSON: {error}"))?;
+    let given: Value = serde_json::from_str(parameters)
+        .map_err(|error| format!("Failed to create workflow from template: --browser-flow-parameters is not JSON: {error}"))?;
     let text = |key: &str| given[key].as_str().filter(|value| !value.is_empty());
     let needed = |key: &str| text(key).ok_or(format!("Failed to create workflow from template: {key} is required"));
     let (form, result) = (needed("search_form_selector")?, needed("search_result_selector")?);
@@ -143,7 +160,9 @@ pub fn template(name: &str, parameters: &str, address: &str) -> Result<Value, Fa
         }
         node
     };
-    let wait = |selector: &str, next: Option<&str>| step("wait_for_selector", json!({ "selector": selector, "timeout": 30000, "visible": true }), next);
+    let wait = |selector: &str, next: Option<&str>| {
+        step("wait_for_selector", json!({ "selector": selector, "timeout": 30000, "visible": true }), next)
+    };
     let race = |button: &str, label: &str, to: &str| {
         let options = json!([
             { "selector": form, "label": "search_form", "timeout": 30000 },
@@ -170,23 +189,35 @@ pub fn template(name: &str, parameters: &str, address: &str) -> Result<Value, Fa
             states.insert("click_continue_button".to_string(), step("click", json!({ "selector": first }), Some(next)));
             if let Some(second) = second {
                 states.insert("race_form_or_button2".to_string(), race(second, "continue_button2", "click_continue_button2"));
-                states.insert("click_continue_button2".to_string(), step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")));
+                states.insert(
+                    "click_continue_button2".to_string(),
+                    step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")),
+                );
             }
         }
         (None, Some(second)) => {
             states.insert("race_form_or_button".to_string(), race(second, "continue_button2", "click_continue_button2"));
-            states.insert("click_continue_button2".to_string(), step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")));
+            states.insert(
+                "click_continue_button2".to_string(),
+                step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")),
+            );
         }
         (None, None) => {}
     }
     states.insert("wait_for_search_form_ready".to_string(), wait(form, Some("enter_parcel_id")));
     let typed = json!({ "selector": form, "value": "{{=it.request_identifier}}", "delay": 100 });
     states.insert("enter_parcel_id".to_string(), step("type", typed, Some("press_enter")));
-    states.insert("press_enter".to_string(), json!({ "type": "keyboard_press", "input": { "key": "Enter" }, "next": "wait_for_search_results" }));
+    states.insert(
+        "press_enter".to_string(),
+        json!({ "type": "keyboard_press", "input": { "key": "Enter" }, "next": "wait_for_search_results" }),
+    );
     let (button, details) = (text("property_details_button"), text("property_details_selector"));
     states.insert("wait_for_search_results".to_string(), wait(result, button.map(|_| "click_property_details")));
     if let Some(button) = button {
-        states.insert("click_property_details".to_string(), step("click", json!({ "selector": button }), details.map(|_| "wait_for_property_details")));
+        states.insert(
+            "click_property_details".to_string(),
+            step("click", json!({ "selector": button }), details.map(|_| "wait_for_property_details")),
+        );
         if let Some(details) = details {
             states.insert("wait_for_property_details".to_string(), wait(details, None));
         }
@@ -231,28 +262,50 @@ pub fn run(browser: &mut Browser, flow: &Value, identifier: &str, address: Optio
             }
             "wait_for_selector" => {
                 let selector = need("selector")?;
-                let waited = browser.wait(&present(&selector, frame.as_deref(), visible), milliseconds(&input["timeout"], 30_000), &format!("selector `{selector}`"));
+                let waited = browser.wait(
+                    &present(&selector, frame.as_deref(), visible),
+                    milliseconds(&input["timeout"], 30_000),
+                    &format!("selector `{selector}`"),
+                );
                 match waited {
                     Ok(_) => produced = Some(selector),
                     Err(error) if error.downcast_ref::<Timeout>().is_some() && node["continue_on_timeout"] == json!(true) => {
                         let next = node["next_on_timeout"].as_str();
-                        jump = Some(next.ok_or(format!("Step {state} timed out with continue_on_timeout, but no next_on_timeout is defined"))?.to_string());
+                        jump = Some(
+                            next.ok_or(format!(
+                                "Step {state} timed out with continue_on_timeout, but no next_on_timeout is defined"
+                            ))?
+                            .to_string(),
+                        );
                     }
                     Err(error) => return Err(error),
                 }
             }
             "wait_for_selector_race" => {
-                let options = input["selectors"].as_array().filter(|options| !options.is_empty()).ok_or(format!("Step {state} needs input.selectors"))?;
+                let options = input["selectors"]
+                    .as_array()
+                    .filter(|options| !options.is_empty())
+                    .ok_or(format!("Step {state} needs input.selectors"))?;
                 let checks: Vec<String> = options
                     .iter()
-                    .map(|option| format!("[{}, {}]", quoted(option["label"].as_str().unwrap_or_default()), present(option["selector"].as_str().unwrap_or_default(), frame.as_deref(), visible)))
+                    .map(|option| {
+                        format!(
+                            "[{}, {}]",
+                            quoted(option["label"].as_str().unwrap_or_default()),
+                            present(option["selector"].as_str().unwrap_or_default(), frame.as_deref(), visible)
+                        )
+                    })
                     .collect();
                 // the first option that times out ends the race
                 let shortest = options.iter().map(|option| milliseconds(&option["timeout"], 30_000)).min().unwrap_or_default();
-                let race = format!("(() => {{ const won = [{}].find((option) => option[1]); return won ? won[0] : null; }})()", checks.join(", "));
+                let race = format!(
+                    "(() => {{ const won = [{}].find((option) => option[1]); return won ? won[0] : null; }})()",
+                    checks.join(", ")
+                );
                 let won = browser.wait(&race, shortest, "one of the selectors")?;
                 let label = won.as_str().unwrap_or_default().to_string();
-                let next = node["next_map"][&label].as_str().ok_or(format!("Step {state} result '{label}' not found in next_map"))?;
+                let next =
+                    node["next_map"][&label].as_str().ok_or(format!("Step {state} result '{label}' not found in next_map"))?;
                 jump = Some(next.to_string());
                 // the form can win while the button that hides it is still there
                 let winner = &node["validate_winner"][&label];
@@ -264,7 +317,14 @@ pub fn run(browser: &mut Browser, flow: &Value, identifier: &str, address: Optio
                 produced = Some(label);
             }
             "click" => click(browser, &need("selector")?, frame.as_deref())?,
-            "type" => enter(browser, &need("selector")?, &need("value")?, milliseconds(&input["delay"], 0), input["clear"] == json!(true), frame.as_deref())?,
+            "type" => enter(
+                browser,
+                &need("selector")?,
+                &need("value")?,
+                milliseconds(&input["delay"], 0),
+                input["clear"] == json!(true),
+                frame.as_deref(),
+            )?,
             "keyboard_press" => browser.press(&need("key")?)?,
             other => return Err(format!("Unknown type: {other}").into()),
         }
@@ -291,9 +351,11 @@ pub fn run(browser: &mut Browser, flow: &Value, identifier: &str, address: Optio
 
 /// `--use-browser`: load the page of a GET request and keep what the browser shows.
 pub fn visit(browser: &mut Browser, address: &str, proceed: bool, button: Option<&str>, captcha: bool) -> Result<Fetched, Fail> {
-    let status = browser.goto(address, "domcontentloaded", Duration::from_secs(15)).map_err(|error| match error.downcast_ref::<Timeout>() {
-        Some(_) => format!("{error}. If the site restricts by location, try from an address in its region.").into(),
-        None => error,
+    let status = browser.goto(address, "domcontentloaded", Duration::from_secs(15)).map_err(|error| {
+        match error.downcast_ref::<Timeout>() {
+            Some(_) => format!("{error}. If the site restricts by location, try from an address in its region.").into(),
+            None => error,
+        }
     })?;
     if let Some((code, reason)) = status.filter(|(code, _)| *code >= 400) {
         return Err(format!("HTTP error {code}: {reason}").into());
@@ -474,7 +536,9 @@ fn handle(browser: &mut Browser, package: &Path, scratch: &Path, work: &Path, in
             }
             "settle" => browser.settle(&text(0), wait(1)).map(|_| Value::Null).map_err(failed),
             "click" => click(browser, &text(0), None).map(|_| Value::Null).map_err(failed),
-            "type" => enter(browser, &text(0), &text(1), milliseconds(&arguments[2], 0), false, None).map(|_| Value::Null).map_err(failed),
+            "type" => enter(browser, &text(0), &text(1), milliseconds(&arguments[2], 0), false, None)
+                .map(|_| Value::Null)
+                .map_err(failed),
             "press" => browser.press(&text(0)).map(|_| Value::Null).map_err(failed),
             "keys" => browser.keys(&text(0), milliseconds(&arguments[1], 0)).map(|_| Value::Null).map_err(failed),
             "saveHtml" => {
@@ -513,7 +577,9 @@ fn handle(browser: &mut Browser, package: &Path, scratch: &Path, work: &Path, in
         return Err("Browser flow v2 handler must save at least one capture".into());
     }
     captures.sort();
-    let listed: Vec<Value> = captures.iter().map(|name| json!({ "name": name, "path": format!("captures/{name}.html"), "type": "html" })).collect();
-    let manifest = json!({ "version": 2, "request_identifier": input["request_identifier"], "sourceUrl": source, "captures": listed });
+    let listed: Vec<Value> =
+        captures.iter().map(|name| json!({ "name": name, "path": format!("captures/{name}.html"), "type": "html" })).collect();
+    let manifest =
+        json!({ "version": 2, "request_identifier": input["request_identifier"], "sourceUrl": source, "captures": listed });
     Ok(std::fs::write(work.join("captures.json"), pretty(&manifest))?)
 }

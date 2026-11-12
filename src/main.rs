@@ -37,7 +37,9 @@ pub type Fail = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Parser)]
 #[command(name = "elephant-cli", version, about = "Validate, hash, export, upload, prepare and transform Elephant county data.")]
-#[command(after_help = "Exit codes: 0 success, 1 the input failed its checks, 2 the command could not run.\nWith --json, stdout is exactly one JSON document; everything else goes to stderr.")]
+#[command(
+    after_help = "Exit codes: 0 success, 1 the input failed its checks, 2 the command could not run.\nWith --json, stdout is exactly one JSON document; everything else goes to stderr."
+)]
 struct Cli {
     /// Print one JSON document describing the result on stdout instead of text
     #[arg(long, global = true)]
@@ -69,7 +71,9 @@ enum Command {
 }
 
 #[derive(Args)]
-#[command(after_help = "The first mechanism that applies answers the seed's request:\n  --browser-flow-zip            a Browser Flow v2 package saves named captures\n  --multi-request-flow-file     several HTTP requests into one JSON file\n  (county Orange)               the Orange County, FL appraiser API\n  --browser-flow-file           a browser flow written as JSON\n  --browser-flow-template       a built-in flow, with --browser-flow-parameters\n  --use-browser                 a plain page load in the browser (GET only)\n  otherwise                     one HTTP request\n\nBrowser mechanisms need the obscura headless browser (https://github.com/h4ckf0r0day/obscura):\n`obscura` on PATH, --browser/OBSCURA_BIN, or --cdp-url/ELEPHANT_CDP_URL for a running browser.\n\nExamples:\n  elephant-cli prepare seed.zip --output-zip prepared.zip\n  elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip\n  elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip")]
+#[command(
+    after_help = "The first mechanism that applies answers the seed's request:\n  --browser-flow-zip            a Browser Flow v2 package saves named captures\n  --multi-request-flow-file     several HTTP requests into one JSON file\n  (county Orange)               the Orange County, FL appraiser API\n  --browser-flow-file           a browser flow written as JSON\n  --browser-flow-template       a built-in flow, with --browser-flow-parameters\n  --use-browser                 a plain page load in the browser (GET only)\n  otherwise                     one HTTP request\n\nBrowser mechanisms need the obscura headless browser (https://github.com/h4ckf0r0day/obscura):\n`obscura` on PATH, --browser/OBSCURA_BIN, or --cdp-url/ELEPHANT_CDP_URL for a running browser.\n\nExamples:\n  elephant-cli prepare seed.zip --output-zip prepared.zip\n  elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip\n  elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip"
+)]
 struct Prepare {
     /// The seed ZIP: parcel.json or property_seed.json, and address.json or unnormalized_address.json
     input_zip: Option<PathBuf>,
@@ -124,7 +128,9 @@ struct Prepare {
 }
 
 #[derive(Args)]
-#[command(after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine: they can read and write only their\nworking directory, cannot use the network, and get fs, path, process, console, Buffer, crypto\n(sha256/sha512) and cheerio.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip")]
+#[command(
+    after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine: they can read and write only their\nworking directory, cannot use the network, and get fs, path, process, console, Buffer, crypto\n(sha256/sha512) and cheerio.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip"
+)]
 struct Transform {
     /// What `prepare` wrote for one parcel (or a ZIP holding seed.csv)
     #[arg(long, value_name = "PATH")]
@@ -147,7 +153,9 @@ struct Transform {
 }
 
 #[derive(Args)]
-#[command(after_help = "Environment: IPFS_API, IPFS_API_TOKEN, ELEPHANT_CAR_GATEWAY, or FILEBASE_ACCESS_KEY + FILEBASE_SECRET_KEY + FILEBASE_BUCKET.\n\nExamples:\n  elephant-cli upload county.car --output-json upload.json\n  elephant-cli upload ./tables --api https://rpc.filebase.io\n  elephant-cli --json upload county.car | jq -r .gatewayUrl")]
+#[command(
+    after_help = "Environment: IPFS_API, IPFS_API_TOKEN, ELEPHANT_CAR_GATEWAY, or FILEBASE_ACCESS_KEY + FILEBASE_SECRET_KEY + FILEBASE_BUCKET.\n\nExamples:\n  elephant-cli upload county.car --output-json upload.json\n  elephant-cli upload ./tables --api https://rpc.filebase.io\n  elephant-cli --json upload county.car | jq -r .gatewayUrl"
+)]
 struct Upload {
     /// A county CAR (`.car`) or a tables directory written by `export-tables`
     input: PathBuf,
@@ -169,7 +177,9 @@ struct Upload {
 }
 
 #[derive(Args)]
-#[command(after_help = "Examples:\n  elephant-cli export-tables county.car --output ./tables --output-json tables.json \\\n    --atlas-page ./atlas/counties/IL/rock-island.json --county rock-island --state IL --fips 17161\n  elephant-cli --json export-tables county.car --output ./tables | jq -r .root")]
+#[command(
+    after_help = "Examples:\n  elephant-cli export-tables county.car --output ./tables --output-json tables.json \\\n    --atlas-page ./atlas/counties/IL/rock-island.json --county rock-island --state IL --fips 17161\n  elephant-cli --json export-tables county.car --output ./tables | jq -r .root"
+)]
 struct ExportTables {
     /// A county CAR written by `hash --output-car`
     input: PathBuf,
@@ -197,7 +207,9 @@ struct ExportTables {
 }
 
 #[derive(Args)]
-#[command(after_help = "Examples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid")]
+#[command(
+    after_help = "Examples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid"
+)]
 struct Hash {
     /// A property directory or ZIP, or a directory of properties
     input: PathBuf,
@@ -216,7 +228,9 @@ struct Hash {
 }
 
 #[derive(Args)]
-#[command(after_help = "Examples:\n  elephant-cli validate ./property-dir\n  elephant-cli validate ./county-outputs --output-csv errors.csv\n  elephant-cli validate county.car --output-csv errors.csv\n  elephant-cli --json validate county.car | jq .errors\n  elephant-cli validate county.car --output-csv - > findings.csv")]
+#[command(
+    after_help = "Examples:\n  elephant-cli validate ./property-dir\n  elephant-cli validate ./county-outputs --output-csv errors.csv\n  elephant-cli validate county.car --output-csv errors.csv\n  elephant-cli --json validate county.car | jq .errors\n  elephant-cli validate county.car --output-csv - > findings.csv"
+)]
 struct Validate {
     /// A property directory or ZIP, a directory of properties, or a county CAR (`.car`)
     input: PathBuf,
@@ -298,12 +312,9 @@ fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
                 checked.rows
             }
             // A property that could not be checked gets a row of its own, so the CSV explains every failure.
-            Err(reason) => vec![report::Row {
-                property: name.clone(),
-                path: "root".to_string(),
-                message: reason,
-                ..report::Row::default()
-            }],
+            Err(reason) => {
+                vec![report::Row { property: name.clone(), path: "root".to_string(), message: reason, ..report::Row::default() }]
+            }
         };
         if !rows.is_empty() {
             failed.push(name.clone());
@@ -313,12 +324,8 @@ fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
         }
     }
     report.finish()?;
-    let mut text = format!(
-        "Properties processed: {}, succeeded: {}, failed: {}\n",
-        names.len(),
-        names.len() - failed.len(),
-        failed.len()
-    );
+    let mut text =
+        format!("Properties processed: {}, succeeded: {}, failed: {}\n", names.len(), names.len() - failed.len(), failed.len());
     if !failed.is_empty() {
         eprintln!("{} of {} properties failed: {}", failed.len(), names.len(), listed(&failed));
         text += &format!("{} errors found. Check {} for details.\n", report.rows, args.output_csv.display());
@@ -393,14 +400,8 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
     let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
-    let outcome = hash::run(
-        &args.input,
-        &args.output_zip,
-        &args.output_csv,
-        args.output_car.as_deref(),
-        &shared,
-        threads(args.threads),
-    )?;
+    let outcome =
+        hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads(args.threads))?;
     for error in &outcome.errors {
         eprintln!("error: {error}");
     }
@@ -476,11 +477,8 @@ fn export_tables(args: &ExportTables, cli: &Cli) -> Result<Done, Fail> {
     let exported = tables::export(&args.input, &args.output, cap, atlas.as_ref(), &mut schemas)
         .map_err(|error| format!("Failed to export tables: {error}"))?;
     let whole = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    let listed: serde_json::Map<String, Value> = exported
-        .tables
-        .iter()
-        .map(|(name, rows, parts)| (name.clone(), json!({ "rows": rows, "parts": parts })))
-        .collect();
+    let listed: serde_json::Map<String, Value> =
+        exported.tables.iter().map(|(name, rows, parts)| (name.clone(), json!({ "rows": rows, "parts": parts }))).collect();
     let parts: usize = exported.tables.iter().map(|table| table.2).sum();
     let mut summary = json!({
         "output": whole(&args.output),
@@ -558,7 +556,9 @@ fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
     match (args.transform_version.as_deref(), &args.transform_zip, &args.scripts_zip) {
         (Some("2"), None, _) => return Err("--transform-zip is required for transform v2".into()),
         (Some("2"), _, Some(_)) => return Err("--scripts-zip cannot be used with transform v2".into()),
-        (Some(other), _, _) if other != "2" => return Err(format!("--transform-version {other} is not supported; only 2 is").into()),
+        (Some(other), _, _) if other != "2" => {
+            return Err(format!("--transform-version {other} is not supported; only 2 is").into())
+        }
         _ => {}
     }
     let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
@@ -586,7 +586,9 @@ fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
 fn prepare(args: &Prepare) -> Result<Done, Fail> {
     match (args.browser_flow_version.as_deref(), &args.browser_flow_zip) {
         (Some("2"), None) => return Err("--browser-flow-zip is required for browser flow v2".into()),
-        (Some(other), _) if other != "2" => return Err(format!("--browser-flow-version {other} is not supported; only 2 is").into()),
+        (Some(other), _) if other != "2" => {
+            return Err(format!("--browser-flow-version {other} is not supported; only 2 is").into())
+        }
         _ => {}
     }
     if let Some(proxy) = args.proxy.as_deref().filter(|proxy| !proxy.contains('@') && !proxy.contains("://")) {

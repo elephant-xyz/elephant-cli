@@ -133,7 +133,11 @@ fn fails_a_data_group_whose_schema_cannot_be_loaded_offline() {
     assert_eq!(ran.code, 1);
     let rows = scratch.rows("errors.csv");
     assert_eq!(rows.len(), 1);
-    assert!(rows[0][4].starts_with("Processing error: schema bafkreigqszh64fy5ra7lrkjytsaefr5iauv36fta2vkscniom4echf2v4y is not in "), "{}", rows[0][4]);
+    assert!(
+        rows[0][4].starts_with("Processing error: schema bafkreigqszh64fy5ra7lrkjytsaefr5iauv36fta2vkscniom4echf2v4y is not in "),
+        "{}",
+        rows[0][4]
+    );
 }
 
 #[test]
@@ -164,7 +168,9 @@ fn fetches_the_manifest_and_missing_schemas_then_works_offline() {
     let ran = scratch.run_with(&["--json", "validate", "clean", "--output-csv", "errors.csv"], &online);
     assert_eq!((ran.code, &ran.json()["data_groups"]), (0, &json!(2)), "{}", ran.stderr);
     let asked = good.requests();
-    assert!(asked.iter().all(|request| request.path == "/manifest" || request.header("accept") == Some("application/vnd.ipld.raw")));
+    assert!(asked
+        .iter()
+        .all(|request| request.path == "/manifest" || request.header("accept") == Some("application/vnd.ipld.raw")));
     assert_eq!(asked.len(), 16, "the manifest and 15 schemas, once each");
     // everything fetched was kept: the same run now passes without the network
     let ran = scratch.run(&["--json", "validate", "clean", "--output-csv", "errors.csv"]);

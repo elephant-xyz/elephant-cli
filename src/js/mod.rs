@@ -34,7 +34,10 @@ mod tests {
     #[test]
     fn fills_dot_templates_as_dot_does() {
         let it = serde_json::json!({ "request_identifier": "12-34" });
-        let filled = super::fill(&["id={{=it.request_identifier}}".to_string(), "{{=it.request_identifier.replace(/-/g, '')}}".to_string()], &it);
+        let filled = super::fill(
+            &["id={{=it.request_identifier}}".to_string(), "{{=it.request_identifier.replace(/-/g, '')}}".to_string()],
+            &it,
+        );
         assert_eq!(filled.unwrap(), ["id=12-34", "1234"]);
     }
 
@@ -244,7 +247,11 @@ fn compute(prelude: &str, function: &str, input: &serde_json::Value) -> Result<s
 /// Fill doT templates (`{{=it.request_identifier}}`) with the values of `it`.
 pub fn fill(templates: &[String], it: &serde_json::Value) -> Result<Vec<String>, String> {
     let prelude = format!("const module = {{ exports: {{}} }}; (function (module) {{ {DOT}\n }}).call(module.exports, module); const doT = module.exports;");
-    let filled = compute(&prelude, "(input) => input.templates.map((text) => doT.template(text)(input.it))", &serde_json::json!({ "templates": templates, "it": it }))?;
+    let filled = compute(
+        &prelude,
+        "(input) => input.templates.map((text) => doT.template(text)(input.it))",
+        &serde_json::json!({ "templates": templates, "it": it }),
+    )?;
     serde_json::from_value(filled).map_err(|error| error.to_string())
 }
 
@@ -317,14 +324,19 @@ pub fn run(start: Start<'_>, sandbox: &Sandbox, bridge: Option<Bridge<'_>>) -> R
     let outcome = context.with(|ctx| -> Result<(), Failed> {
         let fail = |described: String| -> Failed {
             if Instant::now() > limit.get() {
-                return failed(-1, true, format!("[runner] Stopped after {}ms: the time limit was reached.", sandbox.timeout.as_millis()));
+                return failed(
+                    -1,
+                    true,
+                    format!("[runner] Stopped after {}ms: the time limit was reached.", sandbox.timeout.as_millis()),
+                );
             }
             match exit.get() {
                 Some(code) => failed(code, false, String::new()),
                 None => failed(1, false, described),
             }
         };
-        let host = build(&ctx, sandbox, &out, &exit, &limit, &bridge, &start).map_err(|error| fail(thrown(&ctx, None, &error)))?;
+        let host =
+            build(&ctx, sandbox, &out, &exit, &limit, &bridge, &start).map_err(|error| fail(thrown(&ctx, None, &error)))?;
         let started = match &start {
             Start::Script(file) => {
                 let name = file.to_string_lossy().into_owned();
@@ -358,7 +370,11 @@ pub fn run(start: Start<'_>, sandbox: &Sandbox, bridge: Option<Bridge<'_>>) -> R
                 continue;
             }
             if Instant::now() > limit.get() {
-                return Err(failed(-1, true, format!("[runner] Stopped after {}ms: the time limit was reached.", sandbox.timeout.as_millis())));
+                return Err(failed(
+                    -1,
+                    true,
+                    format!("[runner] Stopped after {}ms: the time limit was reached.", sandbox.timeout.as_millis()),
+                ));
             }
             if wait < 0.0 {
                 break;
@@ -368,7 +384,13 @@ pub fn run(start: Start<'_>, sandbox: &Sandbox, bridge: Option<Bridge<'_>>) -> R
         if let Some(promise) = promise {
             match promise.state() {
                 PromiseState::Resolved => {}
-                PromiseState::Pending => return Err(failed(1, false, "The script stopped without finishing: a promise it awaits never settles.".to_string())),
+                PromiseState::Pending => {
+                    return Err(failed(
+                        1,
+                        false,
+                        "The script stopped without finishing: a promise it awaits never settles.".to_string(),
+                    ))
+                }
                 PromiseState::Rejected => {
                     let error = promise.result::<Value>().and_then(Result::err).unwrap_or(rquickjs::Error::Unknown);
                     return Err(fail(thrown(&ctx, Some(&host), &error)));
@@ -450,13 +472,19 @@ fn build<'js>(
             ctx.eval_with_options(body, options)
         })?,
     )?;
-    host.set("utf8Encode", Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, text.into_bytes()))?)?;
+    host.set(
+        "utf8Encode",
+        Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, text.into_bytes()))?,
+    )?;
     host.set(
         "utf8Decode",
         Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| String::from_utf8_lossy(bytes_of(&bytes)).into_owned())?,
     )?;
     host.set("base64Encode", Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| base64(bytes_of(&bytes)))?)?;
-    host.set("base64Decode", Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, unbase64(&text)))?)?;
+    host.set(
+        "base64Decode",
+        Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, unbase64(&text)))?,
+    )?;
 
     // The file system, confined to the sandbox root.
     let root = sandbox.root.clone();
@@ -467,7 +495,8 @@ fn build<'js>(
     host.set(
         "stat",
         Function::new(ctx.clone(), move |ctx: Ctx<'js>, path: String| -> rquickjs::Result<Object<'js>> {
-            let found = std::fs::metadata(reach(&ctx, &root, "stat", &path)?).map_err(|error| refuse(&ctx, &error, "stat", &path))?;
+            let found =
+                std::fs::metadata(reach(&ctx, &root, "stat", &path)?).map_err(|error| refuse(&ctx, &error, "stat", &path))?;
             let info = Object::new(ctx.clone())?;
             info.set("kind", if found.is_dir() { "dir" } else { "file" })?;
             info.set("size", found.len() as f64)?;
@@ -498,7 +527,11 @@ fn build<'js>(
         Function::new(ctx.clone(), move |ctx: Ctx<'js>, path: String, text: String, append: bool| -> rquickjs::Result<()> {
             let file = reach(&ctx, &root, "open", &path)?;
             let written = match append {
-                true => std::fs::OpenOptions::new().create(true).append(true).open(&file).and_then(|mut file| std::io::Write::write_all(&mut file, text.as_bytes())),
+                true => std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&file)
+                    .and_then(|mut file| std::io::Write::write_all(&mut file, text.as_bytes())),
                 false => std::fs::write(&file, text),
             };
             written.map_err(|error| refuse(&ctx, &error, "open", &path))
@@ -525,8 +558,10 @@ fn build<'js>(
     host.set(
         "list",
         Function::new(ctx.clone(), move |ctx: Ctx<'js>, path: String| -> rquickjs::Result<Vec<String>> {
-            let entries = std::fs::read_dir(reach(&ctx, &root, "scandir", &path)?).map_err(|error| refuse(&ctx, &error, "scandir", &path))?;
-            let mut names: Vec<String> = entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
+            let entries = std::fs::read_dir(reach(&ctx, &root, "scandir", &path)?)
+                .map_err(|error| refuse(&ctx, &error, "scandir", &path))?;
+            let mut names: Vec<String> =
+                entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
             names.sort();
             Ok(names)
         })?,
@@ -542,7 +577,9 @@ fn build<'js>(
                 _ => std::fs::remove_file(&target),
             };
             match removed {
-                Err(error) if !(force && error.kind() == std::io::ErrorKind::NotFound) => Err(refuse(&ctx, &error, "unlink", &path)),
+                Err(error) if !(force && error.kind() == std::io::ErrorKind::NotFound) => {
+                    Err(refuse(&ctx, &error, "unlink", &path))
+                }
                 _ => Ok(()),
             }
         })?,
