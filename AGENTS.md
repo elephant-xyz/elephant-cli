@@ -46,6 +46,7 @@
 - Expected outputs under `tests/fixtures/*/expected` came from elephant-cli 1.58.1 on the same inputs. Do not regenerate them from this crate's own output.
 - Write the failing test first. After it passes, break the code on purpose once to see the test fail for the right reason.
 - `tests/transform_engine.rs` holds the embedded JavaScript engine to Node's answers: each case in `tests/fixtures/transform/engine` is a script, and `golden.sh` there writes what Node reports for it. Add a case there when a county script needs something the engine lacks.
+- `scripts/parity` compares this crate with elephant-cli 1.x on generated input and fuzzes `validate` and `hash`. Run the relevant script after changing the validator, hashing, the table export or the JavaScript engine.
 - Tests never use the network: `tests/fixtures/lexicon` is the schema cache, and `tests/support/http.rs` is a local HTTP server.
 
 ## Style

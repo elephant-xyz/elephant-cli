@@ -523,6 +523,7 @@ What changed:
 | `export-tables` | hyparquet writer | Apache parquet writer: same tables, columns and rows; part bytes, part CIDs and the tables root differ |
 | `upload` | Also uploads a hashed ZIP to Pinata | County CARs and tables directories only |
 | `transform` | Scripts run as Node child processes with the CLI's `node_modules` | Scripts run on embedded QuickJS with the Node modules listed under [transform](#transform), confined to their working directory; legacy mode and the Property Improvement extractor mode are gone |
+| `transform` scripts | The four mapping scripts run at once; links in a data-group root array follow directory order, which varies | They run one after another (`ownerMapping`, `structureMapping`, `layoutMapping`, `utilityMapping`, then `data_extractor`); links follow file-name order. CIDs after `hash` are the same |
 | `transform` handlers | `--transform-version 2` required; no npm packages | `--transform-zip` alone is enough; `cheerio` can be imported |
 | `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` has no effect |
 | `prepare` captures | Cleaned and formatted with Prettier | Cleaned, not reformatted |
@@ -540,4 +541,5 @@ node --test tests/install.test.mjs                      # how the npm package ge
 
 - The tests run the built binary on real files. Expected outputs under `tests/fixtures` were produced by elephant-cli 1.58.1 on the same inputs.
 - `assets/cheerio.js` is cheerio's browser build as one file; `scripts/bundle-cheerio.sh` rebuilds it. `assets/doT.js` is doT 1.1.3.
+- `scripts/parity` holds the checks against elephant-cli 1.x and the fuzzers; its README says what each one needs.
 - `CONTEXT.md` defines the terms used in code and documentation.

@@ -45,6 +45,10 @@ node --test tests/install.test.mjs                      # the npm installer; nee
 - Expected values come from somewhere other than this crate: the outputs under `tests/fixtures/*/expected` were written by elephant-cli 1.58.1, and CIDs in tests are literals.
 - Tests do not use the network. `tests/fixtures/lexicon` is a schema cache, and `tests/support/http.rs` serves local HTTP.
 
+### Checking against 1.x
+
+`scripts/parity` holds checks that are too slow or need too much for the test suite: fuzzers for `validate` and `hash`, and comparisons with elephant-cli 1.x for hashing, validation findings, exported tables and county scripts. Run the ones that concern your change; `scripts/parity/README.md` lists them.
+
 ## Style
 
 ```bash
