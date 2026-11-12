@@ -1,6 +1,6 @@
 import { createReadStream } from 'fs';
 // @ipld/car is pinned to 5.4.4, the last release on multiformats 13 (what the rest of the tree uses).
-import { CarBlockIterator, CarIndexedReader } from '@ipld/car';
+import { CarBlockIterator } from '@ipld/car';
 import * as dagJSON from '@ipld/dag-json';
 import * as raw from 'multiformats/codecs/raw';
 import { CID } from 'multiformats/cid';
@@ -17,6 +17,13 @@ import {
   formatCurrentValue,
 } from '../utils/validation-errors.js';
 import { logger } from '../utils/logger.js';
+import {
+  BigSet,
+  BlockMarks,
+  cidKey,
+  LargeCarReader,
+  type CarBlockReader,
+} from '../utils/large-car.js';
 
 export const CAR_CHECKS = [
   'integrity',
@@ -57,7 +64,7 @@ export interface IndexEntry {
  * Returns nothing when the root itself is unusable.
  */
 export async function walkIndex(
-  reader: CarIndexedReader,
+  reader: CarBlockReader,
   report: (check: 'root' | 'index', row: Row) => Promise<void>,
   resolve: (
     check: 'index',
@@ -268,24 +275,23 @@ export async function validateCar(
     input.destroy();
   }
 
-  const reader = await CarIndexedReader.fromFile(file);
+  const reader = await LargeCarReader.fromFile(file);
   const walk = async () => {
-    const missing = new Set<string>();
+    const missing = new BigSet();
     const resolve = async (
       check: CarCheck,
       link: CID,
       from: string,
       context: Partial<Row> = {}
     ): Promise<boolean> => {
-      const key = link.toString();
       if (await reader.has(link)) {
         return true;
       }
-      if (!missing.has(key)) {
-        missing.add(key);
+      if (!missing.has(cidKey(link))) {
+        missing.add(cidKey(link));
         await report(check, {
           block: from,
-          message: `link ${key} is not in the car`,
+          message: `link ${link} is not in the car`,
           ...context,
         });
       }
@@ -300,18 +306,26 @@ export async function validateCar(
     summary.properties = entries.length;
 
     logger.info('Checking graph closure from the root');
-    const reachable = new Set<string>();
+    // Every reachable block is in the CAR (resolve checks), so one bit per indexed block marks it.
+    const reachable = new BlockMarks(reader.blockCount);
     const queue: { cid: CID; from: string }[] = [{ cid: root, from: '' }];
     while (queue.length > 0) {
       const next = queue.pop() as { cid: CID; from: string };
       const key = next.cid.toString();
-      if (reachable.has(key) || missing.has(key)) {
+      const slot = reader.slotOf(next.cid);
+      if (slot !== undefined && reachable.has(slot)) {
         continue;
       }
-      if (!(await resolve('graph', next.cid, next.from))) {
+      if (slot === undefined && missing.has(cidKey(next.cid))) {
         continue;
       }
-      reachable.add(key);
+      if (
+        !(await resolve('graph', next.cid, next.from)) ||
+        slot === undefined
+      ) {
+        continue;
+      }
+      reachable.add(slot);
       if (next.cid.code === raw.code) {
         continue;
       }
@@ -411,15 +425,15 @@ export async function validateCar(
     }
 
     logger.info('Checking for blocks unreachable from the root');
-    const seen = new Set<string>();
+    const seen = new BlockMarks(reader.blockCount);
     for await (const cid of reader.cids()) {
-      const key = cid.toString();
-      if (reachable.has(key) || seen.has(key)) {
+      const slot = reader.slotOf(cid) as number; // every CID the file lists is indexed
+      if (reachable.has(slot) || seen.has(slot)) {
         continue;
       }
-      seen.add(key);
+      seen.add(slot);
       await report('orphans', {
-        block: key,
+        block: cid.toString(),
         message: 'block is not reachable from the root',
       });
     }
