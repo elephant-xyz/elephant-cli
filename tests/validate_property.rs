@@ -176,3 +176,26 @@ fn fetches_the_manifest_and_missing_schemas_then_works_offline() {
     let ran = scratch.run(&["--json", "validate", "clean", "--output-csv", "errors.csv"]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
 }
+
+/// The rows of a fixture, ours and those of elephant-cli 1.58.1, in one order.
+fn sorted(mut rows: Vec<Vec<String>>) -> Vec<Vec<String>> {
+    rows.sort();
+    rows
+}
+
+#[test]
+fn reports_a_failed_then_branch_where_elephant_cli_1_did() {
+    // `method` is missing from the seed's request: each `if`/`then` it fails gets a row of its own
+    let scratch = prepared("then-branch");
+    let ran = scratch.run(&["validate", "then-branch", "--output-csv", "errors.csv"]);
+    assert_eq!(ran.code, 1, "{}", ran.stderr);
+    assert_eq!(sorted(found(&scratch)), sorted(golden("then-branch")));
+}
+
+#[test]
+fn names_the_types_a_value_may_have_in_the_order_the_schema_does() {
+    let scratch = prepared("type-list");
+    let ran = scratch.run(&["validate", "type-list", "--output-csv", "errors.csv"]);
+    assert_eq!(ran.code, 1, "{}", ran.stderr);
+    assert_eq!(sorted(found(&scratch)), sorted(golden("type-list")));
+}

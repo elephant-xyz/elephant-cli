@@ -195,17 +195,54 @@ fn messages(kind: &ValidationErrorKind) -> Vec<String> {
     }
 }
 
+/// Where each `then` or `else` on an error's schema path applies in the data:
+/// the keyword, and how many segments of the error's instance path lead to
+/// the value the `if` was asked about.
+fn conditions(schema: &str) -> Vec<(&str, usize)> {
+    let parts: Vec<&str> = schema.split('/').skip(1).collect();
+    let (mut at, mut depth, mut found) = (0, 0, Vec::new());
+    while at < parts.len() {
+        // a keyword that ends the path is the one that failed; it names no place in the data
+        let inner = at + 1 < parts.len();
+        match parts[at] {
+            "properties" | "patternProperties" | "prefixItems" if inner => {
+                depth += 1;
+                at += 2;
+            }
+            "$defs" | "definitions" | "dependentSchemas" | "allOf" | "anyOf" | "oneOf" if inner => at += 2,
+            "items" | "additionalProperties" | "contains" | "unevaluatedProperties" | "unevaluatedItems" if inner => {
+                depth += 1;
+                // `items/3/...` is the fourth schema of a tuple
+                at += if parts[at + 1].bytes().all(|byte| byte.is_ascii_digit()) { 2 } else { 1 };
+            }
+            keyword @ ("then" | "else") => {
+                found.push((keyword, depth));
+                at += 1;
+            }
+            _ => at += 1,
+        }
+    }
+    found
+}
+
 /// Flatten an error and, like ajv with `allErrors`, the errors of every
-/// `anyOf`/`oneOf` branch that did not match.
-fn collect(error: &ValidationError<'_>, into: &mut Vec<Finding>) {
+/// `anyOf`/`oneOf` branch that did not match, and one row for every `then` or
+/// `else` the error sits under. `seen` holds the conditions already reported.
+fn collect(error: &ValidationError<'_>, schema: &Value, data: &Value, seen: &mut HashSet<String>, into: &mut Vec<Finding>) {
     use ValidationErrorKind as K;
     if let K::AnyOf { context } | K::OneOfNotValid { context } = error.kind() {
-        context.iter().flatten().for_each(|inner| collect(inner, into));
+        context.iter().flatten().for_each(|inner| collect(inner, schema, data, seen, into));
     }
     let instance: &Value = error.instance();
     let pointer = instance.get("/").filter(|_| instance.is_object());
     let path = error.instance_path().as_str();
-    for message in messages(error.kind()) {
+    // the types a value may have, in the order the schema lists them, as ajv prints them
+    let listed = match error.kind() {
+        K::Type { kind: TypeKind::Multiple(_) } => schema.pointer(error.schema_path().as_str()).and_then(Value::as_array),
+        _ => None,
+    };
+    let listed = listed.map(|kinds| vec![format!("must be {}", kinds.iter().map(text).collect::<Vec<_>>().join(","))]);
+    for message in listed.unwrap_or_else(|| messages(error.kind())) {
         // A pointer left in place where the schema wants a string.
         let message = match pointer {
             Some(target) if message.contains("must be string") => {
@@ -223,6 +260,16 @@ fn collect(error: &ValidationError<'_>, into: &mut Vec<Finding>) {
             message,
             value: text(instance),
         });
+    }
+    for (keyword, depth) in conditions(error.schema_path().as_str()) {
+        let asked: String = path.split('/').skip(1).take(depth).map(|part| format!("/{part}")).collect();
+        if seen.insert(format!("{keyword} {asked}")) {
+            into.push(Finding {
+                value: data.pointer(&asked).map(text).unwrap_or_default(),
+                path: if asked.is_empty() { "/".to_string() } else { asked },
+                message: format!("must match \"{keyword}\" schema"),
+            });
+        }
     }
 }
 
@@ -415,8 +462,8 @@ impl Group {
                     Err(error) => return Some(vec![thrown(&error)]),
                     Ok(resolved) => resolved,
                 };
-                let mut findings = Vec::new();
-                validator.iter_errors(&resolved).for_each(|error| collect(&error, &mut findings));
+                let (mut findings, mut seen) = (Vec::new(), HashSet::new());
+                validator.iter_errors(&resolved).for_each(|error| collect(&error, schema, &resolved, &mut seen, &mut findings));
                 Some(findings)
             }
         }
