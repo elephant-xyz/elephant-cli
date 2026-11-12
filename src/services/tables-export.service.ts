@@ -8,7 +8,7 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { constants as zlib, zstdCompressSync } from 'zlib';
 // @ipld/car is pinned to 5.4.4, the last release on multiformats 13 (what the rest of the tree uses).
-import { CarIndexedReader, CarWriter } from '@ipld/car';
+import { CarWriter } from '@ipld/car';
 import * as dagJSON from '@ipld/dag-json';
 import { CID } from 'multiformats/cid';
 import { sha256 } from 'multiformats/hashes/sha2';
@@ -19,6 +19,7 @@ import { decodeDagJson } from './cid-calculator.service.js';
 import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
 import { schemaManifestUrl } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
+import { BigSet, cidKey, LargeCarReader } from '../utils/large-car.js';
 
 export interface ExportTablesOptions {
   /** County CAR written by `hash --output-car`. */
@@ -368,7 +369,7 @@ export async function exportTables(
 ): Promise<ExportTablesResult> {
   const cap = options.partSize ?? 1 << 30;
   await fsPromises.mkdir(options.output, { recursive: true });
-  const reader = await CarIndexedReader.fromFile(options.input);
+  const reader = await LargeCarReader.fromFile(options.input);
   const run = async (): Promise<ExportTablesResult> => {
     const fail = (message: string): never => {
       throw new Error(message);
@@ -541,7 +542,7 @@ export async function exportTables(
       source: 'the county index',
     });
     // ponytail: entity and relationship CIDs seen, so a block shared by several groups lands in one row; spill to disk if a county export is measured too big
-    const seen = new Set<string>();
+    const seen = new BigSet();
     const entity = async (
       table: Table,
       cid: CID,
@@ -549,10 +550,10 @@ export async function exportTables(
       group: string
     ) => {
       const key = cid.toString();
-      if (seen.has(key)) {
+      if (seen.has(cidKey(cid))) {
         return;
       }
-      seen.add(key);
+      seen.add(cidKey(cid));
       const value = await block(cid);
       const extras: Record<string, unknown> = {
         cid: key,
