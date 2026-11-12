@@ -266,7 +266,7 @@ This ensures all files conform to the Property Improvement schema and relationsh
 **Inputs**
 
 - A single property ZIP, a single extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order; children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run).
-- Or a county CAR written by `hash --output-car` (any input ending in `.car`). The file is indexed once and checked in place:
+- Or a county CAR written by `hash --output-car` (any input ending in `.car`). The file is read start to end twice and never loaded whole: the first read hashes every block, the second checks each shard's blocks when the shard block arrives. It runs these checks:
   - Integrity: every block's bytes re-hash to its CID.
   - Root: exactly one root, a `CountyIndex` version 1 with a numeric `properties` count and a `shards` array of links.
   - Index closure: every shard decodes to `{"properties": [...]}`, the entries add up to `properties`, and every `property_cid` and `data_groups` link resolves inside the file.
@@ -274,10 +274,22 @@ This ensures all files conform to the Property Improvement schema and relationsh
   - Lexicon: every data-group root listed in a shard validates against the schema it is keyed by, resolving links from the CAR instead of IPFS.
   - Orphans: every block is reachable from the root.
 
+  A link to a block missing from the file is reported once: under index when a shard lists the block, under graph otherwise.
+
+  The fast path needs the layout `hash --output-car` writes, where a shard's blocks sit right before the shard block. A CAR laid out another way (for example one exported root first from IPFS) gets the same findings, but the whole file is indexed in memory and blocks are read one at a time, which is slower.
+
+**Options**
+
+| Option                            | Description                                                                                                                                                         | Default             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `-o, --output-csv <path>`         | CSV file for validation errors.                                                                                                                                     | `submit_errors.csv` |
+| `--max-concurrent-tasks <number>` | Target concurrency for property inputs (fallback determined automatically).                                                                                         | Auto                |
+| `--car-memory <megabytes>`        | County CAR only: megabytes of block data to hold in memory at once. Blocks beyond it are read back from the file when needed, which is slower but gives the same findings. | `1024`              |
+
 **Outputs**
 
 - `--output-csv` (default `submit_errors.csv`): validation errors. With a directory of properties, one combined CSV for the whole batch (plus a combined `submit_warnings.csv` beside it), followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
-- With a CAR, one row per finding (`file_path` holds the block CID, `error_path` the check name or the JSON path for lexicon errors), followed by a summary of blocks, properties, data groups validated, and errors per check; the exit code is non-zero when any check failed.
+- With a CAR, one row per finding (`file_path` holds the block CID, `error_path` the check name or the JSON path for lexicon errors), followed by a summary of blocks, properties, data groups validated, and errors per check; the exit code is non-zero when any check failed. Two notes appear only when they apply: how many blocks were looked up by CID because they are not stored with the shard that links to them (the slow layout above), and how many blocks did not fit in `--car-memory`.
 
 ```bash
 # Validate every property in a county directory in one invocation

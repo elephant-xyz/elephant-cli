@@ -141,14 +141,34 @@ export interface Tweaks {
   empty?: boolean;
   /** Every property also carries a Seed data group with no relationships. */
   seed?: boolean;
+  /** One shard per property, each written right after its property's blocks. */
+  split?: boolean;
+  /** Split, and property `b` links to property `a`'s address block instead of carrying its own. */
+  shared?: boolean;
+  /** Split, and property `b`'s blocks include a second copy of `a`'s address block that `b` does not link. */
+  spare?: boolean;
+  /** Split, and property `b`'s address block is written among property `a`'s blocks. */
+  late?: boolean;
+  /** The same blocks written in reverse order: the county index first. */
+  reversed?: boolean;
+  /** The index lists its only shard twice. */
+  twice?: boolean;
+  /** The index lists no shards although the file holds one. */
+  unlisted?: boolean;
+  /** Split, and property `b`'s shard block is listed by the index but not written. */
+  gone?: boolean;
+  /** Property `a`'s address block is written twice in a row. */
+  doubled?: boolean;
+  /** Split, property `a`'s address links to a block that is not in the car, and `b`'s shard lists that block as a data group. */
+  claimed?: boolean;
 }
 
 /**
  * Two properties `a` and `b`, each a data-group root -> one
  * `property_has_address` relationship block -> a property and an address
  * entity, in that block order, then the shard and the county index (and the
- * extra block last). `entities` lists property a, address a, property b,
- * address b; `nowhere` is the link used by `dangling` and `lost`.
+ * extra block last). `entities` lists property a, address a, property b and
+ * the address b links to; `nowhere` is the link used by `dangling` and `lost`.
  */
 export async function buildCountyCar(
   file: string,
@@ -158,6 +178,25 @@ export async function buildCountyCar(
   const entries: { property_cid: CID; data_groups: Record<string, CID> }[] = [];
   const entities: CID[] = [];
   const nowhere = (await text('nowhere')).cid;
+  const split = Boolean(
+    tweaks.split ||
+      tweaks.shared ||
+      tweaks.spare ||
+      tweaks.late ||
+      tweaks.gone ||
+      tweaks.claimed
+  );
+  const shards: Block[] = [];
+  const addresses: Block[] = [];
+  const addressOf = (suffix: string) =>
+    json({
+      city: `City ${suffix}`,
+      request_identifier: `req-${suffix}`,
+      ...((tweaks.dangling && suffix === 'b') ||
+      (tweaks.claimed && suffix === 'a')
+        ? { extra: nowhere }
+        : {}),
+    });
   for (const [index, suffix] of tweaks.empty ? [] : ['a', 'b'].entries()) {
     const b = suffix === 'b';
     const property = await json({
@@ -168,11 +207,8 @@ export async function buildCountyCar(
       source_http_request: { method: 'GET', url: `https://x/${suffix}` },
       request_identifier: `req-${suffix}`,
     });
-    const address = await json({
-      city: `City ${suffix}`,
-      request_identifier: `req-${suffix}`,
-      ...(tweaks.dangling && b ? { extra: nowhere } : {}),
-    });
+    addresses.push(await addressOf(suffix));
+    const address = addresses[tweaks.shared ? 0 : index];
     const link = await json({ from: property.cid, to: address.cid });
     const root = await json({
       label: 'County',
@@ -180,7 +216,19 @@ export async function buildCountyCar(
         property_has_address: [tweaks.lost && b ? nowhere : link.cid],
       },
     });
-    blocks.push(root, link, property, address);
+    blocks.push(root, link, property);
+    if (!(b && (tweaks.shared || tweaks.late))) {
+      blocks.push(address);
+    }
+    if (!b && tweaks.late) {
+      blocks.push(await addressOf('b'));
+    }
+    if (!b && tweaks.doubled) {
+      blocks.push(address);
+    }
+    if (b && tweaks.spare) {
+      blocks.push(addresses[0]);
+    }
     entities.push(property.cid, address.cid);
     const twin = await json({ nickname: `twin-${suffix}` });
     const twinLink = await json({ from: property.cid, to: twin.cid });
@@ -201,17 +249,27 @@ export async function buildCountyCar(
         [GROUP]: root.cid,
         ...(tweaks.twin && b ? { [OTHER_GROUP]: other.cid } : {}),
         ...(tweaks.seed ? { [SEED]: seed.cid } : {}),
+        ...(tweaks.claimed && b ? { [SEED]: nowhere } : {}),
       },
     });
+    if (split) {
+      shards.push(await json({ properties: [entries[index]] }));
+      blocks.push(...(tweaks.gone && b ? [] : [shards[index]]));
+    }
   }
-  const shard = await json({ properties: entries });
+  if (!split && !tweaks.empty) {
+    shards.push(await json({ properties: entries }));
+    blocks.push(shards[0]);
+  }
   const index = await json({
     label: 'CountyIndex',
     version: 1,
     properties: entries.length,
-    shards: tweaks.empty ? [] : [shard.cid],
+    shards: [...shards, ...(tweaks.twice ? shards : [])]
+      .filter(() => !tweaks.unlisted)
+      .map((shard) => shard.cid),
   });
-  blocks.push(...(tweaks.empty ? [] : [shard]), index);
+  blocks.push(index);
   if (tweaks.extra) {
     blocks.push(await text('unreachable'));
   }
@@ -222,7 +280,7 @@ export async function buildCountyCar(
       chunks.push(chunk);
     }
   })();
-  for (const block of blocks) {
+  for (const block of tweaks.reversed ? [...blocks].reverse() : blocks) {
     await channel.writer.put(block);
   }
   await channel.writer.close();
