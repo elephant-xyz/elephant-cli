@@ -38,6 +38,7 @@ cargo test                                              # everything except the 
 OBSCURA_BIN=/path/to/obscura cargo test                 # with the browser tests
 cargo test --test hash                                  # one file
 ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs
+node --test tests/install.test.mjs                      # the npm installer; needs neither cargo nor the network
 ```
 
 - Tests run the built binary on real files and assert on its exit code, stdout, stderr and the files it writes. They do not call internal functions.
@@ -65,5 +66,7 @@ A release is a tag.
 
 1. Set the same version in `Cargo.toml` and `package.json`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge.
 2. `git tag v<version> && git push origin v<version>`.
+
+Every commit on `main` is also built by the `Build` workflow and published as the pre-release `build-<commit>`; that is what a git install of the npm package downloads. The newest 50 are kept.
 
 The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and Windows, attaches them to a GitHub release with their SHA-256 sums, writes `npm/release.json` so the npm package downloads the right binary, and publishes `@elephant-xyz/cli`. A version with a hyphen, such as `2.0.0-alpha.1`, is published under the npm tag `next` and marked as a pre-release.

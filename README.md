@@ -44,12 +44,15 @@ Choose one.
 cargo install --git https://github.com/elephant-xyz/elephant-cli --locked
 ```
 
-**Install with npm.** The package builds the binary from source with cargo when installed from git, and downloads a prebuilt binary when installed from a published release:
+**Install with npm.** No Rust toolchain is needed: the package downloads the binary built for it.
 
 ```bash
-npm i github:elephant-xyz/elephant-cli#main
+npm i @elephant-xyz/cli                         # a release
+npm i github:elephant-xyz/elephant-cli#main     # the current main, or #<commit> to pin one
 npx elephant-cli --version
 ```
+
+A release downloads its own binary and checks its SHA-256. A git install downloads the binary CI built for that commit (the pre-release `build-<commit>` of this repository). When there is no binary to download — a commit CI has not built, a platform without one, a binary that does not run on the system — the package builds from source with cargo, and says so. If npm was told not to run install scripts, the first run of `elephant-cli` does the same work.
 
 **Download a release binary** from <https://github.com/elephant-xyz/elephant-cli/releases> and put `elephant-cli` on your `PATH`.
 
@@ -498,6 +501,7 @@ console.log(checked.success, checked.errors, checked.errorCsvPath);
 | `OBSCURA_ALLOW_PRIVATE_NETWORK` | `prepare` | `1` lets obscura reach loopback and private addresses. |
 | `ELEPHANT_ORANGE_API` | `prepare` | Base URL of the Orange County API, for testing. |
 | `ELEPHANT_CLI_BINARY` | the npm package | The native binary the launcher and the library run. |
+| `ELEPHANT_CLI_BUILD_FROM_SOURCE` | the npm package | `1` makes the installer build with cargo instead of downloading a binary. |
 
 ## Migrating from 1.x
 
@@ -530,7 +534,8 @@ What changed:
 cargo test                                   # unit and CLI tests
 OBSCURA_BIN=/path/to/obscura cargo test      # also the browser tests of prepare
 cargo fmt && cargo clippy --all-targets -- -D warnings
-node npm/install.js && node --test tests/sdk.test.mjs   # the npm launcher and library
+ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs   # the npm launcher and library
+node --test tests/install.test.mjs                      # how the npm package gets its binary
 ```
 
 - The tests run the built binary on real files. Expected outputs under `tests/fixtures` were produced by elephant-cli 1.58.1 on the same inputs.

@@ -1,0 +1,48 @@
+name: Build
+
+# Every commit on main gets its binaries, published as the pre-release
+# `build-<commit>`. A git install (`npm i github:elephant-xyz/elephant-cli#main`,
+# or a pinned commit) downloads from there, so it needs no Rust toolchain;
+# npm/install.js builds from source when a commit has no build.
+on:
+  push:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.sha }}
+
+jobs:
+  binaries:
+    uses: ./.github/workflows/binaries.yml
+
+  publish:
+    name: Publish the commit's binaries
+    needs: binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish build-${{ github.sha }}
+        run: |
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          gh release create "build-$GITHUB_SHA" dist/*.tar.gz dist/SHA256SUMS \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Build ${GITHUB_SHA::7}" \
+            --notes "Binaries of commit $GITHUB_SHA, downloaded by git installs of the npm package."
+      # a pinned commit older than these still installs: it builds from source
+      - name: Keep the newest 50 builds
+        run: |
+          gh release list --limit 500 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("build-"))] | sort_by(.createdAt) | reverse | .[50:] | .[].tagName' \
+            | xargs -r -n 1 gh release delete --yes --cleanup-tag

@@ -56,8 +56,8 @@ jobs:
       - name: Run the tests
         run: cargo test --locked
 
-      - name: Test the npm launcher and library
-        run: node --test tests/sdk.test.mjs
+      - name: Test the npm launcher, library and installer
+        run: node --test tests/sdk.test.mjs tests/install.test.mjs
         env:
           ELEPHANT_CLI_BINARY: ${{ github.workspace }}/target/debug/elephant-cli
 
