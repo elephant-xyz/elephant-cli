@@ -61,3 +61,8 @@ fn same(case: &str) {
 fn runs_the_main_function_a_script_guards_with_require_main() {
     same("main");
 }
+
+#[test]
+fn formats_numbers_for_en_us_as_node_does() {
+    same("numbers");
+}

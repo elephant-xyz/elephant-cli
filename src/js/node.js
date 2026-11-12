@@ -295,6 +295,50 @@
     }
   }
 
+  // ---- locale: the en-US answers Node gives; this engine has no Intl ----
+  // The plain digits of a non-negative finite number, taken from its shortest
+  // form as Intl does (5.005 rounds to 5.01, though the double is below it).
+  const digits = (value, shift) => {
+    const [mantissa, exponent] = String(value).split('e');
+    const [whole, fraction = ''] = mantissa.split('.');
+    const all = whole + fraction;
+    const point = whole.length + Number(exponent || 0) + shift;
+    if (point <= 0) return ['0', '0'.repeat(-point) + all];
+    return [all.slice(0, point).padEnd(point, '0'), all.slice(point)];
+  };
+  const group = (whole) => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  function localeNumber(locales, options) {
+    const value = Number(this);
+    const style = (options && options.style) || 'decimal';
+    const sign = value < 0 || Object.is(value, -0) ? '-' : '';
+    const symbol = style === 'currency' ? (options.currency === 'USD' ? '$' : `${options.currency} `) : '';
+    const unit = style === 'percent' ? '%' : '';
+    if (Number.isNaN(value)) return `${symbol}NaN${unit}`;
+    if (!Number.isFinite(value)) return `${sign}${symbol}∞${unit}`;
+    const set = (name, fallback) => (options && options[name] !== undefined ? Number(options[name]) : fallback);
+    const most = set('maximumFractionDigits', undefined);
+    const least = set('minimumFractionDigits', Math.min(style === 'currency' ? 2 : 0, most === undefined ? 2 : most));
+    const limit = most === undefined ? Math.max(least, style === 'currency' ? 2 : style === 'percent' ? 0 : 3) : Math.max(least, most);
+    let [whole, fraction] = digits(Math.abs(value), style === 'percent' ? 2 : 0);
+    if (fraction.length > limit) {
+      const up = fraction[limit] >= '5';
+      const kept = BigInt(whole + fraction.slice(0, limit)) + (up ? 1n : 0n);
+      const text = kept.toString().padStart(limit + 1, '0');
+      whole = text.slice(0, text.length - limit);
+      fraction = text.slice(text.length - limit);
+    }
+    whole = whole.replace(/^0+(?=\d)/, '');
+    fraction = fraction.replace(/0+$/, '').padEnd(least, '0');
+    const grouped = options && options.useGrouping === false ? whole : group(whole);
+    return `${sign}${symbol}${grouped}${fraction ? '.' + fraction : ''}${unit}`;
+  }
+  if (typeof globalThis.Intl === 'undefined') {
+    Number.prototype.toLocaleString = localeNumber;
+    BigInt.prototype.toLocaleString = function () {
+      return String(this).replace(/\d+/, group);
+    };
+  }
+
   // ---- CommonJS ----
   const builtins = {
     fs,
