@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BigMap,
   BigSet,
+  BlockMarks,
   cidKey,
   LargeCarReader,
 } from '../../../src/utils/large-car.js';
@@ -72,6 +73,31 @@ describe('LargeCarReader', () => {
     } finally {
       await large.close();
       await indexed.close();
+    }
+  });
+
+  it('gives every distinct block a slot that BlockMarks can mark', async () => {
+    const leaves = await Promise.all(
+      Array.from({ length: 20 }, (_, i) => text(`slot ${i}`))
+    );
+    const file = await writeCar([leaves[0]], [...leaves, leaves[3]]);
+    const absent = await text('absent');
+    const large = await LargeCarReader.fromFile(file);
+    try {
+      const slots = await Promise.all(
+        leaves.map(async (leaf) => large.slotOf(leaf.cid))
+      );
+      expect(new Set(slots).size).toBe(20);
+      expect(slots.every((slot) => slot !== undefined && slot < 20)).toBe(true);
+      expect(large.slotOf(absent.cid)).toBeUndefined();
+      const marks = new BlockMarks(large.blockCount);
+      marks.add(slots[3] as number).add(slots[19] as number);
+      expect(slots.filter((slot) => marks.has(slot as number))).toEqual([
+        slots[3],
+        slots[19],
+      ]);
+    } finally {
+      await large.close();
     }
   });
 

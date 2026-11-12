@@ -19,6 +19,7 @@ import {
 import { logger } from '../utils/logger.js';
 import {
   BigSet,
+  BlockMarks,
   cidKey,
   LargeCarReader,
   type CarBlockReader,
@@ -305,19 +306,26 @@ export async function validateCar(
     summary.properties = entries.length;
 
     logger.info('Checking graph closure from the root');
-    const reachable = new BigSet();
+    // Every reachable block is in the CAR (resolve checks), so one bit per indexed block marks it.
+    const reachable = new BlockMarks(reader.blockCount);
     const queue: { cid: CID; from: string }[] = [{ cid: root, from: '' }];
     while (queue.length > 0) {
       const next = queue.pop() as { cid: CID; from: string };
       const key = next.cid.toString();
-      const id = cidKey(next.cid);
-      if (reachable.has(id) || missing.has(id)) {
+      const slot = reader.slotOf(next.cid);
+      if (slot !== undefined && reachable.has(slot)) {
         continue;
       }
-      if (!(await resolve('graph', next.cid, next.from))) {
+      if (slot === undefined && missing.has(cidKey(next.cid))) {
         continue;
       }
-      reachable.add(id);
+      if (
+        !(await resolve('graph', next.cid, next.from)) ||
+        slot === undefined
+      ) {
+        continue;
+      }
+      reachable.add(slot);
       if (next.cid.code === raw.code) {
         continue;
       }
@@ -417,13 +425,13 @@ export async function validateCar(
     }
 
     logger.info('Checking for blocks unreachable from the root');
-    const seen = new BigSet();
+    const seen = new BlockMarks(reader.blockCount);
     for await (const cid of reader.cids()) {
-      const id = cidKey(cid);
-      if (reachable.has(id) || seen.has(id)) {
+      const slot = reader.slotOf(cid) as number; // every CID the file lists is indexed
+      if (reachable.has(slot) || seen.has(slot)) {
         continue;
       }
-      seen.add(id);
+      seen.add(slot);
       await report('orphans', {
         block: cid.toString(),
         message: 'block is not reachable from the root',

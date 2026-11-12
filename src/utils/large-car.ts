@@ -79,6 +79,24 @@ export class BigMap {
   }
 }
 
+/** One bit per block of a CAR, by `LargeCarReader.slotOf`: 4 MB for 31.5M blocks instead of a set of CIDs. */
+export class BlockMarks {
+  private readonly bits: Uint8Array;
+
+  constructor(count: number) {
+    this.bits = new Uint8Array(Math.ceil(count / 8));
+  }
+
+  has(slot: number): boolean {
+    return (this.bits[slot >> 3] & (1 << (slot & 7))) !== 0;
+  }
+
+  add(slot: number): this {
+    this.bits[slot >> 3] |= 1 << (slot & 7);
+    return this;
+  }
+}
+
 /** What the CAR walkers need from a reader: `CarIndexedReader` and `LargeCarReader` both fit. */
 export interface CarBlockReader {
   getRoots(): Promise<CID[]>;
@@ -145,6 +163,14 @@ export class LargeCarReader implements CarBlockReader {
 
   async getRoots(): Promise<CID[]> {
     return this.roots;
+  }
+
+  /**
+   * The block's position among the distinct blocks (0 to blockCount - 1), or undefined when the CAR
+   * lacks it. Lets a walker mark blocks in a `BlockMarks` instead of keeping their CIDs.
+   */
+  slotOf(cid: CID): number | undefined {
+    return this.slots.get(cidKey(cid));
   }
 
   async has(cid: CID): Promise<boolean> {
