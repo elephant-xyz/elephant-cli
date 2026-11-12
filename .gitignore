@@ -1,5 +1,6 @@
 target/
 node_modules/
+npm/native/
 *.log
 .env
 .env.*

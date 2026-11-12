@@ -56,6 +56,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Fetch the source content for a parcel and add it to its seed ZIP
+    Prepare(Prepare),
+    /// Turn prepared source content into lexicon data-group files with county scripts or a handler package
+    Transform(Transform),
     /// Check property outputs or a county CAR against the lexicon
     Validate(Validate),
     /// Give property outputs their CIDs and pack them into hashed ZIPs, a CSV and a county CAR
@@ -64,10 +68,6 @@ enum Command {
     ExportTables(ExportTables),
     /// Send a county CAR or a tables directory to an IPFS node and verify it arrived
     Upload(Upload),
-    /// Turn prepared source content into lexicon data-group files with county scripts or a handler package
-    Transform(Transform),
-    /// Fetch the source content for a parcel and add it to its seed ZIP
-    Prepare(Prepare),
 }
 
 #[derive(Args)]

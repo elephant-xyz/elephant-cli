@@ -1,0 +1,43 @@
+{
+  "name": "@elephant-xyz/cli",
+  "version": "2.0.0-alpha.0",
+  "description": "Validate, hash, export, upload, prepare and transform Elephant county data.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elephant-xyz/elephant-cli.git"
+  },
+  "bin": {
+    "elephant-cli": "npm/bin.js"
+  },
+  "main": "npm/lib.js",
+  "types": "npm/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./npm/lib.d.ts",
+      "import": "./npm/lib.js"
+    },
+    "./lib": {
+      "types": "./npm/lib.d.ts",
+      "import": "./npm/lib.js"
+    }
+  },
+  "files": [
+    "npm/*.js",
+    "npm/*.d.ts",
+    "npm/release.json",
+    "src/",
+    "assets/",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node npm/install.js",
+    "test": "cargo test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
