@@ -883,6 +883,124 @@ describe('JsonValidatorService', () => {
       expect(get).toHaveBeenCalledTimes(1);
     });
 
+    it('should retry a schema whose resolve failed', async () => {
+      const content = 'QmRhVwVfENfzsT9gWZnQY9C8w2cpNyuyUKUpc8mNGaW1MG';
+      const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockRejectedValueOnce(new Error('gateway down'))
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+          })
+        )
+        .mockResolvedValueOnce(JSON.stringify({ name: 'first' }));
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: { user: { type: 'string', cid: schemaCID } },
+      };
+      const data = { user: { '/': content } };
+
+      const failed = await jsonValidator.validate(data, schema);
+      const retried = await jsonValidator.validate(data, schema);
+
+      expect(failed.valid).toBe(false);
+      expect(failed.errors![0].message).toContain(
+        'Failed to resolve schema CID'
+      );
+      expect(retried.valid).toBe(true);
+    });
+
+    it('should resolve a schema once for concurrent calls', async () => {
+      const first = 'QmRhVwVfENfzsT9gWZnQY9C8w2cpNyuyUKUpc8mNGaW1MG';
+      const second = 'QmSrPcBnqggGvvRgCi3LoLSLd6gtfbTVgfvktKKpJmtLGr';
+      const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+
+      vi.mocked(fetchFromIpfs as unknown as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+          })
+        )
+        .mockResolvedValue(JSON.stringify({ name: 'someone' }));
+      const get = vi.spyOn(schemaCacheService, 'get');
+
+      const schema: JSONSchema = {
+        type: 'object',
+        properties: { user: { type: 'string', cid: schemaCID } },
+      };
+
+      const results = await Promise.all([
+        jsonValidator.validate({ user: { '/': first } }, schema),
+        jsonValidator.validate({ user: { '/': second } }, schema),
+      ]);
+
+      expect(results.map((result) => result.valid)).toEqual([true, true]);
+      expect(get).toHaveBeenCalledTimes(1);
+    });
+
+    it('should resolve a linked schema once for every root that links to it', async () => {
+      const person = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+      const address = 'QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB';
+      const first = 'QmRhVwVfENfzsT9gWZnQY9C8w2cpNyuyUKUpc8mNGaW1MG';
+      const second = 'QmSrPcBnqggGvvRgCi3LoLSLd6gtfbTVgfvktKKpJmtLGr';
+      const good = 'QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU';
+      const bad = 'Qmbj6yDMMPSaXwYJWJfGoRAUtCfLtZZhM9fi2HEHVQ5Tde';
+      const stored: Record<string, unknown> = {
+        [person]: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            address: { type: 'string', cid: address },
+          },
+          required: ['name'],
+        },
+        [address]: {
+          type: 'object',
+          properties: { city: { type: 'string' } },
+          required: ['city'],
+        },
+        [first]: { name: 'first', address: { '/': good } },
+        [second]: { name: 'second', address: { '/': bad } },
+        [good]: { city: 'Moline' },
+        [bad]: { city: 5 },
+      };
+      vi.mocked(
+        fetchFromIpfs as unknown as ReturnType<typeof vi.fn>
+      ).mockImplementation(async (cid: string) => JSON.stringify(stored[cid]));
+      const get = vi.spyOn(schemaCacheService, 'get');
+
+      // The same person schema sits under a property in one root and under array items in the other
+      const single = await jsonValidator.validate(
+        { user: { '/': first } },
+        {
+          type: 'object',
+          properties: { user: { type: 'string', cid: person } },
+        }
+      );
+      const list = await jsonValidator.validate(
+        { owners: [{ '/': first }, { '/': second }] },
+        {
+          type: 'object',
+          properties: {
+            owners: { type: 'array', items: { type: 'string', cid: person } },
+          },
+        }
+      );
+
+      expect(single.valid).toBe(true);
+      expect(list.errors!.map((error) => error.path)).toEqual([
+        '/owners/1/address/city',
+      ]);
+      // person and address are each loaded once, not once per root
+      expect(get).toHaveBeenCalledTimes(2);
+    });
+
     it('should reject root schema that is a CID link', async () => {
       const schemaCID = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
 
