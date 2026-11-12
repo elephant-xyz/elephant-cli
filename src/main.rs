@@ -20,6 +20,7 @@ mod report;
 mod schemas;
 mod tables;
 mod unixfs;
+mod upload;
 mod validate;
 
 use clap::{Args, Parser, Subcommand};
@@ -54,6 +55,30 @@ enum Command {
     Hash(Hash),
     /// Turn a county CAR into Parquet tables and, optionally, its Atlas page entry
     ExportTables(ExportTables),
+    /// Send a county CAR or a tables directory to an IPFS node and verify it arrived
+    Upload(Upload),
+}
+
+#[derive(Args)]
+#[command(after_help = "Environment: IPFS_API, IPFS_API_TOKEN, ELEPHANT_CAR_GATEWAY, or FILEBASE_ACCESS_KEY + FILEBASE_SECRET_KEY + FILEBASE_BUCKET.\n\nExamples:\n  elephant-cli upload county.car --output-json upload.json\n  elephant-cli upload ./tables --api https://rpc.filebase.io\n  elephant-cli --json upload county.car | jq -r .gatewayUrl")]
+struct Upload {
+    /// A county CAR (`.car`) or a tables directory written by `export-tables`
+    input: PathBuf,
+    /// Kubo RPC API of the node [default: http://127.0.0.1:5001]
+    #[arg(long, value_name = "URL")]
+    api: Option<String>,
+    /// Bearer token for the API
+    #[arg(long, value_name = "BEARER")]
+    token: Option<String>,
+    /// Gateway to read the upload back from [default: the node's, or Filebase's for its API]
+    #[arg(long, value_name = "URL")]
+    gateway: Option<String>,
+    /// Seconds to wait for the gateway to serve what was uploaded
+    #[arg(long, value_name = "SECONDS", default_value = "300")]
+    timeout: String,
+    /// Also write the summary (the same document --json prints) to this file
+    #[arg(long, value_name = "PATH")]
+    output_json: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -398,11 +423,56 @@ fn export_tables(args: &ExportTables, cli: &Cli) -> Result<Done, Fail> {
     Ok(Done { json: summary, text, passed: true })
 }
 
+fn upload(args: &Upload) -> Result<Done, Fail> {
+    let target = upload::Target::new(args.api.as_deref(), args.token.as_deref(), args.gateway.as_deref(), &args.timeout)?;
+    let archive = args.input.to_string_lossy().to_lowercase().ends_with(".car");
+    let summary = match (archive, args.input.join("tables.car").is_file()) {
+        (true, _) => {
+            let sent = upload::car(&args.input, &target)?;
+            json!({
+                "api": target.api,
+                "root": sent.root.to_string(),
+                "blocks": sent.blocks,
+                "gatewayUrl": sent.gateway_url,
+                "uploadedAt": sent.uploaded_at,
+            })
+        }
+        (false, true) => {
+            let sent = upload::tables(&args.input, &target)?;
+            json!({
+                "api": target.api,
+                "root": sent.imported.root.to_string(),
+                "countyRoot": sent.county_root,
+                "parts": sent.parts,
+                "gatewayUrl": sent.imported.gateway_url,
+                "uploadedAt": sent.imported.uploaded_at,
+            })
+        }
+        _ => {
+            return Err(format!(
+                "{} is neither a .car file nor a tables directory written by export-tables",
+                args.input.display()
+            )
+            .into())
+        }
+    };
+    if let Some(path) = &args.output_json {
+        std::fs::write(path, serde_json::to_string_pretty(&summary)?)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    }
+    let mut text = String::from("Upload completed\n");
+    for (key, value) in summary.as_object().into_iter().flatten() {
+        text += &format!("  {key}: {}\n", value.as_str().map_or_else(|| value.to_string(), str::to_string));
+    }
+    Ok(Done { json: summary, text, passed: true })
+}
+
 fn run(cli: &Cli) -> Result<Done, Fail> {
     match &cli.command {
         Command::Validate(args) => validate(args, cli),
         Command::Hash(args) => hash(args, cli),
         Command::ExportTables(args) => export_tables(args, cli),
+        Command::Upload(args) => upload(args).map_err(|error| format!("Upload failed: {error}").into()),
     }
 }
 
@@ -410,7 +480,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
 fn piped(cli: &Cli) -> bool {
     match &cli.command {
         Command::Validate(args) => args.output_csv == Path::new("-"),
-        Command::Hash(_) | Command::ExportTables(_) => false,
+        Command::Hash(_) | Command::ExportTables(_) | Command::Upload(_) => false,
     }
 }
 
