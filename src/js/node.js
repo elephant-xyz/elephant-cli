@@ -1,8 +1,10 @@
 // The slice of Node.js that county transform scripts use, on top of a few
-// host functions: `fs` (synchronous calls and their `fs.promises` twins),
-// `path` (POSIX), `process`, `console`, `Buffer`, timers and CommonJS
-// `require`, with `cheerio` built in. Every path is resolved against a
-// working directory the host confines the script to.
+// host functions: `fs`, `path` (POSIX), `process`, `console`, `Buffer`,
+// timers, `URL`, `http`, `https` and `fetch`, the smaller modules scripts
+// reach for (`vm`, `events`, `util`, `assert`, `crypto` hashes), CommonJS
+// `require`, and `cheerio` built in. Every path is resolved against a working
+// directory the host confines the script to. The engine has no Intl: number
+// and date formatting and string collation give Node's en-US answers.
 (function (host) {
   'use strict';
 
@@ -900,7 +902,7 @@
   EventEmitter.EventEmitter = EventEmitter;
   // vm: code sees the context object's properties and the language's own
   // globals, not this module's `process`, `Buffer` or `console`.
-  const hidden = new Set(['global', 'console', 'process', 'Buffer', 'setTimeout', 'setInterval', 'setImmediate', 'clearTimeout', 'clearInterval', 'clearImmediate', 'URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'atob', 'btoa', 'structuredClone', 'queueMicrotask', 'AbortController', 'performance']);
+  const hidden = new Set(['global', 'console', 'process', 'Buffer', 'setTimeout', 'setInterval', 'setImmediate', 'clearTimeout', 'clearInterval', 'clearImmediate', 'URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'atob', 'btoa', 'structuredClone', 'queueMicrotask', 'AbortController', 'performance', 'fetch', 'Headers']);
   const evaluate = new Function('__elephant_scope__', '__elephant_code__', 'with (__elephant_scope__) { return eval(__elephant_code__); }');
   const within = (code, context = {}) =>
     evaluate(
@@ -965,6 +967,139 @@
     }
   }
 
+  // ---- http, https and fetch: one blocking exchange with the host per request ----
+  const exchange = (method, url, headers, body, follow, timeout) => {
+    const sent = body === undefined || body === null ? undefined : typeof body === 'string' ? Buffer.from(body) : body;
+    const answer = call(host.request, JSON.stringify({ method, url: String(url), headers, follow, timeout }), sent);
+    return { status: answer.status, reason: answer.reason, headers: JSON.parse(answer.headers), body: Buffer.from(answer.body) };
+  };
+  const client = (scheme) => {
+    const request = (target, options, listener) => {
+      if (typeof options === 'function') [listener, options] = [options, undefined];
+      const given = typeof target === 'string' || target instanceof URL_ ? { ...options, href: String(target) } : { ...target };
+      const url = given.href || `${given.protocol || `${scheme}:`}//${given.hostname || given.host || 'localhost'}${given.port ? `:${given.port}` : ''}${given.path || '/'}`;
+      const headers = { ...given.headers };
+      const chunks = [];
+      const req = new EventEmitter();
+      let wait = Number(given.timeout) || 30000;
+      let sent = false;
+      return Object.assign(req, {
+        setHeader: (name, value) => void (headers[name] = value),
+        getHeader: (name) => headers[name],
+        write: (chunk) => Boolean(chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)),
+        setTimeout: (milliseconds, heard) => {
+          wait = Number(milliseconds) || wait;
+          return heard ? req.once('timeout', heard) : req;
+        },
+        destroy: (error) => {
+          sent = true;
+          if (error) immediately(() => req.emit('error', error));
+          return req;
+        },
+        abort: () => req.destroy(),
+        end: (chunk) => {
+          if (chunk) req.write(chunk);
+          if (sent) return req;
+          sent = true;
+          immediately(() => {
+            let answer;
+            try {
+              answer = exchange(given.method || 'GET', url, headers, chunks.length ? Buffer.concat(chunks) : undefined, false, wait);
+            } catch (error) {
+              return void req.emit(error.code === 'ETIMEDOUT' && req.listenerCount('timeout') ? 'timeout' : 'error', error);
+            }
+            let encoding;
+            const res = Object.assign(new EventEmitter(), {
+              statusCode: answer.status,
+              statusMessage: answer.reason,
+              headers: answer.headers,
+              setEncoding: (name) => ((encoding = name), res),
+              resume: () => res,
+              destroy: () => res,
+            });
+            if (listener) listener(res);
+            req.emit('response', res);
+            // after the listener has had its turn to say what it wants to hear
+            immediately(() => {
+              if (answer.body.length) res.emit('data', encoding ? answer.body.toString(encoding) : answer.body);
+              res.emit('end');
+              res.emit('close');
+            });
+          });
+          return req;
+        },
+      });
+    };
+    return { request, get: (...args) => request(...args).end(), Agent: class Agent {}, globalAgent: {} };
+  };
+  class Headers_ {
+    #held = new Map();
+    constructor(init) {
+      const pairs = !init ? [] : typeof init[Symbol.iterator] === 'function' ? [...init] : Object.entries(init);
+      for (const [name, value] of pairs) this.append(name, value);
+    }
+    append(name, value) {
+      const key = String(name).toLowerCase();
+      this.#held.set(key, this.#held.has(key) ? `${this.#held.get(key)}, ${value}` : String(value));
+    }
+    set(name, value) {
+      this.#held.set(String(name).toLowerCase(), String(value));
+    }
+    get(name) {
+      const found = this.#held.get(String(name).toLowerCase());
+      return found === undefined ? null : found;
+    }
+    has(name) {
+      return this.#held.has(String(name).toLowerCase());
+    }
+    delete(name) {
+      this.#held.delete(String(name).toLowerCase());
+    }
+    forEach(each, self) {
+      for (const [name, value] of this.#held) each.call(self, value, name, this);
+    }
+    keys() {
+      return this.#held.keys();
+    }
+    values() {
+      return this.#held.values();
+    }
+    entries() {
+      return this.#held.entries();
+    }
+    [Symbol.iterator]() {
+      return this.#held.entries();
+    }
+  }
+  Object.defineProperty(Headers_, 'name', { value: 'Headers' });
+  const fetch_ = async (target, options = {}) => {
+    const url = new URL_(target && target.url ? target.url : target).href;
+    const headers = new Headers_(options.headers);
+    const form = options.body instanceof URLSearchParams_;
+    if (!headers.has('content-type') && (form || typeof options.body === 'string')) {
+      headers.set('content-type', form ? 'application/x-www-form-urlencoded;charset=UTF-8' : 'text/plain;charset=UTF-8');
+    }
+    if (options.signal && options.signal.aborted) throw options.signal.reason;
+    let answer;
+    try {
+      answer = exchange(String(options.method || 'GET').toUpperCase(), url, Object.fromEntries(headers), form ? String(options.body) : options.body, options.redirect !== 'manual', 300000);
+    } catch (cause) {
+      throw Object.assign(new TypeError('fetch failed'), { cause });
+    }
+    const body = answer.body;
+    return {
+      ok: answer.status >= 200 && answer.status < 300,
+      status: answer.status,
+      statusText: answer.reason,
+      url,
+      redirected: false,
+      headers: new Headers_(answer.headers),
+      text: async () => body.toString(),
+      json: async () => JSON.parse(body.toString()),
+      arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+    };
+  };
+
   // ---- CommonJS ----
   const builtins = {
     fs,
@@ -1001,6 +1136,8 @@
     'assert/strict': asserts(true),
     events: EventEmitter,
     vm,
+    http: client('http'),
+    https: client('https'),
     timers: { setTimeout: schedule(false), setInterval: schedule(true), setImmediate: immediately, clearTimeout: cancel, clearInterval: cancel, clearImmediate: cancel },
   };
   const hashing = { sha256: host.sha256, sha512: host.sha512 };
@@ -1094,6 +1231,8 @@
     atob: (text) => single(host.base64Decode(String(text)), 255),
     btoa: (text) => host.base64Encode(Buffer.from(String(text), 'latin1')),
     performance: { now: () => host.now() - started, timeOrigin: started },
+    fetch: fetch_,
+    Headers: Headers_,
   };
   for (const name of Object.keys(offered)) if (typeof globalThis[name] === 'undefined') globalThis[name] = offered[name];
 
@@ -1107,5 +1246,11 @@
     return (0, eval)(entry)(loaded, call);
   };
   host.exitCode = (error) => (error instanceof Exit ? error.exitCode : undefined);
-  host.describe = (error) => (error instanceof Error ? `${error.stack && error.stack.includes(error.message) ? '' : `${error.name}: ${error.message}\n`}${error.stack || ''}` : `Uncaught ${show(error)}`);
+  // an error as Node prints it: name and message, the stack, and what caused it
+  host.describe = (error) => {
+    if (!(error instanceof Error)) return `Uncaught ${show(error)}`;
+    const head = error.stack && error.stack.includes(error.message) ? '' : `${error.name}: ${error.message}\n`;
+    const cause = error.cause === undefined ? '' : `\n  [cause]: ${error.cause instanceof Error ? `${error.cause.name}: ${error.cause.message}` : show(error.cause)}`;
+    return `${head}${error.stack || ''}${cause}`;
+  };
 })

@@ -60,6 +60,11 @@ impl Schemas {
     }
 
     /// The bytes of a block, from the first gateway that serves bytes hashing to its CID.
+    /// Whether `--offline` was given: nothing may use the network.
+    pub fn offline(&self) -> bool {
+        self.offline
+    }
+
     pub fn fetch(&self, cid: &str) -> Result<Vec<u8>, String> {
         let parsed = Cid::try_from(cid).map_err(|error| format!("{cid} is not a CID: {error}"))?;
         if self.offline {

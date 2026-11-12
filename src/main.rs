@@ -47,7 +47,7 @@ struct Cli {
     /// Directory holding lexicon schemas, one <cid>.json per schema [default: ~/.elephant-cli/schema-cache]
     #[arg(long, global = true, value_name = "DIR", env = "ELEPHANT_SCHEMA_CACHE_DIR")]
     schema_cache: Option<PathBuf>,
-    /// Never use the network: a schema missing from the cache is an error
+    /// Fetch no schemas (one missing from the cache is an error) and keep transform scripts off the network
     #[arg(long, global = true, env = "ELEPHANT_OFFLINE", value_parser = clap::builder::BoolishValueParser::new())]
     offline: bool,
     #[command(subcommand)]
@@ -129,7 +129,7 @@ struct Prepare {
 
 #[derive(Args)]
 #[command(
-    after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine: they can read and write only their\nworking directory, cannot use the network, and get fs, path, process, console, Buffer, crypto\n(sha256/sha512) and cheerio.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip"
+    after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine with the Node modules county scripts\nuse (fs, path, url, util, vm, http, https, crypto hashes, ...), fetch and cheerio. They can read\nand write only their working directory, and reach the network only over HTTP(S), not at all\nwith --offline.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip"
 )]
 struct Transform {
     /// What `prepare` wrote for one parcel (or a ZIP holding seed.csv)

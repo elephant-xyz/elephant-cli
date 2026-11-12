@@ -2,8 +2,9 @@
 //!
 //! A script runs as it would as a Node program: CommonJS or ES module, with
 //! the built-ins in `node.js` (`fs`, `path`, `process`, `console`, `Buffer`,
-//! timers) and `cheerio`. Unlike under Node, it can only read and write
-//! inside the directory it is given, has no network, and is stopped at its
+//! timers, `http`, `https`, `fetch`) and `cheerio`. Unlike under Node, it can
+//! only read and write inside the directory it is given, reaches the network
+//! only through HTTP requests the sandbox allows, and is stopped at its
 //! deadline.
 
 use rquickjs::context::EvalOptions;
@@ -27,6 +28,50 @@ pub struct Sandbox {
     /// What `process.cwd()` returns and relative paths resolve against; inside `root`.
     pub cwd: PathBuf,
     pub timeout: Duration,
+    /// Whether `http`, `https` and `fetch` may send requests.
+    pub network: bool,
+}
+
+/// One HTTP exchange for a script: status, reason, headers and body.
+type Exchange = (u16, String, Vec<(String, String)>, Vec<u8>);
+
+/// Send the request a script described as `{ method, url, headers, follow }`.
+/// Failures start with the code Node gives the same failure.
+fn exchange(asked: &serde_json::Value, body: &[u8], wait: Duration) -> Result<Exchange, String> {
+    let target = asked["url"].as_str().unwrap_or_default();
+    let config = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .max_redirects(if asked["follow"].as_bool().unwrap_or(false) { 20 } else { 0 })
+        .timeout_global(Some(wait));
+    let agent: ureq::Agent = config.build().into();
+    let mut request = ureq::http::Request::builder().method(asked["method"].as_str().unwrap_or("GET")).uri(target);
+    for (name, value) in asked["headers"].as_object().into_iter().flatten() {
+        request = request.header(name.as_str(), value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string()));
+    }
+    let request = request.body(body.to_vec()).map_err(|error| format!("EINVAL: {error} for {target}"))?;
+    let mut response = agent.run(request).map_err(|error| {
+        let code = match &error {
+            ureq::Error::HostNotFound => "ENOTFOUND",
+            ureq::Error::Timeout(_) => "ETIMEDOUT",
+            ureq::Error::ConnectionFailed => "ECONNREFUSED",
+            ureq::Error::Io(io) if io.kind() == std::io::ErrorKind::ConnectionRefused => "ECONNREFUSED",
+            _ => "ECONNRESET",
+        };
+        format!("{code}: {error} for {target}")
+    })?;
+    let status = response.status();
+    let headers = response
+        .headers()
+        .iter()
+        .map(|(name, value)| (name.as_str().to_string(), String::from_utf8_lossy(value.as_bytes()).into_owned()))
+        .collect();
+    let body = response
+        .body_mut()
+        .with_config()
+        .limit(1 << 30)
+        .read_to_vec()
+        .map_err(|error| format!("ECONNRESET: {error} for {target}"))?;
+    Ok((status.as_u16(), status.canonical_reason().unwrap_or_default().to_string(), headers, body))
 }
 
 #[cfg(test)]
@@ -310,9 +355,16 @@ pub fn run(start: Start<'_>, sandbox: &Sandbox, bridge: Option<Bridge<'_>>) -> R
             waiting.pop();
             return;
         }
+        // what a `cause` says is often the actual reason, as with a failed fetch
+        let cause = reason
+            .as_object()
+            .and_then(|error| error.get::<_, Value>("cause").ok())
+            .and_then(|cause| cause.as_exception().and_then(|cause| cause.message()))
+            .map(|message| format!("  [cause]: {message}\n"))
+            .unwrap_or_default();
         let described = reason
             .as_exception()
-            .map(|error| format!("{}\n{}", error.message().unwrap_or_default(), error.stack().unwrap_or_default()))
+            .map(|error| format!("{}\n{}{cause}", error.message().unwrap_or_default(), error.stack().unwrap_or_default()))
             .unwrap_or_else(|| format!("{reason:?}"));
         waiting.push(described);
     })));
@@ -481,6 +533,40 @@ fn build<'js>(
         Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| String::from_utf8_lossy(bytes_of(&bytes)).into_owned())?,
     )?;
     host.set("base64Encode", Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| base64(bytes_of(&bytes)))?)?;
+    // HTTP for `http`, `https` and `fetch`: one blocking exchange, within the script's deadline.
+    let (online, stop) = (sandbox.network, limit.clone());
+    host.set(
+        "request",
+        Function::new(
+            ctx.clone(),
+            move |ctx: Ctx<'js>, asked: String, body: Option<TypedArray<'js, u8>>| -> rquickjs::Result<Object<'js>> {
+                let asked: serde_json::Value = serde_json::from_str(&asked).unwrap_or_default();
+                let left = stop.get().saturating_duration_since(Instant::now());
+                let wait =
+                    Duration::from_millis(asked["timeout"].as_f64().unwrap_or(30_000.0).clamp(1.0, 600_000.0) as u64).min(left);
+                let answered = match online {
+                    true => exchange(&asked, body.as_ref().map(bytes_of).unwrap_or_default(), wait.max(Duration::from_millis(1))),
+                    false => Err("EOFFLINE: the network is off for scripts while --offline is set".to_string()),
+                };
+                let (status, reason, headers, body) = answered.map_err(|reason| Exception::throw_message(&ctx, &reason))?;
+                let headers: serde_json::Map<String, serde_json::Value> =
+                    headers.into_iter().fold(Default::default(), |mut all, (name, value)| {
+                        // a header sent more than once reads as one, joined with a comma, as in Node
+                        match all.get_mut(&name) {
+                            Some(serde_json::Value::String(known)) => *known = format!("{known}, {value}"),
+                            _ => drop(all.insert(name, value.into())),
+                        }
+                        all
+                    });
+                let answer = Object::new(ctx.clone())?;
+                answer.set("status", status)?;
+                answer.set("reason", reason)?;
+                answer.set("headers", serde_json::Value::Object(headers).to_string())?;
+                answer.set("body", TypedArray::<u8>::new(ctx, body)?)?;
+                Ok(answer)
+            },
+        )?,
+    )?;
     host.set(
         "base64Decode",
         Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, unbase64(&text)))?,

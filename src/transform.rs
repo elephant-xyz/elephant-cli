@@ -252,7 +252,7 @@ fn tail(text: &str) -> String {
 }
 
 /// Run county scripts by name, one after the other, in the work directory.
-fn scripts(work: &Path, wanted: &[&str]) -> Result<(), Fail> {
+fn scripts(work: &Path, wanted: &[&str], network: bool) -> Result<(), Fail> {
     let found: Vec<(&str, PathBuf)> = wanted
         .iter()
         .map(|name| {
@@ -261,7 +261,7 @@ fn scripts(work: &Path, wanted: &[&str]) -> Result<(), Fail> {
         .collect::<Result<_, _>>()?;
     for (name, file) in found {
         let began = Instant::now();
-        let sandbox = Sandbox { root: work.to_path_buf(), cwd: work.to_path_buf(), timeout: Duration::from_secs(120) };
+        let sandbox = Sandbox { root: work.to_path_buf(), cwd: work.to_path_buf(), timeout: Duration::from_secs(120), network };
         let Err(failed) = js::run(Start::Script(&file), &sandbox, None) else {
             continue;
         };
@@ -535,7 +535,12 @@ fn handled(work: &Path, label: &str, schemas: &mut Schemas) -> Result<(), Fail> 
             other => Err(format!("{other} is not part of the transform v2 API")),
         }
     };
-    let sandbox = Sandbox { root: work.to_path_buf(), cwd: work.join("handler"), timeout: Duration::from_secs(600) };
+    let sandbox = Sandbox {
+        root: work.to_path_buf(),
+        cwd: work.join("handler"),
+        timeout: Duration::from_secs(600),
+        network: !schemas.offline(),
+    };
     let ran = js::run(Start::Call { file: &entry, entry: HANDLER }, &sandbox, Some(&mut bridge));
     if let Err(failed) = ran {
         if failed.timed_out {
@@ -600,8 +605,8 @@ pub fn run(options: &Options, schemas: &mut Schemas) -> Result<Done, Fail> {
                 (None, Some(record)) => std::fs::copy(input.join(record), work.0.join("input.json")).map(|_| ())?,
                 (None, None) => {}
             }
-            scripts(&work.0, &MAPPERS)?;
-            scripts(&work.0, &["data_extractor.js"])?;
+            scripts(&work.0, &MAPPERS, !schemas.offline())?;
+            scripts(&work.0, &["data_extractor.js"], !schemas.offline())?;
             finish(&work.0, schemas)?;
             "scripts"
         }

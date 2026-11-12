@@ -564,7 +564,8 @@ fn handle(browser: &mut Browser, package: &Path, scratch: &Path, work: &Path, in
             other => Err(format!("{other} is not part of the browser flow v2 API")),
         }
     };
-    let sandbox = Sandbox { root: scratch.to_path_buf(), cwd: scratch.to_path_buf(), timeout: Duration::from_secs(300) };
+    let sandbox =
+        Sandbox { root: scratch.to_path_buf(), cwd: scratch.to_path_buf(), timeout: Duration::from_secs(300), network: true };
     if let Err(failed) = js::run(Start::Call { file: &entry, entry: PAGE }, &sandbox, Some(&mut bridge)) {
         if failed.timed_out {
             return Err("Browser flow v2 timed out after 300000ms".into());

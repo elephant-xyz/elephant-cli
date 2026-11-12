@@ -72,7 +72,7 @@ Global options, accepted before or after the command:
 | --- | --- | --- |
 | `--json` | Print one JSON document describing the result on stdout instead of text. | Off |
 | `--schema-cache <DIR>` | Directory holding the lexicon manifest and schemas, one `<cid>.json` per schema. Also `ELEPHANT_SCHEMA_CACHE_DIR`. | `~/.elephant-cli/schema-cache` |
-| `--offline` | Never use the network for schemas: anything missing from the cache is an error. Also `ELEPHANT_OFFLINE=1`. | Off |
+| `--offline` | Fetch no schemas (one missing from the cache is an error) and keep `transform` scripts off the network. Also `ELEPHANT_OFFLINE=1`. | Off |
 
 Examples of piping:
 
@@ -235,7 +235,16 @@ obscura refuses loopback and private addresses unless `OBSCURA_ALLOW_PRIVATE_NET
 | Scripts | `--scripts-zip` | `ownerMapping.js`, `structureMapping.js`, `layoutMapping.js`, `utilityMapping.js` and then `data_extractor.js` run with `input.html` (or `input.json`) and the seed files in their working directory, and write `data/*.json`. The CLI then stamps `source_http_request` and `request_identifier` on each entity, links entities to `property.json`, and writes the County and Seed data-group roots. |
 | Handler | `--transform-zip` | The package's `handler.js` reads captures with `readCapture(name)` and writes through `writeJson(name, value)` and `writeRelationship({ type, name, from, to })`. The CLI builds the data-group root from the relationships written. |
 
-**Where the JavaScript runs.** County scripts and handlers run on an embedded JavaScript engine (QuickJS), not on Node. They get `fs`, `path`, `process`, `console`, `Buffer`, `crypto` (`createHash` with `sha256` or `sha512`), timers, CommonJS `require`, ES module `import`, and `cheerio`. They can read and write only their working directory, cannot use the network, and are stopped at their time limit (120 seconds per script; `config.timeoutMs` for a handler). Other npm packages are not available.
+**Where the JavaScript runs.** County scripts and handlers run on an embedded JavaScript engine (QuickJS), not on Node. What they get:
+
+- Modules: `fs` (sync, callbacks and `fs/promises`), `path`, `url`, `querystring`, `util`, `assert`, `events`, `os`, `timers`, `vm`, `crypto` (`createHash` with `sha256` or `sha512`, `randomUUID`), `http` and `https` (`get`, `request`), and `cheerio`. CommonJS `require` and ES module `import` both work.
+- Globals: `process`, `console`, `Buffer`, timers, `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `fetch`, `AbortController`, `structuredClone`.
+- `toLocaleString` on numbers and dates, `toLocaleDateString` and `localeCompare` give the answers Node gives for `en-US`. There is no `Intl` object; a locale or option the engine cannot honour throws rather than print another format.
+- Files: only the working directory, which holds the scripts, the seed files and `input.html` or `input.json`.
+- Network: HTTP and HTTPS requests only, and none with `--offline`.
+- Time: 120 seconds per script; `config.timeoutMs` for a handler.
+
+Other npm packages are not available. `tests/fixtures/transform/engine` holds the scripts that check these behaviours against Node.
 
 **Outputs**
 
@@ -509,7 +518,7 @@ What changed:
 | `hash` | A data group that cannot be hashed is only written to `submit_errors.csv`, exit `0` | Named on stderr and in `--json`, exit `1`; `--property-cid` and `--max-concurrent-tasks` are gone |
 | `export-tables` | hyparquet writer | Apache parquet writer: same tables, columns and rows; part bytes, part CIDs and the tables root differ |
 | `upload` | Also uploads a hashed ZIP to Pinata | County CARs and tables directories only |
-| `transform` | Scripts run as Node child processes with the CLI's `node_modules` | Scripts run on embedded QuickJS, confined to their working directory, with `cheerio` built in; legacy mode and the Property Improvement extractor mode are gone |
+| `transform` | Scripts run as Node child processes with the CLI's `node_modules` | Scripts run on embedded QuickJS with the Node modules listed under [transform](#transform), confined to their working directory; legacy mode and the Property Improvement extractor mode are gone |
 | `transform` handlers | `--transform-version 2` required; no npm packages | `--transform-zip` alone is enough; `cheerio` can be imported |
 | `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` has no effect |
 | `prepare` captures | Cleaned and formatted with Prettier | Cleaned, not reformatted |

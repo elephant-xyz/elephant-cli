@@ -7,7 +7,7 @@ Elephant CLI is now a single native binary written in Rust. See "Migrating from 
 * Removed commands: `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform`. Pin `@elephant-xyz/cli@1` if you need one.
 * Exit codes: `1` now means the input failed its checks and `2` that the command could not run.
 * stdout carries only the result (a text report, or one JSON document with `--json`); logs go to stderr. No log file, no update check, no `.env` loading.
-* `transform` runs county scripts and handlers on embedded QuickJS, confined to their working directory and without network access. Legacy mode and the Property Improvement extractor mode are gone.
+* `transform` runs county scripts and handlers on embedded QuickJS, confined to their working directory, with HTTP(S) as their only network access. Legacy mode and the Property Improvement extractor mode are gone.
 * `prepare` drives the obscura browser instead of a bundled Chromium, and no longer reformats captured HTML with Prettier.
 * `upload` sends county CARs and tables directories to a Kubo RPC API only; uploading a hashed ZIP to Pinata is gone.
 * `hash` exits `1` when a data group cannot be hashed; `--property-cid` and `--max-concurrent-tasks` are gone.
