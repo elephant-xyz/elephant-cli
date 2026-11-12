@@ -14,11 +14,13 @@ mod car;
 mod cids;
 mod county;
 mod hash;
+mod js;
 mod lexicon;
 mod property;
 mod report;
 mod schemas;
 mod tables;
+mod transform;
 mod unixfs;
 mod upload;
 mod validate;
@@ -57,6 +59,31 @@ enum Command {
     ExportTables(ExportTables),
     /// Send a county CAR or a tables directory to an IPFS node and verify it arrived
     Upload(Upload),
+    /// Turn prepared source content into lexicon data-group files with county scripts or a handler package
+    Transform(Transform),
+}
+
+#[derive(Args)]
+#[command(after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine: they can read and write only their\nworking directory, cannot use the network, and get fs, path, process, console, Buffer, crypto\n(sha256/sha512) and cheerio.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip")]
+struct Transform {
+    /// What `prepare` wrote for one parcel (or a ZIP holding seed.csv)
+    #[arg(long, value_name = "PATH")]
+    input_zip: PathBuf,
+    /// ZIP to write, holding data/*.json
+    #[arg(long, value_name = "PATH", default_value = "transformed-data.zip")]
+    output_zip: PathBuf,
+    /// ZIP of county scripts
+    #[arg(long, value_name = "PATH")]
+    scripts_zip: Option<PathBuf>,
+    /// Transform v2 handler package
+    #[arg(long, value_name = "PATH")]
+    transform_zip: Option<PathBuf>,
+    /// Accepted for compatibility: `2` with --transform-zip
+    #[arg(long, value_name = "VERSION")]
+    transform_version: Option<String>,
+    /// Label of the data group a handler package builds
+    #[arg(long, value_name = "LABEL")]
+    data_group: Option<String>,
 }
 
 #[derive(Args)]
@@ -467,12 +494,42 @@ fn upload(args: &Upload) -> Result<Done, Fail> {
     Ok(Done { json: summary, text, passed: true })
 }
 
+fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
+    match (args.transform_version.as_deref(), &args.transform_zip, &args.scripts_zip) {
+        (Some("2"), None, _) => return Err("--transform-zip is required for transform v2".into()),
+        (Some("2"), _, Some(_)) => return Err("--scripts-zip cannot be used with transform v2".into()),
+        (Some(other), _, _) if other != "2" => return Err(format!("--transform-version {other} is not supported; only 2 is").into()),
+        _ => {}
+    }
+    let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
+    let options = transform::Options {
+        input: &args.input_zip,
+        output: &args.output_zip,
+        scripts: args.scripts_zip.as_deref(),
+        package: args.transform_zip.as_deref(),
+        group: args.data_group.as_deref(),
+    };
+    let done = transform::run(&options, &mut schemas).map_err(|error| format!("Transform failed: {error}"))?;
+    let text = format!(
+        "Transform finished ({} mode)\n  Files written:  {}\n  Output ZIP:     {}\n",
+        done.mode,
+        done.files.len(),
+        args.output_zip.display()
+    );
+    Ok(Done {
+        json: json!({ "command": "transform", "mode": done.mode, "input_zip": args.input_zip, "output_zip": args.output_zip, "files": done.files }),
+        text,
+        passed: true,
+    })
+}
+
 fn run(cli: &Cli) -> Result<Done, Fail> {
     match &cli.command {
         Command::Validate(args) => validate(args, cli),
         Command::Hash(args) => hash(args, cli),
         Command::ExportTables(args) => export_tables(args, cli),
         Command::Upload(args) => upload(args).map_err(|error| format!("Upload failed: {error}").into()),
+        Command::Transform(args) => transform(args, cli),
     }
 }
 
@@ -480,7 +537,7 @@ fn run(cli: &Cli) -> Result<Done, Fail> {
 fn piped(cli: &Cli) -> bool {
     match &cli.command {
         Command::Validate(args) => args.output_csv == Path::new("-"),
-        Command::Hash(_) | Command::ExportTables(_) | Command::Upload(_) => false,
+        Command::Hash(_) | Command::ExportTables(_) | Command::Upload(_) | Command::Transform(_) => false,
     }
 }
 

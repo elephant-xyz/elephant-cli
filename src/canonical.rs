@@ -51,6 +51,42 @@ fn write(value: &Value, out: &mut String) {
     }
 }
 
+fn plain(value: &Value, out: &mut String) {
+    match value {
+        Value::Number(number) => out.push_str(ryu_js::Buffer::new().format(number.as_f64().unwrap_or(0.0))),
+        Value::Array(items) => {
+            out.push('[');
+            for (at, item) in items.iter().enumerate() {
+                if at > 0 {
+                    out.push(',');
+                }
+                plain(item, out);
+            }
+            out.push(']');
+        }
+        Value::Object(fields) => {
+            out.push('{');
+            for (at, (key, item)) in fields.iter().enumerate() {
+                if at > 0 {
+                    out.push(',');
+                }
+                out.push_str(&Value::String(key.clone()).to_string());
+                out.push(':');
+                plain(item, out);
+            }
+            out.push('}');
+        }
+        other => out.push_str(&other.to_string()),
+    }
+}
+
+/// A value as JavaScript's `JSON.stringify` prints it: compact, keys in the order held.
+pub fn stringify(value: &Value) -> String {
+    let mut out = String::new();
+    plain(value, &mut out);
+    out
+}
+
 pub fn canonical(value: &Value) -> String {
     let mut out = String::new();
     write(value, &mut out);

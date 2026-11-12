@@ -85,6 +85,57 @@ impl Scratch {
     }
 }
 
+/// Entry names and contents of a ZIP file.
+pub fn entries(file: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(file).unwrap()).unwrap();
+    (0..archive.len())
+        .map(|at| {
+            let mut entry = archive.by_index(at).unwrap();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            (entry.name().unwrap().to_string(), bytes)
+        })
+        .collect()
+}
+
+/// Pack a directory as a ZIP; its files sit at the root of the archive.
+pub fn zip_dir(dir: &Path, to: &Path) {
+    use std::io::Write;
+    fn add(writer: &mut zip::ZipWriter<std::fs::File>, dir: &Path, prefix: &str) {
+        let mut found: Vec<_> = std::fs::read_dir(dir).unwrap().map(|entry| entry.unwrap().path()).collect();
+        found.sort();
+        for path in found {
+            let name = format!("{prefix}{}", path.file_name().unwrap().to_string_lossy());
+            if path.is_dir() {
+                add(writer, &path, &format!("{name}/"));
+                continue;
+            }
+            writer.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            writer.write_all(&std::fs::read(path).unwrap()).unwrap();
+        }
+    }
+    let mut writer = zip::ZipWriter::new(std::fs::File::create(to).unwrap());
+    add(&mut writer, dir, "");
+    writer.finish().unwrap();
+}
+
+/// Pack a fixture directory (relative to `tests/fixtures`) as a ZIP.
+pub fn pack(fixture: &str, to: &Path) {
+    zip_dir(&fixtures().join(fixture), to);
+}
+
+/// Pack files given as (name, content) pairs as a ZIP.
+pub fn zip_of(files: &[(&str, &str)], to: &Path) {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::fs::File::create(to).unwrap());
+    for (name, content) in files {
+        writer.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+        writer.write_all(content.as_bytes()).unwrap();
+    }
+    writer.finish().unwrap();
+}
+
 pub fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures")
 }

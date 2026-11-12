@@ -9,6 +9,7 @@
 //! part bytes (and with them part CIDs and the tables root) are not the same
 //! as a 1.x export of the same archive.
 
+use crate::canonical::stringify;
 use crate::car::{self, Car, Place};
 use crate::cids::{self, DAG_JSON};
 use crate::schemas::Schemas;
@@ -238,36 +239,6 @@ fn link(value: &Value) -> Option<Cid> {
     Cid::try_from(text).ok().filter(|_| cids::parses(text))
 }
 
-/// A value as JavaScript's `JSON.stringify` prints it, keys in block order.
-fn stringify(value: &Value, out: &mut String) {
-    match value {
-        Value::Number(number) => out.push_str(ryu_js::Buffer::new().format(number.as_f64().unwrap_or(0.0))),
-        Value::Array(items) => {
-            out.push('[');
-            for (at, item) in items.iter().enumerate() {
-                if at > 0 {
-                    out.push(',');
-                }
-                stringify(item, out);
-            }
-            out.push(']');
-        }
-        Value::Object(fields) => {
-            out.push('{');
-            for (at, (key, item)) in fields.iter().enumerate() {
-                if at > 0 {
-                    out.push(',');
-                }
-                out.push_str(&Value::String(key.clone()).to_string());
-                out.push(':');
-                stringify(item, out);
-            }
-            out.push('}');
-        }
-        other => out.push_str(&other.to_string()),
-    }
-}
-
 fn cell(value: Option<&Value>, kind: Kind, place: impl Fn() -> String) -> Result<Cell, Fail> {
     let Some(value) = value.filter(|value| !value.is_null()) else {
         return Ok(Cell::Null);
@@ -275,21 +246,13 @@ fn cell(value: Option<&Value>, kind: Kind, place: impl Fn() -> String) -> Result
     let whole = |number: f64| number.fract() == 0.0 && number.abs() < 9.3e18;
     Ok(match (kind, value) {
         (Kind::Text, Value::String(text)) => Cell::Text(text.clone()),
-        (Kind::Text, other) => Cell::Text(link(other).map(|cid| cid.to_string()).unwrap_or_else(|| {
-            let mut text = String::new();
-            stringify(other, &mut text);
-            text
-        })),
+        (Kind::Text, other) => Cell::Text(link(other).map(|cid| cid.to_string()).unwrap_or_else(|| stringify(other))),
         (Kind::Bool, Value::Bool(flag)) => Cell::Bool(*flag),
         (Kind::Double, Value::Number(number)) => Cell::Double(number.as_f64().unwrap_or(0.0)),
         (Kind::Int, Value::Number(number)) if number.as_f64().is_some_and(whole) => {
             Cell::Int(number.as_i64().unwrap_or_else(|| number.as_f64().unwrap_or(0.0) as i64))
         }
-        (kind, other) => {
-            let mut text = String::new();
-            stringify(other, &mut text);
-            return Err(format!("{}: expects {}, got {text}", place(), kind.name()).into());
-        }
+        (kind, other) => return Err(format!("{}: expects {}, got {}", place(), kind.name(), stringify(other)).into()),
     })
 }
 

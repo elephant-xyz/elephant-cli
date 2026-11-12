@@ -7,23 +7,7 @@
 mod support;
 
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::io::Read;
-use std::path::Path;
-use support::{fixtures, Scratch};
-
-/// Entry names and contents of a ZIP file.
-fn entries(file: &Path) -> BTreeMap<String, Vec<u8>> {
-    let mut archive = zip::ZipArchive::new(std::fs::File::open(file).unwrap()).unwrap();
-    (0..archive.len())
-        .map(|at| {
-            let mut entry = archive.by_index(at).unwrap();
-            let mut bytes = Vec::new();
-            entry.read_to_end(&mut bytes).unwrap();
-            (entry.name().unwrap().to_string(), bytes)
-        })
-        .collect()
-}
+use support::{entries, fixtures, Scratch};
 
 fn lines(text: &str) -> Vec<&str> {
     text.lines().filter(|line| !line.is_empty()).collect()

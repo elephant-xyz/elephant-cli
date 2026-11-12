@@ -1,0 +1,15 @@
+{
+  "parcel_identifier": "12345",
+  "property_legal_description_text": "LOT 1 BLOCK 2 EXAMPLE SUBDIVISION",
+  "property_type": "SingleFamily",
+  "source_http_request": {
+    "url": "https://county.example.com/detail",
+    "method": "GET",
+    "multiValueQueryString": {
+      "parcel": [
+        "12345"
+      ]
+    }
+  },
+  "request_identifier": "12345"
+}

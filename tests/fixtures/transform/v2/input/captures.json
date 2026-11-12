@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "request_identifier": "12345",
+  "sourceUrl": "https://county.example.com/detail?parcel=12345",
+  "captures": [
+    { "name": "property-detail", "path": "captures/property-detail.html", "type": "html" }
+  ]
+}
