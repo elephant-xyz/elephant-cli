@@ -258,3 +258,70 @@ fn writes_the_findings_to_stdout_when_asked() {
     // the report moves to stderr so stdout stays a clean CSV
     assert!(ran.stderr.contains("orphans errors:         1"), "{}", ran.stderr);
 }
+
+/// Build a clean county, let `damage` rewrite its bytes, validate; returns the exit code and stderr.
+fn damaged(damage: impl Fn(Vec<u8>) -> Vec<u8>) -> (i32, String) {
+    let scratch = Scratch::new();
+    let ids = schemas(&scratch);
+    build(&scratch.path("county.car"), &ids, Tweaks::default());
+    let bytes = std::fs::read(scratch.path("county.car")).unwrap();
+    std::fs::write(scratch.path("county.car"), damage(bytes)).unwrap();
+    let ran = scratch.run(&["validate", "county.car", "--output-csv", "errors.csv"]);
+    (ran.code, ran.stderr)
+}
+
+/// Where `needle` first sits in `bytes`.
+fn find(bytes: &[u8], needle: &[u8]) -> usize {
+    bytes.windows(needle.len()).position(|window| window == needle).expect("the bytes to damage")
+}
+
+#[test]
+fn refuses_a_header_that_is_not_a_car_v1_header() {
+    // a key that is not `version`: other readers refuse the archive, so it cannot be published
+    let (code, said) = damaged(|mut bytes| {
+        let at = find(&bytes, b"version");
+        bytes[at + 2] = b'x';
+        bytes
+    });
+    assert_eq!(code, 2, "{said}");
+    assert!(said.contains("car header"), "{said}");
+
+    // version 2 in a header shaped like version 1
+    let (code, said) = damaged(|mut bytes| {
+        let at = find(&bytes, b"version") + 7;
+        bytes[at] = 2;
+        bytes
+    });
+    assert_eq!(code, 2, "{said}");
+    assert!(said.contains("version"), "{said}");
+
+    // a root link without the zero byte dag-cbor puts before a CID
+    let (code, said) = damaged(|mut bytes| {
+        let at = find(&bytes, &[0xd8, 0x2a, 0x58]) + 4;
+        assert_eq!(bytes[at], 0);
+        bytes[at] = 0xbd;
+        bytes
+    });
+    assert_eq!(code, 2, "{said}");
+    assert!(said.contains("car header"), "{said}");
+}
+
+#[test]
+fn refuses_lengths_no_file_could_hold_without_failing_itself() {
+    // a header key claiming 2^64 - 1 bytes
+    let (code, said) = damaged(|_| [&[10u8, 0xa1, 0x7b][..], &[0xff; 8]].concat());
+    assert_eq!(code, 2, "{said}");
+    assert!(said.contains("car header"), "{said}");
+
+    // a CARv2 wrapper whose payload offset and size overflow when added
+    let (code, said) = damaged(|_| {
+        let pragma = [0x0a, 0xa1, 0x67, b'v', b'e', b'r', b's', b'i', b'o', b'n', 0x02];
+        [&pragma[..], &[0; 16], &[0xff; 16], &[0; 8]].concat()
+    });
+    assert_eq!(code, 2, "{said}");
+    assert!(said.contains("car"), "{said}");
+
+    // a header length prefix of 2^64 - 1
+    let (code, said) = damaged(|_| [&[0xff; 9][..], &[0x01, 0xa1]].concat());
+    assert_eq!(code, 2, "{said}");
+}
