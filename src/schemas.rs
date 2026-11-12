@@ -51,7 +51,9 @@ impl Schemas {
             .any(|name| std::env::var_os(name).is_some());
         let home = || match hosted {
             true => PathBuf::from("/tmp/elephant-cli"),
-            false => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".elephant-cli"),
+            // USERPROFILE is the home directory on Windows, where HOME is usually unset
+            false => PathBuf::from(std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default())
+                .join(".elephant-cli"),
         };
         let dir = dir.unwrap_or_else(|| home().join("schema-cache"));
         Schemas { dir, offline, known: HashMap::new(), manifest: None }

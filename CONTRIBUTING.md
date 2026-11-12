@@ -1,266 +1,69 @@
-# Contributing to Elephant Network CLI
+# Contributing to Elephant CLI
 
-Thank you for your interest in contributing to the Elephant Network CLI! This guide will help you get the project up and running locally and make your first contribution.
+## Table of Contents
 
-## 🚀 Getting Started
+- [Set Up](#set-up)
+- [Make a Change](#make-a-change)
+- [Tests](#tests)
+- [Style](#style)
+- [Submit](#submit)
+- [Release](#release)
 
-### Prerequisites
+## Set Up
 
-- Node.js 16.0 or higher
-- npm or yarn
-- Git
-- A code editor (VS Code recommended)
-
-### Local Development Setup
-
-1. **Fork and Clone the Repository**
+You need Rust 1.85 or newer (<https://rustup.rs>). Node 20 or newer is needed only for the npm launcher and library.
 
 ```bash
-# Fork the repository on GitHub first, then:
-git clone https://github.com/YOUR-USERNAME/elephant-network-cli.git
-cd elephant-network-cli
+git clone https://github.com/elephant-xyz/elephant-cli.git
+cd elephant-cli
+cargo build
+./target/debug/elephant-cli --help
 ```
 
-2. **Install Dependencies**
+The browser tests of `prepare` need the obscura headless browser. Download a `no-render` build from <https://github.com/h4ckf0r0day/obscura/releases> and point `OBSCURA_BIN` at the `obscura` binary. Without it those tests are skipped.
+
+## Make a Change
+
+1. Read `AGENTS.md`: it lists the layout, the rules every command follows, and the contracts with Atlas, the kit agents and the library that must not break.
+2. Write a test that fails for the behaviour you want (see [Tests](#tests)).
+3. Make it pass with the smallest change.
+4. Update `README.md` and the `--help` text in `src/main.rs` when an option or an output changes.
+
+Try to fit new behaviour into one of the six commands before proposing a seventh.
+
+## Tests
 
 ```bash
-npm install
+cargo test                                              # everything except the browser tests
+OBSCURA_BIN=/path/to/obscura cargo test                 # with the browser tests
+cargo test --test hash                                  # one file
+ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs
 ```
 
-3. **Build the Project**
+- Tests run the built binary on real files and assert on its exit code, stdout, stderr and the files it writes. They do not call internal functions.
+- Expected values come from somewhere other than this crate: the outputs under `tests/fixtures/*/expected` were written by elephant-cli 1.58.1, and CIDs in tests are literals.
+- Tests do not use the network. `tests/fixtures/lexicon` is a schema cache, and `tests/support/http.rs` serves local HTTP.
+
+## Style
 
 ```bash
-npm run build
+cargo fmt
+cargo clippy --all-targets -- -D warnings
 ```
 
-4. **Test the CLI Locally**
+Both must be clean; CI checks them. The rest of the style rules are in `AGENTS.md`.
 
-```bash
-# Run directly with node
-node dist/index.js --help
+## Submit
 
-# Or test the binary
-./bin/elephant-cli --help
-```
+- Branch from `main`, and open a pull request against `main`.
+- Commit messages are [conventional commits](https://www.conventionalcommits.org) with a lowercase subject: `feat(validate): accept gateway exports`.
+- Say in the pull request what you ran and what it printed.
 
-## 🏗️ Project Structure
+## Release
 
-```
-elephant-network-cli/
-├── src/
-│   ├── commands/          # CLI command implementations
-│   ├── services/          # Business logic (blockchain, IPFS, etc.)
-│   ├── config/           # Configuration and constants
-│   ├── types/            # TypeScript type definitions
-│   ├── utils/            # Utility functions
-│   └── index.ts          # CLI entry point
-├── bin/                  # Executable scripts
-├── dist/                 # Compiled JavaScript (git ignored)
-├── tests/                # Test files
-└── downloads/            # Default download directory (git ignored)
-```
+A release is a tag.
 
-## 💻 Development Workflow
+1. Set the same version in `Cargo.toml` and `package.json`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge.
+2. `git tag v<version> && git push origin v<version>`.
 
-### Making Changes
-
-1. **Create a new branch**
-
-```bash
-git checkout -b feature/your-feature-name
-```
-
-2. **Make your changes**
-
-The most common areas for contributions:
-
-- **Adding new commands**: Create a new file in `src/commands/`
-- **Improving services**: Modify files in `src/services/`
-- **Adding utilities**: Add to `src/utils/`
-- **Updating types**: Edit `src/types/index.ts`
-
-3. **Build and test your changes**
-
-```bash
-# Build the project
-npm run build
-
-# Test with a real elephant address (has an event at block 71875870)
-node dist/index.js list-assignments \
-  --elephant 0x0e44bfab0f7e1943cF47942221929F898E181505 \
-  --from-block 71875850
-```
-
-4. **Watch mode for development**
-
-```bash
-# Auto-rebuild on file changes
-npm run dev
-```
-
-## 🧪 Testing Your Changes
-
-### Manual Testing Checklist
-
-- [ ] Test with valid elephant address
-- [ ] Test with invalid inputs (bad addresses, URLs)
-- [ ] Test error scenarios (no internet, bad RPC)
-- [ ] Test file downloads work correctly
-- [ ] Verify console output looks correct
-
-### Test Data
-
-- **Elephant address with assignments**: `0x0e44bfab0f7e1943cF47942221929F898E181505`
-- **Block with event**: `71875870`
-- **Expected CID**: `QmWUnTmuodSYEuHVPgxtrARGra2VpzsusAp4FqT9FWobuU`
-
-## 📝 Code Style Guidelines
-
-### TypeScript Best Practices
-
-- Use strict typing - avoid `any` types
-- Add JSDoc comments for public methods
-- Keep functions small and focused
-- Use meaningful variable names
-
-### Example Code Style
-
-```typescript
-/**
- * Downloads a file from IPFS
- * @param cid - The IPFS content identifier
- * @param outputPath - Where to save the file
- * @returns Download result with success status
- */
-async downloadFile(cid: string, outputPath: string): Promise<DownloadResult> {
-  // Implementation
-}
-```
-
-### Formatting
-
-- 2 space indentation
-- No semicolons (TypeScript compiler adds them)
-- Single quotes for strings
-- Max line length: 100 characters
-
-## 🎯 Areas for Contribution
-
-### Good First Issues
-
-1. **Add progress bar for blockchain scanning**
-   - Currently uses a spinner
-   - Could show actual progress percentage
-
-2. **Add CSV export option**
-   - Export assignments list to CSV file
-   - Include all metadata (CID, block, transaction)
-
-3. **Improve error messages**
-   - Make them more user-friendly
-   - Add suggested fixes
-
-4. **Add unit tests**
-   - Test services in isolation
-   - Mock blockchain and IPFS calls
-
-5. **Add filtering options**
-   - Filter by date range
-   - Filter by CID pattern
-
-### Advanced Contributions
-
-1. **Multi-chain support**
-   - Add support for other EVM chains
-   - Make chain configurable
-
-2. **Batch operations**
-   - Process multiple elephant addresses
-   - Parallel blockchain queries
-
-3. **Resume capability**
-   - Save progress for large queries
-   - Resume interrupted downloads
-
-## 🐛 Debugging Tips
-
-### Common Issues During Development
-
-1. **TypeScript errors**
-```bash
-# Check for type errors
-npm run build
-
-# See detailed errors
-npx tsc --noEmit
-```
-
-2. **Runtime errors**
-```bash
-# Enable debug output
-DEBUG=* node dist/index.js list-assignments --oracle 0x...
-```
-
-3. **IPFS gateway issues**
-```bash
-# Test with different gateways
---gateway https://ipfs.io/ipfs/
---gateway https://cloudflare-ipfs.com/ipfs/
-```
-
-## 📤 Submitting Your Contribution
-
-1. **Commit your changes**
-
-```bash
-git add .
-git commit -m "feat: add progress bar for blockchain scanning"
-```
-
-Follow conventional commits:
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation
-- `refactor:` for code changes that don't add features or fix bugs
-
-2. **Push to your fork**
-
-```bash
-git push origin feature/your-feature-name
-```
-
-3. **Create a Pull Request**
-
-- Go to the original repository on GitHub
-- Click "New Pull Request"
-- Select your fork and branch
-- Fill out the PR template
-- Submit!
-
-## 🤝 Getting Help
-
-- **Discord**: Join our Discord server (link in README)
-- **Issues**: Check existing issues or create a new one
-- **Discussions**: Use GitHub Discussions for questions
-
-## 📋 PR Checklist
-
-Before submitting a PR, ensure:
-
-- [ ] Code builds without errors (`npm run build`)
-- [ ] Manual testing completed
-- [ ] Code follows project style
-- [ ] Comments added for complex logic
-- [ ] README updated if adding new features
-- [ ] No sensitive data (keys, passwords) included
-
-## 🎉 Thank You!
-
-Every contribution matters, whether it's:
-- Fixing a typo
-- Improving documentation
-- Adding new features
-- Reporting bugs
-- Suggesting improvements
-
-We appreciate your time and effort in making this project better!
+The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and Windows, attaches them to a GitHub release with their SHA-256 sums, writes `npm/release.json` so the npm package downloads the right binary, and publishes `@elephant-xyz/cli`. A version with a hyphen, such as `2.0.0-alpha.1`, is published under the npm tag `next` and marked as a pre-release.

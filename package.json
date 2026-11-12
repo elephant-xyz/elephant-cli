@@ -36,6 +36,7 @@
   ],
   "scripts": {
     "postinstall": "node npm/install.js",
+    "prepublishOnly": "node -e \"if (require('node:fs').existsSync('npm/native')) throw new Error('npm/native holds a locally built binary; remove it before publishing')\"",
     "test": "cargo test"
   },
   "engines": {
