@@ -93,3 +93,8 @@ fn reads_and_prints_dates_as_node_does() {
 fn takes_urls_and_their_queries_apart_as_node_does() {
     same("urls");
 }
+
+#[test]
+fn offers_the_node_modules_and_globals_scripts_use() {
+    same("modules");
+}

@@ -1,0 +1,174 @@
+{
+  "checks": {
+    "vm": [
+      {
+        "200": [
+          "a",
+          "b"
+        ],
+        "0100": "Single Family",
+        "nested": {
+          "ok": true
+        }
+      },
+      42,
+      80,
+      [
+        80
+      ],
+      "undefinedundefinedundefined",
+      "number",
+      9,
+      2,
+      true,
+      "ReferenceError",
+      "SyntaxError"
+    ],
+    "events": [
+      [
+        "each 1 x",
+        "once 1",
+        "each 2 y",
+        "mine"
+      ],
+      true,
+      false,
+      0,
+      true,
+      "Error: unheard",
+      []
+    ],
+    "buffer": [
+      "aMOpbGxv",
+      "hi",
+      "6869",
+      6,
+      true,
+      [
+        1,
+        1,
+        1
+      ],
+      "ab",
+      6,
+      5,
+      "hi",
+      6,
+      "hello",
+      "world",
+      true,
+      3,
+      "aGk",
+      "{\"type\":\"Buffer\",\"data\":[104,105]}",
+      2,
+      -1,
+      3,
+      true,
+      2,
+      255
+    ],
+    "text": [
+      [
+        195,
+        169,
+        226,
+        130,
+        172
+      ],
+      "é€",
+      "plain",
+      "é",
+      "é“",
+      "�h",
+      "utf-8",
+      "aGk=",
+      "hi"
+    ],
+    "util": [
+      "cart has 2 items: {\"a\":1}",
+      "string",
+      "function",
+      true,
+      false,
+      true,
+      "function",
+      "12%",
+      "a b 3"
+    ],
+    "os": [
+      "\n",
+      "string",
+      "string",
+      "string",
+      true
+    ],
+    "process": [
+      "string",
+      "string",
+      2,
+      "object",
+      "string",
+      "string",
+      "number",
+      "bigint",
+      "number",
+      "number",
+      "number",
+      "function",
+      true,
+      "function"
+    ],
+    "assert": [
+      "ok",
+      "AssertionError: zero is not ok",
+      "ok",
+      "AssertionError: one is not \"1\"",
+      "ok",
+      "AssertionError: not alike",
+      "ok",
+      "AssertionError: same",
+      "ok",
+      "ok",
+      "AssertionError: strict is strict",
+      "AssertionError: failed on purpose"
+    ],
+    "timers": [
+      "function",
+      "function",
+      "function",
+      "undefined",
+      "function"
+    ],
+    "globals": [],
+    "structured_clone": [
+      true,
+      true,
+      2,
+      true,
+      true
+    ],
+    "timer_order": [
+      "sync",
+      "tick",
+      "promise",
+      "immediate",
+      "timeout 0",
+      "timeout 5"
+    ],
+    "fs_callbacks": [
+      true,
+      true,
+      "written",
+      "ENOENT"
+    ],
+    "fs_promises": [
+      true,
+      [
+        "deep"
+      ],
+      "ENOENT",
+      false,
+      true
+    ]
+  }
+}

@@ -73,15 +73,24 @@
   path.posix = path;
 
   // ---- Buffer ----
+  const CP1252 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ';
+  const single = (bytes, mask) => Array.from(bytes, (byte) => String.fromCharCode(byte & mask)).join('');
   class Buffer extends Uint8Array {
     static from(value, encoding) {
       if (typeof value === 'string') {
-        if (encoding === 'base64') return Buffer.from(host.base64Decode(value));
-        if (encoding === 'hex') return Buffer.from(value.match(/../g).map((pair) => parseInt(pair, 16)));
+        if (encoding === 'base64' || encoding === 'base64url') return Buffer.from(host.base64Decode(value.replace(/-/g, '+').replace(/_/g, '/')));
+        if (encoding === 'hex') return Buffer.from((value.match(/../g) || []).map((pair) => parseInt(pair, 16)));
+        if (encoding === 'latin1' || encoding === 'binary' || encoding === 'ascii') return Buffer.from(Array.from(value, (char) => char.charCodeAt(0) & 255));
         return Buffer.from(host.utf8Encode(value));
       }
+      if (value instanceof ArrayBuffer) value = new Uint8Array(value);
       const buffer = new Buffer(value.length);
       buffer.set(value);
+      return buffer;
+    }
+    static alloc(size, fill) {
+      const buffer = new Buffer(size);
+      if (fill !== undefined) buffer.fill(typeof fill === 'string' ? fill.charCodeAt(0) : fill);
       return buffer;
     }
     static isBuffer(value) {
@@ -99,15 +108,58 @@
       }
       return out;
     }
+    static compare(a, b) {
+      for (let at = 0; at < a.length && at < b.length; at++) if (a[at] !== b[at]) return a[at] < b[at] ? -1 : 1;
+      return Math.sign(a.length - b.length);
+    }
+    equals(other) {
+      return Buffer.compare(this, other) === 0;
+    }
+    // a view, as in Node, where Uint8Array.prototype.slice would copy
+    slice(start, end) {
+      return this.subarray(start, end);
+    }
+    indexOf(value, from) {
+      return typeof value === 'string' ? single(this, 255).indexOf(single(Buffer.from(value), 255), from) : super.indexOf(value, from);
+    }
+    includes(value, from) {
+      return this.indexOf(value, from) >= 0;
+    }
+    readUInt8(at = 0) {
+      return this[at];
+    }
     toString(encoding) {
       if (encoding === 'base64') return host.base64Encode(this);
+      if (encoding === 'base64url') return host.base64Encode(this).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       if (encoding === 'hex') return Array.from(this, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      if (encoding === 'latin1' || encoding === 'binary') return single(this, 255);
+      if (encoding === 'ascii') return single(this, 127);
       return host.utf8Decode(this);
     }
     toJSON() {
       return { type: 'Buffer', data: Array.from(this) };
     }
   }
+  class TextEncoder_ {
+    encoding = 'utf-8';
+    encode(text = '') {
+      return new Uint8Array(host.utf8Encode(String(text)));
+    }
+  }
+  class TextDecoder_ {
+    constructor(label = 'utf-8') {
+      const name = String(label).toLowerCase();
+      this.encoding = ['utf8', 'utf-8'].includes(name) ? 'utf-8' : ['latin1', 'iso-8859-1', 'ascii', 'windows-1252', 'cp1252'].includes(name) ? 'windows-1252' : undefined;
+      if (!this.encoding) throw new RangeError(`The "${label}" encoding is not supported`);
+    }
+    decode(bytes = new Uint8Array(0)) {
+      const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      if (this.encoding === 'utf-8') return host.utf8Decode(view);
+      return Array.from(view, (byte) => (byte >= 128 && byte < 160 ? CP1252[byte - 128] : String.fromCharCode(byte))).join('');
+    }
+  }
+  Object.defineProperty(TextEncoder_, 'name', { value: 'TextEncoder' });
+  Object.defineProperty(TextDecoder_, 'name', { value: 'TextDecoder' });
 
   // ---- fs ----
   // The host reports failures as "CODE: text"; Node code reads `error.code`.
@@ -170,6 +222,17 @@
     constants: { F_OK: 0, R_OK: 4, W_OK: 2 },
   };
   const later = (fn) => async (...args) => fn(...args);
+  // the callback forms: the same work, answered on the next turn
+  const back = (fn) => (...args) => {
+    const done = args.pop();
+    let value;
+    try {
+      value = fn(...args);
+    } catch (error) {
+      return void queueMicrotask(() => done(error));
+    }
+    queueMicrotask(() => done(null, value));
+  };
   fs.promises = {
     readFile: later(fs.readFileSync),
     writeFile: later(fs.writeFileSync),
@@ -184,6 +247,8 @@
     copyFile: later(fs.copyFileSync),
     rename: later(fs.renameSync),
   };
+  for (const name of ['readFile', 'writeFile', 'appendFile', 'mkdir', 'readdir', 'unlink', 'rm', 'stat', 'lstat', 'access', 'copyFile', 'rename']) fs[name] = back(fs[`${name}Sync`]);
+  fs.exists = (p, done) => queueMicrotask(() => done(fs.existsSync(p)));
 
   // ---- console ----
   const show = (value) => {
@@ -219,10 +284,32 @@
   // ---- timers ----
   const timers = [];
   let ticket = 0;
+  class Timeout {
+    constructor(id) {
+      this.id = id;
+    }
+    ref() {
+      return this;
+    }
+    unref() {
+      return this;
+    }
+    hasRef() {
+      return true;
+    }
+    [Symbol.toPrimitive]() {
+      return this.id;
+    }
+  }
   const schedule = (repeat) => (fn, delay, ...args) => {
     const timer = { id: ++ticket, due: host.now() + Math.max(0, Number(delay) || 0), fn, args, every: repeat ? Math.max(1, Number(delay) || 1) : 0 };
     timers.push(timer);
-    return timer.id;
+    return new Timeout(timer.id);
+  };
+  // an immediate runs before any timer that is due
+  const immediately = (fn, ...args) => {
+    timers.push({ id: ++ticket, due: 0, fn, args, every: 0 });
+    return new Timeout(ticket);
   };
   const cancel = (id) => {
     const at = timers.findIndex((timer) => timer.id === (id && id.id ? id.id : id));
@@ -231,7 +318,7 @@
   // Run the timers that are due; return how long until the next one, or -1 when none is left.
   host.timers = () => {
     const now = host.now();
-    for (const timer of timers.filter((timer) => timer.due <= now)) {
+    for (const timer of timers.filter((timer) => timer.due <= now).sort((a, b) => a.due - b.due || a.id - b.id)) {
       if (timer.every) timer.due = now + timer.every;
       else cancel(timer.id);
       timer.fn(...timer.args);
@@ -246,6 +333,7 @@
       this.exitCode = code;
     }
   }
+  const started = host.now();
   const process = {
     argv: ['node', host.entry],
     execPath: 'node',
@@ -264,6 +352,11 @@
     nextTick: (fn, ...args) => queueMicrotask(() => fn(...args)),
     hrtime: Object.assign(() => [Math.floor(host.now() / 1000), (host.now() % 1000) * 1e6], { bigint: () => BigInt(Math.round(host.now() * 1e6)) }),
     memoryUsage: () => ({ rss: 0, heapUsed: 0, heapTotal: 0 }),
+    uptime: () => (host.now() - started) / 1000,
+    pid: 1,
+    emitWarning: (warning) => host.print(2, `Warning: ${warning && warning.message ? warning.message : warning}\n`),
+    off: () => process,
+    removeListener: () => process,
     on: () => process,
     once: () => process,
     stdout: { write: (text) => host.print(1, String(text)), isTTY: false },
@@ -698,6 +791,180 @@
     };
   }
 
+  // ---- util, assert, events, vm ----
+  const format = (first, ...rest) => {
+    if (typeof first !== 'string') return [first, ...rest].map(show).join(' ');
+    const text = first.replace(/%([sdifjoO%])/g, (found, kind) => {
+      if (kind === '%') return '%';
+      if (!rest.length) return found;
+      const value = rest.shift();
+      if (kind === 's') return typeof value === 'object' && value !== null ? show(value) : String(value);
+      if (kind === 'd') return String(Number(value));
+      if (kind === 'i') return String(parseInt(value, 10));
+      if (kind === 'f') return String(parseFloat(value));
+      return JSON.stringify(value);
+    });
+    return [text, ...rest.map(show)].join(' ');
+  };
+  const alike = (a, b, strict) => {
+    if (strict ? Object.is(a, b) : a == b) return true;
+    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+    if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+    if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+    if (a instanceof Map || a instanceof Set) return a.size === b.size && alike([...a], [...b], strict);
+    const names = Object.keys(a);
+    return Array.isArray(a) === Array.isArray(b) && names.length === Object.keys(b).length && names.every((name) => name in b && alike(a[name], b[name], strict));
+  };
+  class AssertionError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = 'AssertionError';
+      this.code = 'ERR_ASSERTION';
+    }
+  }
+  const asserts = (strict) => {
+    const check = (ok, message, fallback) => {
+      if (ok) return;
+      throw message instanceof Error ? message : new AssertionError(message === undefined ? fallback() : message);
+    };
+    const assert = (value, message) => check(value, message, () => 'The expression evaluated to a falsy value');
+    const same = (a, b) => (strict ? Object.is(a, b) : a == b);
+    return Object.assign(assert, {
+      AssertionError,
+      ok: assert,
+      equal: (a, b, message) => check(same(a, b), message, () => `${show(a)} ${strict ? '!==' : '!='} ${show(b)}`),
+      notEqual: (a, b, message) => check(!same(a, b), message, () => `${show(a)} ${strict ? '===' : '=='} ${show(b)}`),
+      strictEqual: (a, b, message) => check(Object.is(a, b), message, () => `${show(a)} !== ${show(b)}`),
+      notStrictEqual: (a, b, message) => check(!Object.is(a, b), message, () => `${show(a)} === ${show(b)}`),
+      deepEqual: (a, b, message) => check(alike(a, b, strict), message, () => `${show(a)} does not deep-equal ${show(b)}`),
+      deepStrictEqual: (a, b, message) => check(alike(a, b, true), message, () => `${show(a)} does not deep-equal ${show(b)}`),
+      notDeepStrictEqual: (a, b, message) => check(!alike(a, b, true), message, () => `${show(a)} deep-equals ${show(b)}`),
+      match: (text, pattern, message) => check(pattern.test(text), message, () => `${show(text)} does not match ${pattern}`),
+      fail: (message) => check(false, message, () => 'Failed'),
+      throws: (run, expected, message) => {
+        try {
+          run();
+        } catch (error) {
+          return;
+        }
+        check(false, typeof expected === 'string' ? expected : message, () => 'Missing expected exception.');
+      },
+    });
+  };
+  class EventEmitter {
+    #heard = new Map();
+    on(name, listener) {
+      this.#heard.set(name, [...(this.#heard.get(name) || []), listener]);
+      return this;
+    }
+    once(name, listener) {
+      const wrapped = (...args) => {
+        this.off(name, wrapped);
+        listener.apply(this, args);
+      };
+      wrapped.listener = listener;
+      return this.on(name, wrapped);
+    }
+    off(name, listener) {
+      const kept = (this.#heard.get(name) || []).filter((known) => known !== listener && known.listener !== listener);
+      if (kept.length) this.#heard.set(name, kept);
+      else this.#heard.delete(name);
+      return this;
+    }
+    emit(name, ...args) {
+      const listeners = this.#heard.get(name) || [];
+      if (!listeners.length && name === 'error') throw args[0] instanceof Error ? args[0] : new Error(`Unhandled error. (${show(args[0])})`);
+      for (const listener of listeners) listener.apply(this, args);
+      return listeners.length > 0;
+    }
+    removeAllListeners(name) {
+      if (name === undefined) this.#heard.clear();
+      else this.#heard.delete(name);
+      return this;
+    }
+    listenerCount(name) {
+      return (this.#heard.get(name) || []).length;
+    }
+    listeners(name) {
+      return (this.#heard.get(name) || []).map((listener) => listener.listener || listener);
+    }
+    eventNames() {
+      return [...this.#heard.keys()];
+    }
+    setMaxListeners() {
+      return this;
+    }
+  }
+  EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+  EventEmitter.prototype.removeListener = EventEmitter.prototype.off;
+  EventEmitter.EventEmitter = EventEmitter;
+  // vm: code sees the context object's properties and the language's own
+  // globals, not this module's `process`, `Buffer` or `console`.
+  const hidden = new Set(['global', 'console', 'process', 'Buffer', 'setTimeout', 'setInterval', 'setImmediate', 'clearTimeout', 'clearInterval', 'clearImmediate', 'URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'atob', 'btoa', 'structuredClone', 'queueMicrotask', 'AbortController', 'performance']);
+  const evaluate = new Function('__elephant_scope__', '__elephant_code__', 'with (__elephant_scope__) { return eval(__elephant_code__); }');
+  const within = (code, context = {}) =>
+    evaluate(
+      new Proxy(context, {
+        has: (target, name) => name in target || hidden.has(name),
+        get: (target, name) => (name === Symbol.unscopables ? undefined : target[name]),
+      }),
+      String(code)
+    );
+  const vm = {
+    runInNewContext: within,
+    runInContext: within,
+    runInThisContext: (code) => (0, eval)(String(code)),
+    createContext: (context = {}) => context,
+    isContext: (context) => typeof context === 'object' && context !== null,
+    Script: class Script {
+      constructor(code) {
+        this.code = String(code);
+      }
+      runInNewContext(context) {
+        return within(this.code, context);
+      }
+      runInContext(context) {
+        return within(this.code, context);
+      }
+      runInThisContext() {
+        return (0, eval)(this.code);
+      }
+    },
+  };
+  const clone = (value, seen = new Map()) => {
+    if (typeof value !== 'object' || value === null) return value;
+    if (seen.has(value)) return seen.get(value);
+    if (value instanceof Date) return new Date(value.getTime());
+    if (value instanceof RegExp) return new RegExp(value.source, value.flags);
+    if (ArrayBuffer.isView(value)) return value.slice();
+    const made = value instanceof Map ? new Map() : value instanceof Set ? new Set() : Array.isArray(value) ? [] : {};
+    seen.set(value, made);
+    if (value instanceof Map) for (const [key, item] of value) made.set(clone(key, seen), clone(item, seen));
+    else if (value instanceof Set) for (const item of value) made.add(clone(item, seen));
+    else for (const name of Object.keys(value)) made[name] = clone(value[name], seen);
+    return made;
+  };
+  class AbortController_ {
+    signal = Object.assign(new EventEmitter(), {
+      aborted: false,
+      reason: undefined,
+      addEventListener(name, listener) {
+        this.once(name, listener);
+      },
+      removeEventListener(name, listener) {
+        this.off(name, listener);
+      },
+      throwIfAborted() {
+        if (this.aborted) throw this.reason;
+      },
+    });
+    abort(reason = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })) {
+      if (this.signal.aborted) return;
+      Object.assign(this.signal, { aborted: true, reason });
+      this.signal.emit('abort', { type: 'abort' });
+    }
+  }
+
   // ---- CommonJS ----
   const builtins = {
     fs,
@@ -720,8 +987,21 @@
         return record;
       },
     },
-    util: { inspect: show, format: (...args) => args.map(show).join(' '), promisify: (fn) => (...args) => new Promise((resolve, reject) => fn(...args, (error, value) => (error ? reject(error) : resolve(value)))) },
-    assert: Object.assign((ok, message) => { if (!ok) throw new Error(message || 'Assertion failed'); }, { ok: (ok, message) => { if (!ok) throw new Error(message || 'Assertion failed'); }, strictEqual: (a, b, message) => { if (a !== b) throw new Error(message || `${show(a)} !== ${show(b)}`); } }),
+    util: {
+      inspect: show,
+      format,
+      promisify: (fn) => (...args) => new Promise((resolve, reject) => fn(...args, (error, value) => (error ? reject(error) : resolve(value)))),
+      inherits: (child, parent) => Object.setPrototypeOf(child.prototype, parent.prototype),
+      isDeepStrictEqual: (a, b) => alike(a, b, true),
+      types: { isDate: (value) => value instanceof Date, isRegExp: (value) => value instanceof RegExp, isPromise: (value) => value instanceof Promise },
+      TextEncoder: TextEncoder_,
+      TextDecoder: TextDecoder_,
+    },
+    assert: asserts(false),
+    'assert/strict': asserts(true),
+    events: EventEmitter,
+    vm,
+    timers: { setTimeout: schedule(false), setInterval: schedule(true), setImmediate: immediately, clearTimeout: cancel, clearInterval: cancel, clearImmediate: cancel },
   };
   const hashing = { sha256: host.sha256, sha512: host.sha512 };
   builtins.crypto = {
@@ -799,14 +1079,23 @@
     Buffer,
     setTimeout: schedule(false),
     setInterval: schedule(true),
-    setImmediate: (fn, ...args) => schedule(false)(fn, 0, ...args),
+    setImmediate: immediately,
     clearTimeout: cancel,
     clearInterval: cancel,
     clearImmediate: cancel,
   });
   if (typeof globalThis.URL === 'undefined') Object.assign(globalThis, { URL: URL_, URLSearchParams: URLSearchParams_ });
   if (typeof globalThis.queueMicrotask === 'undefined') globalThis.queueMicrotask = (fn) => void Promise.resolve().then(fn);
-  if (typeof globalThis.structuredClone === 'undefined') globalThis.structuredClone = (value) => JSON.parse(JSON.stringify(value));
+  const offered = {
+    structuredClone: (value) => clone(value),
+    TextEncoder: TextEncoder_,
+    TextDecoder: TextDecoder_,
+    AbortController: AbortController_,
+    atob: (text) => single(host.base64Decode(String(text)), 255),
+    btoa: (text) => host.base64Encode(Buffer.from(String(text), 'latin1')),
+    performance: { now: () => host.now() - started, timeOrigin: started },
+  };
+  for (const name of Object.keys(offered)) if (typeof globalThis[name] === 'undefined') globalThis[name] = offered[name];
 
   host.builtin = builtin;
   host.main = (file) => run(file);
