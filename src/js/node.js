@@ -332,8 +332,71 @@
     const grouped = options && options.useGrouping === false ? whole : group(whole);
     return `${sign}${symbol}${grouped}${fraction ? '.' + fraction : ''}${unit}`;
   }
+  // String order as ICU's root collation gives it for what county data holds:
+  // ASCII, Latin letters with accents, and common punctuation. Primary order
+  // is punctuation, digits, letters without case; then accents; then case,
+  // lowercase first. The tables are ICU's own order, read from Node by sorting
+  // these characters with localeCompare.
+  // ponytail: characters outside the tables sort after `z` by code point; use ICU's data if other scripts matter.
+  const ORDER =
+    '\t\n\u000b\f\r _-‐‒–—―,;:!¡?¿.…·\'‹›"«»()[]{}§¶@*/\\&#%‰†‡•′″`´^¯¨¸°©®+±÷×<=>¬|¦~¤¢$£¥€0123456789abcdefghijklmnopqrstuvwxyz';
+  const MARKS = '̸̵̧̨́̀̆̂̌̊̈̋̃̇̄';
+  // letters and signs that sort as others with a difference of accent (..) or of case ()
+  const FOLD = {
+    'ø': 'o̸', 'Ø': 'O̸', 'ł': 'l̵', 'Ł': 'L̵', 'đ': 'd̵', 'Đ': 'D̵',
+    'æ': 'ae', 'Æ': 'AE', 'œ': 'oe', 'Œ': 'OE', 'ß': 'ss', 'ẞ': 'SS',
+    'ð': 'd', 'Ð': 'D', 'ſ': 's', '‑': '‐', ' ': ' ',
+    '‘': "'", '’': "'", '‚': "'", '“': '"', '”': '"', '„': '"',
+  };
+  const folded = new RegExp(`[${Object.keys(FOLD).join('')}]`, 'g');
+  const DIGIT = ORDER.indexOf('0');
+  const collationKey = (text, numeric) => {
+    const key = [];
+    const source = text.normalize('NFD').replace(folded, (found) => FOLD[found]);
+    for (let at = 0; at < source.length; at++) {
+      const char = source[at];
+      const last = key[key.length - 1];
+      const mark = MARKS.indexOf(char);
+      if (last && (mark >= 0 || (char >= '̀' && char <= 'ͯ'))) last.accents += String.fromCharCode(mark >= 0 ? mark + 1 : char.charCodeAt(0));
+      else if (last && char === '') last.cased = 2;
+      else if (numeric && char >= '0' && char <= '9') {
+        // a run of digits orders by its value: by how many digits count, then by those digits
+        let end = at;
+        while (source[end + 1] >= '0' && source[end + 1] <= '9') end++;
+        const counted = source.slice(at, end + 1).replace(/^0+/, '');
+        key.push({ rank: DIGIT + counted.length / (counted.length + 1), accents: '', cased: 0 });
+        for (const digit of counted) key.push({ rank: DIGIT + Number(digit), accents: '', cased: 0 });
+        at = end;
+      } else {
+        const lower = char.toLowerCase();
+        const rank = ORDER.indexOf(lower);
+        key.push({ rank: rank >= 0 ? rank : 1000 + lower.charCodeAt(0), accents: '', cased: lower === char ? 0 : 1 });
+      }
+    }
+    return key;
+  };
+  function localeCompare(that, locales, options) {
+    const level = (options && options.sensitivity) || 'variant';
+    const a = collationKey(String(this), Boolean(options && options.numeric));
+    const b = collationKey(String(that), Boolean(options && options.numeric));
+    const by = (pick) => {
+      for (let at = 0; at < a.length && at < b.length; at++) {
+        const x = pick(a[at]);
+        const y = pick(b[at]);
+        if (x !== y) return x < y ? -1 : 1;
+      }
+      return 0;
+    };
+    return (
+      by((part) => part.rank) ||
+      Math.sign(a.length - b.length) ||
+      (level === 'accent' || level === 'variant' ? by((part) => part.accents) : 0) ||
+      (level === 'case' || level === 'variant' ? by((part) => part.cased) : 0)
+    );
+  }
   if (typeof globalThis.Intl === 'undefined') {
     Number.prototype.toLocaleString = localeNumber;
+    String.prototype.localeCompare = localeCompare;
     BigInt.prototype.toLocaleString = function () {
       return String(this).replace(/\d+/, group);
     };
