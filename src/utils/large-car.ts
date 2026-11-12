@@ -14,7 +14,7 @@ import { CID } from 'multiformats/cid';
  */
 
 /** Shards per collection: 64 × 2^24 ≈ 1.07 billion entries. */
-const SHARDS = 64;
+export const SHARDS = 64;
 
 /** A compact, exact key for a CID: its binary form as a one-byte-per-char string. */
 export function cidKey(cid: CID): string {
@@ -22,7 +22,7 @@ export function cidKey(cid: CID): string {
 }
 
 // The last byte of a CID is the end of its multihash digest: uniformly distributed for sha256.
-const shardOf = (key: string): number =>
+export const shardOf = (key: string): number =>
   key.charCodeAt(key.length - 1) & (SHARDS - 1);
 
 /** A Set of strings that is not limited to 2^24 entries. */

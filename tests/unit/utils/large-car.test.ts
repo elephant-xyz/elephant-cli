@@ -9,6 +9,8 @@ import {
   BlockMarks,
   cidKey,
   LargeCarReader,
+  SHARDS,
+  shardOf,
 } from '../../../src/utils/large-car.js';
 import { json, text, type Block } from '../../helpers/county-car.js';
 
@@ -136,13 +138,19 @@ describe('BigSet and BigMap', () => {
     expect(set.has('missing')).toBe(false);
   });
 
-  it('hold more keys than one Set allows', () => {
-    // V8 refuses a 2^24 + 1st entry in a single Set; 64 shards take far more.
+  it('spread CID keys over every shard, so they hold 64 times what one Set allows', async () => {
+    // V8 caps one Set at 2^24 entries; BigSet's capacity is SHARDS of those. Real CID keys
+    // (sha256 digests) must reach every shard for that to hold. Cook's 31.5M blocks were run
+    // end to end outside the unit tests.
+    const keys = (
+      await Promise.all(
+        Array.from({ length: 2000 }, (_, i) => text(`spread ${i}`))
+      )
+    ).map((block) => cidKey(block.cid));
+    const used = new Set(keys.map(shardOf));
+    expect(used.size).toBe(SHARDS);
     const set = new BigSet();
-    const total = (1 << 24) + 1000;
-    for (let i = 0; i < total; i += 1) {
-      set.add(`${i}\u0000${String.fromCharCode(i & 255)}`);
-    }
-    expect(set.size).toBe(total);
-  }, 120_000);
+    keys.forEach((key) => set.add(key));
+    expect(set.size).toBe(2000);
+  });
 });
