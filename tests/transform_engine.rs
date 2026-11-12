@@ -88,3 +88,8 @@ fn reads_and_prints_dates_as_node_does() {
     // Invalid Date for the first two and 1976-07-03T22:00:00Z for the third.
     alike("dates", &[("parsed", r#""Q1 2020""#), ("parsed", r#""x2020-01-05""#), ("parsed", r#""Jul 4, 1976 GMT+2""#)]);
 }
+
+#[test]
+fn takes_urls_and_their_queries_apart_as_node_does() {
+    same("urls");
+}

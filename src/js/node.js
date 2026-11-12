@@ -120,7 +120,7 @@
       throw error;
     }
   };
-  const abs = (p) => path.resolve(p instanceof URL_ ? p.pathname : String(p));
+  const abs = (p) => path.resolve(p instanceof URL_ ? fileURLToPath(p) : String(p));
   const encodingOf = (options) => (typeof options === 'string' ? options : options && options.encoding);
   const stat = (p) => {
     const info = call(host.stat, abs(p));
@@ -270,30 +270,253 @@
     stderr: { write: (text) => host.print(2, String(text)), isTTY: false },
   };
 
-  // ---- URL: only what resolving a file path or reading a query needs ----
-  class URL_ {
-    constructor(text, base) {
-      const match = /^([a-z][a-z0-9+.-]*:)(\/\/([^/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/i.exec(String(text));
-      if (!match) {
-        if (base === undefined) throw new TypeError(`Invalid URL: ${text}`);
-        const root = new URL_(base);
-        const joined = String(text).startsWith('/') ? String(text) : path.join(path.dirname(root.pathname || '/'), String(text));
-        return new URL_(`${root.protocol}//${root.host}${joined}`);
+  // ---- URL and URLSearchParams, for http(s) and file URLs ----
+  const invalidUrl = (text) => Object.assign(new TypeError(`Invalid URL: ${text}`), { code: 'ERR_INVALID_URL', input: String(text) });
+  // Percent-encode what a URL part may not hold as it stands; existing escapes stay.
+  const escapeIn = (unsafe) => (text) =>
+    text.replace(unsafe, (run) => {
+      try {
+        return encodeURIComponent(run).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+      } catch (error) {
+        return run;
       }
-      this.protocol = match[1].toLowerCase();
-      this.host = match[3] || '';
-      this.hostname = this.host.replace(/:\d+$/, '');
-      this.port = (/:(\d+)$/.exec(this.host) || [])[1] || '';
-      this.pathname = match[4] || (match[2] !== undefined ? '/' : '');
-      this.search = match[5] || '';
-      this.hash = match[6] || '';
-      this.origin = `${this.protocol}//${this.host}`;
-      this.href = `${this.protocol}${match[2] !== undefined ? '//' + this.host : ''}${this.pathname}${this.search}${this.hash}`;
+    });
+  const escapePath = escapeIn(/[\u0000- "<>`{}\u007f-￿]+/g);
+  const escapeQuery = escapeIn(/[\u0000- "<>'\u007f-￿]+/g);
+  const escapeHash = escapeIn(/[\u0000- "<>`\u007f-￿]+/g);
+  const escapeUser = escapeIn(/[\u0000- "<>`{}/:;=@[\\\]^|?#\u007f-￿]+/g);
+  const unescape = (text) => {
+    try {
+      return decodeURIComponent(text);
+    } catch (error) {
+      return text;
+    }
+  };
+  const formDecode = (text) => unescape(text.replace(/\+/g, ' '));
+  const formEncode = (text) => encodeURIComponent(text).replace(/%20/g, '+').replace(/[!'()~]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  const PORTS = { 'http:': '80', 'https:': '443', 'ftp:': '21', 'ws:': '80', 'wss:': '443', 'file:': '' };
+
+  class URLSearchParams_ {
+    #pairs = [];
+    #changed;
+    constructor(init, changed) {
+      if (typeof init === 'string') this.#read(init);
+      else if (init && typeof init[Symbol.iterator] === 'function') for (const [name, value] of init) this.#pairs.push([String(name), String(value)]);
+      else if (init && typeof init === 'object') for (const name of Object.keys(init)) this.#pairs.push([name, String(init[name])]);
+      this.#changed = changed;
+    }
+    #read(text) {
+      this.#pairs = [];
+      for (const piece of text.replace(/^\?/, '').split('&')) {
+        if (!piece) continue;
+        const at = piece.indexOf('=');
+        this.#pairs.push([formDecode(at < 0 ? piece : piece.slice(0, at)), formDecode(at < 0 ? '' : piece.slice(at + 1))]);
+      }
+    }
+    #touch() {
+      if (this.#changed) this.#changed(this.toString());
+    }
+    // the owning URL was given a new query
+    _reset(text) {
+      this.#read(text);
+    }
+    get size() {
+      return this.#pairs.length;
+    }
+    append(name, value) {
+      this.#pairs.push([String(name), String(value)]);
+      this.#touch();
+    }
+    delete(name) {
+      this.#pairs = this.#pairs.filter((pair) => pair[0] !== String(name));
+      this.#touch();
+    }
+    get(name) {
+      const found = this.#pairs.find((pair) => pair[0] === String(name));
+      return found ? found[1] : null;
+    }
+    getAll(name) {
+      return this.#pairs.filter((pair) => pair[0] === String(name)).map((pair) => pair[1]);
+    }
+    has(name) {
+      return this.#pairs.some((pair) => pair[0] === String(name));
+    }
+    set(name, value) {
+      const at = this.#pairs.findIndex((pair) => pair[0] === String(name));
+      if (at < 0) this.#pairs.push([String(name), String(value)]);
+      else {
+        this.#pairs[at][1] = String(value);
+        this.#pairs = this.#pairs.filter((pair, index) => index <= at || pair[0] !== String(name));
+      }
+      this.#touch();
+    }
+    sort() {
+      this.#pairs = this.#pairs
+        .map((pair, index) => [pair, index])
+        .sort((a, b) => (a[0][0] < b[0][0] ? -1 : a[0][0] > b[0][0] ? 1 : a[1] - b[1]))
+        .map((entry) => entry[0]);
+      this.#touch();
+    }
+    forEach(each, self) {
+      for (const [name, value] of this.#pairs) each.call(self, value, name, this);
+    }
+    keys() {
+      return this.#pairs.map((pair) => pair[0])[Symbol.iterator]();
+    }
+    values() {
+      return this.#pairs.map((pair) => pair[1])[Symbol.iterator]();
+    }
+    entries() {
+      return this.#pairs.map((pair) => [pair[0], pair[1]])[Symbol.iterator]();
+    }
+    [Symbol.iterator]() {
+      return this.entries();
+    }
+    toString() {
+      return this.#pairs.map(([name, value]) => `${formEncode(name)}=${formEncode(value)}`).join('&');
+    }
+  }
+
+  class URL_ {
+    #scheme;
+    #username = '';
+    #password = '';
+    #hostname = '';
+    #port = '';
+    #path = '';
+    #query = null;
+    #fragment = null;
+    #params;
+    constructor(text, base) {
+      const given = String(text).trim();
+      const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(given);
+      if (scheme && !(base !== undefined && scheme[1].length === 1)) this.#parse(given, given);
+      else {
+        if (base === undefined) throw invalidUrl(text);
+        const root = base instanceof URL_ ? base : new URL_(base);
+        const origin = `${root.protocol}//${root.#authority()}`;
+        const folder = root.#path.slice(0, root.#path.lastIndexOf('/') + 1);
+        const query = root.#query === null ? '' : `?${root.#query}`;
+        const joined =
+          given === '' ? `${origin}${root.#path}${query}`
+          : given.startsWith('//') ? `${root.protocol}${given}`
+          : given.startsWith('/') ? `${origin}${given}`
+          : given.startsWith('?') ? `${origin}${root.#path}${given}`
+          : given.startsWith('#') ? `${origin}${root.#path}${query}${given}`
+          : `${origin}${folder}${given}`;
+        this.#parse(joined, text);
+      }
+    }
+    #parse(given, shown) {
+      const parts = /^([a-zA-Z][a-zA-Z0-9+.-]*:)(\/\/([^/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/s.exec(given);
+      if (!parts) throw invalidUrl(shown);
+      this.#scheme = parts[1].toLowerCase();
+      const special = Object.prototype.hasOwnProperty.call(PORTS, this.#scheme);
+      if (special && parts[2] === undefined) throw invalidUrl(shown);
+      const authority = /^(?:([^@]*)@)?(.*?)(?::(\d*))?$/.exec(parts[3] || '');
+      if (authority[1] !== undefined) {
+        const colon = authority[1].indexOf(':');
+        this.#username = escapeUser(colon < 0 ? authority[1] : authority[1].slice(0, colon));
+        this.#password = colon < 0 ? '' : escapeUser(authority[1].slice(colon + 1));
+      }
+      this.#hostname = authority[2].toLowerCase();
+      if (special && this.#scheme !== 'file:' && !this.#hostname) throw invalidUrl(shown);
+      if (/[\s<>^|%\\]/.test(this.#hostname)) throw invalidUrl(shown);
+      this.#port = authority[3] && authority[3] !== PORTS[this.#scheme] ? String(Number(authority[3])) : '';
+      this.#setPath(parts[4], special);
+      this.#query = parts[5] === undefined ? null : escapeQuery(parts[5].slice(1));
+      this.#fragment = parts[6] === undefined ? null : escapeHash(parts[6].slice(1));
+    }
+    #setPath(text, special) {
+      if (!special) return void (this.#path = text);
+      const kept = [];
+      const pieces = escapePath(text).split('/').slice(1);
+      pieces.forEach((piece, index) => {
+        const last = index === pieces.length - 1;
+        const plain = piece.replace(/%2e/gi, '.');
+        if (plain === '..') kept.pop();
+        if (plain === '..' || plain === '.') return void (last && kept.push(''));
+        kept.push(piece);
+      });
+      this.#path = `/${kept.join('/')}`;
+    }
+    #authority() {
+      const user = this.#username || this.#password ? `${this.#username}${this.#password ? `:${this.#password}` : ''}@` : '';
+      return `${user}${this.host}`;
+    }
+    get protocol() {
+      return this.#scheme;
+    }
+    get username() {
+      return this.#username;
+    }
+    get password() {
+      return this.#password;
+    }
+    get hostname() {
+      return this.#hostname;
+    }
+    get port() {
+      return this.#port;
+    }
+    get host() {
+      return this.#hostname + (this.#port ? `:${this.#port}` : '');
+    }
+    get origin() {
+      return this.#scheme === 'file:' || !Object.prototype.hasOwnProperty.call(PORTS, this.#scheme) ? 'null' : `${this.#scheme}//${this.host}`;
+    }
+    get pathname() {
+      return this.#path;
+    }
+    set pathname(value) {
+      const text = String(value);
+      this.#setPath(text.startsWith('/') ? text : `/${text}`, true);
+    }
+    get search() {
+      return this.#query ? `?${this.#query}` : '';
+    }
+    set search(value) {
+      const text = String(value).replace(/^\?/, '');
+      this.#query = text ? escapeQuery(text) : null;
+      if (this.#params) this.#params._reset(this.#query || '');
+    }
+    get hash() {
+      return this.#fragment ? `#${this.#fragment}` : '';
+    }
+    set hash(value) {
+      const text = String(value).replace(/^#/, '');
+      this.#fragment = text ? escapeHash(text) : null;
+    }
+    get searchParams() {
+      this.#params = this.#params || new URLSearchParams_(this.#query || '', (text) => void (this.#query = text || null));
+      return this.#params;
+    }
+    get href() {
+      const slashes = Object.prototype.hasOwnProperty.call(PORTS, this.#scheme) || this.#hostname ? '//' : '';
+      return `${this.#scheme}${slashes}${slashes ? this.#authority() : ''}${this.#path}${this.#query === null ? '' : `?${this.#query}`}${this.#fragment === null ? '' : `#${this.#fragment}`}`;
+    }
+    set href(value) {
+      this.#username = this.#password = '';
+      this.#parse(String(value).trim(), value);
+      if (this.#params) this.#params._reset(this.#query || '');
     }
     toString() {
       return this.href;
     }
+    toJSON() {
+      return this.href;
+    }
+    static canParse(text, base) {
+      try {
+        return Boolean(new URL_(text, base));
+      } catch (error) {
+        return false;
+      }
+    }
   }
+  Object.defineProperty(URL_, 'name', { value: 'URL' });
+  Object.defineProperty(URLSearchParams_, 'name', { value: 'URLSearchParams' });
+  const fileURLToPath = (url) => unescape((url instanceof URL_ ? url : new URL_(String(url))).pathname);
 
   // ---- locale: the en-US answers Node gives; this engine has no Intl ----
   // The plain digits of a non-negative finite number, taken from its shortest
@@ -483,7 +706,20 @@
     process,
     buffer: { Buffer },
     os: { EOL: '\n', tmpdir: () => host.cwd, platform: () => 'linux', homedir: () => host.cwd, cpus: () => [{}] },
-    url: { URL: URL_, fileURLToPath: (url) => new URL_(String(url)).pathname, pathToFileURL: (file) => new URL_(`file://${path.resolve(file)}`) },
+    url: { URL: URL_, URLSearchParams: URLSearchParams_, fileURLToPath, pathToFileURL: (file) => new URL_(`file://${path.resolve(file).replace(/[%?#]/g, encodeURIComponent)}`) },
+    querystring: {
+      escape: encodeURIComponent,
+      unescape,
+      stringify: (record) =>
+        Object.keys(record || {})
+          .flatMap((name) => [].concat(record[name]).map((value) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`))
+          .join('&'),
+      parse: (text) => {
+        const record = {};
+        for (const [name, value] of new URLSearchParams_(String(text))) record[name] = name in record ? [].concat(record[name], value) : value;
+        return record;
+      },
+    },
     util: { inspect: show, format: (...args) => args.map(show).join(' '), promisify: (fn) => (...args) => new Promise((resolve, reject) => fn(...args, (error, value) => (error ? reject(error) : resolve(value)))) },
     assert: Object.assign((ok, message) => { if (!ok) throw new Error(message || 'Assertion failed'); }, { ok: (ok, message) => { if (!ok) throw new Error(message || 'Assertion failed'); }, strictEqual: (a, b, message) => { if (a !== b) throw new Error(message || `${show(a)} !== ${show(b)}`); } }),
   };
@@ -568,7 +804,7 @@
     clearInterval: cancel,
     clearImmediate: cancel,
   });
-  if (typeof globalThis.URL === 'undefined') globalThis.URL = URL_;
+  if (typeof globalThis.URL === 'undefined') Object.assign(globalThis, { URL: URL_, URLSearchParams: URLSearchParams_ });
   if (typeof globalThis.queueMicrotask === 'undefined') globalThis.queueMicrotask = (fn) => void Promise.resolve().then(fn);
   if (typeof globalThis.structuredClone === 'undefined') globalThis.structuredClone = (value) => JSON.parse(JSON.stringify(value));
 
