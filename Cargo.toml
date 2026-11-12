@@ -1,0 +1,28 @@
+[package]
+name = "elephant-cli"
+version = "2.0.0-alpha.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Validate, hash, export, upload, prepare and transform Elephant county data."
+repository = "https://github.com/elephant-xyz/elephant-cli"
+
+[[bin]]
+name = "elephant-cli"
+path = "src/main.rs"
+
+[dependencies]
+cid = "0.11"
+clap = { version = "4", features = ["derive", "env"] }
+jsonschema = { version = "0.61", default-features = false }
+memmap2 = "0.9"
+regex = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+
+[profile.dev]
+debug = false
+opt-level = 1
+
+[profile.release]
+debug = false

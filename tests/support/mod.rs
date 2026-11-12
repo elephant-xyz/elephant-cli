@@ -1,0 +1,143 @@
+//! Shared test support: a scratch directory, the CLI under test, and builders
+//! for blocks and CAR files. The builders are written independently of the
+//! crate's own CAR code so a test never checks the code against itself.
+#![allow(dead_code)]
+
+pub mod county;
+
+use cid::multihash::Multihash;
+use cid::Cid;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+pub const DAG_JSON: u64 = 0x0129;
+pub const RAW: u64 = 0x55;
+
+/// A scratch directory, removed when dropped.
+pub struct Scratch(pub PathBuf);
+
+static NEXT: AtomicU32 = AtomicU32::new(0);
+
+impl Scratch {
+    pub fn new() -> Scratch {
+        let name = format!("elephant-cli-test-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
+        let path = std::env::temp_dir().join(name);
+        std::fs::create_dir_all(&path).unwrap();
+        Scratch(path)
+    }
+
+    pub fn path(&self, name: &str) -> PathBuf {
+        self.0.join(name)
+    }
+
+    pub fn text(&self, name: &str) -> String {
+        std::fs::read_to_string(self.path(name)).unwrap()
+    }
+
+    /// Run the CLI offline, with this directory as cwd and `schemas/` as the schema cache.
+    pub fn run(&self, args: &[&str]) -> Ran {
+        let output = Command::new(env!("CARGO_BIN_EXE_elephant-cli"))
+            .args(args)
+            .current_dir(&self.0)
+            .env("ELEPHANT_SCHEMA_CACHE_DIR", self.path("schemas"))
+            .env("ELEPHANT_OFFLINE", "1")
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap();
+        Ran::from(output)
+    }
+
+    /// The data rows of a CSV the CLI wrote, split on commas (test rows hold no quoted commas).
+    pub fn rows(&self, name: &str) -> Vec<Vec<String>> {
+        let text = self.text(name);
+        text.lines().skip(1).map(|line| line.split(',').map(str::to_string).collect()).collect()
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+pub struct Ran {
+    pub code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl From<Output> for Ran {
+    fn from(output: Output) -> Ran {
+        Ran {
+            code: output.status.code().unwrap_or(-1),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        }
+    }
+}
+
+impl Ran {
+    /// stdout parsed as the single JSON document `--json` prints.
+    pub fn json(&self) -> Value {
+        serde_json::from_str(&self.stdout)
+            .unwrap_or_else(|error| panic!("stdout is not JSON ({error}):\n{}\nstderr:\n{}", self.stdout, self.stderr))
+    }
+}
+
+#[derive(Clone)]
+pub struct Block {
+    pub cid: Cid,
+    pub bytes: Vec<u8>,
+}
+
+fn block(codec: u64, bytes: Vec<u8>) -> Block {
+    let hash = Multihash::<64>::wrap(0x12, &Sha256::digest(&bytes)).unwrap();
+    Block { cid: Cid::new_v1(codec, hash), bytes }
+}
+
+/// A dag-json block holding `value`; links are written as `{"/": "<cid>"}`.
+pub fn node(value: &Value) -> Block {
+    block(DAG_JSON, serde_json::to_vec(value).unwrap())
+}
+
+/// A raw block holding text.
+pub fn text(value: &str) -> Block {
+    block(RAW, value.as_bytes().to_vec())
+}
+
+pub fn link(cid: &Cid) -> Value {
+    json!({ "/": cid.to_string() })
+}
+
+fn varint(mut value: usize, into: &mut Vec<u8>) {
+    while value >= 0x80 {
+        into.push((value as u8 & 0x7f) | 0x80);
+        value >>= 7;
+    }
+    into.push(value as u8);
+}
+
+/// Write a CARv1 file with one root and the blocks in the order given.
+pub fn write_car(file: &Path, root: &Cid, blocks: &[Block]) {
+    let root = root.to_bytes();
+    let mut header = vec![0xa2, 0x65];
+    header.extend(b"roots");
+    header.extend([0x81, 0xd8, 0x2a, 0x58, root.len() as u8 + 1, 0x00]);
+    header.extend(&root);
+    header.push(0x67);
+    header.extend(b"version");
+    header.push(0x01);
+    let mut out = Vec::new();
+    varint(header.len(), &mut out);
+    out.extend(header);
+    for block in blocks {
+        let cid = block.cid.to_bytes();
+        varint(cid.len() + block.bytes.len(), &mut out);
+        out.extend(cid);
+        out.extend(&block.bytes);
+    }
+    std::fs::write(file, out).unwrap();
+}
