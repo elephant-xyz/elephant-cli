@@ -248,6 +248,7 @@
   }
   const process = {
     argv: ['node', host.entry],
+    execPath: 'node',
     env: { NODE_ENV: 'production' },
     platform: 'linux',
     version: 'v22.0.0',
@@ -346,9 +347,12 @@
     }
     return undefined;
   };
+  // The module the host started: scripts end with `if (require.main === module) main();`.
+  let main;
   const run = (file) => {
     if (loaded.has(file)) return loaded.get(file).exports;
-    const module = { exports: {}, filename: file, id: file, loaded: false };
+    const module = { exports: {}, filename: file, id: file, path: path.dirname(file), paths: [], children: [], loaded: false };
+    main = main || module;
     loaded.set(file, module);
     const source = call(host.readText, file);
     if (file.endsWith('.json')) module.exports = JSON.parse(source);
@@ -368,6 +372,7 @@
     };
     require.resolve = (name) => (builtin(String(name)) !== undefined ? name : locate(name, from));
     require.cache = {};
+    require.main = main;
     return require;
   };
 
