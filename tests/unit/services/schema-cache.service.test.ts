@@ -134,6 +134,23 @@ describe('SchemaCacheService', () => {
     });
   });
 
+  describe('concurrent lookups', () => {
+    it('shares one fetch and one object between lookups of the same CID', async () => {
+      (fetchFromIpfs as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => JSON.stringify({ type: 'object' })
+      );
+
+      const found = await Promise.all([
+        schemaCacheService.get('same'),
+        schemaCacheService.get('same'),
+      ]);
+
+      expect(found[0]).toBe(found[1]);
+      expect(await schemaCacheService.get('same')).toBe(found[0]);
+      expect(fetchFromIpfs).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('warm method', () => {
     it('fetches every uncached manifest schema once and survives a failing one', async () => {
       const cached: JSONSchema = { type: 'object' };

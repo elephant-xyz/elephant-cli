@@ -1,4 +1,4 @@
-import { ValidateFunction, ErrorObject, Ajv } from 'ajv';
+import { ErrorObject, Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import { CID } from 'multiformats';
 import * as raw_codec from 'multiformats/codecs/raw';
@@ -23,9 +23,30 @@ export interface ValidationResult {
   errors?: ValidationError[];
 }
 
+// Paths grow as `a.b` for a property and `a[]` for items; re-root one recorded from ''.
+// ponytail: a property whose name starts with "[" would read as items; no lexicon schema has one
+function join(base: string, path: string): string {
+  if (!base || !path) {
+    return base || path;
+  }
+  return path.startsWith('[') ? `${base}${path}` : `${base}.${path}`;
+}
+
+/** A schema with its CID links replaced, and the paths where data may hold a CID pointer. */
+type Resolved = { schema: JSONSchema; allowed: Map<string, boolean> };
+
+type Store<K> = {
+  get(key: K): Promise<Resolved> | undefined;
+  set(key: K, value: Promise<Resolved>): unknown;
+  delete(key: K): boolean;
+};
+
 export class JsonValidatorService {
   private ajv: Ajv;
-  private validators: Map<string, ValidateFunction> = new Map();
+  // Root schemas by object: SchemaCacheService hands out one object per CID and nobody edits it.
+  private prepared = new WeakMap<JSONSchema, Promise<Resolved>>();
+  // Linked schemas by CID, shared by every root that links to them.
+  private linked = new Map<string, Promise<Resolved>>();
   private schemaCacheService: SchemaCacheService;
   private baseDirectory: string;
   private blockSource?: (cid: string) => Promise<Uint8Array | undefined>;
@@ -218,11 +239,12 @@ export class JsonValidatorService {
       }
 
       // Resolve any CID references in the schema first and create a map of which schema parts allow CID resolution
-      const cidAllowedMap = new Map<string, boolean>();
-      const resolvedSchema = await this.resolveCIDSchemasAndTrackPaths(
-        schema,
-        cidAllowedMap
-      );
+      // A WeakMap only takes objects; any other schema is resolved on every call.
+      const store =
+        schema && typeof schema === 'object'
+          ? this.prepared
+          : new Map<JSONSchema, Promise<Resolved>>();
+      const prepared = await this.remember(store, schema, async () => schema);
 
       // Resolve CID pointers in data if present, but only where schema allows it
       if (skipCIDResolution) {
@@ -231,15 +253,15 @@ export class JsonValidatorService {
         resolvedData = await this.resolveCIDPointers(
           data,
           currentFilePath,
-          resolvedSchema,
-          cidAllowedMap
+          prepared.schema,
+          prepared.allowed
         );
       }
 
       logger.debug(`resolved data type: ${typeof resolvedData}`);
 
-      // Get or compile validator
-      const validator = await this.getValidator(resolvedSchema);
+      // Ajv keeps the compiled validator per schema object, and this one is stable
+      const validator = this.ajv.compile(prepared.schema);
 
       // Validate the data (handle both sync and async validators)
       const result = validator(resolvedData);
@@ -272,6 +294,30 @@ export class JsonValidatorService {
   }
 
   /**
+   * Resolve a schema's CID links once per key and keep the result: a county
+   * CAR validates every data group against the same few schemas, and they all
+   * link to the same class schemas. A failed resolve is dropped so the next
+   * call retries.
+   */
+  private remember<K>(
+    store: Store<K>,
+    key: K,
+    source: () => Promise<JSONSchema>
+  ): Promise<Resolved> {
+    const known = store.get(key);
+    if (known) {
+      return known;
+    }
+    const allowed = new Map<string, boolean>();
+    const fresh = source()
+      .then((schema) => this.resolveCIDSchemasAndTrackPaths(schema, allowed))
+      .then((schema) => ({ schema, allowed }));
+    store.set(key, fresh);
+    fresh.catch(() => store.delete(key));
+    return fresh;
+  }
+
+  /**
    * Resolve CID references in schemas and track which paths allow CID pointers
    * Replaces { type: 'string', cid: '...' } with the actual schema from IPFS
    */
@@ -290,37 +336,21 @@ export class JsonValidatorService {
         // Mark this path as allowing CID pointers
         cidAllowedMap.set(currentPath, true);
 
-        // Load the schema from the CID
-        const loadedSchema = await this.loadSchemaFromCID(schema.cid);
+        // Resolve the linked schema once per CID; its pointer paths are relative to this link
+        const linked = await this.remember(this.linked, schema.cid, () =>
+          this.loadSchemaFromCID(schema.cid)
+        );
+        linked.allowed.forEach((_, path) =>
+          cidAllowedMap.set(join(currentPath, path), true)
+        );
 
         // If the original schema allows multiple types (e.g., ['string', 'null']),
-        // we need to create a schema that combines the loaded schema with the null option
-        if (
-          Array.isArray(schema.type) &&
+        // allow null or the linked schema
+        return Array.isArray(schema.type) &&
           schema.type.includes('null') &&
           schema.type.length > 1
-        ) {
-          // First, recursively resolve any CID references within the loaded schema
-          const resolvedLoadedSchema =
-            await this.resolveCIDSchemasAndTrackPaths(
-              loadedSchema,
-              cidAllowedMap,
-              currentPath
-            );
-
-          // Create an anyOf schema that allows null or the resolved loaded schema
-          return {
-            anyOf: [{ type: 'null' }, resolvedLoadedSchema],
-          };
-        } else {
-          // Single type or only string type, use the loaded schema as-is
-          // Recursively resolve any CID references within the loaded schema
-          return await this.resolveCIDSchemasAndTrackPaths(
-            loadedSchema,
-            cidAllowedMap,
-            currentPath
-          );
-        }
+          ? { anyOf: [{ type: 'null' }, linked.schema] }
+          : linked.schema;
       } catch (error) {
         throw new Error(
           `Failed to resolve schema CID: ${error instanceof Error ? error.message : String(error)}`
@@ -637,32 +667,6 @@ export class JsonValidatorService {
       }
     }
     return resolved;
-  }
-
-  /**
-   * Get or compile a validator for a schema
-   */
-  private async getValidator(schema: JSONSchema): Promise<ValidateFunction> {
-    // Create a cache key from the schema
-    const cacheKey = JSON.stringify(schema);
-
-    // Check if we already have a compiled validator
-    let validator = this.validators.get(cacheKey);
-
-    if (!validator) {
-      // Schema has already been resolved by resolveCIDSchemas, compile directly
-      validator = this.ajv.compile(schema);
-      this.validators.set(cacheKey, validator);
-
-      if (!validator) {
-        throw new Error('Failed to compile schema validator');
-      }
-    }
-
-    if (!validator) {
-      throw new Error('Failed to compile or retrieve validator');
-    }
-    return validator;
   }
 
   /**

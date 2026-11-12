@@ -17,6 +17,7 @@ export type JSONSchema = {
 
 export class SchemaCacheService {
   private cache: Map<string, JSONSchema>;
+  private pending = new Map<string, Promise<JSONSchema>>();
   private readonly cacheDir: string;
 
   constructor(
@@ -88,11 +89,24 @@ export class SchemaCacheService {
       Object.values(manifest)
         .map((meta) => meta.ipfsCid)
         .filter((cid) => !this.cache.has(cid))
-        .map((cid) => limit(() => this.fetchSchema(cid).catch(() => undefined)))
+        .map((cid) => limit(() => this.get(cid).catch(() => undefined)))
     );
   }
 
+  /**
+   * The schema for a CID, always as the same object: validators key their
+   * work on it, so concurrent first lookups share one fetch and callers must
+   * not edit what they get.
+   */
   async get(cid: string): Promise<JSONSchema> {
-    return this.cache.get(cid) || (await this.fetchSchema(cid));
+    const cached = this.cache.get(cid);
+    if (cached) {
+      return cached;
+    }
+    const fetching =
+      this.pending.get(cid) ??
+      this.fetchSchema(cid).finally(() => this.pending.delete(cid));
+    this.pending.set(cid, fetching);
+    return fetching;
   }
 }
