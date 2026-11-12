@@ -21,6 +21,8 @@ jobs:
   publish:
     name: Publish the commit's binaries
     needs: binaries
+    # whatever was built: one platform that fails must not leave the others without a binary
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
