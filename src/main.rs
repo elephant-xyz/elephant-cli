@@ -37,9 +37,10 @@ use std::process::ExitCode;
 
 pub type Fail = Box<dyn std::error::Error + Send + Sync>;
 
-/// The static binaries use mimalloc, as does QuickJS in them (`rust-alloc` in
-/// Cargo.toml): with musl's allocator, threads wait for each other. A county
-/// CAR took three times as long to validate and a transform a third longer.
+/// Keeps the static binaries as fast as the glibc ones: they use mimalloc, and
+/// QuickJS in them does too (`rust-alloc` in Cargo.toml). Without this line
+/// threads wait for each other in musl's own allocator, and validating a
+/// county CAR took 20 s instead of 6 s.
 #[cfg(target_env = "musl")]
 #[global_allocator]
 static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
