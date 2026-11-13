@@ -28,6 +28,11 @@ ureq = "3"
 url = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
+# musl's own allocator is slow: the static binaries use mimalloc, QuickJS included (ALLOCATOR in src/main.rs)
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1"
+rquickjs = { version = "0.14", features = ["rust-alloc"] }
+
 [dev-dependencies]
 parquet = { version = "60", default-features = false, features = ["zstd", "json"] }
 

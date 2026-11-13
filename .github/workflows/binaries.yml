@@ -24,18 +24,41 @@ jobs:
           # the oldest runner images, so the binaries run on older systems too
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          # static: any Linux, among them AWS Lambda (glibc 2.34 and older) and Alpine
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-22.04-arm }
           - { target: x86_64-apple-darwin, os: macos-latest }
           - { target: aarch64-apple-darwin, os: macos-latest }
     steps:
       - uses: actions/checkout@v4
       - name: Add the target
         run: rustup target add ${{ matrix.target }}
+      - name: Install the musl C compiler
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "TARGET_CC=musl-gcc" >> "$GITHUB_ENV"
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Run the tests
         # the x86_64 macOS binary is cross-built on an arm64 runner
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo test --release --locked --target ${{ matrix.target }}
+      - name: Run it on the AWS Lambda base image
+        if: endsWith(matrix.target, '-musl')
+        # as a function has it: only /tmp is writable, Lambda's user; here also without a network
+        run: |
+          mkdir "$RUNNER_TEMP/lambda"
+          (cd tests/fixtures/transform/scripts-mode/input && python3 -m zipfile -c "$RUNNER_TEMP/lambda/prepared.zip" ./*)
+          (cd tests/fixtures/transform/scripts-mode/scripts && python3 -m zipfile -c "$RUNNER_TEMP/lambda/scripts.zip" ./*)
+          docker run --rm --read-only --tmpfs /tmp --network none --user 993:990 --workdir /tmp \
+            -v "$PWD/target/${{ matrix.target }}/release:/opt/bin:ro" -v "$RUNNER_TEMP/lambda:/in:ro" \
+            -v "$PWD/tests/fixtures/lexicon:/lexicon:ro" -e ELEPHANT_OFFLINE=1 -e ELEPHANT_SCHEMA_CACHE_DIR=/lexicon \
+            --entrypoint /bin/sh public.ecr.aws/lambda/provided:al2023 -ec '
+              elephant-cli transform --input-zip /in/prepared.zip --scripts-zip /in/scripts.zip --output-zip transformed.zip
+              elephant-cli validate transformed.zip --output-csv errors.csv
+              elephant-cli hash transformed.zip --output-zip hashed.zip --output-csv hash.csv'
       - name: Pack
         run: tar -czf "elephant-cli-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" elephant-cli
       - uses: actions/upload-artifact@v4
