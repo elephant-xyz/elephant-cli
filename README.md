@@ -8,6 +8,7 @@
 
 - [Overview](#overview)
 - [Installation](#installation)
+  - [AWS Lambda](#aws-lambda)
 - [Conventions](#conventions)
 - [Workflow](#workflow)
 - [Commands](#commands)
@@ -45,8 +46,12 @@ Choose one. Node is not needed.
 | --- | --- |
 | Linux x86_64 | `x86_64-unknown-linux-gnu` |
 | Linux arm64 | `aarch64-unknown-linux-gnu` |
+| Linux x86_64, static | `x86_64-unknown-linux-musl` |
+| Linux arm64, static | `aarch64-unknown-linux-musl` |
 | macOS Apple silicon | `aarch64-apple-darwin` |
 | macOS Intel | `x86_64-apple-darwin` |
+
+The `gnu` binaries need glibc 2.35 or newer (Ubuntu 22.04, Debian 12). The static ones need nothing from the system: use them on AWS Lambda, Amazon Linux, Alpine and older distributions.
 
 Every commit on the `v2` branch is published as the pre-release `build-<commit>`, a few minutes after it lands. The newest one:
 
@@ -72,6 +77,42 @@ cargo install --git https://github.com/elephant-xyz/elephant-cli --branch v2 --l
 ```
 
 The browser mechanisms of `prepare` also need the obscura headless browser. Download it from <https://github.com/h4ckf0r0day/obscura/releases> and put `obscura` on your `PATH`. Nothing else needs it.
+
+### AWS Lambda
+
+There is no library to import: a function in any language ships the static binary and runs it. There is no published layer either; put the binary in your own package.
+
+1. Download the static archive for the function's architecture: `x86_64-unknown-linux-musl` for `x86_64`, `aarch64-unknown-linux-musl` for `arm64`.
+2. Ship the binary with the function, in one of three ways:
+   - In the deployment ZIP, next to the handler; it is then at `$LAMBDA_TASK_ROOT/elephant-cli`.
+   - In a layer of your own, as `bin/elephant-cli`; Lambda puts `/opt/bin` on the `PATH`:
+
+     ```bash
+     mkdir bin
+     curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/$version/elephant-cli-aarch64-unknown-linux-musl.tar.gz" | tar -xz -C bin
+     zip -r layer.zip bin
+     aws lambda publish-layer-version --layer-name elephant-cli --zip-file fileb://layer.zip \
+       --compatible-architectures arm64
+     ```
+
+   - In a container image: `COPY elephant-cli /usr/local/bin/`.
+3. Set `ELEPHANT_SCHEMA_CACHE_DIR=/tmp/schema-cache`. Only `/tmp` is writable on Lambda, and the default cache directory is under the home directory: without the variable every invocation fetches the lexicon again. To use no network, ship a filled cache directory with the function, name it in the variable and set `ELEPHANT_OFFLINE=1`.
+4. Keep inputs and outputs under `/tmp`, and size the function's ephemeral storage for them: a ZIP is unpacked there.
+5. Run the command with `--json` and read the exit code and stdout, as described under [Conventions](#conventions):
+
+   ```js
+   import { execFile } from 'node:child_process';
+   import { promisify } from 'node:util';
+   const run = promisify(execFile);
+
+   export const handler = async () => {
+     // exit 1 and 2 reject; the error's `stdout` holds the JSON document
+     const { stdout } = await run('elephant-cli', ['--json', 'validate', '/tmp/transformed.zip', '--output-csv', '/tmp/errors.csv']);
+     return JSON.parse(stdout);
+   };
+   ```
+
+The browser mechanisms of `prepare` do not run in Lambda's ZIP runtimes: the obscura binaries need glibc 2.35 and Lambda has 2.34. Use a container image built on a newer distribution, or point `--cdp-url` at a browser running elsewhere. The other mechanisms of `prepare` and every other command work.
 
 ## Conventions
 
