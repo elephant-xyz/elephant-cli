@@ -37,6 +37,13 @@ use std::process::ExitCode;
 
 pub type Fail = Box<dyn std::error::Error + Send + Sync>;
 
+/// The static binaries use mimalloc, as does QuickJS in them (`rust-alloc` in
+/// Cargo.toml): with musl's allocator, threads wait for each other. A county
+/// CAR took three times as long to validate and a transform a third longer.
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(Parser)]
 #[command(name = "elephant-cli", version, about = "Validate, hash, export, upload, prepare and transform Elephant county data.")]
 #[command(
