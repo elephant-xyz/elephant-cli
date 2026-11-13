@@ -96,7 +96,7 @@ There is no library to import: a function in any language ships the static binar
      ```
 
    - In a container image: `COPY elephant-cli /usr/local/bin/`.
-3. Set `ELEPHANT_SCHEMA_CACHE_DIR=/tmp/schema-cache`. Only `/tmp` is writable on Lambda, and the default cache directory is under the home directory: without the variable every invocation fetches the lexicon again. To use no network, ship a filled cache directory with the function, name it in the variable and set `ELEPHANT_OFFLINE=1`.
+3. Set `ELEPHANT_SCHEMA_CACHE_DIR=/tmp/schema-cache`. Only `/tmp` is writable on Lambda, and the default cache directory is under the home directory: without the variable every invocation fetches the lexicon again, which takes seconds. To use no network, ship a filled cache directory with the function, name it in the variable and set `ELEPHANT_OFFLINE=1`.
 4. Keep inputs and outputs under `/tmp`, and size the function's ephemeral storage for them: a ZIP is unpacked there.
 5. Run the command with `--json` and read the exit code and stdout, as described under [Conventions](#conventions):
 
@@ -112,7 +112,7 @@ There is no library to import: a function in any language ships the static binar
    };
    ```
 
-The browser mechanisms of `prepare` do not run in Lambda's ZIP runtimes: the obscura binaries need glibc 2.35 and Lambda has 2.34. Use a container image built on a newer distribution, or point `--cdp-url` at a browser running elsewhere. The other mechanisms of `prepare` and every other command work.
+For the browser mechanisms of `prepare`, ship obscura's `no-render` build (`obscura-<arch>-linux-no-render.tar.gz`): it runs on Lambda's glibc 2.34, and the full build needs 2.35. Put its two files, `obscura` and `obscura-worker` (about 115 MB), in a layer or in the image, and name the first in `OBSCURA_BIN`.
 
 ## Conventions
 

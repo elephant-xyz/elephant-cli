@@ -45,11 +45,20 @@ jobs:
         # the x86_64 macOS binary is cross-built on an arm64 runner
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo test --release --locked --target ${{ matrix.target }}
-      - name: Start it on the AWS Lambda base image
+      - name: Run it on the AWS Lambda base image
         if: endsWith(matrix.target, '-musl')
+        # as a function has it: only /tmp is writable, Lambda's user; here also without a network
         run: |
-          docker run --rm -v "$PWD/target/${{ matrix.target }}/release:/mnt:ro" \
-            --entrypoint /mnt/elephant-cli public.ecr.aws/lambda/provided:al2023 --version
+          mkdir "$RUNNER_TEMP/lambda"
+          (cd tests/fixtures/transform/scripts-mode/input && python3 -m zipfile -c "$RUNNER_TEMP/lambda/prepared.zip" ./*)
+          (cd tests/fixtures/transform/scripts-mode/scripts && python3 -m zipfile -c "$RUNNER_TEMP/lambda/scripts.zip" ./*)
+          docker run --rm --read-only --tmpfs /tmp --network none --user 993:990 --workdir /tmp \
+            -v "$PWD/target/${{ matrix.target }}/release:/opt/bin:ro" -v "$RUNNER_TEMP/lambda:/in:ro" \
+            -v "$PWD/tests/fixtures/lexicon:/lexicon:ro" -e ELEPHANT_OFFLINE=1 -e ELEPHANT_SCHEMA_CACHE_DIR=/lexicon \
+            --entrypoint /bin/sh public.ecr.aws/lambda/provided:al2023 -ec '
+              elephant-cli transform --input-zip /in/prepared.zip --scripts-zip /in/scripts.zip --output-zip transformed.zip
+              elephant-cli validate transformed.zip --output-csv errors.csv
+              elephant-cli hash transformed.zip --output-zip hashed.zip --output-csv hash.csv'
       - name: Pack
         run: tar -czf "elephant-cli-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" elephant-cli
       - uses: actions/upload-artifact@v4
