@@ -129,7 +129,7 @@ seed.zip ──prepare──▶ prepared.zip ──transform──▶ transforme
 **Required inputs**
 
 - A seed ZIP holding `parcel.json` or `property_seed.json` (with `source_http_request` and `request_identifier`) and `address.json` or `unnormalized_address.json`. [`transform`](#transform) in seed mode writes these files.
-- Or `--input-csv`: a CSV with a `request_identifier` column, together with `--multi-request-flow-file` or `--browser-flow-file`.
+- Or `--input-csv`: a CSV with a `request_identifier` column, together with `--multi-request-flow-file`.
 - `--output-zip`.
 
 **Mechanisms.** The first one that applies answers the seed's request:
@@ -157,7 +157,7 @@ Mechanisms 1, 4 and 5 use the obscura browser. `prepare` starts `obscura serve` 
 | --- | --- | --- |
 | `[INPUT_ZIP]` | The seed ZIP. | None |
 | `--output-zip <PATH>` | ZIP to write. Required. | None |
-| `--input-csv <PATH>` | A CSV with a `request_identifier` column; one output file per row. | None |
+| `--input-csv <PATH>` | A CSV with a `request_identifier` column; one output file per row, answered by the multi-request flow. | None |
 | `--multi-request-flow-file <PATH>` | A multi-request flow (JSON). | None |
 | `--browser-flow-file <PATH>` | A browser flow (JSON). | None |
 | `--browser-flow-zip <PATH>` | A Browser Flow v2 package. | None |
@@ -516,7 +516,8 @@ What changed:
 | `transform` scripts | The four mapping scripts run at once; links in a data-group root array follow directory order, which varies | They run one after another (`ownerMapping`, `structureMapping`, `layoutMapping`, `utilityMapping`, then `data_extractor`); links follow file-name order. CIDs after `hash` are the same |
 | `transform` handlers | `--transform-version 2` required; no npm packages | `--transform-zip` alone is enough; `cheerio` can be imported |
 | `prepare` flows | doT templates; the built-in `SEARCH_BY_PARCEL_ID` flow | Only `{{=it.<name>}}` is filled; write the flow as a `--browser-flow-file` (`--browser-flow-template` and `--browser-flow-parameters` are gone) |
-| `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` has no effect |
+| `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` is gone |
+| `prepare --input-csv` | With a multi-request flow or a browser flow | With a multi-request flow only |
 | `prepare` captures | Cleaned and formatted with Prettier | Cleaned, not reformatted |
 | Browser Flow v2 `page` | The whole Puppeteer `Page` | The methods listed under [prepare](#prepare) |
 

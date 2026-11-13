@@ -127,14 +127,6 @@ fn check(flow: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// For `--input-csv`: the start URL of a flow, with the UUID in it replaced by the row's identifier.
-pub fn origin(flow: &Value, identifier: &str) -> Option<String> {
-    let start = &flow["states"][flow["starts_at"].as_str()?];
-    let address = start["input"]["url"].as_str().filter(|_| start["type"] == "open_page")?;
-    let pattern = regex::Regex::new("(?i)[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}").expect("a valid pattern");
-    Some(pattern.replace(address, identifier).into_owned())
-}
-
 /// Fill the `{{=it.name}}` templates of a text with the values known so far.
 /// Flow files use doT's syntax only to name a value; any other expression is refused.
 pub fn fill(text: &str, known: &Value) -> Result<String, Fail> {
@@ -333,18 +325,13 @@ const PAGE: &str = r#"(async (module, call) => {
   const source = (fn, args) => (typeof fn === 'function' ? `(${fn})(${args.map((arg) => JSON.stringify(arg)).join(', ')})` : String(fn));
   const withElement = (selector, index, fn, args) =>
     `(${fn})(${index === undefined ? `document.querySelector(${text(selector)})` : `document.querySelectorAll(${text(selector)})[${index}]`}${args.map((arg) => ', ' + JSON.stringify(arg)).join('')})`;
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   // Something that may be awaited next to the action that causes it, as in
   // Promise.all([page.waitForNavigation(), page.click(...)]): it starts after the action ran.
   const soon = (work) => new Promise((resolve, reject) => setTimeout(() => { try { resolve(work()); } catch (error) { reject(error); } }, 0));
   const handle = (selector, index) => ({
     click: async () => void call('evaluate', withElement(selector, index, '(found) => { found.scrollIntoView && found.scrollIntoView(); found.click(); }', [])),
     type: async (value, options = {}) => { call('evaluate', withElement(selector, index, '(found) => found.focus()', [])); call('keys', String(value), options.delay || 0); },
-    focus: async () => void call('evaluate', withElement(selector, index, '(found) => found.focus()', [])),
-    press: async (key) => { call('evaluate', withElement(selector, index, '(found) => found.focus()', [])); call('press', key); },
     evaluate: async (fn, ...args) => call('evaluate', withElement(selector, index, fn, args)),
-    getProperty: async (name) => ({ jsonValue: async () => call('evaluate', withElement(selector, index, '(found, name) => found[name]', [name])) }),
-    $: async (inner) => page.$(`${selector} ${inner}`),
   });
   const page = {
     goto: async (url, options = {}) => {
@@ -352,7 +339,6 @@ const PAGE: &str = r#"(async (module, call) => {
       return { status: () => status, ok: () => status === null || (status >= 200 && status < 300) };
     },
     url: () => call('url'),
-    title: async () => call('evaluate', 'document.title'),
     content: async () => call('content'),
     evaluate: async (fn, ...args) => call('evaluate', source(fn, args)),
     waitForSelector: async (selector, options = {}) => {
@@ -364,11 +350,8 @@ const PAGE: &str = r#"(async (module, call) => {
       const mark = call('mark');
       return soon(() => call('waitNavigation', mark, options.waitUntil || 'load', options.timeout ?? 30000));
     },
-    waitForNetworkIdle: async (options = {}) => void call('settle', 'networkidle0', options.timeout ?? 30000),
-    waitForTimeout: sleep,
     click: async (selector) => void call('click', String(selector)),
     type: async (selector, value, options = {}) => void call('type', String(selector), String(value), options.delay || 0),
-    focus: async (selector) => handle(selector).focus(),
     select: async (selector, ...values) =>
       call('evaluate', withElement(selector, undefined, '(found, values) => { for (const option of found.options) option.selected = values.includes(option.value); for (const kind of ["input", "change"]) found.dispatchEvent(new Event(kind, { bubbles: true })); return values; }', [values])),
     $: async (selector) => (call('evaluate', `Boolean(document.querySelector(${text(selector)}))`) ? handle(selector) : null),
@@ -379,15 +362,11 @@ const PAGE: &str = r#"(async (module, call) => {
       press: async (key) => void call('press', String(key)),
       type: async (value, options = {}) => void call('keys', String(value), options.delay || 0),
     },
-    setDefaultTimeout: () => {},
-    setDefaultNavigationTimeout: () => {},
-    setViewport: async () => {},
   };
   const saveHtml = async ({ name, html } = {}) => void call('saveHtml', String(name), html === undefined ? call('content') : String(html));
   const saveSourceUrl = async (url) => void call('saveSourceUrl', String(url));
   const logger = Object.fromEntries(['info', 'success', 'error', 'warn', 'log', 'debug', 'technical', 'progress'].map((level) => [level, (...args) => console.log(...args)]));
-  const signal = { aborted: false, addEventListener: () => {}, removeEventListener: () => {} };
-  await exported.handler({ page, input, saveHtml, saveSourceUrl, signal, logger });
+  await exported.handler({ page, input, saveHtml, saveSourceUrl, logger });
 })"#;
 
 /// A capture name: `property-detail`, `tax-2024`.
@@ -443,7 +422,6 @@ pub fn package(browser: &mut Browser, package: &Path, work: &Path, input: &Value
                 }
                 browser.settle(&text(1), wait(2)).map(|_| Value::Null).map_err(failed)
             }
-            "settle" => browser.settle(&text(0), wait(1)).map(|_| Value::Null).map_err(failed),
             "click" => click(browser, &text(0), None).map(|_| Value::Null).map_err(failed),
             "type" => enter(browser, &text(0), &text(1), milliseconds(&arguments[2], 0), false, None)
                 .map(|_| Value::Null)

@@ -168,6 +168,7 @@ fn says_why_it_could_not_prepare() {
     zip_of(&[("parcel.json", &missing.to_string()), ("address.json", "{}")], &scratch.path("missing.zip"));
     zip_of(&[("parcel.json", "{\"request_identifier\": \"1\"}"), ("address.json", "{}")], &scratch.path("bare.zip"));
     zip_of(&[("address.json", "{}")], &scratch.path("no-parcel.zip"));
+    std::fs::write(scratch.path("parcels.csv"), "request_identifier\n12345\n").unwrap();
     std::fs::write(
         scratch.path("bad-flow.json"),
         json!({ "requests": [{ "key": "A", "request": { "method": "GET", "url": "ftp://x", "body": "b" } }] }).to_string(),
@@ -190,6 +191,12 @@ fn says_why_it_could_not_prepare() {
             vec!["seed.zip", "--output-zip", "out.zip", "--browser-flow-version", "2"],
             "--browser-flow-zip is required for browser flow v2",
         ),
+        // a CSV of parcels is answered by a multi-request flow only
+        (
+            vec!["--input-csv", "parcels.csv", "--output-zip", "out.zip", "--browser-flow-file", "flow.json"],
+            "--multi-request-flow-file is required when using --input-csv",
+        ),
+        (vec!["seed.zip", "--output-zip", "out.zip", "--no-headless"], "unexpected argument '--no-headless'"),
     ] {
         let mut all = vec!["prepare"];
         all.extend(args);

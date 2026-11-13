@@ -210,6 +210,11 @@ fn says_what_a_flow_handler_did_wrong() {
             "await page.goto(input.url); await page.waitForSelector('#never', { timeout: 300 });",
             "Waiting for selector `#never` failed: 300ms exceeded",
         ),
+        // `page` is the part of Puppeteer's Page the README lists, and no more
+        (
+            "throw new Error('page has ' + Object.keys(page).sort().join(' '));",
+            "page has $ $$ $$eval $eval click content evaluate goto keyboard select type url waitForFunction waitForNavigation waitForSelector\n",
+        ),
     ] {
         let scratch = Scratch::new();
         let site = site();

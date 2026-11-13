@@ -80,7 +80,7 @@ struct Prepare {
     /// ZIP to write: the seed files plus what was fetched
     #[arg(long, value_name = "PATH")]
     output_zip: PathBuf,
-    /// Instead of a seed ZIP: a CSV with a request_identifier column, one output file per row
+    /// Instead of a seed ZIP: a CSV with a request_identifier column, one output file per row (with --multi-request-flow-file)
     #[arg(long, value_name = "PATH")]
     input_csv: Option<PathBuf>,
     /// A multi-request flow: several HTTP requests answered into one JSON file
@@ -116,9 +116,6 @@ struct Prepare {
     /// Attach to a running browser's DevTools WebSocket instead of starting obscura
     #[arg(long, value_name = "WS_URL", env = "ELEPHANT_CDP_URL")]
     cdp_url: Option<String>,
-    /// Accepted for compatibility: the browser has no window to show
-    #[arg(long, hide = true)]
-    no_headless: bool,
 }
 
 #[derive(Args)]

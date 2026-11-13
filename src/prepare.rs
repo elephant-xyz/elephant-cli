@@ -400,8 +400,8 @@ fn landing(landed: &str) -> Result<Value, Fail> {
     }))
 }
 
-/// `--input-csv`: one output file per `request_identifier` row.
-fn rows(options: &Options, work: &Path) -> Result<&'static str, Fail> {
+/// `--input-csv`: one output file per `request_identifier` row, each answered by the multi-request flow.
+fn rows(options: &Options, work: &Path) -> Result<(), Fail> {
     let file = options.csv.expect("checked by the caller");
     let text = std::fs::read(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
     let mut reader = csv::Reader::from_reader(text.as_slice());
@@ -414,28 +414,11 @@ fn rows(options: &Options, work: &Path) -> Result<&'static str, Fail> {
     if identifiers.is_empty() {
         return Err("CSV file is empty or has no valid rows".into());
     }
-    let requests = options.multi.map(flow_file).transpose()?;
-    let workflow = match (&requests, options.flow) {
-        (None, Some(file)) => Some(flow::load(file)?),
-        (None, None) => return Err("--multi-request-flow-file or --browser-flow-file is required when using --input-csv".into()),
-        _ => None,
-    };
-    let mut browser = None;
+    let requests = flow_file(options.multi.ok_or("--multi-request-flow-file is required when using --input-csv")?)?;
     for identifier in identifiers.iter().filter(|identifier| !identifier.is_empty()) {
-        let fetched = match (&requests, &workflow) {
-            (Some(requests), _) => multi(requests, identifier)?,
-            (None, Some(workflow)) => {
-                if browser.is_none() {
-                    browser = Some(Browser::start(&options.launch)?);
-                }
-                let start = flow::origin(workflow, identifier);
-                flow::run(browser.as_mut().expect("just started"), workflow, identifier, start.as_deref())?
-            }
-            (None, None) => unreachable!("checked above"),
-        };
-        std::fs::write(work.join(format!("{identifier}.{}", if fetched.html { "html" } else { "json" })), fetched.content)?;
+        std::fs::write(work.join(format!("{identifier}.json")), multi(&requests, identifier)?.content)?;
     }
-    Ok(if requests.is_some() { "multi-request" } else { "browser-flow" })
+    Ok(())
 }
 
 pub fn run(options: &Options) -> Result<Done, Fail> {
@@ -447,8 +430,8 @@ pub fn run(options: &Options) -> Result<Done, Fail> {
         return Err("--continue-button requires --use-browser to be enabled".into());
     }
     if options.csv.is_some() {
-        let mechanism = rows(options, &work.0)?;
-        return Ok(Done { mechanism, files: pack(&work.0, options.output)? });
+        rows(options, &work.0)?;
+        return Ok(Done { mechanism: "multi-request", files: pack(&work.0, options.output)? });
     }
     let input = options.input.ok_or("Either provide an input ZIP or use --input-csv")?;
     unzip(input, &work.0)?;
