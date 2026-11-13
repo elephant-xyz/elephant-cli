@@ -28,8 +28,10 @@ mod unixfs;
 mod upload;
 mod validate;
 
-use clap::{Args, Parser, Subcommand};
+use clap::parser::ValueSource;
+use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use serde_json::{json, Value};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -260,6 +262,9 @@ fn listed(names: &[String]) -> String {
 }
 
 fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
+    if cli.json && args.output_csv == Path::new("-") {
+        return Err("--json and --output-csv - both write to stdout; name a file for the findings, or leave out --json".into());
+    }
     if !args.input.exists() {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
@@ -402,7 +407,7 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
     for error in &outcome.errors {
         eprintln!("error: {error}");
     }
-    let batch = outcome.cid.is_none() && !(outcome.properties == 1 && outcome.failed.len() == 1);
+    let batch = outcome.batch;
     let mut text = String::new();
     if let Some(cid) = &outcome.cid {
         text += "Hash report\n";
@@ -502,7 +507,26 @@ fn export_tables(args: &ExportTables, cli: &Cli) -> Result<Done, Fail> {
         std::fs::write(path, serde_json::to_string_pretty(&summary)?)
             .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
     }
-    Ok(Done { json: summary, text, passed: true })
+    Ok(Done { json: document("export-tables", &args.input, &summary), text, passed: true })
+}
+
+/// The `--json` document of a command whose `--output-json` record keeps the names 1.x gave it:
+/// the same values under snake_case names, as the other commands print theirs.
+fn document(command: &str, input: &Path, record: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    out.insert("command".to_string(), json!(command));
+    out.insert("input".to_string(), json!(input));
+    for (name, value) in record.as_object().into_iter().flatten() {
+        let snake = name.chars().fold(String::new(), |mut snake, letter| {
+            if letter.is_ascii_uppercase() {
+                snake.push('_');
+            }
+            snake.push(letter.to_ascii_lowercase());
+            snake
+        });
+        out.insert(snake, value.clone());
+    }
+    Value::Object(out)
 }
 
 fn upload(args: &Upload) -> Result<Done, Fail> {
@@ -546,7 +570,7 @@ fn upload(args: &Upload) -> Result<Done, Fail> {
     for (key, value) in summary.as_object().into_iter().flatten() {
         text += &format!("  {key}: {}\n", value.as_str().map_or_else(|| value.to_string(), str::to_string));
     }
-    Ok(Done { json: summary, text, passed: true })
+    Ok(Done { json: document("upload", &args.input, &summary), text, passed: true })
 }
 
 fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
@@ -557,6 +581,11 @@ fn transform(args: &Transform, cli: &Cli) -> Result<Done, Fail> {
             return Err(format!("--transform-version {other} is not supported; only 2 is").into())
         }
         _ => {}
+    }
+    if args.data_group.is_some() && args.transform_zip.is_none() {
+        return Err(
+            "--data-group applies to --transform-zip only: scripts and a seed build the County and Seed data groups".into()
+        );
     }
     let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
     let options = transform::Options {
@@ -637,21 +666,43 @@ fn piped(cli: &Cli) -> bool {
     }
 }
 
+/// `--offline` or `--schema-cache` given on the command line to a command they cannot apply to.
+fn stray(cli: &Cli, matches: &ArgMatches) -> Option<String> {
+    let name = match &cli.command {
+        Command::Prepare(_) => "prepare",
+        Command::Upload(_) => "upload",
+        Command::Validate(_) | Command::Hash(_) | Command::ExportTables(_) | Command::Transform(_) => return None,
+    };
+    let typed = |matches: &ArgMatches, id: &str| matches.value_source(id) == Some(ValueSource::CommandLine);
+    let given = |id: &str| typed(matches, id) || matches.subcommand().is_some_and(|(_, inner)| typed(inner, id));
+    let option = ["offline", "schema_cache"].into_iter().find(|id| given(id))?;
+    Some(format!(
+        "--{} does not apply to {name}: it reads no lexicon schemas, and it needs the network",
+        option.replace('_', "-")
+    ))
+}
+
+/// Write to stdout. A reader that has gone away (`... | head`) is not a failure.
+fn say(text: &str) {
+    let _ = std::io::stdout().write_all(text.as_bytes());
+}
+
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    match run(&cli) {
+    let matches = Cli::command().get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
+    match stray(&cli, &matches).map_or_else(|| run(&cli), |reason| Err(reason.into())) {
         Ok(done) => {
-            match (cli.json, piped(&cli)) {
-                (_, true) => eprint!("{}", done.text),
-                (true, false) => println!("{}", done.json),
-                (false, false) => print!("{}", done.text),
+            match (piped(&cli), cli.json) {
+                (true, _) => eprint!("{}", done.text),
+                (false, true) => say(&format!("{}\n", done.json)),
+                (false, false) => say(&done.text),
             }
             ExitCode::from(u8::from(!done.passed))
         }
         Err(error) => {
             eprintln!("error: {error}");
-            if cli.json && !piped(&cli) {
-                println!("{}", json!({ "error": error.to_string() }));
+            if cli.json {
+                say(&format!("{}\n", json!({ "error": error.to_string() })));
             }
             ExitCode::from(2)
         }

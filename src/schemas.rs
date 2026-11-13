@@ -99,27 +99,24 @@ impl Schemas {
     }
 
     /// The lexicon manifest: `{"<name>": {"ipfsCid": "...", "type": "dataGroup" | "class" | "relationship"}}`.
-    /// Fetched once per run and kept as `manifest.json` in the cache directory for offline runs.
+    /// Fetched once per run and kept as `manifest.json` in the cache directory, which is what `--offline` reads.
+    /// A fetch that fails is a failure: an older copy would check the data against an older lexicon unseen.
     fn manifest(&mut self) -> Result<&Value, String> {
         if self.manifest.is_none() {
             let kept = self.dir.join("manifest.json");
             let url = std::env::var("ELEPHANT_SCHEMA_MANIFEST_URL").unwrap_or_else(|_| MANIFEST.to_string());
-            let fresh = match (self.offline, url.starts_with("http://") || url.starts_with("https://")) {
-                (true, _) => Err("--offline is set".to_string()),
+            let bytes = match (self.offline, url.starts_with("http://") || url.starts_with("https://")) {
+                (true, _) => std::fs::read(&kept).map_err(|_| format!("--offline is set; no copy in {}", kept.display())),
                 (false, true) => http(&url, "application/json", 30),
                 (false, false) => std::fs::read(&url).map_err(|error| format!("{url}: {error}")),
             };
-            let parsed = |bytes: Vec<u8>| serde_json::from_slice::<Value>(&bytes).map_err(|error| error.to_string());
-            let manifest = match fresh.and_then(parsed) {
-                Ok(manifest) => {
-                    let _ = std::fs::create_dir_all(&self.dir);
-                    let _ = std::fs::write(&kept, manifest.to_string());
-                    manifest
-                }
-                Err(reason) => std::fs::read(&kept).map_err(|_| reason.clone()).and_then(parsed).map_err(|_| {
-                    format!("Failed to load schema manifest from Elephant Network ({reason}; no copy in {})", kept.display())
-                })?,
-            };
+            let manifest: Value = bytes
+                .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|error| error.to_string()))
+                .map_err(|reason| format!("Failed to load schema manifest from Elephant Network ({reason})"))?;
+            if !self.offline {
+                let _ = std::fs::create_dir_all(&self.dir);
+                let _ = std::fs::write(&kept, manifest.to_string());
+            }
             self.manifest = Some(manifest);
         }
         Ok(self.manifest.as_ref().expect("just loaded"))

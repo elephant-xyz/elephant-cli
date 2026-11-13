@@ -261,6 +261,8 @@ pub struct Outcome {
     /// `<property>: <file>: <reason>` for everything that went wrong.
     pub errors: Vec<String>,
     pub groups: usize,
+    /// Whether the input was a directory of properties.
+    pub batch: bool,
     /// The property CID, when the input was a single property.
     pub cid: Option<String>,
     /// Blocks in the CAR and its root, when one was asked for.
@@ -308,8 +310,15 @@ pub fn run(
         BufWriter::new(File::create(output_csv).map_err(|error| format!("cannot write {}: {error}", output_csv.display()))?);
     writeln!(csv, "propertyCid,dataGroupCid,dataCid,filePath,uploadedAt")?;
     let mut archive = output_car.map(Archive::create).transpose()?;
-    let mut outcome =
-        Outcome { properties: names.len(), failed: Vec::new(), errors: Vec::new(), groups: 0, cid: None, car: None };
+    let mut outcome = Outcome {
+        properties: names.len(),
+        failed: Vec::new(),
+        errors: Vec::new(),
+        groups: 0,
+        batch: !single,
+        cid: None,
+        car: None,
+    };
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
     for slice in inputs.chunks(threads * 64) {

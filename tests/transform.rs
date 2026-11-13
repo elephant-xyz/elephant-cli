@@ -219,6 +219,12 @@ fn refuses_option_combinations_that_make_no_sense() {
             "--scripts-zip cannot be used with --transform-zip",
         ),
         (vec!["--input-zip", "missing.zip"], "input-zip not found: missing.zip"),
+        // a data group is named for a handler; scripts and seeds build the County and Seed groups
+        (
+            vec!["--input-zip", "seed.zip", "--scripts-zip", "seed.zip", "--data-group", "Property Improvement"],
+            "--data-group applies to --transform-zip only",
+        ),
+        (vec!["--input-zip", "seed.zip", "--data-group", "County"], "--data-group applies to --transform-zip only"),
     ] {
         let mut all = vec!["transform"];
         all.extend(args);

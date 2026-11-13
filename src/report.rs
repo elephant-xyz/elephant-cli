@@ -52,6 +52,14 @@ pub fn now() -> String {
     )
 }
 
+/// A reader that has gone away (`... | head`) is not a failure: the rest goes unwritten and the checks go on.
+fn unread(written: std::io::Result<()>) -> std::io::Result<()> {
+    match written {
+        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => other,
+    }
+}
+
 impl Report {
     /// Start the CSV at `path`; `-` writes it to stdout.
     pub fn create(path: &Path) -> Result<Report, Fail> {
@@ -67,8 +75,7 @@ impl Report {
 
     pub fn write(&mut self, row: &Row) -> Result<(), Fail> {
         self.rows += 1;
-        writeln!(
-            self.out,
+        let line = format!(
             "{},{},{},{},{},{},{}",
             row.property,
             row.group,
@@ -77,11 +84,11 @@ impl Report {
             escape(&row.message),
             escape(&row.value),
             now()
-        )?;
-        Ok(())
+        );
+        Ok(unread(writeln!(self.out, "{line}"))?)
     }
 
     pub fn finish(&mut self) -> Result<(), Fail> {
-        Ok(self.out.flush()?)
+        Ok(unread(self.out.flush())?)
     }
 }

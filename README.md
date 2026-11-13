@@ -100,7 +100,9 @@ elephant-cli --json hash ./county-outputs --output-car county.car | jq -r .car.r
 elephant-cli validate county.car --output-csv - | cut -d, -f4 | sort | uniq -c
 ```
 
-The lexicon manifest and every schema fetched are kept in the schema cache, so a later run with `--offline` needs no network.
+The lexicon manifest and every schema fetched are kept in the schema cache, so a later run with `--offline` needs no network. Without `--offline` the manifest is fetched on every run, and a fetch that fails stops the command (exit `2`): a copy from an earlier run is never used unasked.
+
+`--schema-cache` and `--offline` belong to the commands that read lexicon schemas: `transform`, `validate`, `hash` and `export-tables`. Given on the command line to `prepare` or `upload` they are refused; set through the environment they are ignored there.
 
 ## Workflow
 
@@ -273,7 +275,7 @@ Other npm packages are not available. `tests/fixtures/transform/engine` holds th
 | `--scripts-zip <PATH>` | ZIP of the five county scripts. | None |
 | `--transform-zip <PATH>` | Transform v2 handler package. | None |
 | `--transform-version <VERSION>` | Accepted for compatibility: `2`, with `--transform-zip`. | None |
-| `--data-group <LABEL>` | Label of the data group a handler package builds. | `County` |
+| `--data-group <LABEL>` | Label of the data group a handler package builds; refused without `--transform-zip`. | `County` |
 
 **Examples**
 
@@ -388,7 +390,8 @@ elephant-cli hash ./county-outputs \
 
 - `<output>/<table>/part-NNNNN.parquet`: one table per lexicon class, one per relationship type, and `properties` from the index. Which table a block belongs to comes from the schemas, never from a file name. Parts are zstd-compressed and split at `--part-size`.
 - `<output>/tables.car`: one dag-json block, the `CountyTables` document, recording every part by CID, rows and bytes. Part CIDs are UnixFS CIDs as `ipfs add --cid-version 1 --raw-leaves` computes them.
-- `--output-json`: the summary (`output`, `car`, `root`, `countyRoot`, `partSizeBytes`, `codec`, `tables`, `parts`, `exportedAt`, `atlas`); the same document `--json` prints.
+- `--output-json`: the summary (`output`, `car`, `root`, `countyRoot`, `partSizeBytes`, `codec`, `tables`, `parts`, `exportedAt`, `atlas`), under the names 1.x gave them.
+- `--json`: the same values under snake_case names (`county_root`, `part_size_bytes`, `exported_at`), with `command` and `input`, like every other command's document.
 - `--atlas-page`: the county page, created or updated with `groups.<label> = { cid, schema, tables }`. Other groups and unknown keys are kept.
 - stdout: `Tables written: <output> (<n> tables, <n> parts, root <cid>)` and `Atlas page written: <path> group <key>`.
 
@@ -429,7 +432,8 @@ elephant-cli export-tables county.car --output ./county-tables \
 
 **Outputs**
 
-- stdout and `--output-json`: `api`, `root`, `blocks` (CAR) or `countyRoot` and `parts` (tables), `gatewayUrl`, `uploadedAt`.
+- stdout and `--output-json`: `api`, `root`, `blocks` (CAR) or `countyRoot` and `parts` (tables), `gatewayUrl`, `uploadedAt`, under the names 1.x gave them.
+- `--json`: the same values under snake_case names (`county_root`, `gateway_url`, `uploaded_at`), with `command` and `input`.
 
 **Options**
 
@@ -481,8 +485,8 @@ Each command stops the sequence with a non-zero exit code when its step fails, s
 
 | Variable | Used by | Effect |
 | --- | --- | --- |
-| `ELEPHANT_SCHEMA_CACHE_DIR` | all | The schema cache directory (`--schema-cache`). |
-| `ELEPHANT_OFFLINE` | all | `1` is `--offline`. |
+| `ELEPHANT_SCHEMA_CACHE_DIR` | `transform`, `validate`, `hash`, `export-tables` | The schema cache directory (`--schema-cache`). |
+| `ELEPHANT_OFFLINE` | `transform`, `validate`, `hash`, `export-tables` | `1` is `--offline`. |
 | `ELEPHANT_SCHEMA_MANIFEST_URL` | `validate`, `hash`, `transform` | The lexicon manifest; a URL or a local file path. Default `https://lexicon.elephant.xyz/api/manifest`. |
 | `ELEPHANT_IPFS_GATEWAYS` | `validate`, `transform`, `export-tables` | Comma-separated gateway origins for schema fetches; replaces the defaults. |
 | `IPFS_API`, `IPFS_API_TOKEN`, `ELEPHANT_CAR_GATEWAY` | `upload` | The node, its token and the readback gateway. |
@@ -507,6 +511,7 @@ What changed:
 | Output | Banners and emoji on stdout, a log file in the working directory | A plain report on stdout, or one JSON document with `--json`; no log file |
 | Update check | Exits `1` when a newer version is published | None |
 | `.env` | Loaded from the working directory | Not loaded |
+| Gateways | The global `--ipfs-gateway <url>` | `ELEPHANT_IPFS_GATEWAYS`, a comma-separated list |
 | `validate` on properties | Writes `submit_warnings.csv`; a property that cannot be checked exits `1` silently | No warnings file; the reason is on stderr, exit `2` |
 | `validate` on a CAR | Indexes the whole file | Two sequential reads; gateway exports stay on the fast path |
 | `hash` | A data group that cannot be hashed is only written to `submit_errors.csv`, exit `0` | Named on stderr and in `--json`, exit `1`; `--property-cid` and `--max-concurrent-tasks` are gone; every core is used |

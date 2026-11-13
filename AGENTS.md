@@ -32,6 +32,8 @@
 ## CLI rules
 
 - stdout is the result: a text report, or exactly one JSON document with `--json`. Everything else goes to stderr.
+- Every `--json` document names its `command` and `input` and uses snake_case keys. The `--output-json` files of `export-tables` and `upload` keep the camelCase record 1.x wrote, because publication notes hold them.
+- A reader that closes stdout early (`| head`) does not change the exit code or print an error.
 - Exit `0` success, `1` the input failed its checks, `2` the command could not run.
 - No prompts, no colour, no emoji, no progress bars, no network call that the command does not need.
 - Do not add a command before trying to fit the work into one of the six.

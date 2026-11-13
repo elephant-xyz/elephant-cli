@@ -166,3 +166,16 @@ fn refuses_a_file_as_the_zip_output_of_a_batch() {
     assert_eq!(ran.code, 2);
     assert!(ran.stderr.contains("with a directory input it must be a directory"), "{}", ran.stderr);
 }
+
+#[test]
+fn reports_a_batch_as_a_batch_when_every_property_fails() {
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy("hash/single/property", "county/only");
+    std::fs::remove_file(scratch.path("county/only/seed.json")).unwrap();
+    let ran = scratch.run(&["hash", "county", "--output-zip", "hashed", "--output-csv", "hash.csv"]);
+    assert_eq!(ran.code, 1, "{}", ran.stderr);
+    assert_eq!(ran.stdout, "Properties processed: 1, succeeded: 0, failed: 1\n");
+    let ran = scratch.run(&["--json", "hash", "county", "--output-zip", "hashed", "--output-csv", "hash.csv"]);
+    assert_eq!(ran.json()["kind"], "batch");
+}

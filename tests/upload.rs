@@ -133,8 +133,12 @@ fn imports_a_car_and_reads_its_root_back() {
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let summary = ran.json();
     assert_eq!((&summary["api"], &summary["root"], &summary["blocks"]), (&json!(node.url), &json!(COUNTY), &json!(22)));
-    assert_eq!(summary["gatewayUrl"], format!("{}/ipfs/{COUNTY}", node.url));
-    assert_eq!(serde_json::from_str::<Value>(&scratch.text("upload.json")).unwrap(), summary);
+    assert_eq!(summary["gateway_url"], format!("{}/ipfs/{COUNTY}", node.url));
+    assert_eq!(summary["command"], "upload");
+    // --output-json keeps the record 1.x wrote
+    let record: Value = serde_json::from_str(&scratch.text("upload.json")).unwrap();
+    assert_eq!((&record["gatewayUrl"], &record["uploadedAt"]), (&summary["gateway_url"], &summary["uploaded_at"]));
+    assert!(record.get("command").is_none(), "{record}");
     let asked = node.requests();
     assert_eq!(asked[0].path, "/api/v0/dag/import?pin-roots=true&stats=true");
     assert_eq!(asked[0].header("authorization"), Some("Bearer secret"));
@@ -155,7 +159,7 @@ fn adds_every_part_of_a_tables_directory_and_checks_each_cid() {
     let ran = scratch.run_with(&["--json", "upload", "tables"], &[("IPFS_API", api), ("ELEPHANT_CAR_GATEWAY", api)]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
     let summary = ran.json();
-    assert_eq!((&summary["root"], &summary["countyRoot"], &summary["parts"]), (&exported["root"], &json!(COUNTY), &json!(8)));
+    assert_eq!((&summary["root"], &summary["county_root"], &summary["parts"]), (&exported["root"], &json!(COUNTY), &json!(8)));
     let asked = node.requests();
     let adds: Vec<&Request> = asked.iter().filter(|request| request.path.starts_with("/api/v0/add")).collect();
     assert_eq!(adds.len(), 8);

@@ -199,3 +199,17 @@ fn names_the_types_a_value_may_have_in_the_order_the_schema_does() {
     assert_eq!(ran.code, 1, "{}", ran.stderr);
     assert_eq!(sorted(found(&scratch)), sorted(golden("type-list")));
 }
+
+#[test]
+fn does_not_validate_against_an_old_manifest_when_the_fetch_fails() {
+    let scratch = prepared("clean");
+    // online, the lexicon unreachable, and a manifest from an earlier run in the cache
+    let online = [("ELEPHANT_OFFLINE", "0"), ("ELEPHANT_SCHEMA_MANIFEST_URL", "http://127.0.0.1:1/manifest")];
+    assert!(scratch.path("schemas/manifest.json").is_file());
+    let ran = scratch.run_with(&["validate", "clean", "--output-csv", "errors.csv"], &online);
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert!(ran.stderr.contains("Failed to load schema manifest from Elephant Network"), "{}", ran.stderr);
+    // asked to stay offline, the copy in the cache is what there is
+    let ran = scratch.run_with(&["--offline", "validate", "clean", "--output-csv", "errors.csv"], &online);
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+}

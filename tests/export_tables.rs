@@ -58,9 +58,17 @@ fn exports_the_tables_columns_and_rows_elephant_cli_1_exported() {
     let summary = ran.json();
     let golden = fixture("export.json");
     assert_eq!(summary["tables"], golden["tables"], "tables, rows and parts, in the order first written");
-    assert_eq!((&summary["countyRoot"], &summary["parts"]), (&golden["countyRoot"], &golden["parts"]));
-    assert_eq!((&summary["partSizeBytes"], &summary["codec"]), (&json!(1073741824u64), &json!("zstd")));
-    assert_eq!(serde_json::from_str::<Value>(&scratch.text("export.json")).unwrap(), summary);
+    assert_eq!((&summary["county_root"], &summary["parts"]), (&golden["countyRoot"], &golden["parts"]));
+    assert_eq!((&summary["part_size_bytes"], &summary["codec"]), (&json!(1073741824u64), &json!("zstd")));
+    assert_eq!(summary["command"], "export-tables");
+    // --output-json keeps the record 1.x wrote, which publication notes hold
+    let record: Value = serde_json::from_str(&scratch.text("export.json")).unwrap();
+    assert_eq!((&record["countyRoot"], &record["partSizeBytes"]), (&summary["county_root"], &summary["part_size_bytes"]));
+    assert_eq!(
+        (&record["root"], &record["tables"], &record["exportedAt"]),
+        (&summary["root"], &summary["tables"], &summary["exported_at"])
+    );
+    assert!(record.get("command").is_none() && record.get("county_root").is_none(), "{record}");
 
     let expected = fixture("expected-tables.json");
     for (name, rows) in expected["rows"].as_object().unwrap() {
@@ -88,7 +96,7 @@ fn records_every_part_by_cid_in_tables_car() {
     let start = car.windows(8).position(|window| window == b"{\"codec\"").unwrap();
     let document: Value = serde_json::from_slice(&car[start..]).unwrap();
     assert_eq!(document["label"], "CountyTables");
-    assert_eq!(document["county_root"]["/"], summary["countyRoot"]);
+    assert_eq!(document["county_root"]["/"], summary["county_root"]);
     let names: Vec<&String> = document["tables"].as_object().unwrap().keys().collect();
     let mut sorted = names.clone();
     sorted.sort();
