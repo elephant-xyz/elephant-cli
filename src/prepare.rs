@@ -8,7 +8,7 @@
 //! 1. a Browser Flow v2 package (`--browser-flow-zip`), which saves named captures;
 //! 2. a multi-request flow (`--multi-request-flow-file`): several HTTP requests, one JSON file;
 //! 3. the Orange County fetcher, for a seed whose county is `Orange`;
-//! 4. a browser flow (`--browser-flow-file`, or `--browser-flow-template` with its parameters);
+//! 4. a browser flow (`--browser-flow-file`);
 //! 5. a plain page load in the browser (`--use-browser`, GET only);
 //! 6. a plain HTTP request.
 //!
@@ -18,11 +18,11 @@
 use crate::browser::{Browser, Launch};
 use crate::canonical::pretty;
 use crate::flow;
-use crate::js;
+use crate::property::{load, unzip, Work};
 use crate::Fail;
 use serde_json::{json, Map, Value};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::Path;
 use std::time::Duration;
 
 const SEEDS: [&str; 4] = ["parcel.json", "property_seed.json", "address.json", "unnormalized_address.json"];
@@ -34,7 +34,6 @@ pub struct Options<'a> {
     pub output: &'a Path,
     pub multi: Option<&'a Path>,
     pub flow: Option<&'a Path>,
-    pub template: Option<(&'a str, &'a str)>,
     pub package: Option<&'a Path>,
     pub browse: bool,
     /// Click the "Continue" notice some county sites show before the page.
@@ -56,47 +55,6 @@ pub struct Fetched {
     pub html: bool,
     /// Where a browser flow ended, when one ran.
     pub landed: Option<String>,
-}
-
-/// A scratch directory, removed when dropped.
-struct Work(PathBuf);
-
-impl Work {
-    fn new() -> Result<Work, Fail> {
-        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-        let dir = std::env::temp_dir().join(format!("elephant-prepare-{}-{stamp:x}", std::process::id()));
-        std::fs::create_dir_all(&dir)?;
-        Ok(Work(dir.canonicalize()?))
-    }
-}
-
-impl Drop for Work {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn unzip(file: &Path, into: &Path) -> Result<(), Fail> {
-    let opened = std::fs::File::open(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
-    let mut archive = zip::ZipArchive::new(opened).map_err(|error| format!("{} is not a ZIP file: {error}", file.display()))?;
-    for at in 0..archive.len() {
-        let mut entry = archive.by_index(at)?;
-        let Some(name) = entry.enclosed_name() else {
-            continue;
-        };
-        let target = into.join(name);
-        if entry.is_dir() {
-            std::fs::create_dir_all(&target)?;
-            continue;
-        }
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut bytes = Vec::new();
-        entry.read_to_end(&mut bytes)?;
-        std::fs::write(target, bytes)?;
-    }
-    Ok(())
 }
 
 /// Every file under a directory, as paths relative to it with `/` separators, in byte order.
@@ -205,23 +163,11 @@ fn plain(request: &Value) -> Result<Fetched, Fail> {
 
 /// Fill the `{{=it.request_identifier}}` templates anywhere in a value's strings.
 fn fill(value: &mut Value, identifier: &str) -> Result<(), Fail> {
-    fn strings<'a>(value: &'a mut Value, into: &mut Vec<&'a mut String>) {
-        match value {
-            Value::String(text) if text.contains("=it.") => into.push(text),
-            Value::Array(items) => items.iter_mut().for_each(|item| strings(item, into)),
-            Value::Object(fields) => fields.values_mut().for_each(|item| strings(item, into)),
-            _ => {}
-        }
-    }
-    let mut found = Vec::new();
-    strings(value, &mut found);
-    if found.is_empty() {
-        return Ok(());
-    }
-    let templates: Vec<String> = found.iter().map(|text| text.to_string()).collect();
-    let filled = js::fill(&templates, &json!({ "request_identifier": identifier }))?;
-    for (text, value) in found.into_iter().zip(filled) {
-        *text = value;
+    match value {
+        Value::String(text) if text.contains("=it.") => *text = flow::fill(text, &json!({ "request_identifier": identifier }))?,
+        Value::Array(items) => items.iter_mut().try_for_each(|item| fill(item, identifier))?,
+        Value::Object(fields) => fields.values_mut().try_for_each(|item| fill(item, identifier))?,
+        _ => {}
     }
     Ok(())
 }
@@ -438,11 +384,6 @@ fn orange(identifier: &str) -> Result<Fetched, Fail> {
     Ok(Fetched { content: pretty(&Value::Object(output)), html: false, landed: None })
 }
 
-fn load(file: &Path) -> Result<Value, Fail> {
-    let bytes = std::fs::read(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
-    Ok(serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", file.display()))?)
-}
-
 /// Where a browser flow ended, as the request a later run would start from.
 fn landing(landed: &str) -> Result<Value, Fail> {
     let parsed = url::Url::parse(landed)?;
@@ -498,7 +439,7 @@ fn rows(options: &Options, work: &Path) -> Result<&'static str, Fail> {
 }
 
 pub fn run(options: &Options) -> Result<Done, Fail> {
-    let work = Work::new()?;
+    let work = Work::new("prepare")?;
     if options.csv.is_some() && options.input.is_some() {
         return Err("Cannot use both input ZIP and --input-csv at the same time".into());
     }
@@ -540,11 +481,7 @@ pub fn run(options: &Options) -> Result<Done, Fail> {
         flow::package(&mut browser, package, &work.0, &input)?;
         return Ok(Done { mechanism: "browser-flow-v2", files: pack(&work.0, options.output)? });
     }
-    let workflow = match (options.flow, options.template) {
-        (Some(file), _) => Some(flow::load(file)?),
-        (None, Some((name, parameters))) => Some(flow::template(name, parameters, self::address(request)?.as_str())?),
-        (None, None) => None,
-    };
+    let workflow = options.flow.map(flow::load).transpose()?;
     let (mechanism, fetched) = match (options.multi, workflow) {
         (Some(file), _) => ("multi-request", multi(&flow_file(file)?, identifier)?),
         _ if county("county_name") || county("county_jurisdiction") => ("orange", orange(identifier)?),

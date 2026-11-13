@@ -313,14 +313,7 @@ pub fn run(
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
     for slice in inputs.chunks(threads * 64) {
-        let results: Vec<Result<Hashed, String>> = std::thread::scope(|scope| {
-            let work = &work;
-            let workers: Vec<_> = slice
-                .chunks(slice.len().div_ceil(threads).max(1))
-                .map(|chunk| scope.spawn(move || chunk.iter().map(work).collect::<Vec<_>>()))
-                .collect();
-            workers.into_iter().flat_map(|worker| worker.join().expect("worker thread")).collect()
-        });
+        let results: Vec<Result<Hashed, String>> = crate::spread(slice, threads, work);
         for result in results {
             let name = &names[done];
             done += 1;

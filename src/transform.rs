@@ -12,11 +12,12 @@
 
 use crate::canonical::stringify;
 use crate::js::{self, Sandbox, Start};
+use crate::property::{load, names, unzip, Work};
 use crate::schemas::Schemas;
 use crate::Fail;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -35,66 +36,6 @@ pub struct Done {
     pub mode: &'static str,
     /// The files written under `data/` in the output ZIP.
     pub files: Vec<String>,
-}
-
-/// A scratch directory, removed when dropped.
-struct Work(PathBuf);
-
-impl Work {
-    fn new() -> Result<Work, Fail> {
-        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-        let dir = std::env::temp_dir().join(format!("elephant-transform-{}-{stamp:x}", std::process::id()));
-        std::fs::create_dir_all(&dir)?;
-        Ok(Work(dir.canonicalize()?))
-    }
-}
-
-impl Drop for Work {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn unzip(file: &Path, into: &Path) -> Result<(), Fail> {
-    let opened = std::fs::File::open(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
-    let mut archive = zip::ZipArchive::new(opened).map_err(|error| format!("{} is not a ZIP file: {error}", file.display()))?;
-    for at in 0..archive.len() {
-        let mut entry = archive.by_index(at)?;
-        // an entry that would land outside the directory is left out
-        let Some(name) = entry.enclosed_name() else {
-            continue;
-        };
-        let target = into.join(name);
-        if entry.is_dir() {
-            std::fs::create_dir_all(&target)?;
-            continue;
-        }
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut bytes = Vec::new();
-        entry.read_to_end(&mut bytes)?;
-        std::fs::write(target, bytes)?;
-    }
-    Ok(())
-}
-
-/// The names of the regular files directly in a directory, in byte order.
-fn names(dir: &Path) -> Vec<String> {
-    let mut found: Vec<String> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
-    found.sort();
-    found
-}
-
-fn load(file: &Path) -> Result<Value, Fail> {
-    let bytes = std::fs::read(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
-    Ok(serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", file.display()))?)
 }
 
 /// Write a value the way 1.x did: compact, as `JSON.stringify` prints it.
@@ -581,7 +522,7 @@ pub fn run(options: &Options, schemas: &mut Schemas) -> Result<Done, Fail> {
     if options.scripts.is_some() && options.package.is_some() {
         return Err("--scripts-zip cannot be used with --transform-zip".into());
     }
-    let work = Work::new()?;
+    let work = Work::new("transform")?;
     let (input, data) = (work.0.join("input"), work.0.join("data"));
     unzip(options.input, &input)?;
     let mode = match (options.scripts, options.package) {

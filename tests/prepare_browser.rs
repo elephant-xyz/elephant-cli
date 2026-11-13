@@ -144,21 +144,6 @@ fn runs_a_browser_flow_and_points_the_seed_at_where_it_ended() {
     }
 }
 
-#[test]
-fn builds_a_flow_from_the_search_by_parcel_id_template() {
-    let Some(binary) = obscura() else { return };
-    let scratch = Scratch::new();
-    let site = site();
-    seed(&scratch, &site, "/search", Value::Null);
-    let parameters =
-        json!({ "search_form_selector": "#parcel", "search_result_selector": "#title", "continue_button_selector": "#agree" })
-            .to_string();
-    let ran =
-        prepare(&scratch, &binary, &["--browser-flow-template", "SEARCH_BY_PARCEL_ID", "--browser-flow-parameters", &parameters]);
-    assert_eq!(ran.code, 0, "{}", ran.stderr);
-    assert!(text(&scratch, "12345.html").contains("<h1 id=\"title\">Parcel 12345</h1>"));
-}
-
 const HANDLER: &str = r#"export async function handler({ page, input, saveHtml, saveSourceUrl }) {
   const response = await page.goto(input.url, { waitUntil: 'domcontentloaded' });
   if (!response.ok()) throw new Error('search page answered ' + response.status());

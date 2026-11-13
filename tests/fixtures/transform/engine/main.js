@@ -11,7 +11,6 @@ const checks = {
   helper_sees_main: helper.parent === __filename,
   main_filename: require.main.filename === __filename,
   module_keys: ['children', 'exports', 'filename', 'id', 'loaded', 'path', 'paths'].filter((key) => key in module),
-  exec_path: typeof process.execPath,
   argv: [process.argv.length, process.argv[1] === __filename],
 };
 

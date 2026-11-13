@@ -180,8 +180,8 @@ impl Iterator for Blocks<'_> {
     }
 }
 
-#[allow(dead_code)] // used by `hash --output-car`
-fn leb(mut value: usize, into: &mut Vec<u8>) {
+/// Append an unsigned LEB128 number.
+pub fn leb(mut value: u64, into: &mut Vec<u8>) {
     while value >= 0x80 {
         into.push((value as u8 & 0x7f) | 0x80);
         value >>= 7;
@@ -190,7 +190,6 @@ fn leb(mut value: usize, into: &mut Vec<u8>) {
 }
 
 /// The bytes of a CARv1 header naming `roots`.
-#[allow(dead_code)]
 pub fn header(roots: &[Cid]) -> Vec<u8> {
     let mut body = vec![0xa2, 0x65];
     body.extend(b"roots");
@@ -205,17 +204,16 @@ pub fn header(roots: &[Cid]) -> Vec<u8> {
     body.extend(b"version");
     body.push(0x01);
     let mut out = Vec::new();
-    leb(body.len(), &mut out);
+    leb(body.len() as u64, &mut out);
     out.extend(body);
     out
 }
 
 /// Append one block section to a CAR being written.
-#[allow(dead_code)]
 pub fn put(out: &mut impl Write, cid: &Cid, bytes: &[u8]) -> Result<(), Fail> {
     let id = cid.to_bytes();
     let mut length = Vec::new();
-    leb(id.len() + bytes.len(), &mut length);
+    leb((id.len() + bytes.len()) as u64, &mut length);
     out.write_all(&length)?;
     out.write_all(&id)?;
     out.write_all(bytes)?;

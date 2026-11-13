@@ -14,6 +14,7 @@
 //! index of the whole file, built on first use; that is the slow path.
 
 use crate::car::{Car, Place};
+use crate::cids::{DAG_JSON, RAW};
 use crate::lexicon::{self, Group, Lexicon};
 use crate::report::{Report, Row};
 use crate::schemas::Schemas;
@@ -33,8 +34,6 @@ const INDEX: usize = 2;
 const GRAPH: usize = 3;
 const LEXICON: usize = 4;
 const ORPHANS: usize = 5;
-const DAG_JSON: u64 = 0x0129;
-const RAW: u64 = 0x55;
 
 #[derive(Default)]
 pub struct Summary {
@@ -309,7 +308,16 @@ impl Check<'_> {
     }
 
     fn note(&mut self, check: usize, file: &str, message: String) -> Result<(), Fail> {
-        self.write(check, Row { file: file.to_string(), path: CHECKS[check].to_string(), message, ..Row::default() })
+        self.listed(check, ("", ""), file, message)
+    }
+
+    /// A finding about what a shard lists: `listed` names the property and the data group.
+    fn listed(&mut self, check: usize, listed: (&str, &str), file: &str, message: String) -> Result<(), Fail> {
+        let (property, group) = (listed.0.to_string(), listed.1.to_string());
+        self.write(
+            check,
+            Row { property, group, file: file.to_string(), path: CHECKS[check].to_string(), message, ..Row::default() },
+        )
     }
 
     /// Whether the linked block is in the file. A missing one is an index
@@ -336,17 +344,7 @@ impl Check<'_> {
         };
         if !known || self.absent[to].is_some() {
             self.absent.insert(*to, None);
-            self.write(
-                INDEX,
-                Row {
-                    property: property.to_string(),
-                    group: group.to_string(),
-                    file: from.to_string(),
-                    path: CHECKS[INDEX].to_string(),
-                    message: format!("link {to} is not in the car"),
-                    ..Row::default()
-                },
-            )?;
+            self.listed(INDEX, (property, group), &from.to_string(), format!("link {to} is not in the car"))?;
         }
         Ok(false)
     }
@@ -421,17 +419,7 @@ impl Check<'_> {
             let mut groups = Vec::with_capacity(pointers.len());
             for (schema, pointer) in pointers {
                 let Some(data) = link(pointer) else {
-                    self.write(
-                        INDEX,
-                        Row {
-                            property: name.clone(),
-                            group: schema.clone(),
-                            file: shard.to_string(),
-                            path: CHECKS[INDEX].to_string(),
-                            message: format!("data_groups.{schema} must be a link"),
-                            ..Row::default()
-                        },
-                    )?;
+                    self.listed(INDEX, (&name, schema), &shard.to_string(), format!("data_groups.{schema} must be a link"))?;
                     continue;
                 };
                 self.resolve(view, &data, shard, Some((&name, schema)))?;
@@ -444,7 +432,6 @@ impl Check<'_> {
 
     /// Check one shard: its entries, every link below it, and each property's
     /// data groups. Returns the blocks its walk reached.
-    #[allow(clippy::too_many_arguments)]
     fn shard(
         &mut self,
         view: &View,
@@ -473,18 +460,7 @@ impl Check<'_> {
         let listed = items.map_or(&[][..], Vec::as_slice);
         // Last entry first: the order of one depth-first walk from the shard block.
         let work: Vec<(&Value, Option<&Entry>)> = listed.iter().zip(entries.iter().map(Option::as_ref)).rev().collect();
-        let checked: Vec<Checked> = std::thread::scope(|scope| {
-            let workers: Vec<_> = work
-                .chunks(work.len().div_ceil(threads).max(1))
-                .map(|chunk| {
-                    scope.spawn(move || {
-                        let check = |(item, entry): &(&Value, Option<&Entry>)| property(groups, view, cid, item, *entry, times);
-                        chunk.iter().map(check).collect::<Vec<_>>()
-                    })
-                })
-                .collect();
-            workers.into_iter().flat_map(|worker| worker.join().expect("worker thread")).collect()
-        });
+        let checked = crate::spread(&work, threads, |(item, entry)| property(groups, view, cid, item, *entry, times));
         let mut seen = HashSet::new();
         for found in checked {
             for (to, from) in found.dangling {
@@ -584,15 +560,7 @@ fn broken(car: &Car, blocks: &[(Cid, Place)], threads: usize) -> Vec<Cid> {
         let hash = cid.hash();
         hash.code() == 0x12 && hash.digest() == Sha256::digest(car.bytes(*place)).as_slice()
     };
-    std::thread::scope(|scope| {
-        let workers: Vec<_> = blocks
-            .chunks(blocks.len().div_ceil(threads).max(1))
-            .map(|chunk| {
-                scope.spawn(move || chunk.iter().filter(|block| !intact(block)).map(|block| block.0).collect::<Vec<_>>())
-            })
-            .collect();
-        workers.into_iter().flat_map(|worker| worker.join().expect("hash thread")).collect()
-    })
+    crate::spread(blocks, threads, |block| (!intact(block)).then_some(block.0)).into_iter().flatten().collect()
 }
 
 pub fn validate(file: &Path, schemas: &mut Schemas, report: &mut Report, threads: usize) -> Result<Summary, Fail> {

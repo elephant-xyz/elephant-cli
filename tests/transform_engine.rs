@@ -111,15 +111,14 @@ const ASKS: &str = r#"
 const fs = require('fs');
 const http = require('http');
 const base = fs.readFileSync('endpoint.csv', 'utf8').trim();
-const get = (url) =>
+const get = (url, options) =>
   new Promise((resolve) => {
-    http
-      .get(url, (res) => {
-        let body = '';
-        res.on('data', (chunk) => (body += chunk));
-        res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'] || null, body }));
-      })
-      .on('error', (error) => resolve({ error: error.code }));
+    const heard = (res) => {
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'] || null, body }));
+    };
+    (options ? http.get(url, options, heard) : http.get(url, heard)).on('error', (error) => resolve({ error: error.code }));
   });
 (async () => {
   const checks = { https: typeof require('https').get };
@@ -127,20 +126,7 @@ const get = (url) =>
   checks.missing = await get(`${base}/missing`);
   checks.moved = await get(`${base}/moved`);
   checks.refused = await get('http://127.0.0.1:1/none');
-  const posted = await fetch(`${base}/echo`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-County': 'volusia' },
-    body: JSON.stringify({ parcel: 12 }),
-  });
-  checks.fetch = [posted.ok, posted.status, posted.headers.get('Content-Type'), await posted.json()];
-  const absent = await fetch(`${base}/missing`);
-  checks.fetch_missing = [absent.ok, absent.status, await absent.text()];
-  const followed = await fetch(`${base}/moved`);
-  checks.fetch_moved = [followed.status, await followed.text()];
-  checks.fetch_refused = await fetch('http://127.0.0.1:1/none').then(
-    () => 'answered',
-    (error) => error.name
-  );
+  checks.headers = await get(`${base}/echo`, { headers: { 'X-County': 'volusia' } });
   fs.mkdirSync('data', { recursive: true });
   fs.writeFileSync('data/probe.json', JSON.stringify({ checks }));
 })();
@@ -169,12 +155,7 @@ fn county_server() -> http::Server {
             body: br#"{"rings":[[1,2]]}"#.to_vec(),
         },
         "/echo" => {
-            let said = json!({
-                "method": request.method,
-                "county": request.header("x-county"),
-                "type": request.header("content-type"),
-                "sent": String::from_utf8_lossy(&request.body),
-            });
+            let said = json!({ "method": request.method, "county": request.header("x-county") });
             Reply {
                 status: 200,
                 headers: vec![("content-type".into(), "application/json".into())],
@@ -189,7 +170,7 @@ fn county_server() -> http::Server {
 }
 
 #[test]
-fn lets_a_script_ask_a_server_with_http_get_and_fetch() {
+fn lets_a_script_ask_a_server_with_http_get() {
     let server = county_server();
     let scratch = Scratch::new();
     prepared(&scratch, &server.url);
@@ -203,15 +184,10 @@ fn lets_a_script_ask_a_server_with_http_get_and_fetch() {
             "https": "function",
             "get": { "status": 200, "type": "application/json", "body": r#"{"rings":[[1,2]]}"# },
             "missing": { "status": 404, "type": null, "body": "gone" },
-            // http.get hands a redirect to the script, fetch follows it: as in Node
+            // a redirect is handed to the script, as in Node
             "moved": { "status": 302, "type": null, "body": "over there" },
             "refused": { "error": "ECONNREFUSED" },
-            "fetch": [true, 200, "application/json", {
-                "method": "POST", "county": "volusia", "type": "application/json", "sent": r#"{"parcel":12}"#
-            }],
-            "fetch_missing": [false, 404, "gone"],
-            "fetch_moved": [200, r#"{"rings":[[1,2]]}"#],
-            "fetch_refused": "TypeError",
+            "headers": { "status": 200, "type": "application/json", "body": r#"{"method":"GET","county":"volusia"}"# },
         })
     );
 }
@@ -226,13 +202,51 @@ const fs = require('fs');
 const base = fs.readFileSync('endpoint.csv', 'utf8').trim();
 require('http')
   .get(`${base}/polygon?id=12`, () => {})
-  .on('error', async (error) => {
-    const fetched = await fetch(`${base}/polygon?id=12`).then(() => 'answered', (failed) => [failed.name, failed.cause.code]);
+  .on('error', (error) => {
     fs.mkdirSync('data', { recursive: true });
-    fs.writeFileSync('data/probe.json', JSON.stringify({ checks: { get: error.code, fetched } }));
+    fs.writeFileSync('data/probe.json', JSON.stringify({ checks: { get: error.code } }));
   });
 "#;
     let found = script(&scratch, asks, &["--offline"], &[]);
-    assert_eq!(found, json!({ "get": "EOFFLINE", "fetched": ["TypeError", "EOFFLINE"] }));
+    assert_eq!(found, json!({ "get": "EOFFLINE" }));
     assert!(server.requests().is_empty(), "{:?}", server.requests());
+}
+
+/// What the engine cannot answer as Node does, it refuses: a wrong answer would end up in county data unseen.
+#[test]
+fn refuses_what_it_cannot_answer_as_node_does() {
+    let scratch = Scratch::new();
+    pack("transform/scripts-mode/input", &scratch.path("prepared.zip"));
+    let asks = r#"
+const fs = require('fs');
+const tryit = (run) => {
+  try {
+    return run();
+  } catch (error) {
+    return error.name;
+  }
+};
+const url = new URL('https://ex.com/a?b=1');
+url.pathname = '/changed';
+const checks = {
+  date_text: [tryit(() => new Date(0).toLocaleDateString()), tryit(() => new Date(0).toLocaleTimeString()), tryit(() => new Date(0).toLocaleString('en-US'))],
+  encodings: [tryit(() => Buffer.from('aGk=', 'base64')), tryit(() => Buffer.from('hi').toString('base64'))],
+  url_kept: url.href,
+  absent: ['fetch', 'URLSearchParams', 'TextDecoder', 'setInterval', 'structuredClone'].filter((name) => typeof globalThis[name] !== 'undefined'),
+  modules: ['util', 'assert', 'os', 'events', 'child_process'].map((name) => tryit(() => require(name)).code || tryit(() => require(name))),
+};
+fs.mkdirSync('data', { recursive: true });
+fs.writeFileSync('data/probe.json', JSON.stringify({ checks }));
+"#;
+    let found = script(&scratch, asks, &[], &[]);
+    assert_eq!(
+        found,
+        json!({
+            "date_text": ["RangeError", "RangeError", "RangeError"],
+            "encodings": ["TypeError", "TypeError"],
+            "url_kept": "https://ex.com/a?b=1",
+            "absent": [],
+            "modules": ["Error", "Error", "Error", "Error", "Error"],
+        })
+    );
 }

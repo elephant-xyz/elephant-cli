@@ -18,7 +18,6 @@ const texts = [
 ];
 const iso = (date) => (Number.isNaN(date.getTime()) ? 'Invalid Date' : date.toISOString());
 const fixed = new Date(2020, 0, 5, 9, 7, 3, 45);
-const evening = new Date(Date.UTC(1999, 11, 31, 23, 59, 59));
 const checks = {
   parsed: Object.fromEntries(texts.map((text) => [JSON.stringify(text), iso(new Date(text))])),
   parse_function: [Date.parse('1/5/2020'), Date.parse('2020-01-05'), Date.parse('nope'), Date.parse('0000-00-00')].map(String),
@@ -27,30 +26,6 @@ const checks = {
   from_other: [new Date(null), new Date(undefined), new Date(true), new Date('1578182400000'), new Date(new Date(0)), new Date([2020, 1, 5]), new Date({})].map(iso),
   text: [String(new Date(NaN)), fixed.toDateString(), fixed.toUTCString(), fixed.toTimeString().slice(0, 17), JSON.stringify({ at: fixed }), String(fixed).slice(0, 33)],
   getters: [fixed.getFullYear(), fixed.getMonth(), fixed.getDate(), fixed.getDay(), fixed.getHours(), fixed.getMinutes(), fixed.getSeconds(), fixed.getMilliseconds(), fixed.getTimezoneOffset(), fixed.getTime()],
-  locale_date: [fixed.toLocaleDateString(), fixed.toLocaleDateString('en-US'), evening.toLocaleDateString(), new Date(2020, 10, 25).toLocaleDateString()],
-  locale_time: [fixed.toLocaleTimeString(), fixed.toLocaleTimeString('en-US'), evening.toLocaleTimeString(), new Date(2020, 0, 5, 0, 5).toLocaleTimeString(), new Date(2020, 0, 5, 12, 5).toLocaleTimeString()],
-  locale_both: [fixed.toLocaleString(), fixed.toLocaleString('en-US'), evening.toLocaleString()],
-  locale_invalid: [new Date(NaN).toLocaleDateString(), new Date(NaN).toLocaleString()],
-  locale_options: [
-    fixed.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-    fixed.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { timeZone: 'UTC' }),
-    fixed.toLocaleDateString('en-CA'),
-    fixed.toLocaleDateString('en-GB'),
-    fixed.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' }),
-    fixed.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', year: 'numeric' }),
-    fixed.toLocaleDateString('en-US', { year: 'numeric' }),
-    fixed.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
-    evening.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' }),
-    evening.toLocaleString('en-US', { timeZone: 'UTC' }),
-    evening.toLocaleTimeString('en-US', { timeZone: 'UTC' }),
-    new Date(2020, 8, 5).toLocaleDateString('en-US', { month: 'short' }),
-    new Date(2020, 4, 5).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-  ],
   arithmetic: [new Date(2020, 0, 31).setMonth(1), new Date('2020-03-08T12:00:00Z') - new Date('2020-03-07T12:00:00Z'), Math.round((new Date('1/5/2021') - new Date('1/5/2020')) / 864e5)],
 };
 

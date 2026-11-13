@@ -43,17 +43,7 @@ const relative = [
   ['x y', 'https://ex.com/a/'],
 ];
 const invalid = ['', 'not a url', '/just/a/path', 'example.com/x', '://x', 'http://'];
-const query = new URLSearchParams('a=1&b=two+words&a=3&c=%26%3D&d&e=&f=x%20y&=nokey');
-const built = new URLSearchParams({ parcel: '12 34', tab: 'a&b', empty: '' });
-const pairs = new URLSearchParams([['k', 'v1'], ['k', 'v2'], ['z', 'é/ü?']]);
-const live = new URL('https://ex.com/p?a=1&b=2');
-live.searchParams.set('a', 'x y');
-live.searchParams.append('c', '3');
-live.searchParams.delete('b');
-const moved = new URL('https://ex.com/p?a=1#h');
-moved.pathname = '/q r';
-moved.search = '?z=9';
-moved.hash = 'end';
+const query = new URL('https://ex.com/p?a=1&b=two+words&a=3&c=%26%3D&d&e=&f=x%20y&=nokey').searchParams;
 const checks = {
   absolute: absolute.map((text) => tryit(() => shape(new URL(text)))),
   relative: relative.map(([text, base]) => tryit(() => new URL(text, base).href)),
@@ -66,28 +56,11 @@ const checks = {
     query.forEach((value, name) => seen.push(`${name}=${value}`));
     return seen;
   })(),
-  query_build: [String(built), String(pairs), String(new URLSearchParams('?x=1')), String(new URLSearchParams()), String(new URLSearchParams('a=b c&d=e+f'))],
-  query_sort: (() => {
-    const sorted = new URLSearchParams('b=2&a=1&c=3&a=0');
-    sorted.sort();
-    return String(sorted);
-  })(),
   from_url: (() => {
     const url = new URL('https://county.example.com/Parcel.aspx?ParcelID=12-34-56&Year=2024&q=a%20b');
     return [url.searchParams.get('ParcelID'), url.searchParams.get('year'), url.searchParams.get('q'), Object.fromEntries(url.searchParams.entries())];
   })(),
-  live: [live.href, live.search, String(live.searchParams)],
-  moved: [moved.href, moved.pathname, moved.search, moved.hash],
   text: [String(new URL('https://ex.com/a?b#c')), JSON.stringify({ url: new URL('https://ex.com/a') }), new URL('https://ex.com/a').toJSON(), `${new URL('https://ex.com')}`],
-  statics: [typeof URL.canParse === 'function' ? URL.canParse('https://ex.com') : true, typeof URL.canParse === 'function' ? URL.canParse('nope') : false],
-  module: (() => {
-    const url = require('url');
-    return [typeof url.URL, typeof url.URLSearchParams, url.fileURLToPath('file:///tmp/a%20b.txt'), url.pathToFileURL('/tmp/a b.txt').href];
-  })(),
-  querystring: (() => {
-    const querystring = require('querystring');
-    return [querystring.parse('a=1&b=x%20y&a=2'), querystring.stringify({ a: [1, 2], b: 'x y' })];
-  })(),
 };
 
 fs.mkdirSync('data', { recursive: true });

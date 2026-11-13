@@ -1,10 +1,10 @@
 // The slice of Node.js that county transform scripts use, on top of a few
 // host functions: `fs`, `path` (POSIX), `process`, `console`, `Buffer`,
-// timers, `URL`, `http`, `https` and `fetch`, the smaller modules scripts
-// reach for (`vm`, `events`, `util`, `assert`, `crypto` hashes), CommonJS
-// `require`, and `cheerio` built in. Every path is resolved against a working
-// directory the host confines the script to. The engine has no Intl: number
-// and date formatting and string collation give Node's en-US answers.
+// `setTimeout`, a read-only `URL`, `http.get` and `https.get`,
+// `vm.runInNewContext`, sha256 through `crypto`, CommonJS `require`, and
+// `cheerio` built in. Every path is resolved against a working directory the
+// host confines the script to. The engine has no Intl: number formatting and
+// string collation give Node's en-US answers.
 (function (host) {
   'use strict';
 
@@ -21,7 +21,6 @@
   };
   const path = {
     sep: '/',
-    delimiter: ':',
     isAbsolute: (p) => String(p).startsWith('/'),
     normalize(p) {
       p = String(p);
@@ -52,11 +51,6 @@
       const base = String(p).replace(/\/+$/, '').split('/').pop();
       return suffix && base.endsWith(suffix) && base !== suffix ? base.slice(0, -suffix.length) : base;
     },
-    extname(p) {
-      const base = path.basename(p);
-      const at = base.lastIndexOf('.');
-      return at > 0 ? base.slice(at) : '';
-    },
     relative(from, to) {
       const a = path.resolve(from).split('/').filter(Boolean);
       const b = path.resolve(to).split('/').filter(Boolean);
@@ -64,25 +58,16 @@
       while (same < a.length && same < b.length && a[same] === b[same]) same++;
       return [...a.slice(same).map(() => '..'), ...b.slice(same)].join('/');
     },
-    parse(p) {
-      const base = path.basename(p);
-      const ext = path.extname(p);
-      const dir = path.dirname(p);
-      return { root: String(p).startsWith('/') ? '/' : '', dir, base, ext, name: ext ? base.slice(0, -ext.length) : base };
-    },
-    format: (parts) => (parts.dir ? parts.dir + '/' : '') + (parts.base || (parts.name || '') + (parts.ext || '')),
   };
-  path.posix = path;
 
-  // ---- Buffer ----
-  const CP1252 = '€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ';
-  const single = (bytes, mask) => Array.from(bytes, (byte) => String.fromCharCode(byte & mask)).join('');
+  // ---- Buffer: bytes, read as UTF-8 or hex ----
+  const utf8 = (encoding) => {
+    if (encoding && !/^utf-?8$/i.test(encoding)) throw new TypeError(`The "${encoding}" encoding is not available in elephant-cli's JavaScript engine`);
+  };
   class Buffer extends Uint8Array {
     static from(value, encoding) {
       if (typeof value === 'string') {
-        if (encoding === 'base64' || encoding === 'base64url') return Buffer.from(host.base64Decode(value.replace(/-/g, '+').replace(/_/g, '/')));
-        if (encoding === 'hex') return Buffer.from((value.match(/../g) || []).map((pair) => parseInt(pair, 16)));
-        if (encoding === 'latin1' || encoding === 'binary' || encoding === 'ascii') return Buffer.from(Array.from(value, (char) => char.charCodeAt(0) & 255));
+        utf8(encoding);
         return Buffer.from(host.utf8Encode(value));
       }
       if (value instanceof ArrayBuffer) value = new Uint8Array(value);
@@ -90,16 +75,8 @@
       buffer.set(value);
       return buffer;
     }
-    static alloc(size, fill) {
-      const buffer = new Buffer(size);
-      if (fill !== undefined) buffer.fill(typeof fill === 'string' ? fill.charCodeAt(0) : fill);
-      return buffer;
-    }
     static isBuffer(value) {
       return value instanceof Buffer;
-    }
-    static byteLength(value) {
-      return typeof value === 'string' ? host.utf8Encode(value).length : value.length;
     }
     static concat(list) {
       const out = new Buffer(list.reduce((sum, item) => sum + item.length, 0));
@@ -110,58 +87,12 @@
       }
       return out;
     }
-    static compare(a, b) {
-      for (let at = 0; at < a.length && at < b.length; at++) if (a[at] !== b[at]) return a[at] < b[at] ? -1 : 1;
-      return Math.sign(a.length - b.length);
-    }
-    equals(other) {
-      return Buffer.compare(this, other) === 0;
-    }
-    // a view, as in Node, where Uint8Array.prototype.slice would copy
-    slice(start, end) {
-      return this.subarray(start, end);
-    }
-    indexOf(value, from) {
-      return typeof value === 'string' ? single(this, 255).indexOf(single(Buffer.from(value), 255), from) : super.indexOf(value, from);
-    }
-    includes(value, from) {
-      return this.indexOf(value, from) >= 0;
-    }
-    readUInt8(at = 0) {
-      return this[at];
-    }
     toString(encoding) {
-      if (encoding === 'base64') return host.base64Encode(this);
-      if (encoding === 'base64url') return host.base64Encode(this).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       if (encoding === 'hex') return Array.from(this, (byte) => byte.toString(16).padStart(2, '0')).join('');
-      if (encoding === 'latin1' || encoding === 'binary') return single(this, 255);
-      if (encoding === 'ascii') return single(this, 127);
+      utf8(encoding);
       return host.utf8Decode(this);
     }
-    toJSON() {
-      return { type: 'Buffer', data: Array.from(this) };
-    }
   }
-  class TextEncoder_ {
-    encoding = 'utf-8';
-    encode(text = '') {
-      return new Uint8Array(host.utf8Encode(String(text)));
-    }
-  }
-  class TextDecoder_ {
-    constructor(label = 'utf-8') {
-      const name = String(label).toLowerCase();
-      this.encoding = ['utf8', 'utf-8'].includes(name) ? 'utf-8' : ['latin1', 'iso-8859-1', 'ascii', 'windows-1252', 'cp1252'].includes(name) ? 'windows-1252' : undefined;
-      if (!this.encoding) throw new RangeError(`The "${label}" encoding is not supported`);
-    }
-    decode(bytes = new Uint8Array(0)) {
-      const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      if (this.encoding === 'utf-8') return host.utf8Decode(view);
-      return Array.from(view, (byte) => (byte >= 128 && byte < 160 ? CP1252[byte - 128] : String.fromCharCode(byte))).join('');
-    }
-  }
-  Object.defineProperty(TextEncoder_, 'name', { value: 'TextEncoder' });
-  Object.defineProperty(TextDecoder_, 'name', { value: 'TextDecoder' });
 
   // ---- fs ----
   // The host reports failures as "CODE: text"; Node code reads `error.code`.
@@ -174,7 +105,7 @@
       throw error;
     }
   };
-  const abs = (p) => path.resolve(p instanceof URL_ ? fileURLToPath(p) : String(p));
+  const abs = (p) => path.resolve(String(p));
   const encodingOf = (options) => (typeof options === 'string' ? options : options && options.encoding);
   const stat = (p) => {
     const info = call(host.stat, abs(p));
@@ -198,8 +129,7 @@
     readFileSync: (p, options) =>
       encodingOf(options) ? call(host.readText, abs(p)) : Buffer.from(call(host.readBytes, abs(p))),
     writeFileSync: (p, data) =>
-      typeof data === 'string' ? call(host.writeText, abs(p), data, false) : call(host.writeBytes, abs(p), data),
-    appendFileSync: (p, data) => call(host.writeText, abs(p), String(data), true),
+      typeof data === 'string' ? call(host.writeText, abs(p), data) : call(host.writeBytes, abs(p), data),
     mkdirSync: (p, options) => {
       const recursive = Boolean(options && options.recursive);
       call(host.mkdir, abs(p), recursive);
@@ -217,40 +147,9 @@
     rmdirSync: (p, options) => call(host.remove, abs(p), Boolean(options && options.recursive), false),
     rmSync: (p, options) => call(host.remove, abs(p), Boolean(options && options.recursive), Boolean(options && options.force)),
     statSync: stat,
-    lstatSync: stat,
-    accessSync: (p) => void stat(p),
-    copyFileSync: (from, to) => call(host.writeBytes, abs(to), call(host.readBytes, abs(from))),
-    renameSync: (from, to) => call(host.rename, abs(from), abs(to)),
-    constants: { F_OK: 0, R_OK: 4, W_OK: 2 },
   };
   const later = (fn) => async (...args) => fn(...args);
-  // the callback forms: the same work, answered on the next turn
-  const back = (fn) => (...args) => {
-    const done = args.pop();
-    let value;
-    try {
-      value = fn(...args);
-    } catch (error) {
-      return void queueMicrotask(() => done(error));
-    }
-    queueMicrotask(() => done(null, value));
-  };
-  fs.promises = {
-    readFile: later(fs.readFileSync),
-    writeFile: later(fs.writeFileSync),
-    appendFile: later(fs.appendFileSync),
-    mkdir: later(fs.mkdirSync),
-    readdir: later(fs.readdirSync),
-    unlink: later(fs.unlinkSync),
-    rm: later(fs.rmSync),
-    stat: later(fs.statSync),
-    lstat: later(fs.lstatSync),
-    access: later(fs.accessSync),
-    copyFile: later(fs.copyFileSync),
-    rename: later(fs.renameSync),
-  };
-  for (const name of ['readFile', 'writeFile', 'appendFile', 'mkdir', 'readdir', 'unlink', 'rm', 'stat', 'lstat', 'access', 'copyFile', 'rename']) fs[name] = back(fs[`${name}Sync`]);
-  fs.exists = (p, done) => queueMicrotask(() => done(fs.existsSync(p)));
+  fs.promises = { readFile: later(fs.readFileSync), writeFile: later(fs.writeFileSync), readdir: later(fs.readdirSync), unlink: later(fs.unlinkSync) };
 
   // ---- console ----
   const show = (value) => {
@@ -267,62 +166,26 @@
     return String(value);
   };
   const print = (stream) => (...args) => host.print(stream, args.map(show).join(' ') + '\n');
-  const console = {
-    log: print(1),
-    info: print(1),
-    debug: print(1),
-    warn: print(2),
-    error: print(2),
-    trace: print(2),
-    table: print(1),
-    dir: print(1),
-    group: print(1),
-    groupEnd: () => {},
-    assert: (ok, ...args) => void (ok || print(2)('Assertion failed', ...args)),
-    time: () => {},
-    timeEnd: () => {},
-  };
+  const console = { log: print(1), info: print(1), debug: print(1), warn: print(2), error: print(2) };
 
   // ---- timers ----
   const timers = [];
   let ticket = 0;
-  class Timeout {
-    constructor(id) {
-      this.id = id;
-    }
-    ref() {
-      return this;
-    }
-    unref() {
-      return this;
-    }
-    hasRef() {
-      return true;
-    }
-    [Symbol.toPrimitive]() {
-      return this.id;
-    }
-  }
-  const schedule = (repeat) => (fn, delay, ...args) => {
-    const timer = { id: ++ticket, due: host.now() + Math.max(0, Number(delay) || 0), fn, args, every: repeat ? Math.max(1, Number(delay) || 1) : 0 };
-    timers.push(timer);
-    return new Timeout(timer.id);
+  const schedule = (fn, delay, ...args) => {
+    timers.push({ id: ++ticket, due: host.now() + Math.max(0, Number(delay) || 0), fn, args });
+    return ticket;
   };
   // an immediate runs before any timer that is due
-  const immediately = (fn, ...args) => {
-    timers.push({ id: ++ticket, due: 0, fn, args, every: 0 });
-    return new Timeout(ticket);
-  };
+  const immediately = (fn) => void timers.push({ id: ++ticket, due: 0, fn, args: [] });
   const cancel = (id) => {
-    const at = timers.findIndex((timer) => timer.id === (id && id.id ? id.id : id));
+    const at = timers.findIndex((timer) => timer.id === id);
     if (at >= 0) timers.splice(at, 1);
   };
   // Run the timers that are due; return how long until the next one, or -1 when none is left.
   host.timers = () => {
     const now = host.now();
     for (const timer of timers.filter((timer) => timer.due <= now).sort((a, b) => a.due - b.due || a.id - b.id)) {
-      if (timer.every) timer.due = now + timer.every;
-      else cancel(timer.id);
+      cancel(timer.id);
       timer.fn(...timer.args);
     }
     return timers.length ? Math.max(0, Math.min(...timers.map((timer) => timer.due)) - host.now()) : -1;
@@ -335,14 +198,9 @@
       this.exitCode = code;
     }
   }
-  const started = host.now();
   const process = {
     argv: ['node', host.entry],
-    execPath: 'node',
     env: { NODE_ENV: 'production' },
-    platform: 'linux',
-    version: 'v22.0.0',
-    versions: { node: '22.0.0', quickjs: 'ng' },
     exitCode: undefined,
     cwd: () => host.cwd,
     exit: (code) => {
@@ -351,80 +209,21 @@
       host.exit(status);
       throw new Exit(status);
     },
-    nextTick: (fn, ...args) => queueMicrotask(() => fn(...args)),
-    hrtime: Object.assign(() => [Math.floor(host.now() / 1000), (host.now() % 1000) * 1e6], { bigint: () => BigInt(Math.round(host.now() * 1e6)) }),
-    memoryUsage: () => ({ rss: 0, heapUsed: 0, heapTotal: 0 }),
-    uptime: () => (host.now() - started) / 1000,
-    pid: 1,
-    emitWarning: (warning) => host.print(2, `Warning: ${warning && warning.message ? warning.message : warning}\n`),
-    off: () => process,
-    removeListener: () => process,
-    on: () => process,
-    once: () => process,
     stdout: { write: (text) => host.print(1, String(text)), isTTY: false },
     stderr: { write: (text) => host.print(2, String(text)), isTTY: false },
   };
 
-  // ---- URL and URLSearchParams, for http(s) and file URLs ----
-  const invalidUrl = (text) => Object.assign(new TypeError(`Invalid URL: ${text}`), { code: 'ERR_INVALID_URL', input: String(text) });
-  // Percent-encode what a URL part may not hold as it stands; existing escapes stay.
-  const escapeIn = (unsafe) => (text) =>
-    text.replace(unsafe, (run) => {
-      try {
-        return encodeURIComponent(run).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-      } catch (error) {
-        return run;
-      }
-    });
-  const escapePath = escapeIn(/[\u0000- "<>`{}\u007f-￿]+/g);
-  const escapeQuery = escapeIn(/[\u0000- "<>'\u007f-￿]+/g);
-  const escapeHash = escapeIn(/[\u0000- "<>`\u007f-￿]+/g);
-  const escapeUser = escapeIn(/[\u0000- "<>`{}/:;=@[\\\]^|?#\u007f-￿]+/g);
-  const unescape = (text) => {
-    try {
-      return decodeURIComponent(text);
-    } catch (error) {
-      return text;
-    }
-  };
-  const formDecode = (text) => unescape(text.replace(/\+/g, ' '));
-  const formEncode = (text) => encodeURIComponent(text).replace(/%20/g, '+').replace(/[!'()~]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-  const PORTS = { 'http:': '80', 'https:': '443', 'ftp:': '21', 'ws:': '80', 'wss:': '443', 'file:': '' };
-
-  class URLSearchParams_ {
-    #pairs = [];
-    #changed;
-    constructor(init, changed) {
-      if (typeof init === 'string') this.#read(init);
-      else if (init && typeof init[Symbol.iterator] === 'function') for (const [name, value] of init) this.#pairs.push([String(name), String(value)]);
-      else if (init && typeof init === 'object') for (const name of Object.keys(init)) this.#pairs.push([name, String(init[name])]);
-      this.#changed = changed;
-    }
-    #read(text) {
-      this.#pairs = [];
-      for (const piece of text.replace(/^\?/, '').split('&')) {
-        if (!piece) continue;
-        const at = piece.indexOf('=');
-        this.#pairs.push([formDecode(at < 0 ? piece : piece.slice(0, at)), formDecode(at < 0 ? '' : piece.slice(at + 1))]);
-      }
-    }
-    #touch() {
-      if (this.#changed) this.#changed(this.toString());
-    }
-    // the owning URL was given a new query
-    _reset(text) {
-      this.#read(text);
+  // ---- URL, to read: the host takes the text apart by the same rules Node follows ----
+  // The query of a URL, read as URLSearchParams reads it.
+  class Query {
+    #pairs;
+    #text;
+    constructor(pairs, text) {
+      this.#pairs = pairs;
+      this.#text = text;
     }
     get size() {
       return this.#pairs.length;
-    }
-    append(name, value) {
-      this.#pairs.push([String(name), String(value)]);
-      this.#touch();
-    }
-    delete(name) {
-      this.#pairs = this.#pairs.filter((pair) => pair[0] !== String(name));
-      this.#touch();
     }
     get(name) {
       const found = this.#pairs.find((pair) => pair[0] === String(name));
@@ -435,22 +234,6 @@
     }
     has(name) {
       return this.#pairs.some((pair) => pair[0] === String(name));
-    }
-    set(name, value) {
-      const at = this.#pairs.findIndex((pair) => pair[0] === String(name));
-      if (at < 0) this.#pairs.push([String(name), String(value)]);
-      else {
-        this.#pairs[at][1] = String(value);
-        this.#pairs = this.#pairs.filter((pair, index) => index <= at || pair[0] !== String(name));
-      }
-      this.#touch();
-    }
-    sort() {
-      this.#pairs = this.#pairs
-        .map((pair, index) => [pair, index])
-        .sort((a, b) => (a[0][0] < b[0][0] ? -1 : a[0][0] > b[0][0] ? 1 : a[1] - b[1]))
-        .map((entry) => entry[0]);
-      this.#touch();
     }
     forEach(each, self) {
       for (const [name, value] of this.#pairs) each.call(self, value, name, this);
@@ -468,132 +251,16 @@
       return this.entries();
     }
     toString() {
-      return this.#pairs.map(([name, value]) => `${formEncode(name)}=${formEncode(value)}`).join('&');
+      return this.#text;
     }
   }
-
   class URL_ {
-    #scheme;
-    #username = '';
-    #password = '';
-    #hostname = '';
-    #port = '';
-    #path = '';
-    #query = null;
-    #fragment = null;
-    #params;
     constructor(text, base) {
-      const given = String(text).trim();
-      const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(given);
-      if (scheme && !(base !== undefined && scheme[1].length === 1)) this.#parse(given, given);
-      else {
-        if (base === undefined) throw invalidUrl(text);
-        const root = base instanceof URL_ ? base : new URL_(base);
-        const origin = `${root.protocol}//${root.#authority()}`;
-        const folder = root.#path.slice(0, root.#path.lastIndexOf('/') + 1);
-        const query = root.#query === null ? '' : `?${root.#query}`;
-        const joined =
-          given === '' ? `${origin}${root.#path}${query}`
-          : given.startsWith('//') ? `${root.protocol}${given}`
-          : given.startsWith('/') ? `${origin}${given}`
-          : given.startsWith('?') ? `${origin}${root.#path}${given}`
-          : given.startsWith('#') ? `${origin}${root.#path}${query}${given}`
-          : `${origin}${folder}${given}`;
-        this.#parse(joined, text);
-      }
-    }
-    #parse(given, shown) {
-      const parts = /^([a-zA-Z][a-zA-Z0-9+.-]*:)(\/\/([^/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/s.exec(given);
-      if (!parts) throw invalidUrl(shown);
-      this.#scheme = parts[1].toLowerCase();
-      const special = Object.prototype.hasOwnProperty.call(PORTS, this.#scheme);
-      if (special && parts[2] === undefined) throw invalidUrl(shown);
-      const authority = /^(?:([^@]*)@)?(.*?)(?::(\d*))?$/.exec(parts[3] || '');
-      if (authority[1] !== undefined) {
-        const colon = authority[1].indexOf(':');
-        this.#username = escapeUser(colon < 0 ? authority[1] : authority[1].slice(0, colon));
-        this.#password = colon < 0 ? '' : escapeUser(authority[1].slice(colon + 1));
-      }
-      this.#hostname = authority[2].toLowerCase();
-      if (special && this.#scheme !== 'file:' && !this.#hostname) throw invalidUrl(shown);
-      if (/[\s<>^|%\\]/.test(this.#hostname)) throw invalidUrl(shown);
-      this.#port = authority[3] && authority[3] !== PORTS[this.#scheme] ? String(Number(authority[3])) : '';
-      this.#setPath(parts[4], special);
-      this.#query = parts[5] === undefined ? null : escapeQuery(parts[5].slice(1));
-      this.#fragment = parts[6] === undefined ? null : escapeHash(parts[6].slice(1));
-    }
-    #setPath(text, special) {
-      if (!special) return void (this.#path = text);
-      const kept = [];
-      const pieces = escapePath(text).split('/').slice(1);
-      pieces.forEach((piece, index) => {
-        const last = index === pieces.length - 1;
-        const plain = piece.replace(/%2e/gi, '.');
-        if (plain === '..') kept.pop();
-        if (plain === '..' || plain === '.') return void (last && kept.push(''));
-        kept.push(piece);
-      });
-      this.#path = `/${kept.join('/')}`;
-    }
-    #authority() {
-      const user = this.#username || this.#password ? `${this.#username}${this.#password ? `:${this.#password}` : ''}@` : '';
-      return `${user}${this.host}`;
-    }
-    get protocol() {
-      return this.#scheme;
-    }
-    get username() {
-      return this.#username;
-    }
-    get password() {
-      return this.#password;
-    }
-    get hostname() {
-      return this.#hostname;
-    }
-    get port() {
-      return this.#port;
-    }
-    get host() {
-      return this.#hostname + (this.#port ? `:${this.#port}` : '');
-    }
-    get origin() {
-      return this.#scheme === 'file:' || !Object.prototype.hasOwnProperty.call(PORTS, this.#scheme) ? 'null' : `${this.#scheme}//${this.host}`;
-    }
-    get pathname() {
-      return this.#path;
-    }
-    set pathname(value) {
-      const text = String(value);
-      this.#setPath(text.startsWith('/') ? text : `/${text}`, true);
-    }
-    get search() {
-      return this.#query ? `?${this.#query}` : '';
-    }
-    set search(value) {
-      const text = String(value).replace(/^\?/, '');
-      this.#query = text ? escapeQuery(text) : null;
-      if (this.#params) this.#params._reset(this.#query || '');
-    }
-    get hash() {
-      return this.#fragment ? `#${this.#fragment}` : '';
-    }
-    set hash(value) {
-      const text = String(value).replace(/^#/, '');
-      this.#fragment = text ? escapeHash(text) : null;
-    }
-    get searchParams() {
-      this.#params = this.#params || new URLSearchParams_(this.#query || '', (text) => void (this.#query = text || null));
-      return this.#params;
-    }
-    get href() {
-      const slashes = Object.prototype.hasOwnProperty.call(PORTS, this.#scheme) || this.#hostname ? '//' : '';
-      return `${this.#scheme}${slashes}${slashes ? this.#authority() : ''}${this.#path}${this.#query === null ? '' : `?${this.#query}`}${this.#fragment === null ? '' : `#${this.#fragment}`}`;
-    }
-    set href(value) {
-      this.#username = this.#password = '';
-      this.#parse(String(value).trim(), value);
-      if (this.#params) this.#params._reset(this.#query || '');
+      const parsed = host.url(String(text), base === undefined ? null : String(base));
+      if (parsed == null) throw Object.assign(new TypeError(`Invalid URL: ${text}`), { code: 'ERR_INVALID_URL', input: String(text) });
+      const { query, queryText, ...parts } = JSON.parse(parsed);
+      // frozen: a part that is assigned to does not change the others, so it is not taken
+      Object.freeze(Object.assign(this, parts, { searchParams: new Query(query, queryText) }));
     }
     toString() {
       return this.href;
@@ -601,17 +268,8 @@
     toJSON() {
       return this.href;
     }
-    static canParse(text, base) {
-      try {
-        return Boolean(new URL_(text, base));
-      } catch (error) {
-        return false;
-      }
-    }
   }
   Object.defineProperty(URL_, 'name', { value: 'URL' });
-  Object.defineProperty(URLSearchParams_, 'name', { value: 'URLSearchParams' });
-  const fileURLToPath = (url) => unescape((url instanceof URL_ ? url : new URL_(String(url))).pathname);
 
   // ---- locale: the en-US answers Node gives; this engine has no Intl ----
   // The plain digits of a non-negative finite number, taken from its shortest
@@ -731,128 +389,18 @@
       Reflect.construct(target, args.length === 1 && typeof args[0] === 'string' ? [parseDate(args[0])] : args, fresh === DateProxy ? target : fresh),
     get: (target, name) => (name === 'parse' ? parseDate : target[name]),
   });
-  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const two = (value) => String(value).padStart(2, '0');
-  // What toLocaleDateString, toLocaleTimeString and toLocaleString print: `wants` is 'date', 'time' or both.
-  const localeDate = (date, wants, locales, options = {}) => {
-    if (Number.isNaN(date.getTime())) return 'Invalid Date';
-    const locale = (Array.isArray(locales) ? locales[0] : locales) || 'en-US';
-    const refuse = (what) => {
-      throw new RangeError(`${what} is not available in elephant-cli's JavaScript engine, which formats dates for en-US, en-CA and en-GB in local time or UTC`);
-    };
-    if (!['en', 'en-US', 'en-CA', 'en-GB'].includes(locale)) refuse(`The locale ${locale}`);
-    for (const name of Object.keys(options)) {
-      if (!['weekday', 'year', 'month', 'day', 'timeZone'].includes(name) || (name !== 'timeZone' && wants !== 'date')) refuse(`The option ${name}`);
-    }
-    if (options.timeZone !== undefined && options.timeZone !== 'UTC') refuse(`The time zone ${options.timeZone}`);
-    const get = (part) => date[`get${options.timeZone ? 'UTC' : ''}${part}`]();
-    const hour = get('Hours');
-    const time = `${hour % 12 || 12}:${two(get('Minutes'))}:${two(get('Seconds'))} ${hour < 12 ? 'AM' : 'PM'}`;
-    if (wants !== 'date' && !locale.endsWith('US') && locale !== 'en') refuse(`The time in ${locale}`);
-    if (wants === 'time') return time;
-    const year = get('FullYear');
-    const month = get('Month');
-    const day = get('Date');
-    const chosen = ['weekday', 'year', 'month', 'day'].some((name) => options[name] !== undefined);
-    let text = `${month + 1}/${day}/${year}`;
-    if (locale === 'en-CA') text = `${year}-${two(month + 1)}-${two(day)}`;
-    if (locale === 'en-GB') text = `${two(day)}/${two(month + 1)}/${year}`;
-    if (chosen && (locale === 'en-CA' || locale === 'en-GB')) refuse(`Date options in ${locale}`);
-    if (chosen) {
-      const short = (name, style) => (style === 'long' ? name : name.slice(0, 3));
-      const digits = (value, style) => (style === '2-digit' ? two(value % 100) : String(value));
-      const named = options.month === 'long' || options.month === 'short';
-      const parts = [
-        options.month && (named ? short(MONTHS[month], options.month) : digits(month + 1, options.month)),
-        options.day && digits(day, options.day),
-        options.year && digits(year, options.year),
-      ];
-      const [m, d, y] = parts;
-      text = named ? [[m, d].filter(Boolean).join(' '), y].filter(Boolean).join(d ? ', ' : ' ') : parts.filter(Boolean).join('/');
-      if (options.weekday) text = [short(DAYS[get('Day')], options.weekday), text].filter(Boolean).join(', ');
-    }
-    return wants === 'date' ? text : `${text}, ${time}`;
-  };
-  if (typeof globalThis.Intl === 'undefined') {
-    Number.prototype.toLocaleString = localeNumber;
-    NativeDate.prototype.constructor = DateProxy;
-    globalThis.Date = DateProxy;
-    NativeDate.prototype.toLocaleDateString = function (locales, options) {
-      return localeDate(this, 'date', locales, options);
-    };
-    NativeDate.prototype.toLocaleTimeString = function (locales, options) {
-      return localeDate(this, 'time', locales, options);
-    };
-    NativeDate.prototype.toLocaleString = function (locales, options) {
-      return localeDate(this, 'both', locales, options);
-    };
-    String.prototype.localeCompare = localeCompare;
-    BigInt.prototype.toLocaleString = function () {
-      return String(this).replace(/\d+/, group);
+  Number.prototype.toLocaleString = localeNumber;
+  String.prototype.localeCompare = localeCompare;
+  NativeDate.prototype.constructor = DateProxy;
+  globalThis.Date = DateProxy;
+  // the engine's own date texts are not Node's, so these refuse instead of printing another format
+  for (const name of ['toLocaleDateString', 'toLocaleTimeString', 'toLocaleString']) {
+    NativeDate.prototype[name] = () => {
+      throw new RangeError(`Date.prototype.${name} is not available in elephant-cli's JavaScript engine: build the text from the parts of the date`);
     };
   }
 
-  // ---- util, assert, events, vm ----
-  const format = (first, ...rest) => {
-    if (typeof first !== 'string') return [first, ...rest].map(show).join(' ');
-    const text = first.replace(/%([sdifjoO%])/g, (found, kind) => {
-      if (kind === '%') return '%';
-      if (!rest.length) return found;
-      const value = rest.shift();
-      if (kind === 's') return typeof value === 'object' && value !== null ? show(value) : String(value);
-      if (kind === 'd') return String(Number(value));
-      if (kind === 'i') return String(parseInt(value, 10));
-      if (kind === 'f') return String(parseFloat(value));
-      return JSON.stringify(value);
-    });
-    return [text, ...rest.map(show)].join(' ');
-  };
-  const alike = (a, b, strict) => {
-    if (strict ? Object.is(a, b) : a == b) return true;
-    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-    if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
-    if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
-    if (a instanceof Map || a instanceof Set) return a.size === b.size && alike([...a], [...b], strict);
-    const names = Object.keys(a);
-    return Array.isArray(a) === Array.isArray(b) && names.length === Object.keys(b).length && names.every((name) => name in b && alike(a[name], b[name], strict));
-  };
-  class AssertionError extends Error {
-    constructor(message) {
-      super(message);
-      this.name = 'AssertionError';
-      this.code = 'ERR_ASSERTION';
-    }
-  }
-  const asserts = (strict) => {
-    const check = (ok, message, fallback) => {
-      if (ok) return;
-      throw message instanceof Error ? message : new AssertionError(message === undefined ? fallback() : message);
-    };
-    const assert = (value, message) => check(value, message, () => 'The expression evaluated to a falsy value');
-    const same = (a, b) => (strict ? Object.is(a, b) : a == b);
-    return Object.assign(assert, {
-      AssertionError,
-      ok: assert,
-      equal: (a, b, message) => check(same(a, b), message, () => `${show(a)} ${strict ? '!==' : '!='} ${show(b)}`),
-      notEqual: (a, b, message) => check(!same(a, b), message, () => `${show(a)} ${strict ? '===' : '=='} ${show(b)}`),
-      strictEqual: (a, b, message) => check(Object.is(a, b), message, () => `${show(a)} !== ${show(b)}`),
-      notStrictEqual: (a, b, message) => check(!Object.is(a, b), message, () => `${show(a)} === ${show(b)}`),
-      deepEqual: (a, b, message) => check(alike(a, b, strict), message, () => `${show(a)} does not deep-equal ${show(b)}`),
-      deepStrictEqual: (a, b, message) => check(alike(a, b, true), message, () => `${show(a)} does not deep-equal ${show(b)}`),
-      notDeepStrictEqual: (a, b, message) => check(!alike(a, b, true), message, () => `${show(a)} deep-equals ${show(b)}`),
-      match: (text, pattern, message) => check(pattern.test(text), message, () => `${show(text)} does not match ${pattern}`),
-      fail: (message) => check(false, message, () => 'Failed'),
-      throws: (run, expected, message) => {
-        try {
-          run();
-        } catch (error) {
-          return;
-        }
-        check(false, typeof expected === 'string' ? expected : message, () => 'Missing expected exception.');
-      },
-    });
-  };
+  // ---- events, as far as http.get needs them, and vm.runInNewContext ----
   class EventEmitter {
     #heard = new Map();
     on(name, listener) {
@@ -879,30 +427,10 @@
       for (const listener of listeners) listener.apply(this, args);
       return listeners.length > 0;
     }
-    removeAllListeners(name) {
-      if (name === undefined) this.#heard.clear();
-      else this.#heard.delete(name);
-      return this;
-    }
-    listenerCount(name) {
-      return (this.#heard.get(name) || []).length;
-    }
-    listeners(name) {
-      return (this.#heard.get(name) || []).map((listener) => listener.listener || listener);
-    }
-    eventNames() {
-      return [...this.#heard.keys()];
-    }
-    setMaxListeners() {
-      return this;
-    }
   }
-  EventEmitter.prototype.addListener = EventEmitter.prototype.on;
-  EventEmitter.prototype.removeListener = EventEmitter.prototype.off;
-  EventEmitter.EventEmitter = EventEmitter;
   // vm: code sees the context object's properties and the language's own
   // globals, not this module's `process`, `Buffer` or `console`.
-  const hidden = new Set(['global', 'console', 'process', 'Buffer', 'setTimeout', 'setInterval', 'setImmediate', 'clearTimeout', 'clearInterval', 'clearImmediate', 'URL', 'URLSearchParams', 'TextEncoder', 'TextDecoder', 'atob', 'btoa', 'structuredClone', 'queueMicrotask', 'AbortController', 'performance', 'fetch', 'Headers']);
+  const hidden = new Set(['global', 'console', 'process', 'Buffer', 'setTimeout', 'clearTimeout', 'URL', 'atob', 'btoa', 'queueMicrotask', 'performance']);
   const evaluate = new Function('__elephant_scope__', '__elephant_code__', 'with (__elephant_scope__) { return eval(__elephant_code__); }');
   const within = (code, context = {}) =>
     evaluate(
@@ -912,192 +440,31 @@
       }),
       String(code)
     );
-  const vm = {
-    runInNewContext: within,
-    runInContext: within,
-    runInThisContext: (code) => (0, eval)(String(code)),
-    createContext: (context = {}) => context,
-    isContext: (context) => typeof context === 'object' && context !== null,
-    Script: class Script {
-      constructor(code) {
-        this.code = String(code);
-      }
-      runInNewContext(context) {
-        return within(this.code, context);
-      }
-      runInContext(context) {
-        return within(this.code, context);
-      }
-      runInThisContext() {
-        return (0, eval)(this.code);
-      }
-    },
-  };
-  const clone = (value, seen = new Map()) => {
-    if (typeof value !== 'object' || value === null) return value;
-    if (seen.has(value)) return seen.get(value);
-    if (value instanceof Date) return new Date(value.getTime());
-    if (value instanceof RegExp) return new RegExp(value.source, value.flags);
-    if (ArrayBuffer.isView(value)) return value.slice();
-    const made = value instanceof Map ? new Map() : value instanceof Set ? new Set() : Array.isArray(value) ? [] : {};
-    seen.set(value, made);
-    if (value instanceof Map) for (const [key, item] of value) made.set(clone(key, seen), clone(item, seen));
-    else if (value instanceof Set) for (const item of value) made.add(clone(item, seen));
-    else for (const name of Object.keys(value)) made[name] = clone(value[name], seen);
-    return made;
-  };
-  class AbortController_ {
-    signal = Object.assign(new EventEmitter(), {
-      aborted: false,
-      reason: undefined,
-      addEventListener(name, listener) {
-        this.once(name, listener);
-      },
-      removeEventListener(name, listener) {
-        this.off(name, listener);
-      },
-      throwIfAborted() {
-        if (this.aborted) throw this.reason;
-      },
-    });
-    abort(reason = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })) {
-      if (this.signal.aborted) return;
-      Object.assign(this.signal, { aborted: true, reason });
-      this.signal.emit('abort', { type: 'abort' });
-    }
-  }
+  const vm = { runInNewContext: within };
 
-  // ---- http, https and fetch: one blocking exchange with the host per request ----
-  const exchange = (method, url, headers, body, follow, timeout) => {
-    const sent = body === undefined || body === null ? undefined : typeof body === 'string' ? Buffer.from(body) : body;
-    const answer = call(host.request, JSON.stringify({ method, url: String(url), headers, follow, timeout }), sent);
-    return { status: answer.status, reason: answer.reason, headers: JSON.parse(answer.headers), body: Buffer.from(answer.body) };
-  };
-  const client = (scheme) => {
-    const request = (target, options, listener) => {
-      if (typeof options === 'function') [listener, options] = [options, undefined];
-      const given = typeof target === 'string' || target instanceof URL_ ? { ...options, href: String(target) } : { ...target };
-      const url = given.href || `${given.protocol || `${scheme}:`}//${given.hostname || given.host || 'localhost'}${given.port ? `:${given.port}` : ''}${given.path || '/'}`;
-      const headers = { ...given.headers };
-      const chunks = [];
+  // ---- http.get and https.get: one blocking exchange with the host ----
+  const web = {
+    get(url, options, listener) {
+      if (typeof options === 'function') [listener, options] = [options, {}];
       const req = new EventEmitter();
-      let wait = Number(given.timeout) || 30000;
-      let sent = false;
-      return Object.assign(req, {
-        setHeader: (name, value) => void (headers[name] = value),
-        getHeader: (name) => headers[name],
-        write: (chunk) => Boolean(chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)),
-        setTimeout: (milliseconds, heard) => {
-          wait = Number(milliseconds) || wait;
-          return heard ? req.once('timeout', heard) : req;
-        },
-        destroy: (error) => {
-          sent = true;
-          if (error) immediately(() => req.emit('error', error));
-          return req;
-        },
-        abort: () => req.destroy(),
-        end: (chunk) => {
-          if (chunk) req.write(chunk);
-          if (sent) return req;
-          sent = true;
-          immediately(() => {
-            let answer;
-            try {
-              answer = exchange(given.method || 'GET', url, headers, chunks.length ? Buffer.concat(chunks) : undefined, false, wait);
-            } catch (error) {
-              return void req.emit(error.code === 'ETIMEDOUT' && req.listenerCount('timeout') ? 'timeout' : 'error', error);
-            }
-            let encoding;
-            const res = Object.assign(new EventEmitter(), {
-              statusCode: answer.status,
-              statusMessage: answer.reason,
-              headers: answer.headers,
-              setEncoding: (name) => ((encoding = name), res),
-              resume: () => res,
-              destroy: () => res,
-            });
-            if (listener) listener(res);
-            req.emit('response', res);
-            // after the listener has had its turn to say what it wants to hear
-            immediately(() => {
-              if (answer.body.length) res.emit('data', encoding ? answer.body.toString(encoding) : answer.body);
-              res.emit('end');
-              res.emit('close');
-            });
-          });
-          return req;
-        },
+      immediately(() => {
+        let answer;
+        try {
+          answer = call(host.request, String(url), JSON.stringify((options && options.headers) || {}));
+        } catch (error) {
+          return void req.emit('error', error);
+        }
+        const res = Object.assign(new EventEmitter(), { statusCode: answer.status, statusMessage: answer.reason, headers: JSON.parse(answer.headers) });
+        if (listener) listener(res);
+        req.emit('response', res);
+        // after the listener has had its turn to say what it wants to hear
+        immediately(() => {
+          if (answer.body.length) res.emit('data', Buffer.from(answer.body));
+          res.emit('end');
+        });
       });
-    };
-    return { request, get: (...args) => request(...args).end(), Agent: class Agent {}, globalAgent: {} };
-  };
-  class Headers_ {
-    #held = new Map();
-    constructor(init) {
-      const pairs = !init ? [] : typeof init[Symbol.iterator] === 'function' ? [...init] : Object.entries(init);
-      for (const [name, value] of pairs) this.append(name, value);
-    }
-    append(name, value) {
-      const key = String(name).toLowerCase();
-      this.#held.set(key, this.#held.has(key) ? `${this.#held.get(key)}, ${value}` : String(value));
-    }
-    set(name, value) {
-      this.#held.set(String(name).toLowerCase(), String(value));
-    }
-    get(name) {
-      const found = this.#held.get(String(name).toLowerCase());
-      return found === undefined ? null : found;
-    }
-    has(name) {
-      return this.#held.has(String(name).toLowerCase());
-    }
-    delete(name) {
-      this.#held.delete(String(name).toLowerCase());
-    }
-    forEach(each, self) {
-      for (const [name, value] of this.#held) each.call(self, value, name, this);
-    }
-    keys() {
-      return this.#held.keys();
-    }
-    values() {
-      return this.#held.values();
-    }
-    entries() {
-      return this.#held.entries();
-    }
-    [Symbol.iterator]() {
-      return this.#held.entries();
-    }
-  }
-  Object.defineProperty(Headers_, 'name', { value: 'Headers' });
-  const fetch_ = async (target, options = {}) => {
-    const url = new URL_(target && target.url ? target.url : target).href;
-    const headers = new Headers_(options.headers);
-    const form = options.body instanceof URLSearchParams_;
-    if (!headers.has('content-type') && (form || typeof options.body === 'string')) {
-      headers.set('content-type', form ? 'application/x-www-form-urlencoded;charset=UTF-8' : 'text/plain;charset=UTF-8');
-    }
-    if (options.signal && options.signal.aborted) throw options.signal.reason;
-    let answer;
-    try {
-      answer = exchange(String(options.method || 'GET').toUpperCase(), url, Object.fromEntries(headers), form ? String(options.body) : options.body, options.redirect !== 'manual', 300000);
-    } catch (cause) {
-      throw Object.assign(new TypeError('fetch failed'), { cause });
-    }
-    const body = answer.body;
-    return {
-      ok: answer.status >= 200 && answer.status < 300,
-      status: answer.status,
-      statusText: answer.reason,
-      url,
-      redirected: false,
-      headers: new Headers_(answer.headers),
-      text: async () => body.toString(),
-      json: async () => JSON.parse(body.toString()),
-      arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-    };
+      return req;
+    },
   };
 
   // ---- CommonJS ----
@@ -1105,57 +472,23 @@
     fs,
     'fs/promises': fs.promises,
     path,
-    process,
-    buffer: { Buffer },
-    os: { EOL: '\n', tmpdir: () => host.cwd, platform: () => 'linux', homedir: () => host.cwd, cpus: () => [{}] },
-    url: { URL: URL_, URLSearchParams: URLSearchParams_, fileURLToPath, pathToFileURL: (file) => new URL_(`file://${path.resolve(file).replace(/[%?#]/g, encodeURIComponent)}`) },
-    querystring: {
-      escape: encodeURIComponent,
-      unescape,
-      stringify: (record) =>
-        Object.keys(record || {})
-          .flatMap((name) => [].concat(record[name]).map((value) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`))
-          .join('&'),
-      parse: (text) => {
-        const record = {};
-        for (const [name, value] of new URLSearchParams_(String(text))) record[name] = name in record ? [].concat(record[name], value) : value;
-        return record;
+    vm,
+    http: web,
+    https: web,
+    crypto: {
+      createHash(name) {
+        if (String(name).toLowerCase() !== 'sha256') throw new Error(`Digest method not supported: ${name}`);
+        const parts = [];
+        const hash = {
+          update: (data) => (parts.push(typeof data === 'string' ? Buffer.from(data) : data), hash),
+          digest: (encoding) => {
+            const bytes = Buffer.from(host.sha256(Buffer.concat(parts)));
+            return encoding ? bytes.toString(encoding) : bytes;
+          },
+        };
+        return hash;
       },
     },
-    util: {
-      inspect: show,
-      format,
-      promisify: (fn) => (...args) => new Promise((resolve, reject) => fn(...args, (error, value) => (error ? reject(error) : resolve(value)))),
-      inherits: (child, parent) => Object.setPrototypeOf(child.prototype, parent.prototype),
-      isDeepStrictEqual: (a, b) => alike(a, b, true),
-      types: { isDate: (value) => value instanceof Date, isRegExp: (value) => value instanceof RegExp, isPromise: (value) => value instanceof Promise },
-      TextEncoder: TextEncoder_,
-      TextDecoder: TextDecoder_,
-    },
-    assert: asserts(false),
-    'assert/strict': asserts(true),
-    events: EventEmitter,
-    vm,
-    http: client('http'),
-    https: client('https'),
-    timers: { setTimeout: schedule(false), setInterval: schedule(true), setImmediate: immediately, clearTimeout: cancel, clearInterval: cancel, clearImmediate: cancel },
-  };
-  const hashing = { sha256: host.sha256, sha512: host.sha512 };
-  builtins.crypto = {
-    createHash(name) {
-      const digest = hashing[String(name).toLowerCase()];
-      if (!digest) throw new Error(`Digest method not supported: ${name}`);
-      const parts = [];
-      const hash = {
-        update: (data) => (parts.push(typeof data === 'string' ? Buffer.from(data) : data), hash),
-        digest: (encoding) => {
-          const bytes = Buffer.from(digest(Buffer.concat(parts)));
-          return encoding ? bytes.toString(encoding) : bytes;
-        },
-      };
-      return hash;
-    },
-    randomUUID: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => ((c === 'x' ? Math.random() * 16 : 8 + Math.random() * 4) | 0).toString(16)),
   };
   const packages = {};
   const loaded = new Map();
@@ -1209,32 +542,7 @@
     return require;
   };
 
-  Object.assign(globalThis, {
-    global: globalThis,
-    console,
-    process,
-    Buffer,
-    setTimeout: schedule(false),
-    setInterval: schedule(true),
-    setImmediate: immediately,
-    clearTimeout: cancel,
-    clearInterval: cancel,
-    clearImmediate: cancel,
-  });
-  if (typeof globalThis.URL === 'undefined') Object.assign(globalThis, { URL: URL_, URLSearchParams: URLSearchParams_ });
-  if (typeof globalThis.queueMicrotask === 'undefined') globalThis.queueMicrotask = (fn) => void Promise.resolve().then(fn);
-  const offered = {
-    structuredClone: (value) => clone(value),
-    TextEncoder: TextEncoder_,
-    TextDecoder: TextDecoder_,
-    AbortController: AbortController_,
-    atob: (text) => single(host.base64Decode(String(text)), 255),
-    btoa: (text) => host.base64Encode(Buffer.from(String(text), 'latin1')),
-    performance: { now: () => host.now() - started, timeOrigin: started },
-    fetch: fetch_,
-    Headers: Headers_,
-  };
-  for (const name of Object.keys(offered)) if (typeof globalThis[name] === 'undefined') globalThis[name] = offered[name];
+  Object.assign(globalThis, { global: globalThis, console, process, Buffer, URL: URL_, setTimeout: schedule, clearTimeout: cancel });
 
   host.builtin = builtin;
   host.main = (file) => run(file);
@@ -1245,7 +553,6 @@
     const call = (name, ...args) => JSON.parse(host.call(name, JSON.stringify(args)));
     return (0, eval)(entry)(loaded, call);
   };
-  host.exitCode = (error) => (error instanceof Exit ? error.exitCode : undefined);
   // an error as Node prints it: name and message, the stack, and what caused it
   host.describe = (error) => {
     if (!(error instanceof Error)) return `Uncaught ${show(error)}`;

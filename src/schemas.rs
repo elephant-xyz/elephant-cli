@@ -43,28 +43,19 @@ pub fn gateways() -> Vec<String> {
 }
 
 impl Schemas {
-    /// `dir` defaults to `~/.elephant-cli/schema-cache`, the cache elephant-cli 1.x fills
-    /// (`/tmp/elephant-cli/schema-cache` on Lambda and Airflow, as in 1.x).
+    /// `dir` defaults to `~/.elephant-cli/schema-cache`, the cache elephant-cli 1.x fills.
     pub fn new(dir: Option<PathBuf>, offline: bool) -> Schemas {
-        let hosted = ["AWS_LAMBDA_FUNCTION_NAME", "AIRFLOW_HOME", "AIRFLOW__CORE__DAGS_FOLDER", "AIRFLOW__CORE__EXECUTOR"]
-            .iter()
-            .any(|name| std::env::var_os(name).is_some());
-        let home = || match hosted {
-            true => PathBuf::from("/tmp/elephant-cli"),
-            // USERPROFILE is the home directory on Windows, where HOME is usually unset
-            false => PathBuf::from(std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default())
-                .join(".elephant-cli"),
-        };
+        let home = || PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".elephant-cli");
         let dir = dir.unwrap_or_else(|| home().join("schema-cache"));
         Schemas { dir, offline, known: HashMap::new(), manifest: None }
     }
 
-    /// The bytes of a block, from the first gateway that serves bytes hashing to its CID.
     /// Whether `--offline` was given: nothing may use the network.
     pub fn offline(&self) -> bool {
         self.offline
     }
 
+    /// The bytes of a block, from the first gateway that serves bytes hashing to its CID.
     pub fn fetch(&self, cid: &str) -> Result<Vec<u8>, String> {
         let parsed = Cid::try_from(cid).map_err(|error| format!("{cid} is not a CID: {error}"))?;
         if self.offline {

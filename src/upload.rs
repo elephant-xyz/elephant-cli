@@ -24,21 +24,6 @@ pub struct Target {
     timeout: Duration,
 }
 
-fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for chunk in bytes.chunks(3) {
-        let word = chunk.iter().fold(0u32, |word, byte| word << 8 | u32::from(*byte)) << (8 * (3 - chunk.len()));
-        for at in 0..4 {
-            match at <= chunk.len() {
-                true => out.push(ALPHABET[(word >> (18 - 6 * at) & 63) as usize] as char),
-                false => out.push('='),
-            }
-        }
-    }
-    out
-}
-
 impl Target {
     /// Options win over `IPFS_API`, `IPFS_API_TOKEN` and `ELEPHANT_CAR_GATEWAY`;
     /// with all three `FILEBASE_*` variables set they make the token.
@@ -57,7 +42,7 @@ impl Target {
         };
         let filebase = || {
             let parts = [set("FILEBASE_ACCESS_KEY")?, set("FILEBASE_SECRET_KEY")?, set("FILEBASE_BUCKET")?];
-            Some(base64(parts.join(":").as_bytes()))
+            Some(cid::multibase::Base::Base64Pad.encode(parts.join(":")))
         };
         let hosted = rest.split('/').next() == Some("rpc.filebase.io");
         let gateway = given(gateway).or_else(|| set("ELEPHANT_CAR_GATEWAY")).unwrap_or_else(|| match hosted {

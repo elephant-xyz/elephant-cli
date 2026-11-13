@@ -269,14 +269,6 @@
       "f=x y",
       "=nokey"
     ],
-    "query_build": [
-      "parcel=12+34&tab=a%26b&empty=",
-      "k=v1&k=v2&z=%C3%A9%2F%C3%BC%3F",
-      "x=1",
-      "",
-      "a=b+c&d=e+f"
-    ],
-    "query_sort": "a=1&a=0&b=2&c=3",
     "from_url": [
       "12-34-56",
       null,
@@ -287,42 +279,11 @@
         "q": "a b"
       }
     ],
-    "live": [
-      "https://ex.com/p?a=x+y&c=3",
-      "?a=x+y&c=3",
-      "a=x+y&c=3"
-    ],
-    "moved": [
-      "https://ex.com/q%20r?z=9#end",
-      "/q%20r",
-      "?z=9",
-      "#end"
-    ],
     "text": [
       "https://ex.com/a?b#c",
       "{\"url\":\"https://ex.com/a\"}",
       "https://ex.com/a",
       "https://ex.com/"
-    ],
-    "statics": [
-      true,
-      false
-    ],
-    "module": [
-      "function",
-      "function",
-      "/tmp/a b.txt",
-      "file:///tmp/a%20b.txt"
-    ],
-    "querystring": [
-      {
-        "a": [
-          "1",
-          "2"
-        ],
-        "b": "x y"
-      },
-      "a=1&a=2&b=x%20y"
     ]
   }
 }

@@ -1,6 +1,8 @@
-//! Property inputs: one property's files, from a directory or a ZIP, and the
-//! children of a batch directory.
+//! Property inputs: one property's files, from a directory or a ZIP, the
+//! children of a batch directory, and the scratch directory a ZIP is unpacked into.
 
+use crate::Fail;
+use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -104,17 +106,7 @@ impl Property {
     pub fn names(&self) -> Vec<String> {
         match &self.files {
             Files::Zip(entries) => entries.keys().filter(|name| !name.contains('/')).cloned().collect(),
-            Files::Dir(dir) => {
-                let mut names: Vec<String> = std::fs::read_dir(dir)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
-                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                    .collect();
-                names.sort();
-                names
-            }
+            Files::Dir(dir) => names(dir),
         }
     }
 
@@ -134,4 +126,68 @@ impl Property {
     pub fn path(&self, name: &str) -> String {
         self.base.join(name).to_string_lossy().into_owned()
     }
+}
+
+/// A scratch directory, removed when dropped.
+pub struct Work(pub PathBuf);
+
+impl Work {
+    /// `purpose` is part of the directory's name, so one left behind says what made it.
+    pub fn new(purpose: &str) -> Result<Work, Fail> {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let dir = std::env::temp_dir().join(format!("elephant-{purpose}-{}-{stamp:x}", std::process::id()));
+        std::fs::create_dir_all(&dir)?;
+        Ok(Work(dir.canonicalize()?))
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Unpack a ZIP into a directory. An entry that would land outside the directory
+/// is left out, and a link is written as a file: what runs on the result is
+/// confined to that directory.
+pub fn unzip(file: &Path, into: &Path) -> Result<(), Fail> {
+    let opened = std::fs::File::open(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
+    let mut archive = zip::ZipArchive::new(opened).map_err(|error| format!("{} is not a ZIP file: {error}", file.display()))?;
+    for at in 0..archive.len() {
+        let mut entry = archive.by_index(at)?;
+        let Some(name) = entry.enclosed_name() else {
+            continue;
+        };
+        let target = into.join(name);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target)?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes)?;
+        std::fs::write(target, bytes)?;
+    }
+    Ok(())
+}
+
+/// The names of the regular files directly in a directory, in byte order.
+pub fn names(dir: &Path) -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Read a JSON file.
+pub fn load(file: &Path) -> Result<Value, Fail> {
+    let bytes = std::fs::read(file).map_err(|error| format!("cannot read {}: {error}", file.display()))?;
+    Ok(serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", file.display()))?)
 }

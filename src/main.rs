@@ -72,7 +72,7 @@ enum Command {
 
 #[derive(Args)]
 #[command(
-    after_help = "The first mechanism that applies answers the seed's request:\n  --browser-flow-zip            a Browser Flow v2 package saves named captures\n  --multi-request-flow-file     several HTTP requests into one JSON file\n  (county Orange)               the Orange County, FL appraiser API\n  --browser-flow-file           a browser flow written as JSON\n  --browser-flow-template       a built-in flow, with --browser-flow-parameters\n  --use-browser                 a plain page load in the browser (GET only)\n  otherwise                     one HTTP request\n\nBrowser mechanisms need the obscura headless browser (https://github.com/h4ckf0r0day/obscura):\n`obscura` on PATH, --browser/OBSCURA_BIN, or --cdp-url/ELEPHANT_CDP_URL for a running browser.\n\nExamples:\n  elephant-cli prepare seed.zip --output-zip prepared.zip\n  elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip\n  elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip"
+    after_help = "The first mechanism that applies answers the seed's request:\n  --browser-flow-zip            a Browser Flow v2 package saves named captures\n  --multi-request-flow-file     several HTTP requests into one JSON file\n  (county Orange)               the Orange County, FL appraiser API\n  --browser-flow-file           a browser flow written as JSON\n  --use-browser                 a plain page load in the browser (GET only)\n  otherwise                     one HTTP request\n\nBrowser mechanisms need the obscura headless browser (https://github.com/h4ckf0r0day/obscura):\n`obscura` on PATH, --browser/OBSCURA_BIN, or --cdp-url/ELEPHANT_CDP_URL for a running browser.\n\nExamples:\n  elephant-cli prepare seed.zip --output-zip prepared.zip\n  elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip\n  elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip"
 )]
 struct Prepare {
     /// The seed ZIP: parcel.json or property_seed.json, and address.json or unnormalized_address.json
@@ -89,12 +89,6 @@ struct Prepare {
     /// A browser flow written as JSON
     #[arg(long, value_name = "PATH")]
     browser_flow_file: Option<PathBuf>,
-    /// A built-in browser flow; the only one is SEARCH_BY_PARCEL_ID
-    #[arg(long, value_name = "NAME", requires = "browser_flow_parameters")]
-    browser_flow_template: Option<String>,
-    /// The template's parameters, as JSON
-    #[arg(long, value_name = "JSON", requires = "browser_flow_template")]
-    browser_flow_parameters: Option<String>,
     /// A Browser Flow v2 package (handler.js)
     #[arg(long, value_name = "PATH")]
     browser_flow_zip: Option<PathBuf>,
@@ -129,7 +123,7 @@ struct Prepare {
 
 #[derive(Args)]
 #[command(
-    after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine with the Node modules county scripts\nuse (fs, path, url, util, vm, http, https, crypto hashes, ...), fetch and cheerio. They can read\nand write only their working directory, and reach the network only over HTTP(S), not at all\nwith --offline.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip"
+    after_help = "Modes:\n  --input-zip only                 seed.csv -> seed records\n  --scripts-zip <zip>              the five county scripts (ownerMapping.js ... data_extractor.js)\n  --transform-zip <zip>            a Transform v2 handler package (handler.js)\n\nScripts and handlers run on an embedded JavaScript engine with the Node modules county scripts\nuse (fs, path, vm, crypto's sha256, http.get and https.get) and cheerio. They can read and\nwrite only their working directory, and reach the network only with those two calls, not at\nall with --offline.\n\nExamples:\n  elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip\n  elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip"
 )]
 struct Transform {
     /// What `prepare` wrote for one parcel (or a ZIP holding seed.csv)
@@ -222,9 +216,6 @@ struct Hash {
     /// County CAR to write: every JSON block, shard blocks and the county index as root
     #[arg(long, value_name = "PATH")]
     output_car: Option<PathBuf>,
-    /// Threads to hash with [default: number of cores]
-    #[arg(long, value_name = "N")]
-    threads: Option<usize>,
 }
 
 #[derive(Args)]
@@ -237,9 +228,6 @@ struct Validate {
     /// CSV file for the findings, one row each; `-` writes them to stdout
     #[arg(short, long, value_name = "PATH", default_value = "submit_errors.csv")]
     output_csv: PathBuf,
-    /// Threads to check with [default: number of cores]
-    #[arg(long, value_name = "N")]
-    threads: Option<usize>,
 }
 
 /// What a command produced: the JSON document, the text report, and whether the input passed.
@@ -249,8 +237,21 @@ struct Done {
     passed: bool,
 }
 
-fn threads(asked: Option<usize>) -> usize {
-    asked.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from)).max(1)
+/// Run `work` on every item, on `threads` threads; the results keep the order of the items.
+pub fn spread<T: Sync, R: Send>(items: &[T], threads: usize, work: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let work = &work;
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = items
+            .chunks(items.len().div_ceil(threads).max(1))
+            .map(|chunk| scope.spawn(move || chunk.iter().map(work).collect::<Vec<_>>()))
+            .collect();
+        workers.into_iter().flat_map(|worker| worker.join().expect("worker thread")).collect()
+    })
+}
+
+/// One thread per core.
+fn threads() -> usize {
+    std::thread::available_parallelism().map_or(1, usize::from)
 }
 
 /// The names of properties that failed, shortened for a terminal.
@@ -301,7 +302,7 @@ fn validate(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
         });
     }
     let names = property::stems(&children, &args.input)?;
-    let results = validate::batch(&children, &shared, threads(args.threads));
+    let results = validate::batch(&children, &shared, threads());
     let mut report = report::Report::create(&args.output_csv)?;
     let mut failed = Vec::new();
     let mut groups = 0;
@@ -354,7 +355,7 @@ fn county(args: &Validate, cli: &Cli) -> Result<Done, Fail> {
     }
     let mut schemas = schemas::Schemas::new(cli.schema_cache.clone(), cli.offline);
     let mut report = report::Report::create(&args.output_csv)?;
-    let summary = county::validate(&args.input, &mut schemas, &mut report, threads(args.threads))?;
+    let summary = county::validate(&args.input, &mut schemas, &mut report, threads())?;
     report.finish()?;
     let failed: u64 = summary.errors.iter().sum();
     let errors: serde_json::Map<String, Value> =
@@ -400,8 +401,7 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
     let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
-    let outcome =
-        hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads(args.threads))?;
+    let outcome = hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads())?;
     for error in &outcome.errors {
         eprintln!("error: {error}");
     }
@@ -594,14 +594,12 @@ fn prepare(args: &Prepare) -> Result<Done, Fail> {
     if let Some(proxy) = args.proxy.as_deref().filter(|proxy| !proxy.contains('@') && !proxy.contains("://")) {
         return Err(format!("Invalid proxy format: {proxy}. Expected http://user:password@host:port").into());
     }
-    let template = args.browser_flow_template.as_deref().zip(args.browser_flow_parameters.as_deref());
     let options = prepare::Options {
         input: args.input_zip.as_deref(),
         csv: args.input_csv.as_deref(),
         output: &args.output_zip,
         multi: args.multi_request_flow_file.as_deref(),
         flow: args.browser_flow_file.as_deref(),
-        template,
         package: args.browser_flow_zip.as_deref(),
         browse: args.use_browser,
         proceed: !args.no_continue,

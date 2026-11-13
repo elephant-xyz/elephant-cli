@@ -35,20 +35,16 @@ pub struct Sandbox {
 /// One HTTP exchange for a script: status, reason, headers and body.
 type Exchange = (u16, String, Vec<(String, String)>, Vec<u8>);
 
-/// Send the request a script described as `{ method, url, headers, follow }`.
+/// GET `target` with the headers a script gave, following no redirect, as Node's `http.get`.
 /// Failures start with the code Node gives the same failure.
-fn exchange(asked: &serde_json::Value, body: &[u8], wait: Duration) -> Result<Exchange, String> {
-    let target = asked["url"].as_str().unwrap_or_default();
-    let config = ureq::Agent::config_builder()
-        .http_status_as_error(false)
-        .max_redirects(if asked["follow"].as_bool().unwrap_or(false) { 20 } else { 0 })
-        .timeout_global(Some(wait));
+fn exchange(target: &str, headers: &serde_json::Value, wait: Duration) -> Result<Exchange, String> {
+    let config = ureq::Agent::config_builder().http_status_as_error(false).max_redirects(0).timeout_global(Some(wait));
     let agent: ureq::Agent = config.build().into();
-    let mut request = ureq::http::Request::builder().method(asked["method"].as_str().unwrap_or("GET")).uri(target);
-    for (name, value) in asked["headers"].as_object().into_iter().flatten() {
+    let mut request = ureq::http::Request::builder().method("GET").uri(target);
+    for (name, value) in headers.as_object().into_iter().flatten() {
         request = request.header(name.as_str(), value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string()));
     }
-    let request = request.body(body.to_vec()).map_err(|error| format!("EINVAL: {error} for {target}"))?;
+    let request = request.body(()).map_err(|error| format!("EINVAL: {error} for {target}"))?;
     let mut response = agent.run(request).map_err(|error| {
         let code = match &error {
             ureq::Error::HostNotFound => "ENOTFOUND",
@@ -76,16 +72,6 @@ fn exchange(asked: &serde_json::Value, body: &[u8], wait: Duration) -> Result<Ex
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn fills_dot_templates_as_dot_does() {
-        let it = serde_json::json!({ "request_identifier": "12-34" });
-        let filled = super::fill(
-            &["id={{=it.request_identifier}}".to_string(), "{{=it.request_identifier.replace(/-/g, '')}}".to_string()],
-            &it,
-        );
-        assert_eq!(filled.unwrap(), ["id=12-34", "1234"]);
-    }
-
     #[test]
     fn cleans_html_of_scripts_and_styles() {
         let html = "<!DOCTYPE html><html><head><style>b{}</style><link rel=\"stylesheet\" href=\"a.css\"></head><body><p style=\"color:red\">Hi</p><script>1</script></body></html>";
@@ -141,44 +127,6 @@ fn refuse(ctx: &Ctx<'_>, error: &std::io::Error, call: &str, path: &str) -> rqui
 /// Resolve a path the script named, or throw as Node does for a path it may not touch.
 fn reach(ctx: &Ctx<'_>, root: &Path, call: &str, path: &str) -> rquickjs::Result<PathBuf> {
     inside(root, path).ok_or_else(|| Exception::throw_message(ctx, &format!("EACCES: permission denied, {call} '{path}'")))
-}
-
-fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for chunk in bytes.chunks(3) {
-        let word = chunk.iter().fold(0u32, |word, byte| word << 8 | u32::from(*byte)) << (8 * (3 - chunk.len()));
-        for at in 0..4 {
-            match at <= chunk.len() {
-                true => out.push(ALPHABET[(word >> (18 - 6 * at) & 63) as usize] as char),
-                false => out.push('='),
-            }
-        }
-    }
-    out
-}
-
-fn unbase64(text: &str) -> Vec<u8> {
-    let mut out = Vec::new();
-    let mut word = 0u32;
-    let mut bits = 0;
-    for byte in text.bytes() {
-        let value = match byte {
-            b'A'..=b'Z' => byte - b'A',
-            b'a'..=b'z' => byte - b'a' + 26,
-            b'0'..=b'9' => byte - b'0' + 52,
-            b'+' | b'-' => 62,
-            b'/' | b'_' => 63,
-            _ => continue,
-        };
-        word = word << 6 | u32::from(value);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((word >> bits) as u8);
-        }
-    }
-    out
 }
 
 /// The bytes of a typed array a script passed in.
@@ -265,9 +213,6 @@ impl Loader for Files {
     }
 }
 
-/// doT 1.1.3 (MIT), the template engine flow files are written for.
-const DOT: &str = include_str!("../../assets/doT.js");
-
 /// Call a JavaScript function, given as source text, with one JSON argument; returns its JSON result.
 /// The function sees no host: no files, no network, only the language and `prelude`.
 fn compute(prelude: &str, function: &str, input: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -287,17 +232,6 @@ fn compute(prelude: &str, function: &str, input: &serde_json::Value) -> Result<s
         let answer: String = call.call((input.to_string(),)).map_err(explain)?;
         serde_json::from_str(&answer).map_err(|error| error.to_string())
     })
-}
-
-/// Fill doT templates (`{{=it.request_identifier}}`) with the values of `it`.
-pub fn fill(templates: &[String], it: &serde_json::Value) -> Result<Vec<String>, String> {
-    let prelude = format!("const module = {{ exports: {{}} }}; (function (module) {{ {DOT}\n }}).call(module.exports, module); const doT = module.exports;");
-    let filled = compute(
-        &prelude,
-        "(input) => input.templates.map((text) => doT.template(text)(input.it))",
-        &serde_json::json!({ "templates": templates, "it": it }),
-    )?;
-    serde_json::from_value(filled).map_err(|error| error.to_string())
 }
 
 /// Clean captured HTML as 1.x did before formatting it: scripts, styles and
@@ -510,12 +444,6 @@ fn build<'js>(
         })?,
     )?;
     host.set(
-        "sha512",
-        Function::new(ctx.clone(), |ctx: Ctx<'js>, bytes: TypedArray<'js, u8>| {
-            TypedArray::<u8>::new(ctx, <sha2::Sha512 as sha2::Digest>::digest(bytes_of(&bytes)).to_vec())
-        })?,
-    )?;
-    host.set(
         "compile",
         Function::new(ctx.clone(), |ctx: Ctx<'js>, body: String, file: String| -> rquickjs::Result<Function<'js>> {
             let mut options = EvalOptions::default();
@@ -532,44 +460,64 @@ fn build<'js>(
         "utf8Decode",
         Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| String::from_utf8_lossy(bytes_of(&bytes)).into_owned())?,
     )?;
-    host.set("base64Encode", Function::new(ctx.clone(), |bytes: TypedArray<'js, u8>| base64(bytes_of(&bytes)))?)?;
-    // HTTP for `http`, `https` and `fetch`: one blocking exchange, within the script's deadline.
+    // What `new URL(text, base)` reads, or nothing for text that is not a URL.
+    host.set(
+        "url",
+        Function::new(ctx.clone(), |text: String, base: Option<String>| -> Option<String> {
+            let base = match base {
+                Some(base) => Some(url::Url::parse(&base).ok()?),
+                None => None,
+            };
+            let url = url::Url::options().base_url(base.as_ref()).parse(&text).ok()?;
+            let query: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+            let text = url::form_urlencoded::Serializer::new(String::new()).extend_pairs(&query).finish();
+            let parts = serde_json::json!({
+                "href": url::quirks::href(&url),
+                "origin": url::quirks::origin(&url),
+                "protocol": url::quirks::protocol(&url),
+                "username": url::quirks::username(&url),
+                "password": url::quirks::password(&url),
+                "host": url::quirks::host(&url),
+                "hostname": url::quirks::hostname(&url),
+                "port": url::quirks::port(&url),
+                "pathname": url::quirks::pathname(&url),
+                "search": url::quirks::search(&url),
+                "hash": url::quirks::hash(&url),
+                "query": query,
+                "queryText": text,
+            });
+            Some(parts.to_string())
+        })?,
+    )?;
+    // `http.get` and `https.get`: one blocking exchange, within the script's deadline.
     let (online, stop) = (sandbox.network, limit.clone());
     host.set(
         "request",
-        Function::new(
-            ctx.clone(),
-            move |ctx: Ctx<'js>, asked: String, body: Option<TypedArray<'js, u8>>| -> rquickjs::Result<Object<'js>> {
-                let asked: serde_json::Value = serde_json::from_str(&asked).unwrap_or_default();
-                let left = stop.get().saturating_duration_since(Instant::now());
-                let wait =
-                    Duration::from_millis(asked["timeout"].as_f64().unwrap_or(30_000.0).clamp(1.0, 600_000.0) as u64).min(left);
-                let answered = match online {
-                    true => exchange(&asked, body.as_ref().map(bytes_of).unwrap_or_default(), wait.max(Duration::from_millis(1))),
-                    false => Err("EOFFLINE: the network is off for scripts while --offline is set".to_string()),
-                };
-                let (status, reason, headers, body) = answered.map_err(|reason| Exception::throw_message(&ctx, &reason))?;
-                let headers: serde_json::Map<String, serde_json::Value> =
-                    headers.into_iter().fold(Default::default(), |mut all, (name, value)| {
-                        // a header sent more than once reads as one, joined with a comma, as in Node
-                        match all.get_mut(&name) {
-                            Some(serde_json::Value::String(known)) => *known = format!("{known}, {value}"),
-                            _ => drop(all.insert(name, value.into())),
-                        }
-                        all
-                    });
-                let answer = Object::new(ctx.clone())?;
-                answer.set("status", status)?;
-                answer.set("reason", reason)?;
-                answer.set("headers", serde_json::Value::Object(headers).to_string())?;
-                answer.set("body", TypedArray::<u8>::new(ctx, body)?)?;
-                Ok(answer)
-            },
-        )?,
-    )?;
-    host.set(
-        "base64Decode",
-        Function::new(ctx.clone(), |ctx: Ctx<'js>, text: String| TypedArray::<u8>::new(ctx, unbase64(&text)))?,
+        Function::new(ctx.clone(), move |ctx: Ctx<'js>, target: String, headers: String| -> rquickjs::Result<Object<'js>> {
+            let headers: serde_json::Value = serde_json::from_str(&headers).unwrap_or_default();
+            let left = stop.get().saturating_duration_since(Instant::now());
+            let wait = Duration::from_secs(30).min(left).max(Duration::from_millis(1));
+            let answered = match online {
+                true => exchange(&target, &headers, wait),
+                false => Err("EOFFLINE: the network is off for scripts while --offline is set".to_string()),
+            };
+            let (status, reason, headers, body) = answered.map_err(|reason| Exception::throw_message(&ctx, &reason))?;
+            let headers: serde_json::Map<String, serde_json::Value> =
+                headers.into_iter().fold(Default::default(), |mut all, (name, value)| {
+                    // a header sent more than once reads as one, joined with a comma, as in Node
+                    match all.get_mut(&name) {
+                        Some(serde_json::Value::String(known)) => *known = format!("{known}, {value}"),
+                        _ => drop(all.insert(name, value.into())),
+                    }
+                    all
+                });
+            let answer = Object::new(ctx.clone())?;
+            answer.set("status", status)?;
+            answer.set("reason", reason)?;
+            answer.set("headers", serde_json::Value::Object(headers).to_string())?;
+            answer.set("body", TypedArray::<u8>::new(ctx, body)?)?;
+            Ok(answer)
+        })?,
     )?;
 
     // The file system, confined to the sandbox root.
@@ -610,17 +558,9 @@ fn build<'js>(
     let root = sandbox.root.clone();
     host.set(
         "writeText",
-        Function::new(ctx.clone(), move |ctx: Ctx<'js>, path: String, text: String, append: bool| -> rquickjs::Result<()> {
+        Function::new(ctx.clone(), move |ctx: Ctx<'js>, path: String, text: String| -> rquickjs::Result<()> {
             let file = reach(&ctx, &root, "open", &path)?;
-            let written = match append {
-                true => std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&file)
-                    .and_then(|mut file| std::io::Write::write_all(&mut file, text.as_bytes())),
-                false => std::fs::write(&file, text),
-            };
-            written.map_err(|error| refuse(&ctx, &error, "open", &path))
+            std::fs::write(file, text).map_err(|error| refuse(&ctx, &error, "open", &path))
         })?,
     )?;
     let root = sandbox.root.clone();
@@ -668,14 +608,6 @@ fn build<'js>(
                 }
                 _ => Ok(()),
             }
-        })?,
-    )?;
-    let root = sandbox.root.clone();
-    host.set(
-        "rename",
-        Function::new(ctx.clone(), move |ctx: Ctx<'js>, from: String, to: String| -> rquickjs::Result<()> {
-            let (source, target) = (reach(&ctx, &root, "rename", &from)?, reach(&ctx, &root, "rename", &to)?);
-            std::fs::rename(source, target).map_err(|error| refuse(&ctx, &error, "rename", &from))
         })?,
     )?;
     let offered = bridge.clone();

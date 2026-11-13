@@ -2,6 +2,7 @@
 //! and ipfs-unixfs-importer compute it: 262144-byte raw leaves under a
 //! balanced dag-pb tree of up to 174 links per node. Blocks are hashed, not kept.
 
+use crate::car::leb;
 use crate::cids;
 use crate::Fail;
 use cid::Cid;
@@ -18,39 +19,31 @@ struct Node {
     covers: u64,
 }
 
-fn varint(mut value: u64, into: &mut Vec<u8>) {
-    while value >= 0x80 {
-        into.push((value as u8 & 0x7f) | 0x80);
-        value >>= 7;
-    }
-    into.push(value as u8);
-}
-
 /// The dag-pb file node linking `children` in order.
 fn parent(children: &[Node]) -> Node {
     let covers = children.iter().map(|child| child.covers).sum();
     // UnixFS: type File, the file size, then the size each child covers
     let mut data = vec![0x08, 0x02, 0x18];
-    varint(covers, &mut data);
+    leb(covers, &mut data);
     for child in children {
         data.push(0x20);
-        varint(child.covers, &mut data);
+        leb(child.covers, &mut data);
     }
     let mut block = Vec::new();
     for child in children {
         let hash = child.cid.to_bytes();
         // a link: the hash, an empty name, the size of the DAG below it
         let mut link = vec![0x0a];
-        varint(hash.len() as u64, &mut link);
+        leb(hash.len() as u64, &mut link);
         link.extend(hash);
         link.extend([0x12, 0x00, 0x18]);
-        varint(child.total, &mut link);
+        leb(child.total, &mut link);
         block.push(0x12);
-        varint(link.len() as u64, &mut block);
+        leb(link.len() as u64, &mut block);
         block.extend(link);
     }
     block.push(0x0a);
-    varint(data.len() as u64, &mut block);
+    leb(data.len() as u64, &mut block);
     block.extend(data);
     let below: u64 = children.iter().map(|child| child.total).sum();
     Node { cid: cids::of(DAG_PB, &block), total: block.len() as u64 + below, covers }

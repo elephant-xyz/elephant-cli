@@ -19,7 +19,7 @@
 - `src/main.rs`: the clap definitions, the exit codes and what each command prints. Every command module returns a `Done { json, text, passed }`.
 - One module per command: `prepare.rs` (with `flow.rs`, `browser.rs`), `transform.rs`, `validate.rs` (with `county.rs` for CARs), `hash.rs`, `tables.rs`, `upload.rs`.
 - Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
-- `assets/`: JavaScript embedded in the binary (`cheerio.js`, `doT.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
+- `assets/`: JavaScript embedded in the binary (`cheerio.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
 - `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `main`, as pre-release `build-<commit>`), `release.yml` (a tag: GitHub release), `binaries.yml` (the build matrix both use).
 
 ## Contracts that must not break
@@ -41,7 +41,7 @@
 - Tests sit at the public seam: they run the built binary on real files (`tests/*.rs`, helpers in `tests/support`) and assert on exit code, stdout, stderr and the files written.
 - Expected outputs under `tests/fixtures/*/expected` came from elephant-cli 1.58.1 on the same inputs. Do not regenerate them from this crate's own output.
 - Write the failing test first. After it passes, break the code on purpose once to see the test fail for the right reason.
-- `tests/transform_engine.rs` holds the embedded JavaScript engine to Node's answers: each case in `tests/fixtures/transform/engine` is a script, and `golden.sh` there writes what Node reports for it. Add a case there when a county script needs something the engine lacks.
+- `tests/transform_engine.rs` holds the embedded JavaScript engine to Node's answers: each case in `tests/fixtures/transform/engine` is a script, and `golden.sh` there writes what Node reports for it. The shim (`src/js/node.js`) holds only what the published county scripts use: when a script needs something the engine lacks, add it with a case there, and do not add what no script uses.
 - `scripts/parity` compares this crate with elephant-cli 1.x on generated input and fuzzes `validate` and `hash`. Run the relevant script after changing the validator, hashing, the table export or the JavaScript engine.
 - Tests never use the network: `tests/fixtures/lexicon` is the schema cache, and `tests/support/http.rs` is a local HTTP server.
 

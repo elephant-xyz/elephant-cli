@@ -45,7 +45,6 @@ Choose one. Node is not needed.
 | Linux arm64 | `aarch64-unknown-linux-gnu` |
 | macOS Apple silicon | `aarch64-apple-darwin` |
 | macOS Intel | `x86_64-apple-darwin` |
-| Windows x86_64 | `x86_64-pc-windows-msvc` |
 
 ```bash
 target=aarch64-apple-darwin
@@ -140,7 +139,7 @@ seed.zip ──prepare──▶ prepared.zip ──transform──▶ transforme
 | 1 | `--browser-flow-zip` | Runs a Browser Flow v2 package: its `handler.js` drives the page and saves named captures. | `captures/<name>.html`, `captures.json` |
 | 2 | `--multi-request-flow-file` | Sends every request of the flow and gathers the answers under their keys. | `<request_identifier>.json` |
 | 3 | The seed's `county_name` or `county_jurisdiction` is `Orange` | Walks the Orange County, FL property appraiser API. | `<request_identifier>.json` |
-| 4 | `--browser-flow-file`, or `--browser-flow-template` with `--browser-flow-parameters` | Runs a browser flow, a small state machine written as JSON, and captures the page it ends on. | `<request_identifier>.html` |
+| 4 | `--browser-flow-file` | Runs a browser flow, a small state machine written as JSON, and captures the page it ends on. | `<request_identifier>.html` |
 | 5 | `--use-browser` and the request is a GET | Loads the page in the browser. | `<request_identifier>.html` |
 | 6 | Otherwise | Sends the request as one HTTP request. | `<request_identifier>.html` or `.json` |
 
@@ -161,8 +160,6 @@ Mechanisms 1, 4 and 5 use the obscura browser. `prepare` starts `obscura serve` 
 | `--input-csv <PATH>` | A CSV with a `request_identifier` column; one output file per row. | None |
 | `--multi-request-flow-file <PATH>` | A multi-request flow (JSON). | None |
 | `--browser-flow-file <PATH>` | A browser flow (JSON). | None |
-| `--browser-flow-template <NAME>` | A built-in browser flow; the only one is `SEARCH_BY_PARCEL_ID`. | None |
-| `--browser-flow-parameters <JSON>` | The template's parameters. | None |
 | `--browser-flow-zip <PATH>` | A Browser Flow v2 package. | None |
 | `--browser-flow-version <VERSION>` | Accepted for compatibility: `2`, with `--browser-flow-zip`. | None |
 | `--use-browser` | Load the page in the browser. | Off |
@@ -173,7 +170,7 @@ Mechanisms 1, 4 and 5 use the obscura browser. `prepare` starts `obscura serve` 
 | `--browser <PATH>` | The obscura binary to start. Also `OBSCURA_BIN`. | `obscura` on `PATH` |
 | `--cdp-url <WS_URL>` | Attach to a running browser's DevTools WebSocket instead of starting obscura. Also `ELEPHANT_CDP_URL`. | None |
 
-**Multi-request flow.** A JSON file listing requests. Strings containing `{{=it.request_identifier}}` are doT templates filled per parcel:
+**Multi-request flow.** A JSON file listing requests. `{{=it.request_identifier}}` in any string is replaced by the parcel's identifier (in a browser flow, `{{=it.<name>}}` names any stored value). Nothing else of the doT template language is filled; another `{{=...}}` expression is an error:
 
 ```json
 {
@@ -251,11 +248,13 @@ obscura refuses loopback and private addresses unless `OBSCURA_ALLOW_PRIVATE_NET
 
 **Where the JavaScript runs.** County scripts and handlers run on an embedded JavaScript engine (QuickJS), not on Node. What they get:
 
-- Modules: `fs` (sync, callbacks and `fs/promises`), `path`, `url`, `querystring`, `util`, `assert`, `events`, `os`, `timers`, `vm`, `crypto` (`createHash` with `sha256` or `sha512`, `randomUUID`), `http` and `https` (`get`, `request`), and `cheerio`. CommonJS `require` and ES module `import` both work.
-- Globals: `process`, `console`, `Buffer`, timers, `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `fetch`, `AbortController`, `structuredClone`.
-- `toLocaleString` on numbers and dates, `toLocaleDateString` and `localeCompare` give the answers Node gives for `en-US`. There is no `Intl` object; a locale or option the engine cannot honour throws rather than print another format.
+It offers the part of Node the published county scripts use, and no more. A script that reaches for anything else fails with the name of what is missing.
+
+- Modules: `fs` (the sync functions for reading, writing, listing and removing, and `fs/promises` with `readFile`, `writeFile`, `readdir`, `unlink`), `path`, `vm` (`runInNewContext`), `crypto` (`createHash('sha256')`), `http` and `https` (`get`), and `cheerio`. CommonJS `require` and ES module `import` both work.
+- Globals: `process` (`argv`, `env`, `cwd`, `exit`, `stdout`, `stderr`), `console`, `Buffer` (UTF-8 and hex), `setTimeout`, `clearTimeout`, and `URL` to read a URL's parts and `searchParams` (assigning to a part has no effect).
+- `toLocaleString` on numbers and `localeCompare` give the answers Node gives for `en-US`. There is no `Intl` object, and the `toLocale...` methods of dates throw: build a date's text from its parts.
 - Files: only the working directory, which holds the scripts, the seed files and `input.html` or `input.json`.
-- Network: HTTP and HTTPS requests only, and none with `--offline`.
+- Network: `http.get` and `https.get` only, and nothing with `--offline`.
 - Time: 120 seconds per script; `config.timeoutMs` for a handler.
 
 Other npm packages are not available. `tests/fixtures/transform/engine` holds the scripts that check these behaviours against Node.
@@ -327,7 +326,6 @@ The CAR is read start to end twice and never indexed as a whole. Both the layout
 | --- | --- | --- |
 | `<INPUT>` | The property, the directory of properties, or the county CAR. | None |
 | `-o, --output-csv <PATH>` | CSV file for the findings; `-` writes them to stdout. | `submit_errors.csv` |
-| `--threads <N>` | Threads to check with. | Number of cores |
 
 **Examples**
 
@@ -368,7 +366,6 @@ elephant-cli --json validate county.car | jq .errors
 | `-o, --output-zip <PATH>` | Hashed ZIP, or directory of hashed ZIPs. | `hashed-data.zip` |
 | `-c, --output-csv <PATH>` | CSV of data-group CIDs. | `hash-results.csv` |
 | `--output-car <PATH>` | County CAR to write. | Not written |
-| `--threads <N>` | Threads to hash with. | Number of cores |
 
 **Example**
 
@@ -512,12 +509,13 @@ What changed:
 | `.env` | Loaded from the working directory | Not loaded |
 | `validate` on properties | Writes `submit_warnings.csv`; a property that cannot be checked exits `1` silently | No warnings file; the reason is on stderr, exit `2` |
 | `validate` on a CAR | Indexes the whole file | Two sequential reads; gateway exports stay on the fast path |
-| `hash` | A data group that cannot be hashed is only written to `submit_errors.csv`, exit `0` | Named on stderr and in `--json`, exit `1`; `--property-cid` and `--max-concurrent-tasks` are gone |
+| `hash` | A data group that cannot be hashed is only written to `submit_errors.csv`, exit `0` | Named on stderr and in `--json`, exit `1`; `--property-cid` and `--max-concurrent-tasks` are gone; every core is used |
 | `export-tables` | hyparquet writer | Apache parquet writer: same tables, columns and rows; part bytes, part CIDs and the tables root differ |
 | `upload` | Also uploads a hashed ZIP to Pinata | County CARs and tables directories only |
 | `transform` | Scripts run as Node child processes with the CLI's `node_modules` | Scripts run on embedded QuickJS with the Node modules listed under [transform](#transform), confined to their working directory; legacy mode and the Property Improvement extractor mode are gone |
 | `transform` scripts | The four mapping scripts run at once; links in a data-group root array follow directory order, which varies | They run one after another (`ownerMapping`, `structureMapping`, `layoutMapping`, `utilityMapping`, then `data_extractor`); links follow file-name order. CIDs after `hash` are the same |
 | `transform` handlers | `--transform-version 2` required; no npm packages | `--transform-zip` alone is enough; `cheerio` can be imported |
+| `prepare` flows | doT templates; the built-in `SEARCH_BY_PARCEL_ID` flow | Only `{{=it.<name>}}` is filled; write the flow as a `--browser-flow-file` (`--browser-flow-template` and `--browser-flow-parameters` are gone) |
 | `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` has no effect |
 | `prepare` captures | Cleaned and formatted with Prettier | Cleaned, not reformatted |
 | Browser Flow v2 `page` | The whole Puppeteer `Page` | The methods listed under [prepare](#prepare) |
@@ -531,6 +529,6 @@ cargo fmt && cargo clippy --all-targets -- -D warnings
 ```
 
 - The tests run the built binary on real files. Expected outputs under `tests/fixtures` were produced by elephant-cli 1.58.1 on the same inputs.
-- `assets/cheerio.js` is cheerio's browser build as one file; `scripts/bundle-cheerio.sh` rebuilds it. `assets/doT.js` is doT 1.1.3.
+- `assets/cheerio.js` is cheerio's browser build as one file; `scripts/bundle-cheerio.sh` rebuilds it.
 - `scripts/parity` holds the checks against elephant-cli 1.x and the fuzzers; its README says what each one needs.
 - `CONTEXT.md` defines the terms used in code and documentation.

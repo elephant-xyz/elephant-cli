@@ -34,6 +34,3 @@ parquet = { version = "60", default-features = false, features = ["zstd", "json"
 [profile.dev]
 debug = false
 opt-level = 1
-
-[profile.release]
-debug = false

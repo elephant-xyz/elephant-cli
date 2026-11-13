@@ -15,7 +15,8 @@ import subprocess
 import sys
 import tempfile
 
-v2, source, cache, count = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+# each side runs in a directory of its own, so the paths given must not depend on this one
+v2, source, cache, count = *map(os.path.abspath, sys.argv[1:4]), int(sys.argv[4])
 v1 = shlex.split(os.environ.get('ELEPHANT_CLI_V1', ''))
 if not v1:
     sys.exit('set ELEPHANT_CLI_V1 to the command that runs elephant-cli 1.x, such as "node /path/to/elephant-cli-1.x/bin/elephant-cli"')

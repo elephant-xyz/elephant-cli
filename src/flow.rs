@@ -9,6 +9,7 @@ use crate::prepare::Fetched;
 use crate::Fail;
 use serde_json::{json, Value};
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 /// Text that marks a page as an error page, in lower case.
@@ -134,99 +135,21 @@ pub fn origin(flow: &Value, identifier: &str) -> Option<String> {
     Some(pattern.replace(address, identifier).into_owned())
 }
 
-/// The `SEARCH_BY_PARCEL_ID` template: open the search page, pass up to two
-/// "agree" buttons, type the parcel id, press Enter, wait for the result.
-pub fn template(name: &str, parameters: &str, address: &str) -> Result<Value, Fail> {
-    if name != "SEARCH_BY_PARCEL_ID" {
-        return Err(format!(
-            "Failed to create workflow from template: unknown template {name} (the only one is SEARCH_BY_PARCEL_ID)"
-        )
-        .into());
+/// Fill the `{{=it.name}}` templates of a text with the values known so far.
+/// Flow files use doT's syntax only to name a value; any other expression is refused.
+pub fn fill(text: &str, known: &Value) -> Result<String, Fail> {
+    static NAMED: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\{\{=\s*it\.(\w+)\s*\}\}").expect("a valid pattern"));
+    if NAMED.replace_all(text, "").contains("{{=") {
+        return Err(format!("only {{{{=it.<name>}}}} templates are filled; this one is not: {text}").into());
     }
-    let given: Value = serde_json::from_str(parameters)
-        .map_err(|error| format!("Failed to create workflow from template: --browser-flow-parameters is not JSON: {error}"))?;
-    let text = |key: &str| given[key].as_str().filter(|value| !value.is_empty());
-    let needed = |key: &str| text(key).ok_or(format!("Failed to create workflow from template: {key} is required"));
-    let (form, result) = (needed("search_form_selector")?, needed("search_result_selector")?);
-    let frame = text("iframe_selector");
-    let step = |kind: &str, mut input: Value, next: Option<&str>| {
-        if let Some(frame) = frame {
-            input["iframe_selector"] = json!(frame);
-        }
-        let mut node = json!({ "type": kind, "input": input });
-        match next {
-            Some(next) => node["next"] = json!(next),
-            None => node["end"] = json!(true),
-        }
-        node
-    };
-    let wait = |selector: &str, next: Option<&str>| {
-        step("wait_for_selector", json!({ "selector": selector, "timeout": 30000, "visible": true }), next)
-    };
-    let race = |button: &str, label: &str, to: &str| {
-        let options = json!([
-            { "selector": form, "label": "search_form", "timeout": 30000 },
-            { "selector": button, "label": label, "timeout": 30000 },
-        ]);
-        let mut node = step("wait_for_selector_race", json!({ "selectors": options, "visible": true }), None);
-        node.as_object_mut().expect("a node").remove("end");
-        node["next_map"] = json!({ "search_form": "wait_for_search_form_ready", label: to });
-        node["validate_winner"] = json!({ "search_form": { "check_selector": button, "if_exists_goto": to } });
-        node
-    };
-    let (first, second) = (text("continue_button_selector"), text("continue2_button_selector"));
-    let mut states = serde_json::Map::new();
-    let after = if first.is_some() || second.is_some() { "race_form_or_button" } else { "wait_for_search_form_ready" };
-    let mut open = json!({ "type": "open_page", "input": { "url": address, "timeout": 30000, "wait_until": "domcontentloaded" }, "next": after });
-    if let Some(frame) = frame {
-        open["input"]["iframe_selector"] = json!(frame);
-    }
-    states.insert("open_search_page".to_string(), open);
-    match (first, second) {
-        (Some(first), second) => {
-            states.insert("race_form_or_button".to_string(), race(first, "continue_button", "click_continue_button"));
-            let next = if second.is_some() { "race_form_or_button2" } else { "wait_for_search_form_ready" };
-            states.insert("click_continue_button".to_string(), step("click", json!({ "selector": first }), Some(next)));
-            if let Some(second) = second {
-                states.insert("race_form_or_button2".to_string(), race(second, "continue_button2", "click_continue_button2"));
-                states.insert(
-                    "click_continue_button2".to_string(),
-                    step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")),
-                );
-            }
-        }
-        (None, Some(second)) => {
-            states.insert("race_form_or_button".to_string(), race(second, "continue_button2", "click_continue_button2"));
-            states.insert(
-                "click_continue_button2".to_string(),
-                step("click", json!({ "selector": second }), Some("wait_for_search_form_ready")),
-            );
-        }
-        (None, None) => {}
-    }
-    states.insert("wait_for_search_form_ready".to_string(), wait(form, Some("enter_parcel_id")));
-    let typed = json!({ "selector": form, "value": "{{=it.request_identifier}}", "delay": 100 });
-    states.insert("enter_parcel_id".to_string(), step("type", typed, Some("press_enter")));
-    states.insert(
-        "press_enter".to_string(),
-        json!({ "type": "keyboard_press", "input": { "key": "Enter" }, "next": "wait_for_search_results" }),
-    );
-    let (button, details) = (text("property_details_button"), text("property_details_selector"));
-    states.insert("wait_for_search_results".to_string(), wait(result, button.map(|_| "click_property_details")));
-    if let Some(button) = button {
-        states.insert(
-            "click_property_details".to_string(),
-            step("click", json!({ "selector": button }), details.map(|_| "wait_for_property_details")),
-        );
-        if let Some(details) = details {
-            states.insert("wait_for_property_details".to_string(), wait(details, None));
-        }
-    }
-    let capture = match text("capture_iframe_selector") {
-        Some(selector) => json!({ "type": "iframe", "selector": selector }),
-        None => json!({ "type": "page" }),
-    };
-    Ok(json!({ "starts_at": "open_search_page", "states": states, "capture": capture }))
+    let filled = NAMED.replace_all(text, |found: &regex::Captures| match known.get(&found[1]) {
+        Some(Value::String(value)) => value.clone(),
+        // as JavaScript prints a value that is not text, or one that is absent
+        Some(other) => other.to_string(),
+        None => "undefined".to_string(),
+    });
+    Ok(filled.into_owned())
 }
 
 /// Run a browser flow and capture the page, or one iframe, it ends on.
@@ -237,16 +160,10 @@ pub fn run(browser: &mut Browser, flow: &Value, identifier: &str, address: Optio
         let node = &flow["states"][&state];
         let mut input = node["input"].clone();
         // `{{=it.request_identifier}}` and friends, in the strings directly under `input`
-        let templated: Vec<String> = input
-            .as_object()
-            .into_iter()
-            .flatten()
-            .filter(|(_, value)| value.as_str().is_some_and(|text| text.contains("=it.")))
-            .map(|(key, _)| key.clone())
-            .collect();
-        let texts: Vec<String> = templated.iter().map(|key| input[key].as_str().unwrap_or_default().to_string()).collect();
-        for (key, filled) in templated.iter().zip(js::fill(&texts, &known)?) {
-            input[key] = json!(filled);
+        for value in input.as_object_mut().into_iter().flatten().map(|(_, value)| value) {
+            if let Some(text) = value.as_str().filter(|text| text.contains("=it.")) {
+                *value = json!(fill(text, &known)?);
+            }
         }
         let text = |key: &str| input[key].as_str().map(str::to_string);
         let need = |key: &str| text(key).ok_or(format!("Step {state} needs input.{key}"));
@@ -482,18 +399,9 @@ fn kebab(name: &str) -> bool {
 /// Run a Browser Flow v2 package: its handler drives the page and saves named
 /// captures into `work/captures/`, listed in `work/captures.json`.
 pub fn package(browser: &mut Browser, package: &Path, work: &Path, input: &Value) -> Result<(), Fail> {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let scratch = std::env::temp_dir().join(format!("elephant-flow-{}-{stamp:x}", std::process::id()));
-    std::fs::create_dir_all(&scratch)?;
-    let scratch = scratch.canonicalize()?;
-    let outcome = handle(browser, package, &scratch, work, input);
-    let _ = std::fs::remove_dir_all(&scratch);
-    outcome
-}
-
-fn handle(browser: &mut Browser, package: &Path, scratch: &Path, work: &Path, input: &Value) -> Result<(), Fail> {
-    let opened = std::fs::File::open(package).map_err(|error| format!("cannot read {}: {error}", package.display()))?;
-    zip::ZipArchive::new(opened)?.extract(scratch)?;
+    let scratch = crate::property::Work::new("flow")?;
+    let scratch = scratch.0.as_path();
+    crate::property::unzip(package, scratch)?;
     let entry = scratch.join("handler.js");
     if !entry.is_file() {
         return Err("The browser flow package has no handler.js at its root".into());
@@ -584,4 +492,19 @@ fn handle(browser: &mut Browser, package: &Path, scratch: &Path, work: &Path, in
     let manifest =
         json!({ "version": 2, "request_identifier": input["request_identifier"], "sourceUrl": source, "captures": listed });
     Ok(std::fs::write(work.join("captures.json"), pretty(&manifest))?)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn fills_named_templates_and_refuses_expressions() {
+        let known = json!({ "request_identifier": "12-34", "page": 2, "url": null });
+        let fill = |text: &str| super::fill(text, &known).map_err(|error| error.to_string());
+        assert_eq!(fill("id={{=it.request_identifier}}&p={{= it.page }}").unwrap(), "id=12-34&p=2");
+        // what doT prints for a value that is null, and for one that was never set
+        assert_eq!(fill("{{=it.url}} {{=it.missing}}").unwrap(), "null undefined");
+        assert!(fill("{{=it.request_identifier.replace(/-/g, '')}}").unwrap_err().contains("only {{=it.<name>}} templates"));
+    }
 }

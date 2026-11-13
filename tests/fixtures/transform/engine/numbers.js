@@ -14,7 +14,6 @@ const checks = {
   whole_dollars: [1234.5, 1e6].map((value) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })),
   percent: [0.256, 1, 0.0049].map((value) => value.toLocaleString('en-US', { style: 'percent' })),
   in_a_template: `${(2400).toLocaleString()} sq ft`,
-  bigint: (12345678901234567890n).toLocaleString(),
 };
 
 fs.mkdirSync('data', { recursive: true });

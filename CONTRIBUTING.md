@@ -71,4 +71,4 @@ A release is a tag.
 
 Every commit on `main` is also built by the `Build` workflow and published as the pre-release `build-<commit>`, so `main` can be installed without a Rust toolchain. The newest 50 are kept.
 
-The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and Windows, and attaches them to a GitHub release with their SHA-256 sums. A version with a hyphen, such as `2.0.0-alpha.1`, is marked as a pre-release.
+The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and attaches them to a GitHub release with their SHA-256 sums. A version with a hyphen, such as `2.0.0-alpha.1`, is marked as a pre-release.

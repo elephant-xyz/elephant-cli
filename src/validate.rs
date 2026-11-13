@@ -155,18 +155,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
 
 /// Validate every property of a batch on `threads` cores, in the order given.
 pub fn batch(children: &[PathBuf], shared: &Mutex<Shared>, threads: usize) -> Vec<Result<Checked, String>> {
-    std::thread::scope(|scope| {
-        let workers: Vec<_> = children
-            .chunks(children.len().div_ceil(threads).max(1))
-            .map(|chunk| {
-                scope.spawn(move || {
-                    let check = |child: &PathBuf| Property::open(child).and_then(|opened| property(&opened, shared));
-                    chunk.iter().map(check).collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        workers.into_iter().flat_map(|worker| worker.join().expect("worker thread")).collect()
-    })
+    crate::spread(children, threads, |child| Property::open(child).and_then(|opened| property(&opened, shared)))
 }
 
 impl Shared {
