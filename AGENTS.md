@@ -2,7 +2,7 @@
 
 ## What this is
 
-- One Rust crate that builds one binary, `elephant-cli`. `package.json` and `npm/` are a thin Node layer over that binary: a launcher, an installer and the `@elephant-xyz/cli/lib` functions.
+- One Rust crate that builds one binary, `elephant-cli`. There is no npm package: the binary is distributed through GitHub releases and `cargo install`.
 - Six commands, in workflow order: `prepare`, `transform`, `validate`, `hash`, `export-tables`, `upload`. `README.md` documents them in that order; keep it that way.
 - `CONTEXT.md` defines the domain terms. Use them in code, tests and docs.
 
@@ -10,8 +10,6 @@
 
 - Build: `cargo build` (`--release` for measurements).
 - Test: `cargo test`. The browser tests of `prepare` are skipped unless `OBSCURA_BIN` names an obscura binary.
-- Test the npm layer: `ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs`.
-- Test the npm installer: `node --test tests/install.test.mjs`.
 - Lint: `cargo clippy --all-targets -- -D warnings`.
 - Format: `cargo fmt`; never hand-format. CI runs `cargo fmt --check`.
 - One test: `cargo test --test hash batch` (file `tests/hash.rs`, name filter `batch`).
@@ -22,15 +20,13 @@
 - One module per command: `prepare.rs` (with `flow.rs`, `browser.rs`), `transform.rs`, `validate.rs` (with `county.rs` for CARs), `hash.rs`, `tables.rs`, `upload.rs`.
 - Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
 - `assets/`: JavaScript embedded in the binary (`cheerio.js`, `doT.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
-- `npm/`: `bin.js` (launcher), `native.js` (finds or installs the binary), `install.js` (downloads the binary of the release or of the commit, or runs cargo), `lib.js` and `lib.d.ts` (the library).
-- `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `main`, as pre-release `build-<commit>`), `release.yml` (a tag: GitHub release and npm), `binaries.yml` (the build matrix both use).
+- `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `main`, as pre-release `build-<commit>`), `release.yml` (a tag: GitHub release), `binaries.yml` (the build matrix both use).
 
 ## Contracts that must not break
 
-- **Git installs need no Rust.** The kit and Atlas install with `npm i github:elephant-xyz/elephant-cli#<ref>`; `npm/install.js` downloads the binary `build.yml` published for that commit.
-- **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` from an npm git install and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway.
+- **Installing `main` needs no Rust.** `build.yml` publishes `elephant-cli-<target>.tar.gz` for every commit on `main` as the pre-release `build-<commit>`; keep the archive names and the single `elephant-cli` file inside them.
+- **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway.
 - **The kit's oracle agent** runs the sequence under "Publish a County" in the README and reads these stdout lines: `CAR written: <file> (<n> blocks, root <cid>)`, `Tables written: <dir> (<n> tables, <n> parts, root <cid>)`, `Atlas page written: <path> group <key>`, `Properties processed: <n>, succeeded: <n>, failed: <n>`.
-- **`@elephant-xyz/cli/lib`** exports `prepare`, `transform`, `validate`, `hash`, `exportTables` and `upload` with the option and result shapes in `npm/lib.d.ts`.
 - **`hash` output is byte-identical to elephant-cli 1.x.** CIDs are published; a change to canonical JSON, link sorting, codec choice or CAR layout changes them.
 
 ## CLI rules

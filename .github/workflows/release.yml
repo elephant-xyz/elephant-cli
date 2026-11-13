@@ -1,7 +1,7 @@
 name: Release
 
 # A release is a tag: `git tag v2.0.0 && git push origin v2.0.0`.
-# The tag must equal the version in Cargo.toml and package.json.
+# The tag must equal the version in Cargo.toml.
 on:
   push:
     tags: ['v*']
@@ -27,13 +27,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          registry-url: 'https://registry.npmjs.org'
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -42,7 +37,6 @@ jobs:
       - name: Check that the tag is the version
         run: |
           version="${GITHUB_REF_NAME#v}"
-          test "$(node -p "require('./package.json').version")" = "$version"
           grep -q "^version = \"$version\"$" Cargo.toml
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
@@ -54,26 +48,3 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS --title "$GITHUB_REF_NAME" --generate-notes $prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-
-      # npm/install.js reads this file to download the binary instead of building it
-      - name: Record the binaries in the npm package
-        run: |
-          node -e '
-            const fs = require("node:fs");
-            const sha256 = {};
-            for (const line of fs.readFileSync("dist/SHA256SUMS", "utf8").trim().split("\n")) {
-              const [sum, file] = line.trim().split(/\s+/);
-              sha256[file.replace(/^elephant-cli-/, "").replace(/\.tar\.gz$/, "")] = sum;
-            }
-            const base = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${process.env.GITHUB_REF_NAME}`;
-            fs.writeFileSync("npm/release.json", JSON.stringify({ base, sha256 }, null, 2) + "\n");
-          '
-          cat npm/release.json
-
-      - name: Publish to npm
-        run: |
-          tag=latest
-          case "$VERSION" in *-*) tag=next ;; esac
-          npm publish --access public --provenance --tag "$tag" --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

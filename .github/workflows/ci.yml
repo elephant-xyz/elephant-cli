@@ -41,10 +41,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       # the browser tests of `prepare` are skipped without it
       - name: Install the obscura browser
         run: |
@@ -55,33 +51,3 @@ jobs:
 
       - name: Run the tests
         run: cargo test --locked
-
-      - name: Test the npm launcher, library and installer
-        run: node --test tests/sdk.test.mjs tests/install.test.mjs
-        env:
-          ELEPHANT_CLI_BINARY: ${{ github.workspace }}/target/debug/elephant-cli
-
-  # What Atlas and other consumers do: install the package and let it build its binary.
-  install:
-    name: Install from npm package
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Pack and install
-        run: |
-          tarball="$PWD/$(npm pack --silent)"
-          mkdir "$RUNNER_TEMP/app"
-          cd "$RUNNER_TEMP/app"
-          npm init -y > /dev/null
-          npm install "$tarball"
-      - name: Run the installed command
-        working-directory: ${{ runner.temp }}/app
-        run: |
-          ./node_modules/.bin/elephant-cli --version
-          ./node_modules/.bin/elephant-cli --offline --schema-cache "$GITHUB_WORKSPACE/tests/fixtures/lexicon" \
-            hash "$GITHUB_WORKSPACE/tests/fixtures/hash/batch/county" \
-            --output-zip hashed --output-csv hash.csv --output-car county.car | grep '^CAR written: county.car (20 blocks'

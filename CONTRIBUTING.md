@@ -11,7 +11,7 @@
 
 ## Set Up
 
-You need Rust 1.85 or newer (<https://rustup.rs>). Node 20 or newer is needed only for the npm launcher and library.
+You need Rust 1.85 or newer (<https://rustup.rs>).
 
 ```bash
 git clone https://github.com/elephant-xyz/elephant-cli.git
@@ -24,7 +24,7 @@ The browser tests of `prepare` need the obscura headless browser. Download a `no
 
 ## Make a Change
 
-1. Read `AGENTS.md`: it lists the layout, the rules every command follows, and the contracts with Atlas, the kit agents and the library that must not break.
+1. Read `AGENTS.md`: it lists the layout, the rules every command follows, and the contracts with Atlas and the kit agents that must not break.
 2. Write a test that fails for the behaviour you want (see [Tests](#tests)).
 3. Make it pass with the smallest change.
 4. Update `README.md` and the `--help` text in `src/main.rs` when an option or an output changes.
@@ -37,8 +37,6 @@ Try to fit new behaviour into one of the six commands before proposing a seventh
 cargo test                                              # everything except the browser tests
 OBSCURA_BIN=/path/to/obscura cargo test                 # with the browser tests
 cargo test --test hash                                  # one file
-ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs
-node --test tests/install.test.mjs                      # the npm installer; needs neither cargo nor the network
 ```
 
 - Tests run the built binary on real files and assert on its exit code, stdout, stderr and the files it writes. They do not call internal functions.
@@ -68,9 +66,9 @@ Both must be clean; CI checks them. The rest of the style rules are in `AGENTS.m
 
 A release is a tag.
 
-1. Set the same version in `Cargo.toml` and `package.json`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge.
+1. Set the version in `Cargo.toml`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge.
 2. `git tag v<version> && git push origin v<version>`.
 
-Every commit on `main` is also built by the `Build` workflow and published as the pre-release `build-<commit>`; that is what a git install of the npm package downloads. The newest 50 are kept.
+Every commit on `main` is also built by the `Build` workflow and published as the pre-release `build-<commit>`, so `main` can be installed without a Rust toolchain. The newest 50 are kept.
 
-The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and Windows, attaches them to a GitHub release with their SHA-256 sums, writes `npm/release.json` so the npm package downloads the right binary, and publishes `@elephant-xyz/cli`. A version with a hyphen, such as `2.0.0-alpha.1`, is published under the npm tag `next` and marked as a pre-release.
+The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and Windows, and attaches them to a GitHub release with their SHA-256 sums. A version with a hyphen, such as `2.0.0-alpha.1`, is marked as a pre-release.

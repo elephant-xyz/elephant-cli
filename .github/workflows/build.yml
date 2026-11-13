@@ -1,9 +1,8 @@
 name: Build
 
 # Every commit on main gets its binaries, published as the pre-release
-# `build-<commit>`. A git install (`npm i github:elephant-xyz/elephant-cli#main`,
-# or a pinned commit) downloads from there, so it needs no Rust toolchain;
-# npm/install.js builds from source when a commit has no build.
+# `build-<commit>`, so the current main or a pinned commit can be downloaded
+# without a Rust toolchain (see "Installation" in the README).
 on:
   push:
     branches: ['main']
@@ -41,8 +40,8 @@ jobs:
           gh release create "build-$GITHUB_SHA" dist/*.tar.gz dist/SHA256SUMS \
             --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "Build ${GITHUB_SHA::7}" \
-            --notes "Binaries of commit $GITHUB_SHA, downloaded by git installs of the npm package."
-      # a pinned commit older than these still installs: it builds from source
+            --notes "Binaries of commit $GITHUB_SHA."
+      # a pinned commit older than these is built with cargo
       - name: Keep the newest 50 builds
         run: |
           gh release list --limit 500 --json tagName,createdAt \

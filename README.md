@@ -16,7 +16,6 @@
   - [export-tables](#export-tables)
   - [upload](#upload)
 - [Publish a County](#publish-a-county)
-- [Use as a Library](#use-as-a-library)
 - [Environment Variables](#environment-variables)
 - [Migrating from 1.x](#migrating-from-1x)
 - [Development](#development)
@@ -36,25 +35,37 @@ A county dataset moves through six steps. Each step is one command; the output o
 
 ## Installation
 
-Choose one.
+Choose one. Node is not needed.
+
+**Download a binary.** Each release at <https://github.com/elephant-xyz/elephant-cli/releases> has one archive per platform, `elephant-cli-<target>.tar.gz`, and their sums in `SHA256SUMS`:
+
+| Platform | `<target>` |
+| --- | --- |
+| Linux x86_64 | `x86_64-unknown-linux-gnu` |
+| Linux arm64 | `aarch64-unknown-linux-gnu` |
+| macOS Apple silicon | `aarch64-apple-darwin` |
+| macOS Intel | `x86_64-apple-darwin` |
+| Windows x86_64 | `x86_64-pc-windows-msvc` |
+
+```bash
+target=aarch64-apple-darwin
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/latest/download/elephant-cli-$target.tar.gz" | tar -xz
+sudo mv elephant-cli /usr/local/bin/
+elephant-cli --version
+```
+
+Every commit on `main` is published the same way as the pre-release `build-<commit>`, so the current `main`, or a pinned commit, installs without a release:
+
+```bash
+commit=$(git ls-remote https://github.com/elephant-xyz/elephant-cli main | cut -f1)
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/build-$commit/elephant-cli-$target.tar.gz" | tar -xz
+```
 
 **Build with cargo** (needs Rust 1.85 or newer, from <https://rustup.rs>):
 
 ```bash
 cargo install --git https://github.com/elephant-xyz/elephant-cli --locked
 ```
-
-**Install with npm.** No Rust toolchain is needed: the package downloads the binary built for it.
-
-```bash
-npm i @elephant-xyz/cli                         # a release
-npm i github:elephant-xyz/elephant-cli#main     # the current main, or #<commit> to pin one
-npx elephant-cli --version
-```
-
-A release downloads its own binary and checks its SHA-256. A git install downloads the binary CI built for that commit (the pre-release `build-<commit>` of this repository). When there is no binary to download — a commit CI has not built, a platform without one, a binary that does not run on the system — the package builds from source with cargo, and says so. If npm was told not to run install scripts, the first run of `elephant-cli` does the same work.
-
-**Download a release binary** from <https://github.com/elephant-xyz/elephant-cli/releases> and put `elephant-cli` on your `PATH`.
 
 The browser mechanisms of `prepare` also need the obscura headless browser. Download it from <https://github.com/h4ckf0r0day/obscura/releases> and put `obscura` on your `PATH`. Nothing else needs it.
 
@@ -469,24 +480,6 @@ elephant-cli upload ./$county-$group-tables --output-json $county-$group-tables-
 
 Each command stops the sequence with a non-zero exit code when its step fails, so the block can run under `set -e`.
 
-## Use as a Library
-
-The npm package exports the functions 1.x exported from `@elephant-xyz/cli/lib`. Each one runs the native binary and returns the same result shape as before:
-
-```js
-import { prepare, transform, validate, hash, exportTables, upload } from '@elephant-xyz/cli/lib';
-
-await prepare('seed.zip', 'prepared.zip', { multiRequestFlowFile: 'flow.json' });
-
-const transformed = await transform({ inputZip: 'prepared.zip', scriptsZip: 'scripts.zip', outputZip: 'transformed.zip' });
-if (!transformed.success) console.error(transformed.error, transformed.scriptFailure?.stderr);
-
-const checked = await validate({ input: 'transformed.zip', outputCsv: 'errors.csv' });
-console.log(checked.success, checked.errors, checked.errorCsvPath);
-```
-
-`prepare` rejects with the reason when it fails; the others resolve with `{ success: false, error }`. Set `ELEPHANT_CLI_BINARY` to run a binary other than the one the package installed.
-
 ## Environment Variables
 
 | Variable | Used by | Effect |
@@ -500,8 +493,6 @@ console.log(checked.success, checked.errors, checked.errorCsvPath);
 | `OBSCURA_BIN`, `ELEPHANT_CDP_URL` | `prepare` | The obscura binary to start, or a running browser to attach to. |
 | `OBSCURA_ALLOW_PRIVATE_NETWORK` | `prepare` | `1` lets obscura reach loopback and private addresses. |
 | `ELEPHANT_ORANGE_API` | `prepare` | Base URL of the Orange County API, for testing. |
-| `ELEPHANT_CLI_BINARY` | the npm package | The native binary the launcher and the library run. |
-| `ELEPHANT_CLI_BUILD_FROM_SOURCE` | the npm package | `1` makes the installer build with cargo instead of downloading a binary. |
 
 ## Migrating from 1.x
 
@@ -511,8 +502,10 @@ What changed:
 
 | Area | 1.x | 2.x |
 | --- | --- | --- |
-| Runtime | Node 22+ | A native binary; Node only for the npm launcher and library |
-| Removed commands | `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform` | Not available; pin `@elephant-xyz/cli@1` if you need one |
+| Runtime | Node 22+ | A native binary; Node is not needed |
+| Install | `npm i @elephant-xyz/cli`, or from git with npm | A binary from the releases page, or `cargo install`; there is no npm package |
+| Library | `@elephant-xyz/cli/lib` | Gone; run the binary with `--json` |
+| Removed commands | `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform` | Not available; use `@elephant-xyz/cli@1` from npm if you need one |
 | Exit codes | `1` for every failure | `1` the input failed its checks, `2` the command could not run |
 | Output | Banners and emoji on stdout, a log file in the working directory | A plain report on stdout, or one JSON document with `--json`; no log file |
 | Update check | Exits `1` when a newer version is published | None |
@@ -535,8 +528,6 @@ What changed:
 cargo test                                   # unit and CLI tests
 OBSCURA_BIN=/path/to/obscura cargo test      # also the browser tests of prepare
 cargo fmt && cargo clippy --all-targets -- -D warnings
-ELEPHANT_CLI_BINARY=target/debug/elephant-cli node --test tests/sdk.test.mjs   # the npm launcher and library
-node --test tests/install.test.mjs                      # how the npm package gets its binary
 ```
 
 - The tests run the built binary on real files. Expected outputs under `tests/fixtures` were produced by elephant-cli 1.58.1 on the same inputs.

@@ -4,7 +4,8 @@ Elephant CLI is now a single native binary written in Rust. See "Migrating from 
 
 ### BREAKING CHANGES
 
-* Removed commands: `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform`. Pin `@elephant-xyz/cli@1` if you need one.
+* Removed commands: `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform`. Use `@elephant-xyz/cli@1` from npm if you need one.
+* There is no npm package and no `@elephant-xyz/cli/lib`. Install a binary from the GitHub releases, or build with `cargo install`; scripts that used the library run the binary with `--json`.
 * Exit codes: `1` now means the input failed its checks and `2` that the command could not run.
 * stdout carries only the result (a text report, or one JSON document with `--json`); logs go to stderr. No log file, no update check, no `.env` loading.
 * `transform` runs county scripts and handlers on embedded QuickJS, confined to their working directory, with HTTP(S) as their only network access. Legacy mode and the Property Improvement extractor mode are gone.
@@ -19,7 +20,6 @@ Elephant CLI is now a single native binary written in Rust. See "Migrating from 
 * `--json`, `--offline` and `--schema-cache` on every command; `validate --output-csv -` writes the findings to stdout.
 * `hash` produces the same bytes and CIDs as 1.x.
 * `cheerio` is built into `transform` for scripts and handlers.
-* The npm package keeps the `elephant-cli` command and the `@elephant-xyz/cli/lib` functions, over the native binary.
 
 ## [1.58.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.0...v1.58.1) (2025-12-26)
 
