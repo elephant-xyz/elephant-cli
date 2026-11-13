@@ -1,0 +1,44 @@
+{
+  "output": "/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/export-tables/variants/small",
+  "car": "/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/export-tables/variants/small/tables.car",
+  "root": "baguqeera2vu6kxd6ekwyxwc24shmauvuxumhabxumn2mce6hphudn5grhoqa",
+  "countyRoot": "baguqeerai2wamycgxkpzd7wyncncl4srp4ykab4aw62bcb3mvcrlkknzo57a",
+  "partSizeBytes": 300,
+  "codec": "zstd",
+  "tables": {
+    "properties": {
+      "rows": 2,
+      "parts": 2
+    },
+    "property_has_address": {
+      "rows": 2,
+      "parts": 2
+    },
+    "property": {
+      "rows": 2,
+      "parts": 2
+    },
+    "address": {
+      "rows": 2,
+      "parts": 2
+    },
+    "property_has_tax": {
+      "rows": 3,
+      "parts": 3
+    },
+    "tax": {
+      "rows": 3,
+      "parts": 3
+    },
+    "address_has_parcel": {
+      "rows": 2,
+      "parts": 2
+    },
+    "parcel": {
+      "rows": 2,
+      "parts": 2
+    }
+  },
+  "parts": 18,
+  "exportedAt": "2026-11-12T21:04:44.484Z"
+}

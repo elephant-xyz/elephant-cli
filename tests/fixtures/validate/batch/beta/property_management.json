@@ -1,0 +1,8 @@
+{
+  "label": "Property Management",
+  "relationships": {
+    "property_has_property_management": {
+      "/": "./relationship_property_has_company.json"
+    }
+  }
+}

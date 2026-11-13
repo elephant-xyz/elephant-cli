@@ -2,133 +2,53 @@ name: CI
 
 on:
   pull_request:
-    branches: ['main']
+    # version 2 is developed on `v2`; `main` is here for the pull request that would bring it over
+    branches: ['v2', 'main']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  OBSCURA_VERSION: v0.2.6
 
 jobs:
-  security:
-    name: Security Scan
+  check:
+    name: Format and lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-
-      - name: Run security scan
-        run: npx better-npm-audit audit --level moderate
-        continue-on-error: true
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-
-  format:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Check formatting
-        run: npm run format:check
+        run: cargo fmt --check
+      - name: Run clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        node-version: [22, 24]
+        include:
+          - os: ubuntu-latest
+            obscura: obscura-x86_64-linux-no-render.tar.gz
+          - os: macos-latest
+            obscura: obscura-aarch64-macos-no-render.tar.gz
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      # the browser tests of `prepare` are skipped without it
+      - name: Install the obscura browser
+        run: |
+          mkdir -p "$RUNNER_TEMP/obscura"
+          curl -fsSL "https://github.com/h4ckf0r0day/obscura/releases/download/$OBSCURA_VERSION/${{ matrix.obscura }}" \
+            | tar -xz -C "$RUNNER_TEMP/obscura"
+          echo "OBSCURA_BIN=$RUNNER_TEMP/obscura/obscura" >> "$GITHUB_ENV"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Show resolved Node.js
-        run: node --version
-
-      - name: Build project
-        run: npm run build
-
-      - name: Run tests with coverage
-        env:
-          RPC_URL: ${{ secrets.RPC_URL }}
-        run: npm run test:coverage
-
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage/coverage-final.json
-          flags: unittests
-          name: codecov-umbrella
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      - name: Run the tests
+        run: cargo test --locked

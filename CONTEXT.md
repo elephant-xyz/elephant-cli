@@ -36,6 +36,30 @@ _Avoid_: Relationship schema name when referring to `*_has_*` keys
 The CID-named JSON file with `label` and `relationships` that indexes relationship outputs for one data group.
 _Avoid_: Manifest, bundle root
 
+**County CAR**:
+The single archive `hash --output-car` writes for one data group of one county: every property's blocks, the **Shards** and the **County Index** as its root.
+_Avoid_: Bundle, archive file when the county archive is meant
+
+**County Index**:
+The root block of a **County CAR**: the property count and links to the **Shards**.
+_Avoid_: Manifest, root file
+
+**Shard**:
+A block of a **County CAR** listing up to 5000 properties with their data-group CIDs.
+_Avoid_: Chunk, page
+
+**Finding**:
+One row of a validation CSV: a thing `validate` found wrong, with where and why.
+_Avoid_: Warning, issue
+
+**Tables Directory**:
+What `export-tables` writes for a **County CAR**: Parquet parts per table and `tables.car`, the document recording every part by CID.
+_Avoid_: Export folder, Parquet dump
+
+**Schema Cache**:
+The directory holding the lexicon manifest and one `<cid>.json` per schema; with it the CLI runs offline.
+_Avoid_: Schema folder, lexicon directory
+
 ## Relationships
 
 - A **Seed Record** can produce one **Capture Manifest** through Browser Flow v2.
@@ -43,6 +67,8 @@ _Avoid_: Manifest, bundle root
 - A **Transform v2 Handler Package** reads **Captures** and writes **Entity Outputs** and **Relationship Outputs**.
 - A **Relationship Output** links exactly two **Entity Outputs**.
 - A **Data-Group Root** indexes **Relationship Outputs** by **Relationship Key**.
+- A **County CAR** has one **County Index**, which links one or more **Shards**; a **Shard** lists properties and their **Data-Group Roots**.
+- A **Tables Directory** is exported from exactly one **County CAR**.
 
 ## Example dialogue
 

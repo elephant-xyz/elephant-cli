@@ -1,54 +1,67 @@
 # Agent Notes
 
-## Runtime And Package
+## What this is
 
-- This is a single-package ESM TypeScript CLI, not a workspace; use `npm ci` with `package-lock.json`.
-- CI runs on Node 24, with tests also covering Node 22; README says Node 20+ for users, but CI is the source of truth for development verification.
-- The published CLI binary is `bin/elephant-cli`, which imports `dist/index.js`; run `npm run build` before testing CLI behavior through the binary.
-- `src/index.ts` registers Commander commands and loads `.env` from the current working directory via `dotenv.config({ path: '.env' })`.
+- Version 2 of elephant-cli, developed on the `v2` branch with its own releases (tags `v2.*`); `main` is 1.x (TypeScript). Pull requests for this code go to `v2`.
+- One Rust crate that builds one binary, `elephant-cli`. There is no npm package: the binary is distributed through GitHub releases and `cargo install`.
+- Six commands, in workflow order: `prepare`, `transform`, `validate`, `hash`, `export-tables`, `upload`. `README.md` documents them in that order; keep it that way.
+- `CONTEXT.md` defines the domain terms. Use them in code, tests and docs.
 
 ## Commands
 
-- Install deps: `npm ci`.
-- Build: `npm run build` (`tsc` plus copying `src/commands/generate-transform/prompts/*.md` into `dist/`).
-- Watch build: `npm run dev`.
-- Run all tests: `npm test` (creates `./tmp`, sets `TMPDIR=./tmp`, and runs Vitest with `--dangerouslyIgnoreUnhandledErrors`).
-- Run one test file: `npm run test -- tests/unit/commands/transform.test.ts`.
-- Run coverage with thresholds: `npm run test:coverage`.
-- Lint source only: `npm run lint`; ESLint ignores `tests`, `dist`, `node_modules`, `coverage`, and `*.js`.
-- Format source and tests: `npm run format`; check with `npm run format:check`.
-- Release CI quality order is `lint -> format:check -> build -> test:coverage`.
+- Build: `cargo build` (`--release` for measurements).
+- Test: `cargo test`. The browser tests of `prepare` are skipped unless `OBSCURA_BIN` names an obscura binary.
+- Lint: `cargo clippy --all-targets -- -D warnings`.
+- Format: `cargo fmt`; never hand-format. CI runs `cargo fmt --check`.
+- One test: `cargo test --test hash batch` (file `tests/hash.rs`, name filter `batch`).
 
-## Architecture
+## Layout
 
-- Add new CLI commands as separate modules under `src/commands/`, then register them in `src/index.ts`.
-- Do not add new CLI commands by default; first try to fit work into an existing command, service, or library API, and only add a command if the user explicitly insists after the tradeoff is explained.
-- Shared programmatic APIs live outside command modules; `src/lib/index.ts` exports library wrappers from `src/lib/commands.ts` and `src/lib/prepare.ts`.
-- Core service logic belongs in `src/services/`; cross-cutting helpers belong in `src/utils/` or `src/lib/` depending on whether they are CLI-library APIs.
-- Command source imports use emitted `.js` specifiers in TypeScript because `tsconfig.json` uses `module: "nodenext"`.
-- The standard county workflow is `prepare -> generate-transform -> transform -> hash -> upload -> submit-to-contract`; keep README command docs in that execution order.
+- `src/main.rs`: the clap definitions, the exit codes and what each command prints. Every command module returns a `Done { json, text, passed }`.
+- One module per command: `prepare.rs` (with `flow.rs`, `browser.rs`), `transform.rs`, `validate.rs` (with `county.rs` for CARs), `hash.rs`, `tables.rs`, `upload.rs`.
+- Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
+- `assets/`: JavaScript embedded in the binary (`cheerio.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
+- `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `v2`, as pre-release `build-<commit>`), `release.yml` (a `v2.*` tag: GitHub release, never marked "Latest"), `binaries.yml` (the build matrix both use).
 
-## Current CLI Commands
+## Contracts that must not break
 
-- Registered in `src/index.ts`: `validate`, `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `hex-to-cid`, `cid-to-hex`, `hash`, `export-tables`, `upload`, `fetch-data`, `transform`, `generate-transform`, `prepare`, and `create-keystore`.
-- Before proposing a new command, check whether the behavior belongs in `prepare`, `generate-transform`, `transform`, `hash`, `upload`, `validate`, or `submit-to-contract`; these are the main workflow extension points.
-- If the user asks for a capability that sounds like a new command, recommend the smallest change to an existing command first and ask for confirmation before adding a new command surface.
+- **Installing `v2` needs no Rust.** `build.yml` publishes `elephant-cli-<target>.tar.gz` for every commit on `v2` as the pre-release `build-<commit>`; keep the archive names and the single `elephant-cli` file inside them.
+- **1.x stays untouched.** `main`, its npm releases and the release GitHub marks "Latest" belong to 1.x until the migration is decided; Atlas and the kit install from `main`.
+- **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway.
+- **The kit's oracle agent** runs the sequence under "Publish a County" in the README and reads these stdout lines: `CAR written: <file> (<n> blocks, root <cid>)`, `Tables written: <dir> (<n> tables, <n> parts, root <cid>)`, `Atlas page written: <path> group <key>`, `Properties processed: <n>, succeeded: <n>, failed: <n>`.
+- **`hash` output is byte-identical to elephant-cli 1.x.** CIDs are published; a change to canonical JSON, link sorting, codec choice or CAR layout changes them.
 
-## Tests And Gotchas
+## CLI rules
 
-- Vitest only includes `tests/**/*.test.ts` and `tests/**/*.spec.ts`; helper files without those suffixes are not test entrypoints.
-- `tests/setup.ts` mocks console methods and suppresses unhandled rejections/exceptions, so assertions on logging need explicit mock checks.
-- Browser/HTML flows depend on Puppeteer/Chromium packages; README lists Linux system libraries needed for local browser execution.
-- `generate-transform` requires `OPENAI_API_KEY`; `upload` requires `PINATA_JWT`; contract submission and chain checks require an RPC URL.
-- Avoid committing generated/runtime artifacts such as `dist/`, `coverage/`, `tmp/`, logs, CSV outputs, ZIP bundles, and `.env`.
+- stdout is the result: a text report, or exactly one JSON document with `--json`. Everything else goes to stderr.
+- Every `--json` document names its `command` and `input` and uses snake_case keys. The `--output-json` files of `export-tables` and `upload` keep the camelCase record 1.x wrote, because publication notes hold them.
+- A reader that closes stdout early (`| head`) does not change the exit code or print an error.
+- Exit `0` success, `1` the input failed its checks, `2` the command could not run.
+- No prompts, no colour, no emoji, no progress bars, no network call that the command does not need.
+- Do not add a command before trying to fit the work into one of the six.
 
-## Style And Docs
+## Tests
 
-- Use context7 MCP for current documentation, code snippets, and best practices when external library behavior is uncertain.
-- Keep logic in one function unless it is genuinely composable or reusable.
-- Avoid unnecessary destructuring, `else`, `try/catch`, `let`, and `any`; never use `as any`.
-- Prefer single-word variable names where they remain clear.
-- Use `npm run format` for styling instead of hand-formatting; Prettier is 2 spaces, semicolons, single quotes, trailing commas `es5`, print width 80.
-- For long guides, include a table of contents; for each command document purpose, required inputs, outputs, options, and an example invocation.
-- Documentation should target end-user workflows first, use precise language, consistent terminology, and GitHub-friendly anchors.
-- Commit messages are conventional commits with lowercase subjects; allowed types are `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, and `revert`.
+- Tests sit at the public seam: they run the built binary on real files (`tests/*.rs`, helpers in `tests/support`) and assert on exit code, stdout, stderr and the files written.
+- Expected outputs under `tests/fixtures/*/expected` came from elephant-cli 1.58.1 on the same inputs. Do not regenerate them from this crate's own output.
+- Write the failing test first. After it passes, break the code on purpose once to see the test fail for the right reason.
+- `tests/transform_engine.rs` holds the embedded JavaScript engine to Node's answers: each case in `tests/fixtures/transform/engine` is a script, and `golden.sh` there writes what Node reports for it. The shim (`src/js/node.js`) holds only what the published county scripts use: when a script needs something the engine lacks, add it with a case there, and do not add what no script uses.
+- `scripts/parity` compares this crate with elephant-cli 1.x on generated input and fuzzes `validate` and `hash`. Run the relevant script after changing the validator, hashing, the table export or the JavaScript engine.
+- Tests never use the network: `tests/fixtures/lexicon` is the schema cache, and `tests/support/http.rs` is a local HTTP server.
+
+## Style
+
+- Keep logic in one function unless a piece is reused or stands on its own.
+- Prefer early returns to `else`. Prefer immutable bindings to `let mut`.
+- No `unwrap` or `expect` on anything that depends on input; return the error with the path or CID it concerns.
+- No `unsafe` without a comment saying why it is sound.
+- Prefer single-word names where they stay clear.
+- A new dependency needs a reason a few lines of code cannot meet, and a maintainer that will still be there next year.
+- Commit messages are conventional commits with lowercase subjects: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+
+## Documentation
+
+- Target end-user workflows first; order sections by execution.
+- Long guides get a table of contents.
+- For each command: purpose, required inputs, outputs, options and an example invocation.
+- When an option or output changes, update the README and the `--help` text in `src/main.rs` together.

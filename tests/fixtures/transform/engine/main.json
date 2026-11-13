@@ -1,0 +1,21 @@
+{
+  "checks": {
+    "ran": true,
+    "helper_is_main": false,
+    "helper_sees_main": true,
+    "main_filename": true,
+    "module_keys": [
+      "children",
+      "exports",
+      "filename",
+      "id",
+      "loaded",
+      "path",
+      "paths"
+    ],
+    "argv": [
+      2,
+      true
+    ]
+  }
+}

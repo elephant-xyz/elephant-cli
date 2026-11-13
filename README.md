@@ -1,1266 +1,545 @@
-# Elephant Network CLI
+# Elephant CLI
 
-This guide walks Elephant Network oracles through the complete workflow of transforming county data and submitting proofs on-chain using the Elephant CLI.
+`elephant-cli` prepares, transforms, validates, hashes, exports and uploads Elephant county data. Version 2 is a single native binary written in Rust.
+
+> **Status.** Version 2 lives on the `v2` branch, next to 1.x on `main`, and has its own releases (tags `v2.*`). Whether it replaces 1.x is not decided: `main`, the release GitHub marks "Latest" and `npm i @elephant-xyz/cli` are all still 1.x. Pull requests for version 2 go to `v2`.
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Create an Encrypted Keystore](#create-an-encrypted-keystore)
-- [Transform Input Requirements](#transform-input-requirements)
-- [Property Improvement Workflow](#property-improvement-workflow)
-- [Build the Seed Bundle](#build-the-seed-bundle)
-- [Fetch Current Source Content](#fetch-current-source-content)
-- [Browser Flow Templates](#browser-flow-templates)
-- [Browser Flow v2 Handler Packages](#browser-flow-v2-handler-packages)
-- [Transform v2 Handler Packages](#transform-v2-handler-packages)
-- [Generate Transformation Scripts](#generate-transformation-scripts)
-- [Produce the County Dataset](#produce-the-county-dataset)
-- [Hash the County Dataset](#hash-the-county-dataset)
-- [Export County Tables](#export-county-tables)
-- [Upload Datagroups to IPFS](#upload-datagroups-to-ipfs)
-- [Submit Hashes to the Contract](#submit-hashes-to-the-contract)
-- [Utility Commands](#utility-commands)
+- [Conventions](#conventions)
+- [Workflow](#workflow)
+- [Commands](#commands)
+  - [prepare](#prepare)
+  - [transform](#transform)
+  - [validate](#validate)
+  - [hash](#hash)
+  - [export-tables](#export-tables)
+  - [upload](#upload)
+- [Publish a County](#publish-a-county)
+- [Environment Variables](#environment-variables)
+- [Migrating from 1.x](#migrating-from-1x)
+- [Development](#development)
 
 ## Overview
 
-The Elephant CLI enables oracles to:
+A county dataset moves through six steps. Each step is one command; the output of one is the input of the next.
 
-- Derive canonical seed files from jurisdiction sourcing metadata (`transform`).
-- Download the live county response for reproducible processing (`prepare`).
-- Generate and execute extraction scripts for county-specific transformations (`generate-transform` and `transform`).
-- Process Property Improvement data groups with HTML extraction and relationship mapping (`transform --data-group "Property Improvement"`).
-- Canonicalize outputs, upload to IPFS, and record submissions on the Polygon network (`hash`, `upload`, `submit-to-contract`).
-
-Each section below explains what a command does, the inputs it expects, the resulting artifacts, available options, and a runnable example.
-
-## Prerequisites
-
-- Node.js 22.15 or later (includes `npm`); `export-tables` compresses Parquet pages with the Zstd support built into `node:zlib` from that release.
-- Ability to create and extract ZIP archives (`zip`/`unzip`).
-- Access to a Polygon RPC endpoint (e.g., Alchemy, Infura, or internal infrastructure).
-- Oracle private key to be stored in an encrypted keystore file.
-- Pinata JWT (`PINATA_JWT`) for IPFS uploads.
-- OpenAI API key (`OPENAI_API_KEY`) for script generation.
-- Optional: `ELEPHANT_SCHEMA_MANIFEST_URL` to override the lexicon schema manifest endpoint (default `https://lexicon.elephant.xyz/api/manifest`), and `ELEPHANT_IPFS_GATEWAYS` (or the global `--ipfs-gateway <origins>` option) as a comma-separated list of gateway origins, no trailing slash, used instead of the public defaults when fetching lexicon schemas; list the defaults after your own to keep them as fallback. Defaults: `https://ipfs.filebase.io`, `https://gateway.pinata.cloud`, `https://trustless-gateway.link`. Schemas are fetched as trustless raw blocks (`?format=raw`) and hash-verified, so any gateway that supports the trustless gateway spec works.
-- Stable network connection and sufficient disk space for ZIP artifacts.
+| Step | Command | Input | Output |
+| --- | --- | --- | --- |
+| 1 | [`prepare`](#prepare) | A seed ZIP naming the request for one parcel | The seed ZIP plus the fetched source content |
+| 2 | [`transform`](#transform) | The prepared ZIP and county scripts or a handler package | A ZIP of lexicon data-group files |
+| 3 | [`validate`](#validate) | Property outputs, or a county CAR | A CSV of findings |
+| 4 | [`hash`](#hash) | A directory of property outputs | Hashed ZIPs, a CSV of CIDs and a county CAR |
+| 5 | [`export-tables`](#export-tables) | A county CAR | Parquet tables, `tables.car` and an Atlas page entry |
+| 6 | [`upload`](#upload) | A county CAR or a tables directory | The content on an IPFS node, verified |
 
 ## Installation
 
-Install once and reuse:
+Choose one. Node is not needed.
+
+**Download a binary.** Each build has one archive per platform, `elephant-cli-<target>.tar.gz`, and their sums in `SHA256SUMS`:
+
+| Platform | `<target>` |
+| --- | --- |
+| Linux x86_64 | `x86_64-unknown-linux-gnu` |
+| Linux arm64 | `aarch64-unknown-linux-gnu` |
+| macOS Apple silicon | `aarch64-apple-darwin` |
+| macOS Intel | `x86_64-apple-darwin` |
+
+Every commit on the `v2` branch is published as the pre-release `build-<commit>`, a few minutes after it lands. The newest one:
 
 ```bash
-npm install -g @elephant-xyz/cli
+target=aarch64-apple-darwin
+commit=$(git ls-remote https://github.com/elephant-xyz/elephant-cli v2 | cut -f1)
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/build-$commit/elephant-cli-$target.tar.gz" | tar -xz
+sudo mv elephant-cli /usr/local/bin/
+elephant-cli --version
 ```
 
-Or run ad-hoc without installing globally:
+A version 2 release is a tag `v2.*` on the [releases page](https://github.com/elephant-xyz/elephant-cli/releases). Name it in the URL; `releases/latest` is 1.x:
 
 ```bash
-npx @elephant-xyz/cli --help
+version=v2.0.0-alpha.1
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/$version/elephant-cli-$target.tar.gz" | tar -xz
 ```
 
-## Create an Encrypted Keystore
-
-Use `create-keystore` to encrypt your Polygon private key for later use with `submit-to-contract`.
+**Build with cargo** (needs Rust 1.85 or newer, from <https://rustup.rs>):
 
 ```bash
-elephant-cli create-keystore \
-  --private-key 0xYOUR_PRIVATE_KEY \
-  --password "your-strong-password" \
-  --output oracle-keystore.json
+cargo install --git https://github.com/elephant-xyz/elephant-cli --branch v2 --locked
 ```
 
-**What it does**
+The browser mechanisms of `prepare` also need the obscura headless browser. Download it from <https://github.com/h4ckf0r0day/obscura/releases> and put `obscura` on your `PATH`. Nothing else needs it.
 
-- Encrypts the supplied private key with the provided password.
-- Writes an encrypted JSON keystore to disk and prints the derived address.
+## Conventions
 
-**Inputs**
+Every command follows the same rules, so the CLI is easy to script and to drive from an agent.
 
-- Private key (with or without `0x`).
-- Password (minimum 8 characters).
+- **stdout carries the result.** Without options it is a short text report. With `--json` it is exactly one JSON document.
+- **stderr carries everything else**: warnings, per-item errors and the reason a command could not run.
+- **Exit codes:** `0` success; `1` the input was checked and failed (validation findings, a property that could not be hashed); `2` the command could not run (bad arguments, unreadable input, network or browser failure).
+- **Errors with `--json`:** when a command exits `2`, stdout holds `{"error": "<reason>"}`.
+- **Nothing prompts** and nothing needs a terminal. There is no update check.
+- **`--help` on every command** lists its options, modes and examples.
 
-**Output**
+Global options, accepted before or after the command:
 
-- `oracle-keystore.json` (or the path provided via `--output`).
+| Option | Description | Default |
+| --- | --- | --- |
+| `--json` | Print one JSON document describing the result on stdout instead of text. | Off |
+| `--schema-cache <DIR>` | Directory holding the lexicon manifest and schemas, one `<cid>.json` per schema. Also `ELEPHANT_SCHEMA_CACHE_DIR`. | `~/.elephant-cli/schema-cache` |
+| `--offline` | Fetch no schemas (one missing from the cache is an error) and keep `transform` scripts off the network. Also `ELEPHANT_OFFLINE=1`. | Off |
 
-**Options**
-
-| Option                      | Description                                     | Default         |
-| --------------------------- | ----------------------------------------------- | --------------- |
-| `-k, --private-key <key>`   | Private key to encrypt.                         | Required        |
-| `-p, --password <password>` | Password used for encryption.                   | Required        |
-| `-o, --output <path>`       | Destination file for the keystore JSON.         | `keystore.json` |
-| `-f, --force`               | Overwrite the output file if it already exists. | `false`         |
-
-## Transform Input Requirements
-
-The first `transform` run produces canonical seed files from a county sourcing list. Supply a ZIP that contains a single `seed.csv` at its top level:
-
-```
-seed-input.zip
-└── seed.csv
-```
-
-`seed.csv` must include the following headers (one property per row):
-
-| Column                  | Required | Purpose                                                                            |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `parcel_id`             | ✅       | Parcel identifier used across Elephant datasets.                                   |
-| `address`               | ✅       | Human-readable street address for logging.                                         |
-| `method`                | ✅       | HTTP method (`GET` or `POST`).                                                     |
-| `url`                   | ✅       | Base URL to request during `prepare`.                                              |
-| `multiValueQueryString` | ➖       | JSON string mapping query keys to string arrays (e.g. `{"parcel":["0745"]}`).      |
-| `source_identifier`     | ✅       | Stable identifier for the property request (becomes the file stem in later steps). |
-| `county`                | ✅       | County name (case-insensitive; transformed to title case).                         |
-| `json`                  | ➖       | JSON request body (stringified). Mutually exclusive with `body`.                   |
-| `body`                  | ➖       | Raw request payload string. Mutually exclusive with `json`.                        |
-| `headers`               | ➖       | JSON string of HTTP headers (e.g. `{"content-type":"application/json"}`).          |
-
-Only one of `json` or `body` may be present in a row. Leave optional columns blank when not needed.
-
-Example row:
-
-```
-parcel_id,address,method,url,multiValueQueryString,source_identifier,county,json
-074527L1060260060,123 Example Ave,GET,https://county.example.com/search,"{\"parcel\":[\"074527L1060260060\"]}",ALACHUA-074527L1060260060,Alachua,
-```
-
-## Property Improvement Workflow
-
-The Property Improvement workflow extracts structured data from permit websites and creates a Property Improvement data group with all related entities and relationships.
-
-### Overview
-
-The Property Improvement workflow consists of three main steps:
-
-1. **Prepare**: Fetch HTML content from permit websites using HTTP requests
-2. **Extract**: Run extraction scripts to parse HTML and create structured JSON files
-3. **Transform**: Create Property Improvement data group with relationships
-
-### Step 1: Prepare HTML Content
-
-Create an `input.csv` file with HTTP request details for the permit website:
-
-```csv
-source_http_request,request_identifier
-"https://egweb1.cityofbonitasprings.org/energov/selfservice#/permit/e7e6ec95-4042-4710-ad00-f946bb30291f",permit-123
-```
-
-Then run the prepare step to fetch the HTML content:
+Examples of piping:
 
 ```bash
-# Create input.zip with input.csv
-elephant-cli prepare input.zip --output-zip prepared-property-improvement.zip
+# Exit status alone
+elephant-cli validate county.car --output-csv errors.csv && echo clean
+
+# One field of the result
+elephant-cli --json hash ./county-outputs --output-car county.car | jq -r .car.root
+
+# The findings themselves on stdout (the report moves to stderr)
+elephant-cli validate county.car --output-csv - | cut -d, -f4 | sort | uniq -c
 ```
 
-**What this does:**
+The lexicon manifest and every schema fetched are kept in the schema cache, so a later run with `--offline` needs no network. Without `--offline` the manifest is fetched on every run, and a fetch that fails stops the command (exit `2`): a copy from an earlier run is never used unasked.
 
-- Reads HTTP request details from `input.csv`
-- Fetches HTML content from the permit website
-- Creates `prepared-property-improvement.zip` containing both `input.csv` and the fetched HTML file
+`--schema-cache` and `--offline` belong to the commands that read lexicon schemas: `transform`, `validate`, `hash` and `export-tables`. Given on the command line to `prepare` or `upload` they are refused; set through the environment they are ignored there.
 
-### Step 2: Create Extraction Scripts
+## Workflow
 
-Create a `property-improvement-extractor.js` script that:
-
-- Reads HTML files from the input directory
-- Extracts Property Improvement data (permit details, contractors, inspections, etc.)
-- Creates structured JSON files for each entity type
-- Outputs files to the data directory
-
-Example script structure:
-
-```javascript
-// property-improvement-extractor.js
-const fs = require('fs');
-const cheerio = require('cheerio');
-
-// Read HTML file
-const html = fs.readFileSync('input/permit.html', 'utf8');
-const $ = cheerio.load(html);
-
-// Extract Property Improvement data
-const propertyImprovement = {
-  permit_number: $('.permit-number').text(),
-  permit_type: $('.permit-type').text(),
-  // ... more fields
-};
-
-// Write JSON files
-fs.writeFileSync(
-  'data/property_improvement.json',
-  JSON.stringify(propertyImprovement)
-);
-fs.writeFileSync(
-  'data/property_improvement_has_contractor_1.json',
-  JSON.stringify(contractorRelationship)
-);
+```text
+seed.zip ──prepare──▶ prepared.zip ──transform──▶ transformed.zip
+                                                        │
+              one ZIP or folder per property ◀──────────┘
+                             │
+                         validate ──▶ errors.csv
+                             │
+                           hash ──▶ county.car, hash.csv, hashed ZIPs
+                             │
+                         validate county.car ──▶ car-errors.csv
+                             │
+                      export-tables ──▶ tables/, tables.car, Atlas page
+                             │
+                          upload ──▶ IPFS node, read back through a gateway
 ```
 
-Package your script into `property-improvement-scripts.zip`:
+## Commands
 
-```
-property-improvement-scripts.zip
-└── scripts/
-    └── property-improvement-extractor.js
-```
+### prepare
 
-### Step 3: Transform to Data Group
+**Purpose:** fetch the source content for one parcel and add it to its seed ZIP.
 
-Run the transform command to create the Property Improvement data group:
+**Required inputs**
 
-```bash
-elephant-cli transform \
-  --data-group "Property Improvement" \
-  --input-zip prepared-property-improvement.zip \
-  --scripts-zip property-improvement-scripts.zip \
-  --output-zip property-improvement-output.zip
-```
+- A seed ZIP holding `parcel.json` or `property_seed.json` (with `source_http_request` and `request_identifier`) and `address.json` or `unnormalized_address.json`. [`transform`](#transform) in seed mode writes these files.
+- Or `--input-csv`: a CSV with a `request_identifier` column, together with `--multi-request-flow-file`.
+- `--output-zip`.
 
-**What this does:**
+**Mechanisms.** The first one that applies answers the seed's request:
 
-1. **Runs extraction script**: Executes `property-improvement-extractor.js` to parse HTML and create JSON files
-2. **Copies extracted files**: Moves JSON files from `data/` to `input/` for processing
-3. **Creates data group**: Builds Property Improvement data group structure with relationships
-4. **Validates output**: Ensures all files conform to Property Improvement schema
+| Order | Applies when | What it does | File written |
+| --- | --- | --- | --- |
+| 1 | `--browser-flow-zip` | Runs a Browser Flow v2 package: its `handler.js` drives the page and saves named captures. | `captures/<name>.html`, `captures.json` |
+| 2 | `--multi-request-flow-file` | Sends every request of the flow and gathers the answers under their keys. | `<request_identifier>.json` |
+| 3 | The seed's `county_name` or `county_jurisdiction` is `Orange` | Walks the Orange County, FL property appraiser API. | `<request_identifier>.json` |
+| 4 | `--browser-flow-file` | Runs a browser flow, a small state machine written as JSON, and captures the page it ends on. | `<request_identifier>.html` |
+| 5 | `--use-browser` and the request is a GET | Loads the page in the browser. | `<request_identifier>.html` |
+| 6 | Otherwise | Sends the request as one HTTP request. | `<request_identifier>.html` or `.json` |
 
-**Input Requirements:**
-
-- **input.csv**: HTTP request details (same format as seed.csv)
-- **HTML file**: Property improvement data from permit website
-- **Extraction script**: `property-improvement-extractor.js` that parses HTML and creates JSON files
-
-**Output Structure:**
-
-```
-property-improvement-output.zip
-└── data/
-    ├── <property_improvement_schema_cid>.json    # Data group root file
-    ├── property_improvement.json                # Main Property Improvement entity
-    ├── company_1.json                           # Contractor/company entities
-    ├── file_1.json                              # File attachments
-    ├── inspection_1.json                       # Inspection records
-    ├── property_improvement_has_contractor_1.json  # Relationships
-    ├── property_improvement_has_file_1.json
-    └── property_improvement_has_inspection_1.json
-```
-
-**Key Differences from County Workflow:**
-
-- **Custom extraction**: Uses `property-improvement-extractor.js` instead of County mapping scripts
-- **HTML-based**: Extracts data from HTML content rather than structured CSV data
-- **Single script**: Runs one extraction script instead of multiple mapping scripts
-
-**Validation:**
-
-The output can be validated using:
-
-```bash
-elephant-cli validate property-improvement-output.zip
-```
-
-This ensures all files conform to the Property Improvement schema and relationships are properly structured.
-
-**Inputs**
-
-- A single property ZIP, a single extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories (one property each, processed in sorted name order; children starting with `.` or `__` are skipped; duplicate names such as `12345.zip` next to `12345/` abort the run).
-- Or a county CAR written by `hash --output-car` (any input ending in `.car`). The file is indexed once and checked in place:
-  - Integrity: every block's bytes re-hash to its CID.
-  - Root: exactly one root, a `CountyIndex` version 1 with a numeric `properties` count and a `shards` array of links.
-  - Index closure: every shard decodes to `{"properties": [...]}`, the entries add up to `properties`, and every `property_cid` and `data_groups` link resolves inside the file.
-  - Graph closure: every link in every dag-json block reachable from the root resolves inside the file.
-  - Lexicon: every data-group root listed in a shard validates against the schema it is keyed by, resolving links from the CAR instead of IPFS.
-  - Orphans: every block is reachable from the root.
+Mechanisms 1, 4 and 5 use the obscura browser. `prepare` starts `obscura serve` itself and stops it when done.
 
 **Outputs**
 
-- `--output-csv` (default `submit_errors.csv`): validation errors. With a directory of properties, one combined CSV for the whole batch (plus a combined `submit_warnings.csv` beside it), followed by a `Properties processed / succeeded / failed` summary; the exit code is non-zero when any property failed.
-- With a CAR, one row per finding (`file_path` holds the block CID, `error_path` the check name or the JSON path for lexicon errors), followed by a summary of blocks, properties, data groups validated, and errors per check; the exit code is non-zero when any check failed.
-
-```bash
-# Validate every property in a county directory in one invocation
-elephant-cli validate ./county-outputs --output-csv county-errors.csv
-
-# Prove a county CAR is intact, closed, and lexicon-valid before registering its root
-elephant-cli validate county.car --output-csv car-errors.csv
-```
-
-## Build the Seed Bundle
-
-Run `transform` against the seed ZIP to derive the foundational seed files.
-
-```bash
-elephant-cli transform \
-  --input-zip seed-input.zip \
-  --output-zip seed-bundle.zip
-```
-
-**What it does**
-
-- Parses `seed.csv` and constructs canonical `property_seed.json`, `unnormalized_address.json`, and relationship scaffolding.
-- Generates a seed datagroup JSON (named by the Seed schema CID).
-- Packages everything inside a top-level `data/` directory.
-
-**Inputs**
-
-- ZIP containing `seed.csv` at the root.
-
-**Output**
-
-```
-seed-bundle.zip
-└── data/
-    ├── <seed_schema_cid>.json
-    ├── property_seed.json
-    ├── relationship_property_to_address.json
-    └── unnormalized_address.json
-```
-
-For the next step, extract `data/property_seed.json` and `data/unnormalized_address.json` into a new working folder (no subdirectories) and zip them as `prepare-input.zip`.
+- The output ZIP: every file of the seed ZIP plus the file or files in the table above.
+- After a browser flow (mechanism 4) the seed files point at the page the flow ended on: `source_http_request` becomes that page's URL and the original request moves to `entry_http_request`.
+- Captured HTML from mechanisms 1 and 4 is cleaned: scripts, styles and inline styles are removed. Mechanisms 5 and 6 keep the content as received.
 
 **Options**
 
-| Option                 | Description                                                  | Default                |
-| ---------------------- | ------------------------------------------------------------ | ---------------------- |
-| `--input-zip <path>`   | Seed ZIP containing `seed.csv`.                              | Required               |
-| `--output-zip <path>`  | Destination ZIP for generated seed assets.                   | `transformed-data.zip` |
-| `--scripts-zip <path>` | When provided, runs county scripts instead of seed mode.     | None                   |
-| `--legacy-mode`        | Use the legacy AI workflow (not used in modern oracle flow). | `false`                |
+| Option | Description | Default |
+| --- | --- | --- |
+| `[INPUT_ZIP]` | The seed ZIP. | None |
+| `--output-zip <PATH>` | ZIP to write. Required. | None |
+| `--input-csv <PATH>` | A CSV with a `request_identifier` column; one output file per row, answered by the multi-request flow. | None |
+| `--multi-request-flow-file <PATH>` | A multi-request flow (JSON). | None |
+| `--browser-flow-file <PATH>` | A browser flow (JSON). | None |
+| `--browser-flow-zip <PATH>` | A Browser Flow v2 package. | None |
+| `--browser-flow-version <VERSION>` | Accepted for compatibility: `2`, with `--browser-flow-zip`. | None |
+| `--use-browser` | Load the page in the browser. | Off |
+| `--no-continue` | With `--use-browser`: do not click the "Continue" notice some county sites show first. | Clicks it |
+| `--continue-button <SELECTOR>` | With `--use-browser`: click this element once the page has loaded. | None |
+| `--ignore-captcha` | With `--use-browser`: do not wait for a reCAPTCHA redirect or treat the word as an error page. | Off |
+| `--proxy <URL>` | Proxy for the browser, `http://user:password@host:port`. | None |
+| `--browser <PATH>` | The obscura binary to start. Also `OBSCURA_BIN`. | `obscura` on `PATH` |
+| `--cdp-url <WS_URL>` | Attach to a running browser's DevTools WebSocket instead of starting obscura. Also `ELEPHANT_CDP_URL`. | None |
 
-## Fetch Current Source Content
-
-Package the extracted seed files into a ZIP that looks like this:
-
-```
-prepare-input.zip
-├── property_seed.json
-└── unnormalized_address.json
-```
-
-Run `prepare` to reproduce the county response referenced by the seed.
-
-```bash
-elephant-cli prepare prepare-input.zip --output-zip prepared-site.zip
-```
-
-For sites requiring browser interaction, choose the appropriate approach:
-
-```bash
-# Simple disclaimer/agree button only
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --continue-button "#acceptDataDisclaimer" \
-  --use-browser
-
-# Complex counties requiring multi-step navigation
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --browser-flow-template <TEMPLATE_NAME> \
-  --browser-flow-parameters '<JSON_PARAMETERS>'
-
-# Sites with CAPTCHA that should be ignored
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --use-browser \
-  --ignore-captcha
-
-# Using a proxy for browser mode (helpful for bypassing rate limits)
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --use-browser \
-  --proxy "username:password@192.168.1.1:8080"
-
-# Using multi-request flow for APIs with multiple endpoints
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --multi-request-flow-file flow.json
-
-# Using Browser Flow v2 for packaged Puppeteer handlers
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --browser-flow-version 2 \
-  --browser-flow-zip county-browser-flow-v2.zip
-```
-
-**What it does**
-
-- Reads `source_http_request` from `property_seed.json`.
-- Performs the HTTP request, browser workflow, multi-request flow, or Browser Flow v2 handler package.
-- Writes the fetched response or captured HTML alongside the seed files.
-
-**Inputs**
-
-- ZIP containing `property_seed.json` and `unnormalized_address.json` at the top level.
-- Browser Flow v2 also accepts the newer top-level names `parcel.json` and `address.json`.
-
-**Output**
-
-Default, browser template, custom browser flow, and multi-request outputs use one response file:
-
-```
-prepared-site.zip
-├── property_seed.json
-├── unnormalized_address.json
-└── <request_identifier>.html | <request_identifier>.json
-```
-
-Browser Flow v2 outputs a capture manifest and one or more cleaned HTML captures:
-
-```
-prepared-site.zip
-├── property_seed.json
-├── unnormalized_address.json
-├── captures.json
-└── captures/
-    └── <capture-name>.html
-```
-
-**Options**
-
-| Option                             | Description                                                                     | Default  |
-| ---------------------------------- | ------------------------------------------------------------------------------- | -------- |
-| `--output-zip <path>`              | Destination ZIP containing the fetched response.                                | Required |
-| `--use-browser`                    | Fetch GET requests with a headless Chromium browser (needed for dynamic sites). | `false`  |
-| `--no-continue`                    | Skip auto-clicking "Continue" modals when browser mode is active.               | `false`  |
-| `--continue-button <selector>`     | CSS selector for a simple continue/agree button to click.                       | None     |
-| `--ignore-captcha`                 | Ignore CAPTCHA pages and continue processing.                                   | `false`  |
-| `--browser-flow-template <name>`   | Use a predefined browser automation template (e.g., `SEARCH_BY_PARCEL_ID`).     | None     |
-| `--browser-flow-parameters <json>` | JSON parameters for the browser flow template.                                  | None     |
-| `--browser-flow-file <path>`       | Path to custom browser flow JSON file (takes precedence over template).         | None     |
-| `--browser-flow-version <version>` | Set to `2` to run a packaged Browser Flow v2 handler.                           | None     |
-| `--browser-flow-zip <path>`        | Path to a Browser Flow v2 ZIP containing `handler.js`.                          | None     |
-| `--multi-request-flow-file <path>` | Path to JSON file defining a multi-request flow (sequence of HTTP requests).    | None     |
-| `--proxy <url>`                    | Proxy URL with authentication (format: `username:password@ip:port`).            | None     |
-
-### Browser Flow Templates
-
-Browser flow templates provide reusable automation patterns for complex county websites that require multi-step navigation. Instead of hardcoding browser interactions, templates allow you to configure automation using CSS selectors as parameters. The URL is automatically extracted from `property_seed.json`'s `source_http_request` field.
-
-**Key Benefits:**
-
-- Handles modal dialogs and terms acceptance screens
-- Automates form filling and navigation
-- Configurable for different county website structures
-- No code changes required for new counties
-
-For available templates, parameters, and detailed usage examples, see [Browser Flow Templates Documentation](./docs/browser-flow-templates.md).
-
-**Need Maximum Flexibility?**
-
-For complex, site-specific workflows that don't fit standard templates, you can define custom browser flows using JSON files. This gives you complete control over the automation sequence. See [Custom Browser Flows Documentation](./docs/custom-browser-flows.md) for detailed information and examples.
-
-Quick example using a custom flow:
-
-```bash
-elephant-cli prepare input.zip \
-  --output-zip output.zip \
-  --browser-flow-file my-custom-flow.json
-```
-
-### Browser Flow v2 Handler Packages
-
-Browser Flow v2 is for counties where the browser workflow is easier to maintain
-as JavaScript than as a template or JSON workflow. Package an ES module named
-`handler.js` into a ZIP, then run `prepare` with `--browser-flow-version 2` and
-`--browser-flow-zip`.
-
-Quick example using a Browser Flow v2 package:
-
-```bash
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --browser-flow-version 2 \
-  --browser-flow-zip county-browser-flow-v2.zip
-```
-
-The handler receives a Puppeteer `page`, normalized seed input, a `logger`, and
-helpers for recording the final source URL and saving cleaned HTML captures:
-
-```javascript
-export async function handler({ input, page, saveHtml, saveSourceUrl }) {
-  await page.goto(input.url, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#property-details', { timeout: 60000 });
-
-  await saveSourceUrl(page.url());
-  await saveHtml({ name: 'property-detail' });
-}
-```
-
-The output includes `captures.json` and `captures/<name>.html` files. See
-[Browser Flow v2 Handler Packages](./docs/browser-flow-v2.md) for the complete
-package contract, handler API, output manifest, and troubleshooting guide.
-
-## Transform v2 Handler Packages
-
-Transform v2 consumes Browser Flow v2 prepared ZIPs (`address.json`,
-`parcel.json`, `captures.json`, and `captures/*.html`) with a packaged
-`handler.js` transform. It is separate from the v1 `--scripts-zip` runner.
-
-```bash
-elephant-cli transform \
-  --transform-version 2 \
-  --transform-zip county-transform-v2.zip \
-  --input-zip prepared-site.zip \
-  --output-zip transformed-data.zip
-```
-
-Use transform v2 when one transform entrypoint should read one or more named
-captures and write entity and relationship JSON through the helper API. See
-[Transform v2 Handler Packages](./docs/TRANSFORM-V2.md) for the full package
-contract, context API, metadata rules, and examples.
-
-### Multi-Request Flows
-
-For counties where property data is distributed across multiple API endpoints, use multi-request flows to fetch and combine data from a sequence of HTTP requests into a single JSON output.
-
-**When to Use Multi-Request Flows:**
-
-- Property data is spread across multiple API endpoints (e.g., owner info, sales history, tax data)
-- Different aspects of property information require separate API calls
-- The property appraiser provides API access rather than HTML pages
-- A single page view or request cannot capture all necessary data
-
-**Key Features:**
-
-- Execute multiple HTTP requests in parallel (GET, POST, PUT, PATCH)
-- Automatically substitute `{{=it.request_identifier}}` template variables in URLs, headers, bodies, and query parameters using doT.js syntax
-- Support for JSON and form-encoded request bodies
-- Automatic response parsing (JSON or string)
-- Combined output with all request/response pairs in a single JSON file
-
-For detailed documentation, configuration format, validation rules, and troubleshooting, see [Multi-Request Flow Documentation](./docs/MULTI_REQUEST_FLOW.md).
-
-**Quick Example:**
-
-Create a flow file `manatee-flow.json`:
+**Multi-request flow.** A JSON file listing requests. `{{=it.request_identifier}}` in any string is replaced by the parcel's identifier (in a browser flow, `{{=it.<name>}}` names any stored value). Nothing else of the doT template language is filled; another `{{=...}}` expression is an error:
 
 ```json
 {
   "requests": [
     {
-      "key": "OwnersAndGeneralInformation",
-      "request": {
-        "method": "POST",
-        "url": "https://example.com/api/owner",
-        "headers": {
-          "content-type": "application/x-www-form-urlencoded"
-        },
-        "body": "parid={{=it.request_identifier}}"
-      }
-    },
-    {
       "key": "Sales",
       "request": {
         "method": "GET",
-        "url": "https://example.com/api/sales?parid={{=it.request_identifier}}"
+        "url": "https://county.example.com/api/sales",
+        "multiValueQueryString": { "parid": ["{{=it.request_identifier}}"] }
       }
     }
   ]
 }
 ```
 
-Then run:
-
-```bash
-elephant-cli prepare prepare-input.zip \
-  --output-zip prepared-site.zip \
-  --multi-request-flow-file manatee-flow.json
-```
-
-See the [examples directory](./examples/manatee-multi-request-prepare-flow.json) for a complete real-world example.
-
-To use `transform` with a browser on AWS EC2 instances you need to run Ubuntu 22.04 or later and perfrom the following steps:
-
-```bash
-# Update package lists
-sudo apt update
-
-
-# Install dependencies
-sudo apt install -y \
-    dconf-service \
-    libasound2t64 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgcc-s1 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libayatana-appindicator3-1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    wget \
-    libgbm1
-
-
-# Clean up
-sudo apt autoremove -y
-sudo apt clean
-```
-
-## Generate Transformation Scripts
-
-Provide the prepared site bundle to `generate-transform` to produce county-specific extraction scripts. Set `OPENAI_API_KEY` beforehand.
-
-```bash
-export OPENAI_API_KEY=sk-live...
-elephant-cli generate-transform prepared-site.zip \
-  --output-zip generated-scripts.zip
-```
-
-**What it does**
-
-- Runs an LLM pipeline that reads the seed, address, and downloaded county response.
-- Generates JavaScript scripts (`ownerMapping.js`, `structureMapping.js`, `layoutMapping.js`, `utilityMapping.js`, `data_extractor.js`) plus a manifest.
-
-**Inputs**
-
-- ZIP containing `property_seed.json`, `unnormalized_address.json`, and one HTML or JSON county response file at the root. Optionally include a `scripts/` directory with prior attempts and CSVs containing previous errors.
-
-**Output**
-
-```
-generated-scripts.zip
-├── data_extractor.js
-├── ownerMapping.js
-├── structureMapping.js
-├── utilityMapping.js
-├── layoutMapping.js
-└── manifest.json
-```
-
-**Options**
-
-| Option                         | Description                                                                                                                                              | Default                 |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `-o, --output-zip <path>`      | Destination ZIP for generated scripts or repaired scripts.                                                                                               | `generated-scripts.zip` |
-| `-d, --data-dictionary <path>` | Optional reference file fed to the generator.                                                                                                            | None                    |
-| `--scripts-zip <path>`         | Existing scripts bundle (must contain `data_extractor.js`) for automatic repair.                                                                         | None                    |
-| `-e, --error <string>`         | JSON error payload captured from a failed transform run.                                                                                                 | None                    |
-| `--error-csv <path>`           | CSV of validation errors produced by `validate` (e.g., `submit_errors.csv`). Deduplicated and used to guide automatic repair (requires `--scripts-zip`). | None                    |
-
-**Error repair flow**
-
-- Supply `--scripts-zip` and exactly one of:
-  - `--error` with a JSON payload like `{"type":"error","message":"Unknown enum value X.","path":"Class.property"}`
-  - `--error-csv` with a validation errors CSV generated by `validate` (headers: `property_cid,data_group_cid,file_path,error_path,error_message,timestamp`)
-- When `--error-csv` is provided, the CLI:
-  - Parses all rows, maps each `error_path` (e.g., `/relationships/<rel>/.../(from|to)/<prop>`) through the given `data_group_cid` to resolve the underlying `<Class>.<property>`.
-  - Deduplicates errors by `<Class>.<property>` and aggregates them into a single error payload.
-  - Fetches the schema fragment for each unique property and provides all fragments to the repair prompt.
-- The CLI extracts `data_extractor.js`, passes the current script, aggregated error(s), and schema fragment(s) to the model, and writes back the fixed `data_extractor.js` into `--output-zip`.
-- Only the extraction script is modified; other files remain untouched. The repaired ZIP can be reused with the `transform` command.
-
-Example invocations:
-
-```bash
-# Repair using a single JSON error payload
-elephant-cli generate-transform prepared-site.zip \
-  --scripts-zip generated-scripts.zip \
-  --error '{"type":"error","message":"must be one of ...","path":"Owner.first_name"}' \
-  --output-zip generated-scripts-fixed.zip
-
-# Repair using a CSV of validation errors produced by `validate`
-elephant-cli generate-transform prepared-site.zip \
-  --scripts-zip generated-scripts.zip \
-  --error-csv submit_errors.csv \
-  --output-zip generated-scripts-fixed.zip
-```
-
-_Approximate duration: up to one hour per county. The process consumes OpenAI API credits._
-
-## Produce the County Dataset
-
-Run `transform` again, this time supplying both the prepared site ZIP and the generated scripts.
-
-```bash
-elephant-cli transform \
-  --input-zip prepared-site.zip \
-  --scripts-zip generated-scripts.zip \
-  --output-zip transformed-data.zip
-```
-
-**What it does**
-
-- Normalizes inputs to `input.html`/`input.json`, `property_seed.json`, and `unnormalized_address.json` in a temporary workspace.
-- Executes the generated scripts, adding `source_http_request` metadata to every datagroup.
-- Builds county relationships, then bundles the results.
-- Writes the Seed data-group root and its `address_has_parcel` relationship next to the `address.json` and `parcel.json` the scripts produced (keeping any the scripts already wrote), so `hash` derives the property CID from this bundle alone.
-
-**Inputs**
-
-- `prepared-site.zip` (from the previous step).
-- `generated-scripts.zip` (from the LLM pipeline or a hand-tuned bundle).
-
-**Output**
-
-```
-transformed-data.zip
-└── data/
-    ├── property.json
-    ├── *.json (cleaned datagroups named by schema CIDs)
-    └── relationship_*.json
-```
-
-**Options**
-
-| Option                 | Description                                                    | Default                  |
-| ---------------------- | -------------------------------------------------------------- | ------------------------ |
-| `--input-zip <path>`   | Prepared site ZIP with seed and source response.               | Required                 |
-| `--scripts-zip <path>` | ZIP of scripts to execute.                                     | Required in scripts mode |
-| `--output-zip <path>`  | Destination ZIP for the transformed county bundle.             | `transformed-data.zip`   |
-| `--legacy-mode`        | Use the legacy agent flow (not part of the standard pipeline). | `false`                  |
-
-## Hash the County Dataset
-
-Feed the transformed bundle to `hash` to compute content-addressed JSON and produce the submission CSV.
-
-```bash
-elephant-cli hash transformed-data.zip \
-  --output-zip hashed-data.zip \
-  --output-csv hash-results.csv
-```
-
-**What it does**
-
-- Canonicalizes every JSON datagroup.
-- Calculates IPFS-compatible multihash CIDs.
-- Produces a CSV mapping property, datagroup, and data CIDs, ready for contract submission.
-
-**Inputs**
-
-- ZIP containing a single property directory (such as `transformed-data.zip` from the previous step). The ZIP may contain either files directly or a `data/` folder; both are supported.
-- Or an extracted property directory, or a directory whose immediate children are property ZIPs and/or property subdirectories. Each child is hashed as one property, in sorted name order, sharing one schema cache and manifest across the batch. Same directory rules as `validate`.
-
-**Outputs**
-
-```
-hashed-data.zip
-└── <property_cid>/
-    ├── <data_cid>.json (canonicalized datagroups)
-    └── image files copied from the transform bundle
-
-hash-results.csv
-propertyCid,dataGroupCid,dataCid,filePath,uploadedAt
-...
-```
-
-The CSV leaves `uploadedAt` empty (populated after IPFS upload).
-
-With `--output-car`, every hashed JSON block of the run (image files excluded) is also written into one CAR file whose single root is a county index; a consumer walks root -> shard -> property -> data group:
-
-```
-<index>   {"label":"CountyIndex","version":1,"properties":<count>,"shards":[{"/":"<shard cid>"},...]}
-<shard>   {"properties":[{"property_cid":{"/":"<property cid>"},"data_groups":{"<data group schema cid>":{"/":"<data cid>"},...}},...]}
-```
-
-With a directory input, `--output-zip` is treated as an output directory and `--output-csv` collects every property's rows into one file:
-
-```bash
-elephant-cli hash ./county-transformed \
-  --output-zip ./county-hashed \
-  --output-csv county-hash-results.csv
-```
-
-```
-county-hashed/
-├── <property-a>.zip   (stem of the child ZIP or subdirectory name)
-└── <property-b>.zip
-
-county-hash-results.csv   (one header, rows from every property)
-submit_errors.csv         (combined per-property error reports, beside the CSV)
-submit_warnings.csv       (combined per-property warning reports, beside the CSV)
-```
-
-`--output-zip` must be a directory (or not exist yet); an existing file is rejected. A property that fails does not stop the batch; a `Properties processed / succeeded / failed` summary is printed and the exit code is non-zero when any property failed.
-
-Add `--output-car` to collect the whole batch into one CAR alongside the per-property ZIPs:
-
-```bash
-elephant-cli hash ./county-transformed \
-  --output-zip ./county-hashed \
-  --output-csv county-hash-results.csv \
-  --output-car county.car
-```
-
-**Options**
-
-| Option                            | Description                                                                   | Default                    |
-| --------------------------------- | ----------------------------------------------------------------------------- | -------------------------- |
-| `-o, --output-zip <path>`         | Destination ZIP containing canonicalized JSON (folder named by property CID). | `hashed-data.zip`          |
-| `-c, --output-csv <path>`         | CSV file with hash results.                                                   | `hash-results.csv`         |
-| `--output-car <path>`             | Also write all hashed JSON blocks of the run into one CAR rooted at an index. | Not written                |
-| `--max-concurrent-tasks <number>` | Target concurrency for hashing (fallback determined automatically).           | Auto                       |
-| `--property-cid <cid>`            | Override the property CID used for the output folder and CSV.                 | Seed CID or inferred value |
-
-## Export County Tables
-
-Turn a validated county CAR into Parquet tables with `export-tables`: one table per lexicon class, one per relationship type, and a `properties` table from the index, plus a `tables.car` whose single root records every part.
-
-```bash
-elephant-cli export-tables county.car \
-  --output ./county-tables \
-  --output-json tables-summary.json
-```
-
-**What it does**
-
-- Walks the CAR from the county index through every shard, property, data-group root and relationship block, in file order.
-- Places each entity in the table of the lexicon class its relationship schema names for that end (`from`/`to` `cid` -> class schema `title`, snake_case), never by file name. Every schema is fetched once per CID.
-- Writes each entity and relationship block once, however many groups or relationships reach it; `property_cid` and `data_group_cid` on such a shared block name the first property and data group that reached it in walk order.
-- Closes a part when the next row would push it past `--part-size` (default `1g`), so small tables are one part and the same CAR always yields byte-identical parts and the same tables root (no timestamps inside the files).
-- Compresses every Parquet page with Zstd level 3 (the `node:zlib` implementation); the index records `"codec":"zstd"`.
-- Computes each part's CID as a UnixFS file with CIDv1, raw leaves and sha2-256, so `ipfs add --cid-version 1 --raw-leaves <part>` returns the recorded CID.
-
-**Inputs**
-
-- A county CAR written by `hash --output-car`, ideally after `validate county.car` passed.
-- Class, relationship and data-group schemas, resolved through the schema cache and the lexicon manifest.
-
-**Outputs**
-
-```
-county-tables/
-├── tables.car                     (one dag-json CountyTables block, the root)
-├── properties/part-00000.parquet  (property_cid, one column per data-group schema CID holding the data-group root CID)
-├── property/part-00000.parquet    (one table per class: schema columns, then cid, property_cid, data_group_cid, request_identifier)
-├── address/part-00000.parquet
-├── property_has_address/part-00000.parquet   (one table per relationship type: relationship_cid, from_cid, to_cid, property_cid, data_group_cid)
-└── ...
-```
-
-Column types follow the class schema: `string` -> UTF8, `number` -> DOUBLE, `integer` -> INT64, `boolean` -> BOOLEAN, every column nullable; `source_http_request`, `source_payload` and any other object or array value are UTF8 JSON strings. Every part carries the key-value metadata `elephant.county_root`, `elephant.manifest_url`, `elephant.table`, `elephant.part` and `elephant.part_size_bytes`.
-
-The `CountyTables` root links every part:
-
-```
-{"label":"CountyTables","version":1,"county_root":{"/":"<county index cid>"},"part_size_bytes":1073741824,"codec":"zstd",
- "tables":{"<table>":{"rows":<n>,"parts":[{"cid":{"/":"<unixfs file cid>"},"rows":<n>,"bytes":<n>},...]},...}}
-```
-
-The command prints `Tables written: <dir> (<tables> tables, <parts> parts, root <cid>)` and, with `--output-json`, writes the same with per-table row and part counts, the county root and an `exportedAt` timestamp.
-
-**Atlas page**
-
-[Atlas](https://github.com/elephant-xyz/atlas) registers a county as `counties/<STATE>/<county>.json`. `--atlas-page <path>` creates or updates that file from the same walk, so nothing is copied by hand:
-
-```bash
-elephant-cli export-tables county.car \
-  --output ./county-tables \
-  --atlas-page ./atlas/counties/FL/lee.json --county lee --state FL --fips 12071
-```
+**Browser flow.** A JSON state machine. Step types: `open_page`, `wait_for_selector`, `wait_for_selector_race`, `click`, `type`, `keyboard_press`. Strings directly under `input` may use `{{=it.request_identifier}}`, `{{=it.url}}` and the `result` of earlier wait steps:
 
 ```json
 {
-  "county": "lee",
-  "state": "FL",
-  "fips": "12071",
-  "groups": {
-    "county": {
-      "cid": "<county index root>",
-      "schema": "<data-group schema CID>",
-      "tables": "<CountyTables root>"
-    }
+  "starts_at": "open",
+  "states": {
+    "open": { "type": "open_page", "input": { "url": "{{=it.url}}" }, "next": "fill" },
+    "fill": { "type": "type", "input": { "selector": "#parcel", "value": "{{=it.request_identifier}}" }, "next": "submit" },
+    "submit": { "type": "keyboard_press", "input": { "key": "Enter" }, "next": "result" },
+    "result": { "type": "wait_for_selector", "input": { "selector": "#details", "timeout": 30000 }, "end": true }
   }
 }
 ```
 
-- `--county`, `--state` and `--fips` are required when the page does not exist; when it does, any given value must match the file or the command fails.
-- The group key is the snake_cased title of the archive's data-group schema (`County` -> `county`, `Property Improvement` -> `property_improvement`), taken from the distinct schema CIDs in the index with the `Seed` schema dropped. An archive with more than one other data group fails: `archive carries N data groups; Atlas registers one group per archive`.
-- `groups[<key>]` is written as `{ cid, schema, tables }` (county root, schema CID, tables root); other groups in the file are kept, keys are sorted, the file is 2-space indented with a trailing newline. The command prints `Atlas page written: <path> group <key>`, and the summary (`--output-json`, library result) carries `atlas: { page, group }`.
+**Browser Flow v2 package.** A ZIP with `handler.js` at its root. The handler receives `page`, `input`, `saveHtml({ name, html? })`, `saveSourceUrl(url)` and `logger`. `page` offers the part of Puppeteer's `Page` that flows use: `goto`, `url`, `content`, `evaluate`, `waitForSelector`, `waitForFunction`, `waitForNavigation`, `click`, `type`, `select`, `$`, `$$`, `$eval`, `$$eval`, `keyboard.press` and `keyboard.type`.
 
-**Options**
-
-| Option                 | Description                                                                                          | Default     |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- | ----------- |
-| `--output <dir>`       | Directory that receives `<table>/part-NNNNN.parquet` files and `tables.car`.                         | Required    |
-| `--part-size <bytes>`  | Cap on the bytes of one Parquet part; accepts `k`, `m` and `g` suffixes.                             | `1g`        |
-| `--output-json <path>` | Write the export summary as JSON.                                                                    | Not written |
-| `--atlas-page <path>`  | Create or update the Atlas county page with `groups[<key>] = { cid, schema, tables }`.               | Not written |
-| `--county <key>`       | Atlas county key; required with `--atlas-page` for a new page, must match an existing one.           | From page   |
-| `--state <ST>`         | Two-letter state code; required with `--atlas-page` for a new page, must match an existing one.      | From page   |
-| `--fips <code>`        | Five-digit county FIPS code; required with `--atlas-page` for a new page, must match an existing one. | From page   |
-
-## Upload Datagroups to IPFS
-
-Upload the hashed bundle to Pinata with the `upload` command. Provide a Pinata JWT via `--pinata-jwt` or `PINATA_JWT`.
-
-```bash
-export PINATA_JWT=eyJhbGciOi...
-elephant-cli upload hashed-data.zip \
-  --output-csv upload-results.csv
-```
-
-A `.car` input (from `hash --output-car`) is imported through the Kubo RPC API instead (`dag/import` with `pin-roots=true`), which a local kubo daemon, Filebase and other pinning providers all speak. Success is reported only after the root has been read back from the gateway (`--gateway` or `ELEPHANT_CAR_GATEWAY`, an origin with no trailing slash) and its bytes verified against the root CID; `--timeout` bounds that readback, not the upload.
-
-A tables directory (from `export-tables`, recognised by its `tables.car`) goes through the same API: every Parquet part is added and pinned with `add?pin=true&cid-version=1&raw-leaves=true`, one request per part, and the CID the node returns must equal the one `tables.car` records; then `tables.car` is imported and its root read back exactly as for a county CAR, and the first part is fetched from the gateway (`<root>/tables/<table>/parts/0/cid`, falling back to its bare CID) and its size compared with the recorded bytes.
-
-```bash
-# tables directory to Filebase
-elephant-cli upload ./county-tables \
-  --api https://rpc.filebase.io \
-  --output-json tables-upload.json
-```
-
-```bash
-# local kubo daemon (API on 127.0.0.1:5001, gateway on 127.0.0.1:8080)
-elephant-cli upload county.car
-
-# Filebase: the token is composed from the three FILEBASE_* variables
-export FILEBASE_ACCESS_KEY=... FILEBASE_SECRET_KEY=... FILEBASE_BUCKET=county-cars
-elephant-cli upload county.car \
-  --api https://rpc.filebase.io \
-  --output-json upload-summary.json
-```
-
-**What it does**
-
-- Extracts the single property directory from the hashed ZIP.
-- Uploads JSON datagroups (and image assets) to IPFS via Pinata.
-- Writes a CSV in the same format as `hash-results.csv`, including upload timestamps.
-
-**Inputs**
-
-- `hashed-data.zip` containing one property directory named by property CID.
-
-**Outputs**
-
-- IPFS CID for the JSON directory (printed in the CLI).
-- Optional CID for media files when present.
-- `upload-results.csv` mirroring the hash CSV headers with a populated `uploadedAt` (ISO 8601) column.
-- For a `.car` input: the upload summary, printed and (with `--output-json`) written as JSON:
-
-```json
-{
-  "api": "https://rpc.filebase.io",
-  "root": "baguqeera...",
-  "blocks": 133,
-  "gatewayUrl": "https://ipfs.filebase.io/ipfs/baguqeera...",
-  "uploadedAt": "2025-09-21T00:00:00.000Z"
+```js
+export async function handler({ page, input, saveHtml, saveSourceUrl }) {
+  await page.goto(input.url, { waitUntil: 'domcontentloaded' });
+  await page.type('#parcel', input.request_identifier);
+  await Promise.all([page.waitForNavigation(), page.keyboard.press('Enter')]);
+  await page.waitForSelector('#details');
+  await saveSourceUrl(page.url());
+  await saveHtml({ name: 'property-detail' });
 }
 ```
 
-- For a tables directory: `api`, `root` (the `CountyTables` CID), `countyRoot`, `parts` (part files added), `gatewayUrl`, `uploadedAt`.
-
-**Options**
-
-| Option                 | Description                                                                                                                             | Default                                                                             |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `--pinata-jwt <jwt>`   | Pinata authentication token (falls back to `PINATA_JWT`). ZIP input only.                                                               | Required if env var absent                                                          |
-| `--api <url>`          | Kubo RPC API for a CAR or tables-directory input (falls back to `IPFS_API`).                                                            | `http://127.0.0.1:5001`                                                             |
-| `--token <bearer>`     | Bearer token for the API (falls back to `IPFS_API_TOKEN`, then to base64 of `FILEBASE_ACCESS_KEY:FILEBASE_SECRET_KEY:FILEBASE_BUCKET`). | None                                                                                |
-| `--gateway <url>`      | Gateway origin, no trailing slash, used to read the CAR or tables root back (falls back to `ELEPHANT_CAR_GATEWAY`).                     | `https://ipfs.filebase.io` for `rpc.filebase.io`, otherwise `http://127.0.0.1:8080` |
-| `--timeout <seconds>`  | Seconds to wait for the root (and, for tables, the first part) to resolve on the gateway.                                               | `300`                                                                               |
-| `--output-json <path>` | Write the CAR or tables upload summary as JSON.                                                                                         | Not written                                                                         |
-
-## Submit Hashes to the Contract
-
-Finalize the workflow by submitting the uploaded hashes to the Elephant smart contract on Polygon.
+**Examples**
 
 ```bash
-elephant-cli submit-to-contract upload-results.csv \
-  --keystore-json oracle-keystore.json \
-  --keystore-password "your-strong-password" \
-  --rpc-url https://polygon.llamarpc.com \
-  --gas-price auto
+# One HTTP request
+elephant-cli prepare seed.zip --output-zip prepared.zip
+
+# A Browser Flow v2 package
+elephant-cli prepare seed.zip --output-zip prepared.zip --browser-flow-zip flow.zip
+
+# Many parcels through a multi-request flow
+elephant-cli prepare --input-csv parcels.csv --multi-request-flow-file flow.json --output-zip prepared.zip
 ```
 
-Use the CSV generated by `upload` (preferred) or `hash` (if you operate your own uploader) as the input.
+obscura refuses loopback and private addresses unless `OBSCURA_ALLOW_PRIVATE_NETWORK=1` is set; set it to prepare against a local test server.
 
-**What it does**
+### transform
 
-- Validates each row, batches submissions, and sends transactions to the Elephant contract.
-- Optionally performs dry runs, centralized API submissions, or unsigned transaction export.
-- Writes transaction IDs to a CSV for auditing.
+**Purpose:** turn what `prepare` captured for one parcel into lexicon data-group files.
 
-**Inputs**
+**Required inputs**
 
-- CSV with headers `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt`.
-- Encrypted keystore JSON and password, or centralized API credentials.
+- `--input-zip`: the prepared ZIP, or for seed mode a ZIP holding `seed.csv`.
+- For scripts mode, `--scripts-zip`; for handler mode, `--transform-zip`.
+
+**Modes.** The options given choose the mode:
+
+| Mode | Options | What happens |
+| --- | --- | --- |
+| Seed | `--input-zip` only | The first row of `seed.csv` becomes `address.json`, `parcel.json`, `unnormalized_address.json`, `property_seed.json` and the Seed data-group root. |
+| Scripts | `--scripts-zip` | `ownerMapping.js`, `structureMapping.js`, `layoutMapping.js`, `utilityMapping.js` and then `data_extractor.js` run with `input.html` (or `input.json`) and the seed files in their working directory, and write `data/*.json`. The CLI then stamps `source_http_request` and `request_identifier` on each entity, links entities to `property.json`, and writes the County and Seed data-group roots. |
+| Handler | `--transform-zip` | The package's `handler.js` reads captures with `readCapture(name)` and writes through `writeJson(name, value)` and `writeRelationship({ type, name, from, to })`. The CLI builds the data-group root from the relationships written. |
+
+**Where the JavaScript runs.** County scripts and handlers run on an embedded JavaScript engine (QuickJS), not on Node. What they get:
+
+It offers the part of Node the published county scripts use, and no more. A script that reaches for anything else fails with the name of what is missing.
+
+- Modules: `fs` (the sync functions for reading, writing, listing and removing, and `fs/promises` with `readFile`, `writeFile`, `readdir`, `unlink`), `path`, `vm` (`runInNewContext`), `crypto` (`createHash('sha256')`), `http` and `https` (`get`), and `cheerio`. CommonJS `require` and ES module `import` both work.
+- Globals: `process` (`argv`, `env`, `cwd`, `exit`, `stdout`, `stderr`), `console`, `Buffer` (UTF-8 and hex), `setTimeout`, `clearTimeout`, and `URL` to read a URL's parts and `searchParams` (assigning to a part has no effect).
+- `toLocaleString` on numbers and `localeCompare` give the answers Node gives for `en-US`. There is no `Intl` object, and the `toLocale...` methods of dates throw: build a date's text from its parts.
+- Files: only the working directory, which holds the scripts, the seed files and `input.html` or `input.json`.
+- Network: `http.get` and `https.get` only, and nothing with `--offline`.
+- Time: 120 seconds per script; `config.timeoutMs` for a handler.
+
+Other npm packages are not available. `tests/fixtures/transform/engine` holds the scripts that check these behaviours against Node.
 
 **Outputs**
 
-- On-chain transactions (unless `--dry-run` is used).
-- Updated reports: `submit_errors.csv`, `submit_warnings.csv`, and a timestamped `transaction-ids-*.csv` (override with `--transaction-ids-csv`).
+- The output ZIP with a `data/` directory: entity files, relationship files, and one `<schema CID>.json` root per data group.
+- In scripts mode the Seed root and `address_has_parcel.json` are written when `data/address.json` and `data/parcel.json` exist.
 
 **Options**
 
-| Option                                | Description                                                                 | Default                                   |
-| ------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------- |
-| `--keystore-json <path>`              | Encrypted keystore file containing the oracle key.                          | Required unless using API mode            |
-| `--keystore-password <password>`      | Password for decrypting the keystore (or set `ELEPHANT_KEYSTORE_PASSWORD`). | Required with keystore                    |
-| `--rpc-url <url>`                     | Polygon RPC endpoint.                                                       | Env `RPC_URL` or Elephant default         |
-| `--contract-address <address>`        | Submit contract address.                                                    | Env `SUBMIT_CONTRACT_ADDRESS` or default  |
-| `--transaction-batch-size <number>`   | Number of items per transaction.                                            | `200`                                     |
-| `--gas-price <value>`                 | Gas price in gwei (`auto` or numeric string).                               | `30`                                      |
-| `--dry-run`                           | Validate and produce artifacts without sending transactions.                | `false`                                   |
-| `--unsigned-transactions-json <path>` | File to store unsigned transactions (requires `--dry-run`).                 | None                                      |
-| `--from-address <address>`            | Sender address to record in unsigned transactions.                          | None                                      |
-| `--domain <domain>`                   | Centralized submission API domain.                                          | None                                      |
-| `--api-key <key>`                     | API key for centralized submission.                                         | None                                      |
-| `--oracle-key-id <id>`                | Oracle key identifier for centralized submission.                           | None                                      |
-| `--check-eligibility`                 | Verify consensus and prior submissions before sending.                      | `false`                                   |
-| `--transaction-ids-csv <path>`        | Output CSV for transaction hashes.                                          | `reports/transaction-ids-{timestamp}.csv` |
+| Option | Description | Default |
+| --- | --- | --- |
+| `--input-zip <PATH>` | The prepared ZIP. Required. | None |
+| `--output-zip <PATH>` | ZIP to write. | `transformed-data.zip` |
+| `--scripts-zip <PATH>` | ZIP of the five county scripts. | None |
+| `--transform-zip <PATH>` | Transform v2 handler package. | None |
+| `--transform-version <VERSION>` | Accepted for compatibility: `2`, with `--transform-zip`. | None |
+| `--data-group <LABEL>` | Label of the data group a handler package builds; refused without `--transform-zip`. | `County` |
 
-Complete these steps for each property, track generated artifacts, and retain keystore/password information securely. Running the commands in the order above delivers a full seed-to-contract submission for the Elephant Network.
-
-## Utility Commands
-
-These helpers support cross-checking hashes, translating identifiers, and auditing previously submitted payloads.
-
-### Convert Hex Hashes to CID
+**Examples**
 
 ```bash
-elephant-cli hex-to-cid 0x1220e828d7cf579e7a7b2c60cffd66a4663b4857670f2ec16125cb22f1affc6c \
-  --validate
+# Seed records from a seed.csv
+elephant-cli transform --input-zip seed.zip --output-zip seed-records.zip
+
+# County scripts
+elephant-cli transform --input-zip prepared.zip --scripts-zip scripts.zip --output-zip transformed.zip
+
+# A handler package
+elephant-cli transform --input-zip prepared.zip --transform-zip handler.zip --output-zip transformed.zip
 ```
 
-**What it does**
+When a script fails, the reason on stderr names the script, its exit code, and the last lines it printed.
 
-- Validates an Ethereum-style `0x`-prefixed (or bare) 32-byte hex string.
-- Converts the hash to a base32 CIDv1 using the raw codec and prints it to stdout.
+### validate
 
-**Input**
+**Purpose:** check property outputs, or a county CAR, against the lexicon.
 
-- One 32-byte hex hash (with or without `0x`).
+**Required inputs**
 
-**Output**
+- One property ZIP or directory; or a directory whose children are property ZIPs and directories, one property each (children starting with `.` or `__` are skipped, and two children with the same name stop the run); or a county CAR (any input ending in `.car`).
 
-- CID string on stdout. With `--quiet`, emits the CID only; otherwise prefixes output with `CID:`.
+**What is checked for a property**
 
-**Options**
+- Every data-group root (a JSON file holding exactly `label` and `relationships`) validates against the schema the lexicon manifest gives its label, following `{"/": "./file.json"}` links to relationship and entity files.
+- Every JSON file is reached by a data group. A file that is not is reported as unused.
 
-| Option           | Description                                                       | Default |
-| ---------------- | ----------------------------------------------------------------- | ------- |
-| `-v, --validate` | Print confirmation that the hex input is valid before conversion. | `false` |
-| `-q, --quiet`    | Suppress labels and emit just the CID string.                     | `false` |
+**What is checked for a county CAR**
 
-### Convert CID to Hex Hash
+- **integrity:** every block's bytes hash to its CID.
+- **root:** exactly one root, a `CountyIndex` version 1 with a numeric `properties` count and a `shards` array of links.
+- **index:** every shard decodes, the entries add up to `properties`, and every `property_cid` and `data_groups` link is in the file.
+- **graph:** every link below the root is in the file.
+- **lexicon:** every data-group root listed in a shard validates against the schema it is keyed by, with links resolved from the CAR.
+- **orphans:** every block is reachable from the root.
 
-```bash
-elephant-cli cid-to-hex bafkreicfajrgq6qicnclpbg4qolyhm6co74fcwrkm7n6dyx4qw5bpjvlfe \
-  --validate
-```
-
-**What it does**
-
-- Validates a CIDv1 string.
-- Converts the CID into the 32-byte hex hash expected by on-chain contracts.
-
-**Input**
-
-- One CIDv1 string (multibase base32, usually beginning with `b`).
-
-**Output**
-
-- 32-byte hex hash on stdout (prefixed with `Hex:` unless `--quiet` is used).
-
-**Options**
-
-| Option           | Description                                                       | Default |
-| ---------------- | ----------------------------------------------------------------- | ------- |
-| `-v, --validate` | Print confirmation that the CID input is valid before conversion. | `false` |
-| `-q, --quiet`    | Suppress labels and emit just the hex string.                     | `false` |
-
-### Check Gas Price
-
-```bash
-elephant-cli check-gas-price
-```
-
-Or with a custom RPC URL:
-
-```bash
-elephant-cli check-gas-price --rpc-url https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY
-```
-
-**What it does**
-
-- Fetches current gas prices from the blockchain network.
-- Displays both legacy (Type 0) and EIP-1559 (Type 2) transaction gas prices.
-- Shows the current block number and base fee information.
-
-**Inputs**
-
-- None required. Optionally provide an RPC URL.
-
-**Output**
-
-```
-🐘 Elephant Network CLI - Check Gas Price
-
-📊 Current Gas Prices
-
-Block Number: 79589165
-
-Legacy (Type 0) Transaction:
-  Gas Price: 25.285523905 Gwei
-
-EIP-1559 (Type 2) Transaction:
-  Max Fee Per Gas: 26.068348884 Gwei
-  Max Priority Fee (Tip): 25.789395847 Gwei
-  Base Fee Per Gas: 0.281338954 Gwei
-
-✅ Gas price check complete
-```
-
-**Options**
-
-| Option            | Description                                                       | Default                   |
-| ----------------- | ----------------------------------------------------------------- | ------------------------- |
-| `--rpc-url <url>` | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com` |
-
-**Use as Library**
-
-You can also use this function programmatically in your code:
-
-```typescript
-import { checkGasPrice } from '@elephant-xyz/cli/lib';
-
-const gasPriceInfo = await checkGasPrice({
-  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
-});
-
-console.log(gasPriceInfo.legacy?.gasPrice); // "25.285523905"
-console.log(gasPriceInfo.eip1559?.maxFeePerGas); // "26.068348884"
-```
-
-### Check Transaction Status
-
-```bash
-elephant-cli check-transaction-status transaction-ids.csv
-```
-
-Or with custom options:
-
-```bash
-elephant-cli check-transaction-status transaction-ids.csv \
-  --rpc-url https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY \
-  --output-csv checked-transactions.csv \
-  --max-concurrent 20
-```
-
-**What it does**
-
-- Reads transaction hashes from a CSV file.
-- Checks the status of each transaction on the blockchain (success, failed, pending, or not found).
-- Writes results to a new CSV file with status, block number, gas used, and any errors.
-
-**Inputs**
-
-- CSV file with headers: `transactionHash`, `batchIndex`, `itemCount`, `timestamp`, `status` (optional columns are allowed).
-
-**Output**
-
-```
-transaction-status-checked-20240101120000.csv
-transactionHash,batchIndex,itemCount,timestamp,status,blockNumber,gasUsed,checkTimestamp,error
-0x123...,0,1,2024-01-01T00:00:00Z,success,12345,100000,2024-01-01T12:00:00Z,
-0x456...,1,1,2024-01-01T00:00:00Z,pending,,,2024-01-01T12:00:00Z,
-```
-
-**Options**
-
-| Option                   | Description                                                       | Default                                      |
-| ------------------------ | ----------------------------------------------------------------- | -------------------------------------------- |
-| `--rpc-url <url>`        | RPC URL for the blockchain network (falls back to `RPC_URL` env). | `https://polygon-rpc.com`                    |
-| `--output-csv <path>`    | Output CSV file path.                                             | `transaction-status-checked-{timestamp}.csv` |
-| `--max-concurrent <num>` | Maximum concurrent status checks.                                 | `10`                                         |
-
-**Use as Library**
-
-You can also use this function programmatically in your code:
-
-```typescript
-import { checkTransactionStatus } from '@elephant-xyz/cli/lib';
-
-// Check a single transaction
-const result = await checkTransactionStatus({
-  transactionHashes: '0x123...',
-  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
-});
-
-console.log(result[0].status); // "success", "failed", "pending", or "not found"
-console.log(result[0].blockNumber); // 12345 (if mined)
-console.log(result[0].gasUsed); // "100000" (if mined)
-
-// Check multiple transactions
-const results = await checkTransactionStatus({
-  transactionHashes: ['0x111...', '0x222...', '0x333...'],
-  rpcUrl: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_API_KEY',
-  maxConcurrent: 20,
-});
-
-results.forEach((tx) => {
-  console.log(`${tx.transactionHash}: ${tx.status}`);
-});
-```
-
-### Fetch Data from IPFS or Transactions
-
-```bash
-elephant-cli fetch-data bafkreicfajrgq6qicnclpbg4qolyhm6co74fcwrkm7n6dyx4qw5bpjvlfe \
-  --output-zip fetched-data.zip \
-  --gateway https://gateway.pinata.cloud/ipfs
-```
-
-You can also supply a Polygon transaction hash (32-byte hex). When a transaction is provided, the CLI resolves its logged dataset hashes via the configured RPC endpoint before downloading referenced CIDs.
-
-**What it does**
-
-- Traverses an IPFS datagroup tree starting from a CID, following relationship links, and saves the resolved JSON to a ZIP archive.
-- For transaction hashes, reads on-chain submissions, converts each hex hash back into CID form, and downloads the associated data graph.
-- Rewrites CID links inside the fetched JSON to point at the relative paths inside the ZIP for easier offline inspection.
-
-**Inputs**
-
-- Either an IPFS CID or a 32-byte transaction hash. Provide one identifier per invocation.
+The CAR is read start to end twice and never indexed as a whole. Both the layout `hash --output-car` writes (a shard's blocks right before the shard block) and a gateway export (`?format=car`: a shard's blocks right after it) are checked this way. A CAR laid out some other way gets the same findings, but the whole file is indexed in memory and the report says how many blocks were looked up by CID.
 
 **Outputs**
 
-```
-fetched-data.zip
-└── <property_folder>/
-    ├── *.json (datagroups named by schema CID when known)
-    └── relationship_*.json (local links between files)
-```
-
-When media assets are referenced and accessible through the gateway, they are downloaded into sibling files in the same property folder.
+- `--output-csv`: one row per finding, with the columns `property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp`. For a CAR, `file_path` holds the block CID and `error_path` the check name, or the JSON path for a schema error.
+- stdout: the report. For a directory of properties it is `Properties processed: <n>, succeeded: <n>, failed: <n>`. For a CAR it lists blocks, properties, data groups validated and errors per check.
+- Exit code `1` when anything was found.
 
 **Options**
 
-| Option                    | Description                                                                            | Default                             |
-| ------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------- |
-| `-g, --gateway <url>`     | IPFS gateway used for downloads (set `IPFS_GATEWAY` to override globally).             | `https://gateway.pinata.cloud/ipfs` |
-| `-o, --output-zip <path>` | Destination ZIP that will hold the fetched dataset.                                    | `fetched-data.zip`                  |
-| `-r, --rpc-url <url>`     | Polygon RPC endpoint used when resolving transaction hashes (falls back to `RPC_URL`). | Elephant default                    |
+| Option | Description | Default |
+| --- | --- | --- |
+| `<INPUT>` | The property, the directory of properties, or the county CAR. | None |
+| `-o, --output-csv <PATH>` | CSV file for the findings; `-` writes them to stdout. | `submit_errors.csv` |
 
-Set `--gateway` to match the provider used during uploads if you need consistent access controls. Provide an RPC endpoint with access to Elephant submissions when fetching by transaction hash.
+**Examples**
+
+```bash
+elephant-cli validate ./property-dir
+elephant-cli validate ./county-outputs --output-csv county-errors.csv
+elephant-cli validate county.car --output-csv car-errors.csv
+elephant-cli --json validate county.car | jq .errors
+```
+
+### hash
+
+**Purpose:** give every JSON file a data group reaches its canonical bytes and CID, and pack the result.
+
+**Required inputs**
+
+- One property ZIP or directory, or a directory of properties (the same rules as [`validate`](#validate)). Each property needs a Seed data group: its CID is the property CID.
+
+**What happens**
+
+- Links `{"/": "./file.json"}` are replaced by `{"/": "<cid>"}`, deepest first. A link to an image becomes the raw CID of its bytes; an `ipfs_url` naming an image becomes `ipfs://<cid>`. A link to anything else fails the data group.
+- JSON is canonicalised (RFC 8785, with arrays of links sorted) and given a CIDv1: dag-json, sha2-256.
+- Bytes and CIDs are identical to those of elephant-cli 1.x.
+
+**Outputs**
+
+- `--output-zip`: for one property, a ZIP with `<property CID>/<cid>.json` for every block and the property's images. For a directory of properties, a directory that receives one such ZIP per property.
+- `--output-csv`: `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt`, one row per data group.
+- `--output-car`: the county CAR. Each property's blocks, a shard block after every 5000 properties, and the `CountyIndex` last, as the root.
+- stdout: `CAR written: <path> (<n> blocks, root <cid>)`, and for a directory `Properties processed: <n>, succeeded: <n>, failed: <n>`.
+- Exit code `1` when a data group or a property could not be hashed; each one is named on stderr and under `errors` in the `--json` document.
+
+**Options**
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `<INPUT>` | The property or the directory of properties. | None |
+| `-o, --output-zip <PATH>` | Hashed ZIP, or directory of hashed ZIPs. | `hashed-data.zip` |
+| `-c, --output-csv <PATH>` | CSV of data-group CIDs. | `hash-results.csv` |
+| `--output-car <PATH>` | County CAR to write. | Not written |
+
+**Example**
+
+```bash
+elephant-cli hash ./county-outputs \
+  --output-zip ./county-hashed --output-csv county-hash.csv --output-car county.car
+```
+
+### export-tables
+
+**Purpose:** turn a validated county CAR into Parquet tables, and write its Atlas page entry.
+
+**Required inputs**
+
+- A county CAR written by `hash --output-car`.
+- `--output`.
+- For a new Atlas page: `--atlas-page` with `--county`, `--state` and `--fips`.
+
+**Outputs**
+
+- `<output>/<table>/part-NNNNN.parquet`: one table per lexicon class, one per relationship type, and `properties` from the index. Which table a block belongs to comes from the schemas, never from a file name. Parts are zstd-compressed and split at `--part-size`.
+- `<output>/tables.car`: one dag-json block, the `CountyTables` document, recording every part by CID, rows and bytes. Part CIDs are UnixFS CIDs as `ipfs add --cid-version 1 --raw-leaves` computes them.
+- `--output-json`: the summary (`output`, `car`, `root`, `countyRoot`, `partSizeBytes`, `codec`, `tables`, `parts`, `exportedAt`, `atlas`), under the names 1.x gave them.
+- `--json`: the same values under snake_case names (`county_root`, `part_size_bytes`, `exported_at`), with `command` and `input`, like every other command's document.
+- `--atlas-page`: the county page, created or updated with `groups.<label> = { cid, schema, tables }`. Other groups and unknown keys are kept.
+- stdout: `Tables written: <output> (<n> tables, <n> parts, root <cid>)` and `Atlas page written: <path> group <key>`.
+
+**Options**
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `<INPUT>` | The county CAR. | None |
+| `--output <DIR>` | Directory for the tables. Required. | None |
+| `--part-size <BYTES>` | Largest part file, a byte count with an optional `k`, `m` or `g`. | `1g` |
+| `--output-json <PATH>` | Also write the summary to this file. | Not written |
+| `--atlas-page <PATH>` | Create or update the Atlas county page. | Not written |
+| `--county <KEY>` | County key for a new Atlas page. | From the page |
+| `--state <ST>` | Two-letter state code for a new Atlas page. | From the page |
+| `--fips <CODE>` | Five-digit county FIPS code for a new Atlas page. | From the page |
+
+**Example**
+
+```bash
+elephant-cli export-tables county.car --output ./county-tables \
+  --output-json county-tables.json \
+  --atlas-page ./atlas/counties/IL/rock-island.json --county rock-island --state IL --fips 17161
+```
+
+### upload
+
+**Purpose:** send a county CAR or a tables directory to an IPFS node over the Kubo RPC API, and prove it arrived.
+
+**Required inputs**
+
+- A county CAR (`.car`), or a tables directory written by `export-tables` (one holding `tables.car`).
+- A node: a local kubo daemon by default, or `--api` with a pinning provider such as `https://rpc.filebase.io`.
+
+**What is verified**
+
+- For a CAR: the node reports the root the archive declares, and the gateway serves the root block with bytes that hash to its CID.
+- For a tables directory: every part has the size `tables.car` records before anything is sent; the node's CID for every part equals the recorded one; then `tables.car` is imported as above and the first part is read back.
+
+**Outputs**
+
+- stdout and `--output-json`: `api`, `root`, `blocks` (CAR) or `countyRoot` and `parts` (tables), `gatewayUrl`, `uploadedAt`, under the names 1.x gave them.
+- `--json`: the same values under snake_case names (`county_root`, `gateway_url`, `uploaded_at`), with `command` and `input`.
+
+**Options**
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `<INPUT>` | The CAR or the tables directory. | None |
+| `--api <URL>` | Kubo RPC API of the node. Also `IPFS_API`. | `http://127.0.0.1:5001` |
+| `--token <BEARER>` | Bearer token for the API. Also `IPFS_API_TOKEN`, or the three `FILEBASE_*` variables. | None |
+| `--gateway <URL>` | Gateway to read back from. Also `ELEPHANT_CAR_GATEWAY`. | The node's, or Filebase's for its API |
+| `--timeout <SECONDS>` | How long to wait for the gateway to serve what was uploaded. | `300` |
+| `--output-json <PATH>` | Also write the summary to this file. | Not written |
+
+**Examples**
+
+```bash
+elephant-cli upload county.car --output-json county-upload.json
+
+export FILEBASE_ACCESS_KEY=... FILEBASE_SECRET_KEY=... FILEBASE_BUCKET=...
+elephant-cli upload ./county-tables --api https://rpc.filebase.io --output-json tables-upload.json
+```
+
+## Publish a County
+
+Once every property of a data group has been transformed, run this sequence once per data group:
+
+```bash
+county=lee; state=FL; fips=12071; group=county
+
+elephant-cli validate ./$group-outputs --output-csv $county-$group-errors.csv
+
+elephant-cli hash ./$group-outputs \
+  --output-zip ./$county-$group-hashed \
+  --output-csv $county-$group-hash.csv \
+  --output-car $county-$group.car
+
+elephant-cli validate $county-$group.car --output-csv $county-$group-car-errors.csv
+
+elephant-cli export-tables $county-$group.car --output ./$county-$group-tables \
+  --output-json $county-$group-tables-export.json \
+  --atlas-page ./atlas/counties/$state/$county.json --county $county --state $state --fips $fips
+
+elephant-cli upload $county-$group.car --output-json $county-$group-upload.json
+elephant-cli upload ./$county-$group-tables --output-json $county-$group-tables-upload.json
+```
+
+Each command stops the sequence with a non-zero exit code when its step fails, so the block can run under `set -e`.
+
+## Environment Variables
+
+| Variable | Used by | Effect |
+| --- | --- | --- |
+| `ELEPHANT_SCHEMA_CACHE_DIR` | `transform`, `validate`, `hash`, `export-tables` | The schema cache directory (`--schema-cache`). |
+| `ELEPHANT_OFFLINE` | `transform`, `validate`, `hash`, `export-tables` | `1` is `--offline`. |
+| `ELEPHANT_SCHEMA_MANIFEST_URL` | `validate`, `hash`, `transform` | The lexicon manifest; a URL or a local file path. Default `https://lexicon.elephant.xyz/api/manifest`. |
+| `ELEPHANT_IPFS_GATEWAYS` | `validate`, `transform`, `export-tables` | Comma-separated gateway origins for schema fetches; replaces the defaults. |
+| `IPFS_API`, `IPFS_API_TOKEN`, `ELEPHANT_CAR_GATEWAY` | `upload` | The node, its token and the readback gateway. |
+| `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, `FILEBASE_BUCKET` | `upload` | Together they make the Filebase token when none is given. |
+| `OBSCURA_BIN`, `ELEPHANT_CDP_URL` | `prepare` | The obscura binary to start, or a running browser to attach to. |
+| `OBSCURA_ALLOW_PRIVATE_NETWORK` | `prepare` | `1` lets obscura reach loopback and private addresses. |
+| `ELEPHANT_ORANGE_API` | `prepare` | Base URL of the Orange County API, for testing. |
+
+## Migrating from 1.x
+
+The commands a county publication uses keep their names and options: `validate <input> --output-csv`, `hash <input> --output-zip --output-csv --output-car`, `export-tables` with its Atlas options, and `upload` with `--api`, `--token`, `--gateway`, `--timeout` and `--output-json` all work as before. `hash` produces the same bytes and CIDs.
+
+What changed:
+
+| Area | 1.x | 2.x |
+| --- | --- | --- |
+| Runtime | Node 22+ | A native binary; Node is not needed |
+| Install | `npm i @elephant-xyz/cli`, or from git with npm | A binary from the releases page, or `cargo install`; there is no npm package |
+| Library | `@elephant-xyz/cli/lib` | Gone; run the binary with `--json` |
+| Removed commands | `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform` | Not available; use `@elephant-xyz/cli@1` from npm if you need one |
+| Exit codes | `1` for every failure | `1` the input failed its checks, `2` the command could not run |
+| Output | Banners and emoji on stdout, a log file in the working directory | A plain report on stdout, or one JSON document with `--json`; no log file |
+| Update check | Exits `1` when a newer version is published | None |
+| `.env` | Loaded from the working directory | Not loaded |
+| Gateways | The global `--ipfs-gateway <url>` | `ELEPHANT_IPFS_GATEWAYS`, a comma-separated list |
+| `validate` on properties | Writes `submit_warnings.csv`; a property that cannot be checked exits `1` silently | No warnings file; the reason is on stderr, exit `2` |
+| `validate` on a CAR | Indexes the whole file | Two sequential reads; gateway exports stay on the fast path |
+| `hash` | A data group that cannot be hashed is only written to `submit_errors.csv`, exit `0` | Named on stderr and in `--json`, exit `1`; `--property-cid` and `--max-concurrent-tasks` are gone; every core is used |
+| `export-tables` | hyparquet writer | Apache parquet writer: same tables, columns and rows; part bytes, part CIDs and the tables root differ |
+| `upload` | Also uploads a hashed ZIP to Pinata | County CARs and tables directories only |
+| `transform` | Scripts run as Node child processes with the CLI's `node_modules` | Scripts run on embedded QuickJS with the Node modules listed under [transform](#transform), confined to their working directory; legacy mode and the Property Improvement extractor mode are gone |
+| `transform` scripts | The four mapping scripts run at once; links in a data-group root array follow directory order, which varies | They run one after another (`ownerMapping`, `structureMapping`, `layoutMapping`, `utilityMapping`, then `data_extractor`); links follow file-name order. CIDs after `hash` are the same |
+| `transform` handlers | `--transform-version 2` required; no npm packages | `--transform-zip` alone is enough; `cheerio` can be imported |
+| `prepare` flows | doT templates; the built-in `SEARCH_BY_PARCEL_ID` flow | Only `{{=it.<name>}}` is filled; write the flow as a `--browser-flow-file` (`--browser-flow-template` and `--browser-flow-parameters` are gone) |
+| `prepare` browser | Bundled Chromium through Puppeteer | The obscura browser, installed separately; `--no-headless` is gone |
+| `prepare --input-csv` | With a multi-request flow or a browser flow | With a multi-request flow only |
+| `prepare` captures | Cleaned and formatted with Prettier | Cleaned, not reformatted |
+| Browser Flow v2 `page` | The whole Puppeteer `Page` | The methods listed under [prepare](#prepare) |
+
+## Development
+
+```bash
+cargo test                                   # unit and CLI tests
+OBSCURA_BIN=/path/to/obscura cargo test      # also the browser tests of prepare
+cargo fmt && cargo clippy --all-targets -- -D warnings
+```
+
+- The tests run the built binary on real files. Expected outputs under `tests/fixtures` were produced by elephant-cli 1.58.1 on the same inputs.
+- `assets/cheerio.js` is cheerio's browser build as one file; `scripts/bundle-cheerio.sh` rebuilds it.
+- `scripts/parity` holds the checks against elephant-cli 1.x and the fuzzers; its README says what each one needs.
+- `CONTEXT.md` defines the terms used in code and documentation.

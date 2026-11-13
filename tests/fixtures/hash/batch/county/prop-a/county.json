@@ -1,0 +1,6 @@
+{
+  "relationships": {
+    "property_has_address": { "/": "./relationship_property_has_address.json" }
+  },
+  "label": "County"
+}

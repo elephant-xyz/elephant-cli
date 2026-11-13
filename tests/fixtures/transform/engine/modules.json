@@ -1,0 +1,84 @@
+{
+  "checks": {
+    "vm": [
+      {
+        "200": [
+          "a",
+          "b"
+        ],
+        "0100": "Single Family",
+        "nested": {
+          "ok": true
+        }
+      },
+      42,
+      80,
+      [
+        80
+      ],
+      "undefinedundefinedundefined",
+      "ReferenceError",
+      "SyntaxError"
+    ],
+    "buffer": [
+      "6869",
+      true,
+      false,
+      "ab",
+      6,
+      "hi",
+      2,
+      "in a template"
+    ],
+    "crypto": [
+      "8200534342bc21f634f4334870a22c9731082eb17d9c5ec8cbf2cdec9f596ed7",
+      32
+    ],
+    "process": [
+      "string",
+      2,
+      "object",
+      true,
+      "function",
+      "function",
+      "function"
+    ],
+    "globals": [],
+    "files": [
+      true,
+      "raw",
+      [
+        [
+          "bytes.bin",
+          false,
+          true
+        ],
+        [
+          "deep",
+          true,
+          false
+        ]
+      ],
+      3,
+      true,
+      "ENOENT",
+      true,
+      false
+    ],
+    "timer_order": [
+      "sync",
+      "promise",
+      "timeout 0",
+      "timeout 5"
+    ],
+    "fs_promises": [
+      true,
+      [
+        "file.json"
+      ],
+      "ENOENT",
+      false,
+      true
+    ]
+  }
+}

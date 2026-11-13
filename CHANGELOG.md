@@ -1,3 +1,26 @@
+# 2.0.0 (unreleased)
+
+Elephant CLI is now a single native binary written in Rust. See "Migrating from 1.x" in the README for the full table.
+
+### BREAKING CHANGES
+
+* Removed commands: `validate-and-upload`, `submit-to-contract`, `check-transaction-status`, `check-gas-price`, `create-keystore`, `hex-to-cid`, `cid-to-hex`, `fetch-data`, `generate-transform`. Use `@elephant-xyz/cli@1` from npm if you need one.
+* There is no npm package and no `@elephant-xyz/cli/lib`. Install a binary from the GitHub releases, or build with `cargo install`; scripts that used the library run the binary with `--json`.
+* Exit codes: `1` now means the input failed its checks and `2` that the command could not run.
+* stdout carries only the result (a text report, or one JSON document with `--json`); logs go to stderr. No log file, no update check, no `.env` loading.
+* `transform` runs county scripts and handlers on embedded QuickJS, confined to their working directory, with `http.get` and `https.get` as their only network access. The engine offers the part of Node the published county scripts use (listed in the README), not all of it. Legacy mode and the Property Improvement extractor mode are gone.
+* `prepare` drives the obscura browser instead of a bundled Chromium, and no longer reformats captured HTML with Prettier. Flow files are filled only where they say `{{=it.<name>}}`; `--browser-flow-template`, `--browser-flow-parameters` and `--no-headless` are gone, `--input-csv` takes a multi-request flow only, and a Browser Flow v2 handler gets the `page` methods listed in the README.
+* `upload` sends county CARs and tables directories to a Kubo RPC API only; uploading a hashed ZIP to Pinata is gone.
+* `hash` exits `1` when a data group cannot be hashed; `--property-cid` and `--max-concurrent-tasks` are gone.
+* `export-tables` writes Parquet with the Apache writer: tables, columns and rows are unchanged, part bytes and the tables root differ.
+
+### Features
+
+* `validate` checks a county CAR in two sequential reads on all cores, for the layout `hash` writes and for gateway exports alike.
+* `--json`, `--offline` and `--schema-cache` on every command; `validate --output-csv -` writes the findings to stdout.
+* `hash` produces the same bytes and CIDs as 1.x.
+* `cheerio` is built into `transform` for scripts and handlers.
+
 ## [1.58.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.0...v1.58.1) (2025-12-26)
 
 

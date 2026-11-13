@@ -1,0 +1,1 @@
+{"source_http_request":{"url":"https://county.example.com/detail","method":"GET","multiValueQueryString":{"parcel":["12345"]}},"request_identifier":"12345","full_address":"1 Main St, Fort Myers, FL 33901","county_jurisdiction":"Lee"}

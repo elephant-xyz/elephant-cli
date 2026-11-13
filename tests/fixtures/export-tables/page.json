@@ -1,0 +1,12 @@
+{
+  "county": "test",
+  "state": "IL",
+  "fips": "17161",
+  "groups": {
+    "county": {
+      "cid": "baguqeerai2wamycgxkpzd7wyncncl4srp4ykab4aw62bcb3mvcrlkknzo57a",
+      "schema": "bafkreia6tjziby3upxmidymud5iusd32urrztslgrudkwysc7ydmxoekuq",
+      "tables": "baguqeeraxd5sf4mjxsq7la4x3ia65o7uytlu6g7fzv5oo3r4nfs5obiv7naa"
+    }
+  }
+}
