@@ -58,17 +58,19 @@ Both must be clean; CI checks them. The rest of the style rules are in `AGENTS.m
 
 ## Submit
 
-- Branch from `main`, and open a pull request against `main`.
+- Version 2 lives on the `v2` branch: branch from `v2`, and open a pull request against `v2`. `main` is 1.x.
 - Commit messages are [conventional commits](https://www.conventionalcommits.org) with a lowercase subject: `feat(validate): accept gateway exports`.
 - Say in the pull request what you ran and what it printed.
 
 ## Release
 
-A release is a tag.
+A release of version 2 is a tag `v2.*` on the `v2` branch. Releases of 1.x are cut from `main` by semantic-release and are not affected.
 
-1. Set the version in `Cargo.toml`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge.
-2. `git tag v<version> && git push origin v<version>`.
+1. Set the version in `Cargo.toml`, run `cargo build` to update `Cargo.lock`, add the entry to `CHANGELOG.md`, and merge into `v2`.
+2. On `v2`: `git tag v<version> && git push origin v<version>`.
 
-Every commit on `main` is also built by the `Build` workflow and published as the pre-release `build-<commit>`, so `main` can be installed without a Rust toolchain. The newest 50 are kept.
+While 1.x is still released from `main`, give version 2 a version with a hyphen (`2.0.0-alpha.1`, `2.0.0-rc.1`): the plain tag `v2.0.0` is the one semantic-release would create if `main` ever got a breaking change.
 
-The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and attaches them to a GitHub release with their SHA-256 sums. A version with a hyphen, such as `2.0.0-alpha.1`, is marked as a pre-release.
+Every commit on `v2` is also built by the `Build` workflow and published as the pre-release `build-<commit>`, so `v2` can be installed without a Rust toolchain. The newest 50 are kept.
+
+The `Release` workflow builds the binaries for Linux and macOS (x86_64 and arm64) and attaches them to a GitHub release with their SHA-256 sums. The release is never marked "Latest", which stays with 1.x, and a version with a hyphen is marked as a pre-release.

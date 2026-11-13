@@ -1,10 +1,12 @@
 name: Release
 
-# A release is a tag: `git tag v2.0.0 && git push origin v2.0.0`.
-# The tag must equal the version in Cargo.toml.
+# A release of version 2 is a tag on the v2 branch:
+#   git tag v2.0.0-alpha.1 && git push origin v2.0.0-alpha.1
+# The tag must equal the version in Cargo.toml. Tags of 1.x (`v1.*`) are cut
+# from main by its own workflow and do not start this one.
 on:
   push:
-    tags: ['v*']
+    tags: ['v2.*']
   workflow_dispatch:
     inputs:
       dry-run:
@@ -45,6 +47,8 @@ jobs:
           (cd dist && sha256sum *.tar.gz > SHA256SUMS)
           prerelease=""
           case "$VERSION" in *-*) prerelease=--prerelease ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS --title "$GITHUB_REF_NAME" --generate-notes $prerelease
+          # never "Latest": that is the newest 1.x release, which `releases/latest` and npm users expect
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS --title "$GITHUB_REF_NAME" \
+            --generate-notes --latest=false $prerelease
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,11 +1,11 @@
 name: Build
 
-# Every commit on main gets its binaries, published as the pre-release
-# `build-<commit>`, so the current main or a pinned commit can be downloaded
+# Every commit on v2 gets its binaries, published as the pre-release
+# `build-<commit>`, so the current v2 or a pinned commit can be downloaded
 # without a Rust toolchain (see "Installation" in the README).
 on:
   push:
-    branches: ['main']
+    branches: ['v2']
 
 permissions:
   contents: read

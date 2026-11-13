@@ -2,6 +2,7 @@
 
 ## What this is
 
+- Version 2 of elephant-cli, developed on the `v2` branch with its own releases (tags `v2.*`); `main` is 1.x (TypeScript). Pull requests for this code go to `v2`.
 - One Rust crate that builds one binary, `elephant-cli`. There is no npm package: the binary is distributed through GitHub releases and `cargo install`.
 - Six commands, in workflow order: `prepare`, `transform`, `validate`, `hash`, `export-tables`, `upload`. `README.md` documents them in that order; keep it that way.
 - `CONTEXT.md` defines the domain terms. Use them in code, tests and docs.
@@ -20,11 +21,12 @@
 - One module per command: `prepare.rs` (with `flow.rs`, `browser.rs`), `transform.rs`, `validate.rs` (with `county.rs` for CARs), `hash.rs`, `tables.rs`, `upload.rs`.
 - Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
 - `assets/`: JavaScript embedded in the binary (`cheerio.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
-- `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `main`, as pre-release `build-<commit>`), `release.yml` (a tag: GitHub release), `binaries.yml` (the build matrix both use).
+- `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `v2`, as pre-release `build-<commit>`), `release.yml` (a `v2.*` tag: GitHub release, never marked "Latest"), `binaries.yml` (the build matrix both use).
 
 ## Contracts that must not break
 
-- **Installing `main` needs no Rust.** `build.yml` publishes `elephant-cli-<target>.tar.gz` for every commit on `main` as the pre-release `build-<commit>`; keep the archive names and the single `elephant-cli` file inside them.
+- **Installing `v2` needs no Rust.** `build.yml` publishes `elephant-cli-<target>.tar.gz` for every commit on `v2` as the pre-release `build-<commit>`; keep the archive names and the single `elephant-cli` file inside them.
+- **1.x stays untouched.** `main`, its npm releases and the release GitHub marks "Latest" belong to 1.x until the migration is decided; Atlas and the kit install from `main`.
 - **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway.
 - **The kit's oracle agent** runs the sequence under "Publish a County" in the README and reads these stdout lines: `CAR written: <file> (<n> blocks, root <cid>)`, `Tables written: <dir> (<n> tables, <n> parts, root <cid>)`, `Atlas page written: <path> group <key>`, `Properties processed: <n>, succeeded: <n>, failed: <n>`.
 - **`hash` output is byte-identical to elephant-cli 1.x.** CIDs are published; a change to canonical JSON, link sorting, codec choice or CAR layout changes them.
