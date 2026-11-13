@@ -84,6 +84,21 @@ fn loads_a_page_in_the_browser_and_keeps_what_scripts_rendered() {
     assert!(page.contains("<script>") && page.to_lowercase().starts_with("<!doctype html>"), "{page}");
 }
 
+#[test]
+fn gives_a_page_without_the_known_county_markers_eight_seconds_as_1x_does() {
+    let Some(binary) = obscura() else { return };
+    let scratch = Scratch::new();
+    let site = site();
+    seed(&scratch, &site, "/search", Value::Null);
+    let began = std::time::Instant::now();
+    let ran = prepare(&scratch, &binary, &["--use-browser"]);
+    let took = began.elapsed().as_secs_f32();
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+    assert!(text(&scratch, "12345.html").contains("id=\"agree\""));
+    // 1.x stops waiting for the notice after 8 s and keeps the page 1 s later
+    assert!((8.5..13.0).contains(&took), "took {took} s");
+}
+
 const FLOW: &str = r##"{
   "starts_at": "open",
   "states": {

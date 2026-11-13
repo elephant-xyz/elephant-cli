@@ -371,7 +371,8 @@ pub fn visit(browser: &mut Browser, address: &str, proceed: bool, button: Option
     // Either the notice some county sites show first, or the page itself.
     let notice = present("#pnlIssues", None, true);
     let shown = format!("({notice} || Boolean(document.querySelector('#parcelLabel, .sectionTitle, table.detailsTable, .textPanel, [id*=\"Property\"]')))");
-    let _ = browser.wait(&shown, Duration::from_secs(15), "the page content");
+    // 1.x races the two waits, and the notice's wait ends after 8 s whether or not it came.
+    let _ = browser.wait(&shown, Duration::from_secs(8), "the page content");
     let before = browser.navigations;
     match button {
         Some(selector) => {
