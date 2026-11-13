@@ -2,7 +2,7 @@ name: Binaries
 
 # Builds and tests elephant-cli for every platform it is distributed for and
 # uploads one artifact per target: elephant-cli-<target>.tar.gz.
-# Called by build.yml (every commit on main) and release.yml (every tag).
+# Called by build.yml (every commit on v2) and release.yml (every v2 tag).
 on:
   workflow_call:
 

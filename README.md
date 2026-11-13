@@ -2,6 +2,8 @@
 
 `elephant-cli` prepares, transforms, validates, hashes, exports and uploads Elephant county data. Version 2 is a single native binary written in Rust.
 
+> **Status.** Version 2 lives on the `v2` branch, next to 1.x on `main`, and has its own releases (tags `v2.*`). Whether it replaces 1.x is not decided: `main`, the release GitHub marks "Latest" and `npm i @elephant-xyz/cli` are all still 1.x. Pull requests for version 2 go to `v2`.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -37,7 +39,7 @@ A county dataset moves through six steps. Each step is one command; the output o
 
 Choose one. Node is not needed.
 
-**Download a binary.** Each release at <https://github.com/elephant-xyz/elephant-cli/releases> has one archive per platform, `elephant-cli-<target>.tar.gz`, and their sums in `SHA256SUMS`:
+**Download a binary.** Each build has one archive per platform, `elephant-cli-<target>.tar.gz`, and their sums in `SHA256SUMS`:
 
 | Platform | `<target>` |
 | --- | --- |
@@ -46,24 +48,27 @@ Choose one. Node is not needed.
 | macOS Apple silicon | `aarch64-apple-darwin` |
 | macOS Intel | `x86_64-apple-darwin` |
 
+Every commit on the `v2` branch is published as the pre-release `build-<commit>`, a few minutes after it lands. The newest one:
+
 ```bash
 target=aarch64-apple-darwin
-curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/latest/download/elephant-cli-$target.tar.gz" | tar -xz
+commit=$(git ls-remote https://github.com/elephant-xyz/elephant-cli v2 | cut -f1)
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/build-$commit/elephant-cli-$target.tar.gz" | tar -xz
 sudo mv elephant-cli /usr/local/bin/
 elephant-cli --version
 ```
 
-Every commit on `main` is published the same way as the pre-release `build-<commit>`, so the current `main`, or a pinned commit, installs without a release:
+A version 2 release is a tag `v2.*` on the [releases page](https://github.com/elephant-xyz/elephant-cli/releases). Name it in the URL; `releases/latest` is 1.x:
 
 ```bash
-commit=$(git ls-remote https://github.com/elephant-xyz/elephant-cli main | cut -f1)
-curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/build-$commit/elephant-cli-$target.tar.gz" | tar -xz
+version=v2.0.0-alpha.1
+curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/$version/elephant-cli-$target.tar.gz" | tar -xz
 ```
 
 **Build with cargo** (needs Rust 1.85 or newer, from <https://rustup.rs>):
 
 ```bash
-cargo install --git https://github.com/elephant-xyz/elephant-cli --locked
+cargo install --git https://github.com/elephant-xyz/elephant-cli --branch v2 --locked
 ```
 
 The browser mechanisms of `prepare` also need the obscura headless browser. Download it from <https://github.com/h4ckf0r0day/obscura/releases> and put `obscura` on your `PATH`. Nothing else needs it.
