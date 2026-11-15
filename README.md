@@ -88,11 +88,13 @@ There is no library to import: a function in any language ships the static binar
    - In a layer of your own, as `bin/elephant-cli`; Lambda puts `/opt/bin` on the `PATH`:
 
      ```bash
+     version=v2.0.0-alpha.1              # or build-<commit>
+     target=aarch64-unknown-linux-musl   # for x86_64: x86_64-unknown-linux-musl
      mkdir bin
-     curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/$version/elephant-cli-aarch64-unknown-linux-musl.tar.gz" | tar -xz -C bin
+     curl -fsSL "https://github.com/elephant-xyz/elephant-cli/releases/download/$version/elephant-cli-$target.tar.gz" | tar -xz -C bin
      zip -r layer.zip bin
      aws lambda publish-layer-version --layer-name elephant-cli --zip-file fileb://layer.zip \
-       --compatible-architectures arm64
+       --compatible-architectures arm64    # for x86_64: x86_64
      ```
 
    - In a container image: `COPY elephant-cli /usr/local/bin/`.
@@ -105,9 +107,15 @@ There is no library to import: a function in any language ships the static binar
    import { promisify } from 'node:util';
    const run = promisify(execFile);
 
+   // in the deployment ZIP; from a layer or a container image it is on the PATH: 'elephant-cli'
+   const cli = `${process.env.LAMBDA_TASK_ROOT}/elephant-cli`;
+
    export const handler = async () => {
-     // exit 1 and 2 reject; the error's `stdout` holds the JSON document
-     const { stdout } = await run('elephant-cli', ['--json', 'validate', '/tmp/transformed.zip', '--output-csv', '/tmp/errors.csv']);
+     // exit 1 and 2 reject; the error's `stdout` holds the JSON document.
+     // maxBuffer: the document names every failed property, and Node stops the command at 1 MiB
+     const { stdout } = await run(cli, ['--json', 'validate', '/tmp/transformed.zip', '--output-csv', '/tmp/errors.csv'], {
+       maxBuffer: Infinity,
+     });
      return JSON.parse(stdout);
    };
    ```
