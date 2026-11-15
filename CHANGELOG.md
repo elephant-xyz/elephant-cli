@@ -20,6 +20,7 @@ Elephant CLI is now a single native binary written in Rust. See "Migrating from 
 * `--json`, `--offline` and `--schema-cache` on every command; `validate --output-csv -` writes the findings to stdout.
 * `hash` produces the same bytes and CIDs as 1.x.
 * `cheerio` is built into `transform` for scripts and handlers.
+* Static Linux binaries (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`) that run on AWS Lambda, Amazon Linux and Alpine; the README says how to ship one with a function.
 
 ## [1.58.1](https://github.com/elephant-xyz/elephant-cli/compare/v1.58.0...v1.58.1) (2025-12-26)
 
