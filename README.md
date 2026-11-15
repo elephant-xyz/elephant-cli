@@ -111,10 +111,14 @@ There is no library to import: a function in any language ships the static binar
    const cli = `${process.env.LAMBDA_TASK_ROOT}/elephant-cli`;
 
    export const handler = async () => {
-     // exit 1 and 2 reject; the error's `stdout` holds the JSON document.
      // maxBuffer: the document names every failed property, and Node stops the command at 1 MiB
      const { stdout } = await run(cli, ['--json', 'validate', '/tmp/transformed.zip', '--output-csv', '/tmp/errors.csv'], {
        maxBuffer: Infinity,
+     }).catch((error) => {
+       // exit 1, the input failed its checks: the JSON document is on the error's `stdout`.
+       // Exit 2, the command could not run: the function fails
+       if (error.code !== 1) throw error;
+       return error;
      });
      return JSON.parse(stdout);
    };
