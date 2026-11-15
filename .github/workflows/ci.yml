@@ -28,7 +28,7 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
 
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.target || matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -37,11 +37,25 @@ jobs:
         include:
           - os: ubuntu-latest
             obscura: obscura-x86_64-linux-no-render.tar.gz
+          # the static binary: build.yml builds it only after the merge
+          - os: ubuntu-latest
+            obscura: obscura-x86_64-linux-no-render.tar.gz
+            target: x86_64-unknown-linux-musl
           - os: macos-latest
             obscura: obscura-aarch64-macos-no-render.tar.gz
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Add the musl target and its C compiler
+        if: matrix.target
+        run: |
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "TARGET_CC=musl-gcc" >> "$GITHUB_ENV"
+          echo "CARGO_BUILD_TARGET=${{ matrix.target }}" >> "$GITHUB_ENV"
       # the browser tests of `prepare` are skipped without it
       - name: Install the obscura browser
         run: |

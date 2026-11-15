@@ -45,10 +45,19 @@ jobs:
         # the x86_64 macOS binary is cross-built on an arm64 runner
         if: matrix.target != 'x86_64-apple-darwin'
         run: cargo test --release --locked --target ${{ matrix.target }}
+      - name: Pack
+        run: tar -czf "elephant-cli-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" elephant-cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elephant-cli-${{ matrix.target }}
+          path: elephant-cli-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
       - name: Run it on the AWS Lambda base image
         if: endsWith(matrix.target, '-musl')
+        # after the upload, so a registry that does not answer does not cost the build its archive;
         # as a function has it: only /tmp is writable, Lambda's user; here also without a network
         run: |
+          for attempt in 1 2 3; do docker pull -q public.ecr.aws/lambda/provided:al2023 && break; sleep 20; done
           mkdir "$RUNNER_TEMP/lambda"
           (cd tests/fixtures/transform/scripts-mode/input && python3 -m zipfile -c "$RUNNER_TEMP/lambda/prepared.zip" ./*)
           (cd tests/fixtures/transform/scripts-mode/scripts && python3 -m zipfile -c "$RUNNER_TEMP/lambda/scripts.zip" ./*)
@@ -59,10 +68,3 @@ jobs:
               elephant-cli transform --input-zip /in/prepared.zip --scripts-zip /in/scripts.zip --output-zip transformed.zip
               elephant-cli validate transformed.zip --output-csv errors.csv
               elephant-cli hash transformed.zip --output-zip hashed.zip --output-csv hash.csv'
-      - name: Pack
-        run: tar -czf "elephant-cli-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" elephant-cli
-      - uses: actions/upload-artifact@v4
-        with:
-          name: elephant-cli-${{ matrix.target }}
-          path: elephant-cli-${{ matrix.target }}.tar.gz
-          if-no-files-found: error
