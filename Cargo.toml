@@ -17,9 +17,11 @@ csv = "1"
 clap = { version = "4", features = ["derive", "env"] }
 jsonschema = { version = "0.61", default-features = false }
 memmap2 = "0.9"
+# the allocator of every binary, QuickJS included (ALLOCATOR in src/main.rs): musl's own is slow
+mimalloc = "0.1"
 parquet = { version = "60", default-features = false, features = ["zstd"] }
 regex = "1"
-rquickjs = { version = "0.14", features = ["loader"] }
+rquickjs = { version = "0.14", features = ["loader", "rust-alloc"] }
 ryu-js = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
@@ -27,11 +29,6 @@ tungstenite = { version = "0.30", default-features = false, features = ["handsha
 ureq = "3"
 url = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
-
-# musl's own allocator is slow: the static binaries use mimalloc, QuickJS included (ALLOCATOR in src/main.rs)
-[target.'cfg(target_env = "musl")'.dependencies]
-mimalloc = "0.1"
-rquickjs = { version = "0.14", features = ["rust-alloc"] }
 
 [dev-dependencies]
 parquet = { version = "60", default-features = false, features = ["zstd", "json"] }
