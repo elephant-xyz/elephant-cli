@@ -48,13 +48,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-      - name: Add the musl target and its C compiler
+      - name: Install the musl C compiler
+        if: matrix.target
+        uses: ./.github/actions/musl-cc
+      - name: Add the musl target
         if: matrix.target
         run: |
           rustup target add ${{ matrix.target }}
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          echo "TARGET_CC=musl-gcc" >> "$GITHUB_ENV"
           echo "CARGO_BUILD_TARGET=${{ matrix.target }}" >> "$GITHUB_ENV"
       # the browser tests of `prepare` are skipped without it
       - name: Install the obscura browser
@@ -66,3 +66,21 @@ jobs:
 
       - name: Run the tests
         run: cargo test --locked
+
+      - name: Run it on the AWS Lambda base image, with a network
+        if: matrix.target
+        # what the offline run of binaries.yml leaves out: the lexicon fetched and cached under /tmp,
+        # and obscura's no-render build. Exit 1 passes: the lexicon of today may reject the fixture
+        run: |
+          mkdir -p "$RUNNER_TEMP/site/html/detail" "$RUNNER_TEMP/in"
+          echo '<html><body><p>Parcel 12345</p></body></html>' > "$RUNNER_TEMP/site/html/detail/index.html"
+          python3 -m http.server 18765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/site" &
+          (cd tests/fixtures/prepare/seed && python3 -m zipfile -c "$RUNNER_TEMP/in/seed.zip" ./*)
+          docker run --rm --read-only --tmpfs /tmp --network host --user 993:990 --workdir /tmp \
+            -v "$PWD/target/${{ matrix.target }}/debug:/opt/bin:ro" -v "$RUNNER_TEMP/obscura:/opt/obscura:ro" \
+            -v "$RUNNER_TEMP/in:/in:ro" -v "$PWD/tests/fixtures/validate/clean:/clean:ro" \
+            -e ELEPHANT_SCHEMA_CACHE_DIR=/tmp/schema-cache -e OBSCURA_BIN=/opt/obscura/obscura -e OBSCURA_ALLOW_PRIVATE_NETWORK=1 \
+            --entrypoint /bin/sh public.ecr.aws/lambda/provided:al2023 -ec '
+              elephant-cli validate /clean --output-csv errors.csv || [ $? = 1 ]
+              ELEPHANT_OFFLINE=1 elephant-cli validate /clean --output-csv errors.csv || [ $? = 1 ]
+              elephant-cli prepare /in/seed.zip --output-zip prepared.zip --use-browser'

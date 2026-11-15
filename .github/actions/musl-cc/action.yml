@@ -1,0 +1,10 @@
+name: Install the musl C compiler
+description: The C compiler that the static (musl) targets build their C dependencies with. Add the Rust target yourself.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y musl-tools
+        echo "TARGET_CC=musl-gcc" >> "$GITHUB_ENV"
