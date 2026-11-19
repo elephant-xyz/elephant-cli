@@ -1,0 +1,12 @@
+{
+  "unnormalized_address": "123 Café Lane, Fort Myers, FL 33901",
+  "county_name": "Lee",
+  "longitude": -81.8723100,
+  "latitude": 26.6406,
+  "source_http_request": {
+    "url": "https://example.com/parcel",
+    "method": "GET",
+    "multiValueQueryString": { "folio": ["10203040"] }
+  },
+  "request_identifier": "10203040"
+}

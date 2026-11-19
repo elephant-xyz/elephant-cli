@@ -22,6 +22,7 @@ fn hashes_one_property_to_the_same_bytes_as_elephant_cli_1() {
     let ran = scratch.run(&[
         "hash",
         "property",
+        "--linked",
         "--output-zip",
         "out/hashed.zip",
         "--output-csv",
@@ -53,6 +54,7 @@ fn hashes_a_directory_of_properties_to_the_same_bytes_as_elephant_cli_1() {
     let ran = scratch.run(&[
         "hash",
         "county",
+        "--linked",
         "--output-zip",
         "out/hashed",
         "--output-csv",
@@ -140,6 +142,7 @@ fn keeps_going_past_a_property_without_a_seed_and_leaves_it_out_of_the_car() {
         "--json",
         "hash",
         "county",
+        "--linked",
         "--output-zip",
         "hashed",
         "--output-csv",

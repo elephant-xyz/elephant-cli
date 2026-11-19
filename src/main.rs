@@ -18,6 +18,7 @@ mod flow;
 mod hash;
 mod js;
 mod lexicon;
+mod packed;
 mod prepare;
 mod property;
 mod report;
@@ -208,7 +209,7 @@ struct ExportTables {
 
 #[derive(Args)]
 #[command(
-    after_help = "Examples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid"
+    after_help = "A data group is written packed, as one block {entities, label, relationships}: each relationship holds the CIDs of its\ntwo entities as strings, and entities holds them by CID. The Seed data group, a data group whose relationships or\nentities hold other links, and one over 1,048,576 bytes stay linked. --linked writes every data group as one block\nper file, with the CIDs elephant-cli gave before packing. validate and export-tables read both layouts.\n\nExamples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli hash ./county-outputs --linked --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid"
 )]
 struct Hash {
     /// A property directory or ZIP, or a directory of properties
@@ -222,6 +223,9 @@ struct Hash {
     /// County CAR to write: every JSON block, shard blocks and the county index as root
     #[arg(long, value_name = "PATH")]
     output_car: Option<PathBuf>,
+    /// Write one block per file, as elephant-cli before packing did, instead of one packed block per data group
+    #[arg(long)]
+    linked: bool,
 }
 
 #[derive(Args)]
@@ -410,7 +414,8 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
     let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
-    let outcome = hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads())?;
+    let outcome =
+        hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads(), !args.linked)?;
     for error in &outcome.errors {
         eprintln!("error: {error}");
     }
@@ -420,6 +425,9 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         text += "Hash report\n";
         text += &format!("  Property CID:        {cid}\n");
         text += &format!("  Data groups hashed:  {}\n", outcome.groups);
+        if !args.linked {
+            text += &format!("  Data groups packed:  {}\n", outcome.packed);
+        }
         text += &format!("  Output ZIP:          {}\n", args.output_zip.display());
         text += &format!("  Output CSV:          {}\n", args.output_csv.display());
     }
@@ -437,6 +445,14 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
     if !outcome.failed.is_empty() {
         eprintln!("{} of {} properties failed: {}", outcome.failed.len(), outcome.properties, listed(&outcome.failed));
     }
+    if outcome.left > 0 {
+        let rest = match outcome.left - outcome.first.len() {
+            0 => String::new(),
+            more => format!(", and {more} more"),
+        };
+        let first = outcome.first.join(", ");
+        eprintln!("warning: {} data groups could not be packed and stay linked: {first}{rest}", outcome.left);
+    }
     Ok(Done {
         json: json!({
             "command": "hash",
@@ -448,6 +464,9 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
             "failed": outcome.failed,
             "errors": outcome.errors,
             "data_groups": outcome.groups,
+            "packed": outcome.packed,
+            "not_packed": outcome.left,
+            "not_packed_first": outcome.first,
             "property_cid": outcome.cid,
             "output_zip": args.output_zip,
             "output_csv": args.output_csv,

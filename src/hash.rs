@@ -5,7 +5,8 @@
 //! Bytes and CIDs are those elephant-cli 1.x produced: links
 //! `{"/": "./file.json"}` become `{"/": "<cid>"}` depth first, JSON is
 //! canonicalised (see `canonical`), and the CAR holds each property's blocks
-//! right before the shard block that lists it.
+//! right before the shard block that lists it. Unless `--linked`, a data group
+//! becomes one block (see `packed`); 1.58.1 and older wrote the linked layout only.
 
 use crate::canonical::canonical;
 use crate::car;
@@ -25,6 +26,8 @@ const SEED: &str = "bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe"
 const IMAGES: [&str; 6] = ["png", "jpg", "jpeg", "gif", "svg", "webp"];
 /// Properties per shard block of the county index.
 const SHARD: usize = 5000;
+/// Data groups left linked that a run names; a county may have one per property.
+const NAMED: usize = 20;
 
 fn image(name: &str) -> bool {
     name.rsplit_once('.').is_some_and(|(_, extension)| IMAGES.contains(&extension.to_lowercase().as_str()))
@@ -40,6 +43,10 @@ pub struct Hashed {
     pub blocks: BTreeMap<String, Vec<u8>>,
     /// Roots that could not be hashed: file name and reason.
     pub errors: Vec<(String, String)>,
+    /// Data groups written packed.
+    pub packed: usize,
+    /// Roots that could not be packed and stay linked, by file name; a Seed is not one of them.
+    pub left: Vec<String>,
 }
 
 struct Work<'a> {
@@ -112,26 +119,41 @@ impl Work<'_> {
     }
 }
 
-/// Hash one property. `Err` means nothing could be hashed.
-pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Hashed, String> {
+/// Hash one property. `Err` means nothing could be hashed. With `packed`,
+/// every data group but the Seed becomes one block where `packed::pack` allows it.
+pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Result<Hashed, String> {
     let found = scan(property, shared)?;
     let seed = shared.lock().expect("shared state").schemas.group("Seed")?;
     let seeded = |cid: &String| cid == SEED || Some(cid) == seed.as_ref();
     let Some(first) = found.roots.iter().position(|(_, cid)| seeded(cid)) else {
         return Err("Property CID could not be determined: the property has no Seed data group".to_string());
     };
+    // The CID of the linked Seed root is the property CID: a packed one would give the property another.
+    if let Some((name, _)) = found.roots.iter().find(|(name, cid)| seeded(cid) && found.parsed[name].get("entities").is_some()) {
+        return Err(format!("Property CID could not be determined: the Seed data group in {name} is packed"));
+    }
     let mut hashed = Hashed {
         // Until the seed resolves, the property goes by the CID of the seed file as written.
-        cid: cids::of_json(&found.parsed[&found.roots[first].0], &canonical(&found.parsed[&found.roots[first].0])).to_string(),
+        cid: crate::canonical::cid(&found.parsed[&found.roots[first].0]).to_string(),
         groups: Vec::new(),
         blocks: BTreeMap::new(),
         errors: Vec::new(),
+        packed: 0,
+        left: Vec::new(),
     };
     let order = std::iter::once(first).chain((0..found.roots.len()).filter(|at| *at != first));
     for at in order {
         let (name, group) = &found.roots[at];
+        let value = &found.parsed[name];
+        // A root that came packed is written as it is. It has to be final:
+        // resolving a pointer inside an entity would change the entity under the CID it is filed by.
+        let ready = value.get("entities").is_some();
         let mut work = Work { property, blocks: BTreeMap::new(), open: vec![name.clone()] };
-        let resolved = match work.resolve(&found.parsed[name], None, "") {
+        let resolved = work.resolve(value, None, "").and_then(|resolved| match ready && resolved != *value {
+            true => Err("a packed root has to be final, and this one holds a file pointer or an ipfs_url to resolve".to_string()),
+            false => Ok(resolved),
+        });
+        let resolved = match resolved {
             Ok(resolved) => resolved,
             Err(reason) => {
                 hashed.errors.push((name.clone(), format!("Processing error: {reason}")));
@@ -142,7 +164,23 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Hashed, S
         if at == first {
             hashed.cid = cid.clone();
         }
-        hashed.blocks.append(&mut work.blocks);
+        // A Seed root's CID is the property CID: it is never packed.
+        let candidate = packed && !ready && !seeded(group);
+        let cid = match candidate.then(|| crate::packed::pack(&cid, &work.blocks)).flatten() {
+            Some((cid, bytes)) => {
+                hashed.blocks.insert(cid.clone(), bytes);
+                hashed.packed += 1;
+                cid
+            }
+            None => {
+                hashed.blocks.append(&mut work.blocks);
+                hashed.packed += usize::from(ready);
+                if candidate {
+                    hashed.left.push(name.clone());
+                }
+                cid
+            }
+        };
         hashed.groups.push((group.clone(), cid, name.clone()));
     }
     Ok(hashed)
@@ -267,6 +305,11 @@ pub struct Outcome {
     pub cid: Option<String>,
     /// Blocks in the CAR and its root, when one was asked for.
     pub car: Option<(u64, String)>,
+    /// Data groups written packed.
+    pub packed: usize,
+    /// Data groups that could not be packed and stay linked, and `<property>: <file>` for the first `NAMED` of them.
+    pub left: usize,
+    pub first: Vec<String>,
 }
 
 /// Hash a single property or every property of a batch directory.
@@ -277,6 +320,7 @@ pub fn run(
     output_car: Option<&Path>,
     shared: &Mutex<Shared>,
     threads: usize,
+    packed: bool,
 ) -> Result<Outcome, Fail> {
     let children = crate::property::children(input);
     let single = children.is_empty();
@@ -299,7 +343,7 @@ pub fn run(
     };
     let work = |(from, to): &(PathBuf, PathBuf)| -> Result<Hashed, String> {
         let opened = Property::open(from)?;
-        let hashed = property(&opened, shared)?;
+        let hashed = property(&opened, shared, packed)?;
         zip(to, &opened, &hashed)?;
         Ok(hashed)
     };
@@ -318,6 +362,9 @@ pub fn run(
         batch: !single,
         cid: None,
         car: None,
+        packed: 0,
+        left: 0,
+        first: Vec::new(),
     };
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
@@ -349,6 +396,10 @@ pub fn run(
                 archive.add(&hashed)?;
             }
             outcome.groups += hashed.groups.len();
+            outcome.packed += hashed.packed;
+            outcome.left += hashed.left.len();
+            let room = NAMED.saturating_sub(outcome.first.len());
+            outcome.first.extend(hashed.left.iter().take(room).map(|file| format!("{name}: {file}")));
             outcome.errors.extend(hashed.errors.iter().map(|(file, reason)| format!("{name}: {file}: {reason}")));
             if !hashed.errors.is_empty() {
                 outcome.failed.push(name.clone());

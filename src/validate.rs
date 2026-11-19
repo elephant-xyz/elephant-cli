@@ -4,9 +4,11 @@
 //! A data-group root is a JSON file holding exactly `label` and
 //! `relationships`; the manifest maps its label to a schema CID. Everything a
 //! root links to (`{"/": "./file.json"}`) is validated through it. A JSON
-//! file no root reaches is reported as unused.
+//! file no root reaches is reported as unused. A packed root (see `packed`)
+//! also holds `entities` and is validated as the linked root it stands for.
 
 use crate::lexicon::{self, Group, Lexicon};
+use crate::packed;
 use crate::property::Property;
 use crate::report::Row;
 use crate::schemas::Schemas;
@@ -38,9 +40,10 @@ fn target(value: &Value) -> Option<&str> {
     value.get("/")?.as_str()?.strip_prefix("./")
 }
 
-/// A data-group root: an object holding exactly a string `label` and `relationships`.
+/// A data-group root: an object holding exactly a string `label` and
+/// `relationships`, and `entities` next to them when it is packed.
 fn root(value: &Value) -> Option<&str> {
-    let fields = value.as_object().filter(|fields| fields.len() == 2)?;
+    let fields = value.as_object().filter(|fields| fields.len() == 2 + usize::from(fields.contains_key("entities")))?;
     fields.get("relationships").filter(|links| links.is_object() || links.is_array())?;
     fields.get("label")?.as_str()
 }
@@ -125,6 +128,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned())),
         ))
     };
+    let mut packing = Vec::new();
     for (name, value, cid) in &roots {
         let group = {
             let mut guard = shared.lock().expect("shared state");
@@ -139,7 +143,9 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             message,
             ..Row::default()
         };
-        match (&*group, group.validate(value, &source)) {
+        let (found, checked) = packed::validate(&group, value, &source);
+        packing.extend(found.into_iter().map(|(path, message)| row(&path, message)));
+        match (&*group, checked) {
             (_, Some(errors)) => {
                 rows.extend(errors.into_iter().map(|error| Row { value: error.value, ..row(&error.path, error.message) }));
             }
@@ -150,7 +156,9 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             )),
         }
     }
-    Ok(Checked { groups: roots.len(), rows: lexicon::filter(rows) })
+    // Findings about the packing are not lexicon rows: none is folded into another.
+    let rows = packing.into_iter().chain(lexicon::filter(rows)).collect();
+    Ok(Checked { groups: roots.len(), rows })
 }
 
 /// Validate every property of a batch on `threads` cores, in the order given.

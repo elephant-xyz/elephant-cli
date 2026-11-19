@@ -12,6 +12,7 @@
 use crate::canonical::stringify;
 use crate::car::{self, Car, Place};
 use crate::cids::{self, DAG_JSON};
+use crate::packed;
 use crate::schemas::Schemas;
 use crate::unixfs;
 use crate::Fail;
@@ -285,11 +286,18 @@ struct Export<'a> {
     cap: u64,
     meta: Vec<(String, String)>,
     seen: HashSet<Cid>,
+    /// The relationship blocks and entities of the packed data group being exported.
+    inline: HashMap<Cid, Value>,
 }
 
 impl Export<'_> {
-    /// A block as a JSON object; anything else cannot be exported.
-    fn block(&self, cid: &Cid) -> Result<Map<String, Value>, Fail> {
+    /// A block as a JSON object; anything else cannot be exported. A packed
+    /// data group holds its blocks itself.
+    fn block(&mut self, cid: &Cid) -> Result<Map<String, Value>, Fail> {
+        // each is asked for once: `seen` keeps a relationship or an entity from being exported twice
+        if let Some(Value::Object(fields)) = self.inline.remove(cid) {
+            return Ok(fields);
+        }
         let bytes = self.index.get(cid).filter(|_| cid.codec() == DAG_JSON).map(|place| self.car.bytes(*place));
         match bytes.and_then(|bytes| serde_json::from_slice::<Value>(bytes).ok()) {
             Some(Value::Object(fields)) => Ok(fields),
@@ -524,6 +532,7 @@ pub fn export(file: &Path, output: &Path, cap: u64, atlas: Option<&Atlas>, schem
             ("elephant.part_size_bytes".to_string(), cap.to_string()),
         ],
         seen: HashSet::new(),
+        inline: HashMap::new(),
     };
     // The `properties` table: one column per data group, in order of first appearance.
     let mut groups: Vec<String> = Vec::new();
@@ -569,7 +578,16 @@ pub fn export(file: &Path, output: &Path, cap: u64, atlas: Option<&Atlas>, schem
         }
         export.writer(&properties)?.push(row)?;
         for (group, data) in &entry.groups {
-            let root = export.block(data)?;
+            export.inline.clear();
+            // A packed root is exported as the linked root it stands for.
+            let root = match packed::unpack(Value::Object(export.block(data)?)) {
+                Err(root) => root,
+                Ok(unpacked) => {
+                    let held = unpacked.blocks.into_iter();
+                    export.inline.extend(held.filter_map(|(cid, block)| Some((Cid::try_from(cid).ok()?, block))));
+                    unpacked.root
+                }
+            };
             let ends = export.chain(group)?;
             let empty = Map::new();
             // a list of relationships has no keys the schema could name

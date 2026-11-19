@@ -16,6 +16,7 @@
 use crate::car::{Car, Place};
 use crate::cids::{DAG_JSON, RAW};
 use crate::lexicon::{self, Group, Lexicon};
+use crate::packed;
 use crate::report::{Report, Row};
 use crate::schemas::Schemas;
 use crate::Fail;
@@ -264,7 +265,9 @@ fn property(
                 continue;
             };
             let group = &groups[schema];
-            match group.validate(value, &source) {
+            let (packing, checked) = packed::validate(group, value, &source);
+            found.rows.extend(packing.into_iter().map(|(path, message)| row(&path, message)));
+            match checked {
                 None if matches!(**group, Group::Invalid) => {
                     found.rows.push(row("lexicon", format!("schema {schema} is not a valid data group schema")));
                 }
