@@ -12,7 +12,7 @@ import {
 import AdmZip from 'adm-zip';
 import { tmpdir } from 'os';
 import { promises as fsPromises } from 'fs';
-import { isPacked, unpack } from '../utils/packed-data-group.js';
+import { isPacked, unpackStrict } from '../utils/packed-data-group.js';
 
 interface BatchDataItem {
   propertyHash: string;
@@ -109,9 +109,11 @@ export class IPFSFetcherService {
       }
 
       const content = await response.json();
-      // Any block can be fetched; only one shaped like a data-group root is a packed one.
+      // Any block can be fetched; only one shaped like a data-group root is a
+      // packed one: exactly `entities`, a string `label` and `relationships`.
       if (
         !isPacked(content) ||
+        Object.keys(content).length !== 3 ||
         typeof content.label !== 'string' ||
         !content.relationships ||
         typeof content.relationships !== 'object'
@@ -120,11 +122,7 @@ export class IPFSFetcherService {
       }
       // A packed data group is handed on as its linked root; the blocks it
       // links to are served from memory, so the files come out as for linked data.
-      const linked = await unpack(content);
-      const finding = linked.findings[0];
-      if (finding) {
-        throw new Error(`${finding.message} (at ${finding.path})`);
-      }
+      const linked = await unpackStrict(content);
       this.unpacked = linked.blocks;
       this.linkedCids = new Map([[cid, linked.cid]]);
       return linked.root;

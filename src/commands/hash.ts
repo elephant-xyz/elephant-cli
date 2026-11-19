@@ -530,18 +530,23 @@ async function hashProperty(
 
     // --packed: an eligible data group becomes one block, and the blocks only
     // it linked to are dropped. A group that stays linked keeps all of its own.
+    // The root that gave the property CID is never packed, whatever its label.
     const kept = new Set<string>();
     for (const root of options.packed
       ? hashedFiles.filter((hashedFile) => hashedFile.dataGroupCid)
       : []) {
-      const json = pack(
-        root.transformedData,
-        (cid) => cidToFileMap.get(cid)?.transformedData
-      );
+      const json =
+        root.originalPath === seedDatagroupFile?.filePath
+          ? undefined
+          : pack(
+              root.transformedData,
+              (cid) => cidToFileMap.get(cid)?.transformedData
+            );
       if (json === undefined) {
         [root.calculatedCid, ...(root.linked ?? [])].forEach((cid) =>
           kept.add(cid)
         );
+        logger.info(`Left ${root.originalPath} linked: it cannot be packed`);
         continue;
       }
       root.canonicalJson = json;

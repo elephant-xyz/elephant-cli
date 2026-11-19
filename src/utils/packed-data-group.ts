@@ -124,6 +124,16 @@ export function pack(
     : undefined;
 }
 
+/** `unpack` for a reader that reports nothing: the first finding is an error. */
+export async function unpackStrict(packed: Json): Promise<Unpacked> {
+  const unpacked = await unpack(packed);
+  const finding = unpacked.findings[0];
+  if (finding) {
+    throw new Error(`${finding.message} (at ${finding.path})`);
+  }
+  return unpacked;
+}
+
 /**
  * The blocks of an unpacked root as a block source for
  * `JsonValidatorService.validate`. A CID it lacks is an error that names the

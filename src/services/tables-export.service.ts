@@ -20,7 +20,7 @@ import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
 import { schemaManifestUrl } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { BigSet, cidKey, LargeCarReader } from '../utils/large-car.js';
-import { isPacked, unpack } from '../utils/packed-data-group.js';
+import { isPacked, unpackStrict } from '../utils/packed-data-group.js';
 
 export interface ExportTablesOptions {
   /** County CAR written by `hash --output-car`. */
@@ -599,17 +599,14 @@ export async function exportTables(
         const bytes = (await reader.get(group.data))?.bytes;
         const found = decode(group.data, bytes);
         const packed = isPacked(found)
-          ? await unpack(JSON.parse(new TextDecoder().decode(bytes))).catch(
-              (error: unknown) =>
-                fail(
-                  `packed data group ${group.data} cannot be unpacked: ${error instanceof Error ? error.message : String(error)}`
-                )
+          ? await unpackStrict(
+              JSON.parse(new TextDecoder().decode(bytes))
+            ).catch((error: unknown) =>
+              fail(
+                `packed data group ${group.data} cannot be read: ${error instanceof Error ? error.message : String(error)}`
+              )
             )
           : undefined;
-        const finding = packed?.findings[0];
-        if (finding) {
-          return fail(`${finding.message} (${group.data} at ${finding.path})`);
-        }
         const root = packed
           ? await block(CID.parse(packed.cid), packed.blocks)
           : found;

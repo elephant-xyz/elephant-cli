@@ -200,14 +200,14 @@ export class JsonValidatorService {
    * @param schema The schema to validate against
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    * @param skipCIDResolution Skip resolving CID pointers (useful when data is already processed)
-   * @param blockSource Resolve `{"/": cid}` data pointers from this source instead of IPFS; a pointer it cannot supply fails validation
+   * @param blockSource Resolve `{"/": cid}` data pointers from this source instead of IPFS; it throws, with its own reason, for a block it does not have
    */
   async validate(
     data: any,
     schema: JSONSchema,
     currentFilePath?: string,
     skipCIDResolution?: boolean,
-    blockSource?: (cid: string) => Promise<Uint8Array | undefined>
+    blockSource?: (cid: string) => Promise<Uint8Array>
   ): Promise<ValidationResult> {
     let resolvedData;
     try {
@@ -473,7 +473,7 @@ export class JsonValidatorService {
     schema?: any,
     cidAllowedMap?: Map<string, boolean>,
     currentPath: string = '',
-    blockSource?: (cid: string) => Promise<Uint8Array | undefined>
+    blockSource?: (cid: string) => Promise<Uint8Array>
   ): Promise<any> {
     if (!data || typeof data !== 'object' || data === null) {
       return data;
@@ -523,9 +523,6 @@ export class JsonValidatorService {
       if (isCID) {
         try {
           const local = await blockSource?.(pointerValue);
-          if (blockSource && !local) {
-            throw new Error(`block ${pointerValue} is not in the car`);
-          }
           const text = local
             ? new TextDecoder().decode(local)
             : await fetchFromIpfs(pointerValue);

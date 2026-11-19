@@ -855,7 +855,7 @@ elephant-cli hash ./county-transformed \
 
 **A data group stays linked, exactly as without the option, when**
 
-- its label is `Seed`. The Seed data CID is the property CID, so it never changes.
+- its label is `Seed`, or it is the data group `hash` takes the property CID from. The Seed data CID is the property CID, so it never changes.
 - a relationship value in its root is something other than `null`, a link or an array of links.
 - a relationship file is not an object whose `from` and `to` link to JSON files of the same run, or it holds another link.
 - a class file holds a link.

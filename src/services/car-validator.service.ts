@@ -355,8 +355,13 @@ export async function validateCar(
       `Validating data-group roots of ${entries.length} properties against lexicon`
     );
     await services.schemaCacheService.warm();
-    const fromCar = async (cid: string) =>
-      (await reader.get(CID.parse(cid)))?.bytes;
+    const fromCar = async (cid: string) => {
+      const block = await reader.get(CID.parse(cid));
+      if (!block) {
+        throw new Error(`block ${cid} is not in the car`);
+      }
+      return block.bytes;
+    };
     for (const item of entries) {
       const rows: ErrorEntry[] = [];
       for (const group of item.groups) {

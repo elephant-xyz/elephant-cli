@@ -79,17 +79,22 @@ describe('fetch-data with a packed data group', () => {
     }
   );
 
-  it('writes a block that is not a data-group root as it is, even with an entities member', async () => {
-    const block = { entities: {}, name: 'not a data group' };
-    vi.stubGlobal('fetch', async (url: string) =>
-      url === schemaManifestUrl()
-        ? new Response('{}')
-        : new Response(JSON.stringify(block))
-    );
-    expect(await fetched(EXPECTED.property)).toEqual({
-      [`${EXPECTED.property}.json`]: JSON.stringify(block, null, 2),
-    });
-  });
+  it.each([
+    [{ entities: {}, name: 'not a data group' }],
+    [{ entities: {}, label: 'County', relationships: {}, extra: true }],
+  ])(
+    'writes a block that is not a data-group root as it is, even with an entities member: %j',
+    async (block) => {
+      vi.stubGlobal('fetch', async (url: string) =>
+        url === schemaManifestUrl()
+          ? new Response('{}')
+          : new Response(JSON.stringify(block))
+      );
+      expect(await fetched(EXPECTED.property)).toEqual({
+        [`${EXPECTED.property}.json`]: JSON.stringify(block, null, 2),
+      });
+    }
+  );
 
   it('refuses a packed block whose entity key is not the CID of its value', async () => {
     await serve({}, (packed) =>

@@ -176,7 +176,12 @@ export function services(strict = false) {
 }
 
 /** `hash` a property directory (or a directory of them) into `out`, linked or packed. */
-export async function hash(input: string, out: string, packed: boolean) {
+export async function hash(
+  input: string,
+  out: string,
+  packed: boolean,
+  overrides = services()
+) {
   await fsPromises.mkdir(out, { recursive: true });
   const outputs = {
     outputZip: path.join(out, 'hashed.zip'),
@@ -185,7 +190,7 @@ export async function hash(input: string, out: string, packed: boolean) {
   };
   await handleHash(
     { input, ...outputs, packed, silent: true, cwd: out },
-    services()
+    overrides
   );
   const reader = await CarReader.fromBytes(
     await fsPromises.readFile(outputs.outputCar)

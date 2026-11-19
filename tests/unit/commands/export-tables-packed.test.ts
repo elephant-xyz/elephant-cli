@@ -103,7 +103,7 @@ describe('export-tables with packed data groups', () => {
         { input: car.target, output: path.join(tmp, 'tables'), silent: true },
         services()
       )
-    ).rejects.toThrow(`packed data group ${cid} cannot be unpacked`);
+    ).rejects.toThrow(`packed data group ${cid} cannot be read`);
   });
 
   it('refuses a packed root that is not well formed instead of writing its rows', async () => {

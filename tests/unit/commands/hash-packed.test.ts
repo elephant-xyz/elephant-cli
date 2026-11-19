@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
+import { SchemaManifestService } from '../../../src/services/schema-manifest.service.js';
 import {
+  COUNTY,
   EXPECTED,
   hash,
   scratch,
+  SEED,
+  services,
   Vector,
   VECTORS,
   zipped,
@@ -115,6 +119,39 @@ describe('hash --packed', () => {
     for (const [name, bytes] of kept) {
       expect(before.get(name)).toEqual(bytes);
     }
+  });
+
+  it('keeps the root that gives the property CID linked, whatever its label', async () => {
+    const tmp = await fresh();
+    const input = path.join(tmp, 'property');
+    await fsPromises.cp(path.join(VECTORS, 'vector-1', 'property'), input, {
+      recursive: true,
+    });
+    const seed = JSON.parse(
+      await fsPromises.readFile(path.join(input, 'seed.json'), 'utf-8')
+    );
+    await fsPromises.writeFile(
+      path.join(input, 'seed.json'),
+      JSON.stringify({ ...seed, label: 'Origin' })
+    );
+    // A manifest that knows the Seed schema under another label.
+    const alias = {
+      ...services(),
+      schemaManifestService: {
+        loadSchemaManifest: async () => ({}),
+        getDataGroupCidByLabel: (label: string) =>
+          ({ Origin: SEED, County: COUNTY })[label] ?? null,
+      } as unknown as SchemaManifestService,
+    };
+    const linked = await hash(input, path.join(tmp, 'linked'), false, alias);
+    const packed = await hash(input, path.join(tmp, 'packed'), true, alias);
+    expect(packed.data['seed.json']).toBe(linked.data['seed.json']);
+    expect(packed.data['county.json']).toBe(EXPECTED['vector-1'].packed);
+    expect(
+      [...zipped(packed.outputZip).keys()].every((name) =>
+        name.startsWith(`${linked.data['seed.json']}/`)
+      )
+    ).toBe(true);
   });
 
   it('packs every property of a directory input', async () => {
