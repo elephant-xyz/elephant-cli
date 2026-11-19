@@ -375,23 +375,16 @@ fn hashes_a_property_that_holds_a_packed_root_to_the_same_cid() {
 }
 
 #[test]
-fn validates_a_packed_root_whose_json_dag_json_refuses_like_the_linked_one() {
-    // 1.x gives a block with a key every JavaScript object inherits a raw CID; so does the block that packs it
+fn leaves_a_data_group_linked_when_its_packed_block_would_not_be_dag_json() {
+    // 1.x gives a block with a key every JavaScript object inherits a raw CID, and no reader takes a raw
+    // data-group root; elephant-cli 1.x leaves such a data group linked under --packed, so this crate does too
     let scratch = Scratch::new();
     scratch.lexicon();
     scratch.copy(VECTORS[0].0, "property");
     let address = scratch.text("property/address.json").replace("\"folio\"", "\"constructor\": [\"x\"], \"folio\"");
     std::fs::write(scratch.path("property/address.json"), address).unwrap();
-    let mut found = Vec::new();
-    for extra in [&[][..], &["--packed"]] {
-        assert_eq!(hash(&scratch, extra).code, 0);
-        let summary = scratch.run(&["--json", "validate", "out/county.car", "--output-csv", "errors.csv"]).json();
-        found.push((findings(&scratch, "out/county.car"), summary["data_groups"].clone()));
-    }
-    let county = scratch.rows("out/hash.csv")[1][2].clone();
-    assert!(county.starts_with("bafkrei"), "{county}");
-    assert_eq!(found[1], found[0]);
-    assert_eq!(found[1].1, 2);
+    let [packed, linked] = both(&scratch);
+    assert!(packed == linked, "{}\n{}", packed.0, linked.0);
 }
 
 #[test]

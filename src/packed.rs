@@ -37,7 +37,8 @@ fn linked(value: &Value) -> bool {
 /// the CID and the canonical bytes of the packed block. `None` when the data
 /// group has to stay linked: it is the Seed, it holds something other than
 /// relationships linking two link-free entities of `blocks`, it is too big,
-/// or one of its blocks does not have the CID of its canonical JSON.
+/// its packed block would not be dag-json, or one of its blocks does not have
+/// the CID of its canonical JSON.
 pub fn pack(root: &str, blocks: &BTreeMap<String, Vec<u8>>) -> Option<(String, Vec<u8>)> {
     // A block is read back from its canonical bytes and has to be filed under the CID those give
     // it, or the packed block could not be unpacked to the same CIDs. It is not when the JSON had a
@@ -71,7 +72,8 @@ pub fn pack(root: &str, blocks: &BTreeMap<String, Vec<u8>>) -> Option<(String, V
     }
     let value = json!({ "entities": entities, "label": label, "relationships": relationships });
     let text = canonical(&value);
-    (text.len() <= LIMIT).then(|| (cids::of_json(&value, &text).to_string(), text.into_bytes()))
+    // A block dag-json refuses would get a raw CID, and no reader takes a raw data-group root.
+    (text.len() <= LIMIT && cids::dag_json(&value)).then(|| (cids::of_json(&value, &text).to_string(), text.into_bytes()))
 }
 
 /// A packed data group as the linked layout holds it.
