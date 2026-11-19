@@ -555,7 +555,7 @@ async function hashProperty(
       kept.add(root.calculatedCid);
       logger.info(`Packed ${root.originalPath} (CID: ${root.calculatedCid})`);
     }
-    const outputFiles = options.packed
+    const output = options.packed
       ? hashedFiles.filter((hashedFile) => kept.has(hashedFile.calculatedCid))
       : hashedFiles;
 
@@ -570,7 +570,7 @@ async function hashProperty(
 
     // Process hashed files to generate CSV entries
     // We only include main datagroup files in CSV, not linked files
-    for (const hashedFile of outputFiles) {
+    for (const hashedFile of output) {
       if (hashedFile.dataGroupCid) {
         // Only include files with dataGroupCid (main files, not linked)
         // Calculate the path relative to the extracted ZIP content root
@@ -624,7 +624,7 @@ async function hashProperty(
 
     // Add each hashed file to the ZIP
     // For single property: use property CID as the single folder name (no 'data' wrapper)
-    for (const hashedFile of outputFiles) {
+    for (const hashedFile of output) {
       // Single folder structure: propertyCid/calculatedCid.json
       const zipPath = path.join(
         propertyFolderName,
@@ -641,7 +641,7 @@ async function hashProperty(
     // ponytail: json blocks only; add media blocks if a consumer needs them in the CAR
     for (const [cid, hashedFile] of [
       ...new Map(
-        outputFiles.map((hashedFile) => [hashedFile.calculatedCid, hashedFile])
+        output.map((hashedFile) => [hashedFile.calculatedCid, hashedFile])
       ),
     ].sort(([a], [b]) => a.localeCompare(b))) {
       await car?.put(
@@ -653,7 +653,7 @@ async function hashProperty(
     await car?.property(
       CID.parse(propertyFolderName),
       Object.fromEntries(
-        outputFiles
+        output
           .filter((hashedFile) => hashedFile.dataGroupCid)
           .map((hashedFile) => [
             hashedFile.dataGroupCid,

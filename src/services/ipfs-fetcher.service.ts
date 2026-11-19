@@ -28,7 +28,7 @@ export class IPFSFetcherService {
   // its own CID with the CID of its linked root. Its files are written before
   // the next root is fetched, so one group is all that is held.
   private unpacked: Map<string, Uint8Array> = new Map();
-  private linkedCids: Map<string, string> = new Map();
+  private roots: Map<string, string> = new Map();
   private readonly maxRetries: number = 3;
   private readonly rateLimitDelay: number = 5000; // Base delay for rate limiting
   private provider: JsonRpcProvider | null = null;
@@ -110,7 +110,8 @@ export class IPFSFetcherService {
 
       const content = await response.json();
       // Any block can be fetched; only one shaped like a data-group root is a
-      // packed one: exactly `entities`, a string `label` and `relationships`.
+      // packed one: exactly `entities`, a string `label` and `relationships`,
+      // the shape SchemaManifestService.isDataGroupRootFile takes for a root.
       if (
         !isPacked(content) ||
         Object.keys(content).length !== 3 ||
@@ -124,7 +125,7 @@ export class IPFSFetcherService {
       // links to are served from memory, so the files come out as for linked data.
       const linked = await unpackStrict(content);
       this.unpacked = linked.blocks;
-      this.linkedCids = new Map([[cid, linked.cid]]);
+      this.roots = new Map([[cid, linked.cid]]);
       return linked.root;
     } catch (error) {
       logger.error(`Error fetching CID ${cid}: ${error}`);
@@ -239,7 +240,7 @@ export class IPFSFetcherService {
       if (datagroupCid) {
         filename = `${datagroupCid}.json`;
       } else {
-        filename = `${this.linkedCids.get(cid) ?? cid}.json`;
+        filename = `${this.roots.get(cid) ?? cid}.json`;
       }
     }
 

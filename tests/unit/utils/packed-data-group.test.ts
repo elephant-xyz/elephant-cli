@@ -236,6 +236,19 @@ describe('pack', () => {
     expect(run(relationships, label)).toBeUndefined();
   });
 
+  it('leaves a root that already has entities as it is', () => {
+    expect(
+      pack(
+        {
+          entities: { kept: 1 },
+          label: 'County',
+          relationships: { one: link('rel-b') },
+        },
+        (cid) => blocks[cid]
+      )
+    ).toBeUndefined();
+  });
+
   it('packs up to exactly the size limit and not a byte over', () => {
     const size = (pad: number) => {
       const wide = { ...blocks, home: { city: 'x'.repeat(pad) } };

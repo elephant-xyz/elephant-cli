@@ -62,8 +62,8 @@ export const PACKED_LIMIT = 1_048_576;
 
 /**
  * The canonical JSON of the packed block of a linked data-group root, or
- * undefined when the group has to stay linked: a Seed root (its CID is the
- * property CID), a relationship value that is not null, a link or an array of
+ * undefined when the group has to stay as it is: a Seed root (its CID is the
+ * property CID), a root that has `entities` already, a relationship value that is not null, a link or an array of
  * links, a relationship block that is not an object whose `from` and `to`
  * link to blocks `block` knows with no other link in it, an entity holding a
  * link, or a packed block that is over `PACKED_LIMIT` or not dag-json (its
@@ -76,8 +76,10 @@ export function pack(
 ): string | undefined {
   // The canonical form sorts link arrays by CID; packed arrays keep that order.
   const linked: unknown = JSON.parse(canonicalizer.canonicalize(root));
+  // A root that has `entities` is packed already, whatever else it holds.
   if (
     !isObject(linked) ||
+    Object.hasOwn(linked, 'entities') ||
     linked.label === 'Seed' ||
     !isObject(linked.relationships)
   ) {

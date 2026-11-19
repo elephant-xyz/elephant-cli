@@ -1288,7 +1288,7 @@ You can also supply a Polygon transaction hash (32-byte hex). When a transaction
 - Traverses an IPFS datagroup tree starting from a CID, following relationship links, and saves the resolved JSON to a ZIP archive.
 - For transaction hashes, reads on-chain submissions, converts each hex hash back into CID form, and downloads the associated data graph.
 - Rewrites CID links inside the fetched JSON to point at the relative paths inside the ZIP for easier offline inspection.
-- Writes a [packed](#packed-data-groups) data group as the same files as its linked form: the root, one file per relationship and one per entity, taken from the packed block without further downloads. A packed block that is not well formed is not written.
+- Writes a [packed](#packed-data-groups) data group as the same files as its linked form: the root, one file per relationship and one per entity, taken from the packed block without further downloads. A packed root is a block with exactly `entities`, a string `label` and `relationships`; one whose entity keys or `from`/`to` values are wrong is not written. Any other block is saved as it is.
 
 **Inputs**
 
