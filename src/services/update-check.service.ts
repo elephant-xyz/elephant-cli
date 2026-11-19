@@ -61,7 +61,8 @@ async function fetchLatestTag(pkgName: string): Promise<string | undefined> {
   try {
     const encoded = encodeURIComponent(pkgName);
     const url = `https://registry.npmjs.org/-/package/${encoded}/dist-tags`;
-    const res = await fetch(url);
+    // Runs before every command: a registry that never answers must not block the CLI.
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return undefined;
     const json = (await res.json()) as { latest?: string };
     return typeof json.latest === 'string' ? json.latest : undefined;
@@ -92,7 +93,8 @@ export async function checkCliUpdate(
   current: string
 ): Promise<void> {
   if (process.env.ELEPHANT_SKIP_UPDATE_CHECK === '1') return;
-  if (process.env.CI === '1') return;
+  // GitHub Actions and most runners set CI=true; some set CI=1.
+  if (['1', 'true'].includes(process.env.CI ?? '')) return;
 
   const cacheDir = getCacheDir();
   const cacheFile = path.join(cacheDir, 'update.json');
