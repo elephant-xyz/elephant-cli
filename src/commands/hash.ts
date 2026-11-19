@@ -48,7 +48,7 @@ export interface HashCommandOptions {
   maxConcurrentTasks?: number;
   propertyCid?: string;
   /** Write each eligible data group as one packed block. */
-  packed?: boolean;
+  linked?: boolean;
   silent?: boolean;
   cwd?: string;
 }
@@ -74,8 +74,8 @@ export function registerHashCommand(program: Command) {
       'Also write every hashed JSON block of the run into one CAR file rooted at a county index block'
     )
     .option(
-      '--packed',
-      'Write each data group as one packed block (entities and relationships inside the root) instead of one block per root, relationship and class file. Seed, and any group that cannot be packed, stay linked.'
+      '--linked',
+      'Write one block per root, relationship and class file, as versions before packing did, instead of one packed block per data group (entities and relationships inside the root). Seed, and any group that cannot be packed, are linked either way.'
     )
     .option(
       '--max-concurrent-tasks <number>',
@@ -528,13 +528,13 @@ async function hashProperty(
       await Promise.all(allOperationPromises);
     }
 
-    // --packed: an eligible data group becomes one block, and the blocks only
+    // Unless --linked: an eligible data group becomes one block, and the blocks only
     // it linked to are dropped. A group that stays linked keeps all of its own.
     // The root that gave the property CID is never packed, whatever its label.
     const kept = new Set<string>();
-    for (const root of options.packed
-      ? hashedFiles.filter((hashedFile) => hashedFile.dataGroupCid)
-      : []) {
+    for (const root of options.linked
+      ? []
+      : hashedFiles.filter((hashedFile) => hashedFile.dataGroupCid)) {
       const json =
         root.originalPath === seedDatagroupFile?.filePath
           ? undefined
@@ -555,9 +555,9 @@ async function hashProperty(
       kept.add(root.calculatedCid);
       logger.info(`Packed ${root.originalPath} (CID: ${root.calculatedCid})`);
     }
-    const output = options.packed
-      ? hashedFiles.filter((hashedFile) => kept.has(hashedFile.calculatedCid))
-      : hashedFiles;
+    const output = options.linked
+      ? hashedFiles
+      : hashedFiles.filter((hashedFile) => kept.has(hashedFile.calculatedCid));
 
     // Phase 3: Generate CSV output and create output ZIP
     progressTracker.setPhase('Creating Output Files', 2);

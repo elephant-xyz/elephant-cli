@@ -88,6 +88,7 @@ describe('hash on a bundle that still contains a fact sheet', () => {
         input: path.join(tmp, 'property'),
         outputZip,
         outputCsv: path.join(tmp, 'hash.csv'),
+        linked: true, // one block per file, so the fact sheet is a block of its own
         silent: true,
         cwd: tmp,
       },

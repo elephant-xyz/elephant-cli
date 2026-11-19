@@ -189,7 +189,8 @@ export async function hash(
     outputCar: path.join(out, 'county.car'),
   };
   await handleHash(
-    { input, ...outputs, packed, silent: true, cwd: out },
+    // packed is the default: no option asks for it
+    { input, ...outputs, linked: !packed || undefined, silent: true, cwd: out },
     overrides
   );
   const reader = await CarReader.fromBytes(

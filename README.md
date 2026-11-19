@@ -820,21 +820,23 @@ elephant-cli hash ./county-transformed \
 | `-o, --output-zip <path>`         | Destination ZIP containing canonicalized JSON (folder named by property CID). | `hashed-data.zip`          |
 | `-c, --output-csv <path>`         | CSV file with hash results.                                                   | `hash-results.csv`         |
 | `--output-car <path>`             | Also write all hashed JSON blocks of the run into one CAR rooted at an index. | Not written                |
-| `--packed`                        | Write each data group as one [packed](#packed-data-groups) block.             | Off (linked layout)        |
+| `--linked`                        | Write one block per file instead of one [packed](#packed-data-groups) block.  | Off (packed layout)        |
 | `--max-concurrent-tasks <number>` | Target concurrency for hashing (fallback determined automatically).           | Auto                       |
 | `--property-cid <cid>`            | Override the property CID used for the output folder and CSV.                 | Seed CID or inferred value |
 
 ### Packed Data Groups
 
-By default `hash` writes a data group of a property in the linked layout: one block for the data-group root, one for every relationship file and one for every class file, each linking to the next by CID. A large county then holds tens of millions of blocks. With `--packed`, `hash` writes the whole data group as one block instead.
+By default `hash` writes the whole data group of a property as one packed block. Versions before packing wrote the linked layout: one block for the data-group root, one for every relationship file and one for every class file, each linking to the next by CID, so a large county held tens of millions of blocks. `--linked` still writes that layout, byte for byte:
 
 ```bash
 elephant-cli hash ./county-transformed \
   --output-zip ./county-hashed \
   --output-csv county-hash-results.csv \
   --output-car county.car \
-  --packed
+  --linked
 ```
+
+A packed data group has another data CID than the same data linked. Hash a county that is already published with `--linked` to keep its CIDs.
 
 **What it does**
 
@@ -868,7 +870,7 @@ elephant-cli hash ./county-transformed \
 - `--output-zip`: `<property_cid>/<packed data cid>.json` replaces the root, relationship and class files of that data group. Files that a linked data group (such as Seed) still links to remain.
 - `--output-car`: the packed block replaces the same blocks. The county index and shards have the same form in both layouts.
 
-Without `--packed` the output is byte-for-byte what earlier versions wrote. `validate`, `export-tables` and `fetch-data` read both layouts, and one input may mix them. `validate-and-upload` accepts the linked layout only.
+With `--linked` the output is byte-for-byte what earlier versions wrote. `validate`, `export-tables` and `fetch-data` read both layouts without any option, and one input may mix them. `validate-and-upload` reads and writes the linked layout only, so its data CIDs differ from those of `hash` unless `hash` runs with `--linked`.
 
 ## Export County Tables
 
