@@ -36,9 +36,13 @@ fn linked(value: &Value) -> bool {
 /// Pack the data group whose linked root is the block `root` of `blocks`:
 /// the CID and the canonical bytes of the packed block. `None` when the data
 /// group has to stay linked: it is the Seed, it holds something other than
-/// relationships linking two link-free entities of `blocks`, or it is too big.
+/// relationships linking two link-free entities of `blocks`, it is too big,
+/// or one of its blocks does not have the CID of its canonical JSON.
 pub fn pack(root: &str, blocks: &BTreeMap<String, Vec<u8>>) -> Option<(String, Vec<u8>)> {
-    let read = |cid: &str| serde_json::from_slice::<Value>(blocks.get(cid)?).ok();
+    // A block is read back from its canonical bytes and has to be filed under the CID those give
+    // it, or the packed block could not be unpacked to the same CIDs. It is not when the JSON had a
+    // `__proto__` key that decided the codec: canonical JSON drops the key, `hash` chooses before that.
+    let read = |key: &str| serde_json::from_slice::<Value>(blocks.get(key)?).ok().filter(|value| cid(value).to_string() == key);
     // The canonical bytes, so a list of relationships is in the order of the linked root.
     let top = read(root)?;
     let fields = top.as_object().filter(|fields| fields.len() == 2)?;

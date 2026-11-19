@@ -446,3 +446,35 @@ fn names_the_first_twenty_data_groups_it_could_not_pack() {
         format!("warning: 22 data groups could not be packed and stay linked: {}, and 2 more\n", first.join(", "))
     );
 }
+
+#[test]
+fn writes_a_root_that_came_packed_as_it_is() {
+    // nothing inside it is resolved: an entity changed in place would no longer be the one its key names
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    let mut packed: Value = serde_json::from_slice(&std::fs::read(fixtures().join(VECTORS[0].1)).unwrap()).unwrap();
+    packed["entities"]["baguqeerag55b2l2jd6rdhr7xeyv4bo7skhrry6ng5tj7zm4refxtc6x7numq"]["ipfs_url"] = json!("photo.png");
+    property(&scratch, &serde_json::to_vec(&packed).unwrap());
+    std::fs::write(scratch.path("property/photo.png"), "not really a picture").unwrap();
+    for extra in [&[][..], &["--packed"]] {
+        let ran = hash(&scratch, extra);
+        assert_eq!(ran.code, 0, "{}", ran.stderr);
+        let county = scratch.rows("out/hash.csv")[1][2].clone();
+        let zipped = entries(&scratch.path("out/hashed.zip"));
+        let written: Value = serde_json::from_slice(&zipped[&format!("{PROPERTY}/{county}.json")]).unwrap();
+        assert_eq!(written, packed);
+    }
+}
+
+#[test]
+fn leaves_a_data_group_linked_when_a_block_is_not_filed_under_the_cid_of_its_canonical_json() {
+    // canonical JSON drops `__proto__`, but this crate chooses the block's codec before that (1.x after it):
+    // the entity has a raw CID that its canonical bytes, read back, would not get
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy(VECTORS[0].0, "property");
+    let address = scratch.text("property/address.json").replacen('{', "{\"__proto__\": {\"constructor\": 1},", 1);
+    std::fs::write(scratch.path("property/address.json"), address).unwrap();
+    let [packed, linked] = both(&scratch);
+    assert!(packed == linked, "{}\n{}", packed.0, linked.0);
+}

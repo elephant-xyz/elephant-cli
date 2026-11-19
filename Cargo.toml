@@ -23,7 +23,8 @@ parquet = { version = "60", default-features = false, features = ["zstd"] }
 regex = "1"
 rquickjs = { version = "0.14", features = ["loader", "rust-alloc"] }
 ryu-js = "1"
-# float_roundtrip: a number read back from canonical bytes is the number that was written
+# float_roundtrip: a number read back from canonical bytes is the number that was written. jsonschema
+# turns it on as well, so naming it changes no build; it is named because hashing depends on it.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 sha2 = "0.10"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }

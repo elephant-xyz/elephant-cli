@@ -45,8 +45,8 @@ pub struct Hashed {
     pub errors: Vec<(String, String)>,
     /// Data groups written packed.
     pub packed: usize,
-    /// Roots `--packed` had to leave linked, by file name; the Seed is not one of them.
-    pub linked: Vec<String>,
+    /// Roots `--packed` had to leave linked, by file name; a Seed is not one of them.
+    pub left: Vec<String>,
 }
 
 struct Work<'a> {
@@ -135,13 +135,21 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
         blocks: BTreeMap::new(),
         errors: Vec::new(),
         packed: 0,
-        linked: Vec::new(),
+        left: Vec::new(),
     };
     let order = std::iter::once(first).chain((0..found.roots.len()).filter(|at| *at != first));
     for at in order {
         let (name, group) = &found.roots[at];
+        let value = &found.parsed[name];
+        // A root that came packed is written as it is: resolving a pointer inside
+        // an entity would change the entity under the CID it is filed by.
+        let ready = value.get("entities").is_some();
         let mut work = Work { property, blocks: BTreeMap::new(), open: vec![name.clone()] };
-        let resolved = match work.resolve(&found.parsed[name], None, "") {
+        let resolved = match ready {
+            true => Ok(value.clone()),
+            false => work.resolve(value, None, ""),
+        };
+        let resolved = match resolved {
             Ok(resolved) => resolved,
             Err(reason) => {
                 hashed.errors.push((name.clone(), format!("Processing error: {reason}")));
@@ -152,13 +160,9 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
         if at == first {
             hashed.cid = cid.clone();
         }
-        // A Seed root's CID is the property CID: it stays as it is. So does a root that came packed.
-        let ready = found.parsed[name].get("entities").is_some();
-        let tried = (packed && !ready && !seeded(group)).then(|| crate::packed::pack(&cid, &work.blocks));
-        if matches!(tried, Some(None)) {
-            hashed.linked.push(name.clone());
-        }
-        let cid = match tried.flatten() {
+        // A Seed root's CID is the property CID: it is never packed.
+        let candidate = packed && !ready && !seeded(group);
+        let cid = match candidate.then(|| crate::packed::pack(&cid, &work.blocks)).flatten() {
             Some((cid, bytes)) => {
                 hashed.blocks.insert(cid.clone(), bytes);
                 hashed.packed += 1;
@@ -167,6 +171,9 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
             None => {
                 hashed.blocks.append(&mut work.blocks);
                 hashed.packed += usize::from(ready);
+                if candidate {
+                    hashed.left.push(name.clone());
+                }
                 cid
             }
         };
@@ -297,7 +304,7 @@ pub struct Outcome {
     /// Data groups written packed.
     pub packed: usize,
     /// Data groups `--packed` had to leave linked, and `<property>: <file>` for the first `NAMED` of them.
-    pub linked: usize,
+    pub left: usize,
     pub first: Vec<String>,
 }
 
@@ -352,7 +359,7 @@ pub fn run(
         cid: None,
         car: None,
         packed: 0,
-        linked: 0,
+        left: 0,
         first: Vec::new(),
     };
     let mut done = 0;
@@ -386,9 +393,9 @@ pub fn run(
             }
             outcome.groups += hashed.groups.len();
             outcome.packed += hashed.packed;
-            outcome.linked += hashed.linked.len();
+            outcome.left += hashed.left.len();
             let room = NAMED.saturating_sub(outcome.first.len());
-            outcome.first.extend(hashed.linked.iter().take(room).map(|file| format!("{name}: {file}")));
+            outcome.first.extend(hashed.left.iter().take(room).map(|file| format!("{name}: {file}")));
             outcome.errors.extend(hashed.errors.iter().map(|(file, reason)| format!("{name}: {file}: {reason}")));
             if !hashed.errors.is_empty() {
                 outcome.failed.push(name.clone());

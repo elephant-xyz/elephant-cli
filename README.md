@@ -475,6 +475,8 @@ A data group stays linked, exactly as without the option, when any of these hold
 - An entity holds a link.
 - The packed block would be larger than 1,048,576 bytes.
 
+A data group also stays linked when one of its blocks does not have the CID of its canonical JSON, which a `__proto__` key can cause. A root that is already packed in the input is written as it is, with or without the option.
+
 `--packed` is off by default, and without it the output is byte for byte what it was. A packed data group has another CID than the linked one: choose a layout per county data group and keep it.
 
 ### export-tables
@@ -582,7 +584,7 @@ elephant-cli upload ./$county-$group-tables --output-json $county-$group-tables-
 
 Each command stops the sequence with a non-zero exit code when its step fails, so the block can run under `set -e`.
 
-To publish the data group as one block per property, add `--packed` to `hash`; the other commands and the lines they print stay the same. See [Packed data groups](#packed-data-groups).
+To publish the data group as one block per property, add `--packed` to `hash`; the other commands and the lines they print stay the same. See [Packed data groups](#packed-data-groups). Everything that reads the archive has to know the packed layout: this version of elephant-cli 2 does, elephant-cli 1.x only from the release that adds it. Check what Atlas CI runs before publishing a packed county.
 
 ## Environment Variables
 
