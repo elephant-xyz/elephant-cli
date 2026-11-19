@@ -269,16 +269,10 @@ fn property(
                 found.rows.push(row("lexicon", message.to_string()));
                 continue;
             };
-            // A packed root is validated as the linked root it stands for.
-            let unpacked = packed::verify(value);
-            let inline = |pointer: &str| match &unpacked {
-                Some(unpacked) => unpacked.source(pointer),
-                None => source(pointer),
-            };
-            let findings = unpacked.iter().flat_map(|unpacked| &unpacked.findings);
-            found.rows.extend(findings.map(|(path, message)| row(path, message.clone())));
             let group = &groups[schema];
-            match group.validate(unpacked.as_ref().map_or(value, |unpacked| &unpacked.root), &inline) {
+            let (packing, checked) = packed::validate(group, value, &source);
+            found.rows.extend(packing.into_iter().map(|(path, message)| row(&path, message)));
+            match checked {
                 None if matches!(**group, Group::Invalid) => {
                     found.rows.push(row("lexicon", format!("schema {schema} is not a valid data group schema")));
                 }

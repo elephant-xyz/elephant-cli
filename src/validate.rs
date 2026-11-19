@@ -143,15 +143,9 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             message,
             ..Row::default()
         };
-        // A packed root is validated as the linked root it stands for.
-        let unpacked = packed::verify(value);
-        let inline = |pointer: &str| match &unpacked {
-            Some(unpacked) => unpacked.source(pointer),
-            None => source(pointer),
-        };
-        let findings = unpacked.iter().flat_map(|unpacked| &unpacked.findings);
-        packing.extend(findings.map(|(path, message)| row(path, message.clone())));
-        match (&*group, group.validate(unpacked.as_ref().map_or(value, |unpacked| &unpacked.root), &inline)) {
+        let (found, checked) = packed::validate(&group, value, &source);
+        packing.extend(found.into_iter().map(|(path, message)| row(&path, message)));
+        match (&*group, checked) {
             (_, Some(errors)) => {
                 rows.extend(errors.into_iter().map(|error| Row { value: error.value, ..row(&error.path, error.message) }));
             }
@@ -163,7 +157,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
         }
     }
     // Findings about the packing are not lexicon rows: none is folded into another.
-    let rows = lexicon::filter(rows).into_iter().chain(packing).collect();
+    let rows = packing.into_iter().chain(lexicon::filter(rows)).collect();
     Ok(Checked { groups: roots.len(), rows })
 }
 

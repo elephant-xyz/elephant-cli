@@ -445,9 +445,13 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
     if !outcome.failed.is_empty() {
         eprintln!("{} of {} properties failed: {}", outcome.failed.len(), outcome.properties, listed(&outcome.failed));
     }
-    if !outcome.linked.is_empty() {
-        let count = outcome.linked.len();
-        eprintln!("warning: {count} data groups could not be packed and stay linked: {}", listed(&outcome.linked));
+    if outcome.linked > 0 {
+        let rest = match outcome.linked - outcome.first.len() {
+            0 => String::new(),
+            more => format!(", and {more} more"),
+        };
+        let first = outcome.first.join(", ");
+        eprintln!("warning: {} data groups could not be packed and stay linked: {first}{rest}", outcome.linked);
     }
     Ok(Done {
         json: json!({
@@ -462,6 +466,7 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
             "data_groups": outcome.groups,
             "packed": outcome.packed,
             "not_packed": outcome.linked,
+            "not_packed_first": outcome.first,
             "property_cid": outcome.cid,
             "output_zip": args.output_zip,
             "output_csv": args.output_csv,

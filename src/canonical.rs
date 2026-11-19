@@ -1,7 +1,8 @@
 //! The canonical bytes of a JSON block: RFC 8785 (JCS) after elephant's link
 //! sort, exactly as elephant-cli 1.x wrote them, so CIDs stay the same.
 
-use crate::cids::order;
+use crate::cids::{self, order};
+use cid::Cid;
 use serde_json::Value;
 
 /// The target of a link as the sort sees it, and as a packed data group may
@@ -128,6 +129,11 @@ pub fn canonical(value: &Value) -> String {
     let mut out = String::new();
     write(value, &mut out);
     out
+}
+
+/// The CID a JSON value has as a block: that of its canonical bytes.
+pub fn cid(value: &Value) -> Cid {
+    cids::of_json(value, &canonical(value))
 }
 
 #[cfg(test)]

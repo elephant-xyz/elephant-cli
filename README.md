@@ -419,7 +419,7 @@ elephant-cli --json validate county.car | jq .errors
 - `--output-csv`: `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt`, one row per data group.
 - `--output-car`: the county CAR. Each property's blocks, a shard block after every 5000 properties, and the `CountyIndex` last, as the root.
 - stdout: `CAR written: <path> (<n> blocks, root <cid>)`, and for a directory `Properties processed: <n>, succeeded: <n>, failed: <n>`.
-- With `--packed`: the `--json` document counts the data groups written packed under `packed` and names those that had to stay linked under `not_packed` (`<property>: <file>`, the Seed left out); stderr warns about them.
+- With `--packed`: the `--json` document counts the data groups written packed under `packed` and those that had to stay linked under `not_packed`, Seed data groups left out, and names the first 20 of them under `not_packed_first` (`<property>: <file>`); stderr warns about them.
 - Exit code `1` when a data group or a property could not be hashed; each one is named on stderr and under `errors` in the `--json` document.
 
 **Options**

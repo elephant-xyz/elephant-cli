@@ -26,6 +26,8 @@ const SEED: &str = "bafkreif7ywbjxu3s6jfi6ginvmsufeux3cd5eujuivg2y7tmqt2qk4rsoe"
 const IMAGES: [&str; 6] = ["png", "jpg", "jpeg", "gif", "svg", "webp"];
 /// Properties per shard block of the county index.
 const SHARD: usize = 5000;
+/// Data groups left linked that a run names; a county may have one per property.
+const NAMED: usize = 20;
 
 fn image(name: &str) -> bool {
     name.rsplit_once('.').is_some_and(|(_, extension)| IMAGES.contains(&extension.to_lowercase().as_str()))
@@ -128,7 +130,7 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
     };
     let mut hashed = Hashed {
         // Until the seed resolves, the property goes by the CID of the seed file as written.
-        cid: cids::of_json(&found.parsed[&found.roots[first].0], &canonical(&found.parsed[&found.roots[first].0])).to_string(),
+        cid: crate::canonical::cid(&found.parsed[&found.roots[first].0]).to_string(),
         groups: Vec::new(),
         blocks: BTreeMap::new(),
         errors: Vec::new(),
@@ -150,18 +152,21 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
         if at == first {
             hashed.cid = cid.clone();
         }
-        // The Seed root's CID is the property CID: it stays as it is.
-        let cid = match (packed && at != first).then(|| crate::packed::pack(&cid, &work.blocks)) {
-            Some(Some((cid, bytes))) => {
+        // A Seed root's CID is the property CID: it stays as it is. So does a root that came packed.
+        let ready = found.parsed[name].get("entities").is_some();
+        let tried = (packed && !ready && !seeded(group)).then(|| crate::packed::pack(&cid, &work.blocks));
+        if matches!(tried, Some(None)) {
+            hashed.linked.push(name.clone());
+        }
+        let cid = match tried.flatten() {
+            Some((cid, bytes)) => {
                 hashed.blocks.insert(cid.clone(), bytes);
                 hashed.packed += 1;
                 cid
             }
-            tried => {
-                if tried.is_some() {
-                    hashed.linked.push(name.clone());
-                }
+            None => {
                 hashed.blocks.append(&mut work.blocks);
+                hashed.packed += usize::from(ready);
                 cid
             }
         };
@@ -291,8 +296,9 @@ pub struct Outcome {
     pub car: Option<(u64, String)>,
     /// Data groups written packed.
     pub packed: usize,
-    /// `<property>: <file>` for every data group `--packed` had to leave linked.
-    pub linked: Vec<String>,
+    /// Data groups `--packed` had to leave linked, and `<property>: <file>` for the first `NAMED` of them.
+    pub linked: usize,
+    pub first: Vec<String>,
 }
 
 /// Hash a single property or every property of a batch directory.
@@ -346,7 +352,8 @@ pub fn run(
         cid: None,
         car: None,
         packed: 0,
-        linked: Vec::new(),
+        linked: 0,
+        first: Vec::new(),
     };
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
@@ -379,7 +386,9 @@ pub fn run(
             }
             outcome.groups += hashed.groups.len();
             outcome.packed += hashed.packed;
-            outcome.linked.extend(hashed.linked.iter().map(|file| format!("{name}: {file}")));
+            outcome.linked += hashed.linked.len();
+            let room = NAMED.saturating_sub(outcome.first.len());
+            outcome.first.extend(hashed.linked.iter().take(room).map(|file| format!("{name}: {file}")));
             outcome.errors.extend(hashed.errors.iter().map(|(file, reason)| format!("{name}: {file}: {reason}")));
             if !hashed.errors.is_empty() {
                 outcome.failed.push(name.clone());

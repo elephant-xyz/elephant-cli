@@ -362,10 +362,15 @@ fn hashes_a_property_that_holds_a_packed_root_to_the_same_cid() {
     scratch.lexicon();
     property(&scratch, &std::fs::read(fixtures().join(VECTORS[0].1)).unwrap());
     for extra in [&[][..], &["--packed"]] {
-        let ran = hash(&scratch, extra);
+        let mut args = vec!["--json", "hash", "property", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"];
+        args.extend(extra);
+        let ran = scratch.run(&args);
         assert_eq!(ran.code, 0, "{}", ran.stderr);
         let cids: Vec<String> = scratch.rows("out/hash.csv").into_iter().map(|row| row[2].clone()).collect();
         assert_eq!(cids, [PROPERTY, VECTORS[0].3]);
+        // it is written packed, whoever packed it
+        assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(1), &json!(0)), "{}", ran.stdout);
+        assert!(ran.stderr.is_empty(), "{}", ran.stderr);
     }
 }
 
@@ -394,24 +399,50 @@ fn says_which_data_groups_it_packed_and_which_it_could_not() {
     let scratch = Scratch::new();
     scratch.lexicon();
     scratch.copy(VECTORS[0].0, "property");
+    // a second Seed root is no more a candidate than the first
+    std::fs::copy(scratch.path("property/seed.json"), scratch.path("property/seed2.json")).unwrap();
     let run = |extra: &[&str]| {
         let mut args = vec!["--json", "hash", "property", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"];
         args.extend(extra);
         scratch.run(&args)
     };
+    let counts = |ran: &support::Ran| {
+        [ran.json()["packed"].clone(), ran.json()["not_packed"].clone(), ran.json()["not_packed_first"].clone()]
+    };
     let ran = run(&["--packed"]);
-    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(1), &json!([])), "{}", ran.stdout);
+    assert_eq!(counts(&ran), [json!(1), json!(0), json!([])], "{}", ran.stdout);
     assert!(ran.stderr.is_empty(), "{}", ran.stderr);
-    let ran = run(&[]);
-    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(0), &json!([])), "{}", ran.stdout);
+    assert_eq!(counts(&run(&[])), [json!(0), json!(0), json!([])]);
 
     // an entity that links a file: the data group stays linked, and the run says so
     let property = scratch.text("property/property.json").replacen('{', "{\"parcel\": {\"/\": \"./parcel.json\"},", 1);
     std::fs::write(scratch.path("property/property.json"), property).unwrap();
     let ran = run(&["--packed"]);
     assert_eq!(ran.code, 0, "{}", ran.stderr);
-    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(0), &json!(["property: county.json"])));
+    assert_eq!(counts(&ran), [json!(0), json!(1), json!(["property: county.json"])]);
     assert_eq!(ran.stderr, "warning: 1 data groups could not be packed and stay linked: property: county.json\n");
     let ran = scratch.run(&["hash", "property", "--packed", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"]);
     assert!(ran.stdout.contains("  Data groups packed:  0\n"), "{}", ran.stdout);
+}
+
+#[test]
+fn names_the_first_twenty_data_groups_it_could_not_pack() {
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    for at in 0..22 {
+        let name = format!("county/p{at:02}");
+        scratch.copy(VECTORS[0].0, &name);
+        let property =
+            scratch.text(&format!("{name}/property.json")).replacen('{', "{\"parcel\": {\"/\": \"./parcel.json\"},", 1);
+        std::fs::write(scratch.path(&name).join("property.json"), property).unwrap();
+    }
+    let ran = scratch.run(&["--json", "hash", "county", "--packed", "--output-zip", "out", "--output-csv", "out/hash.csv"]);
+    let summary = ran.json();
+    assert_eq!((&summary["packed"], &summary["not_packed"]), (&json!(0), &json!(22)));
+    let first: Vec<String> = (0..20).map(|at| format!("p{at:02}: county.json")).collect();
+    assert_eq!(summary["not_packed_first"], json!(first));
+    assert_eq!(
+        ran.stderr,
+        format!("warning: 22 data groups could not be packed and stay linked: {}, and 2 more\n", first.join(", "))
+    );
 }

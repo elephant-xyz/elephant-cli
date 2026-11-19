@@ -12,10 +12,11 @@
 //! and the entity is not a block of its own. A root is packed when it is an
 //! object with an `entities` member; `unpack` gives back the linked form,
 //! with the CIDs the linked layout has, for the code that reads that, and
-//! `verify` does the same for the code that checks it.
+//! `validate` checks a root of either layout against its schema.
 
-use crate::canonical::{canonical, link};
+use crate::canonical::{canonical, cid, link};
 use crate::cids;
+use crate::lexicon::{Finding, Group, Source};
 use serde_json::{json, Map, Value};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -79,19 +80,6 @@ pub struct Unpacked {
     pub findings: Vec<(String, String)>,
 }
 
-impl Unpacked {
-    /// What a pointer below the root names. A packed data group holds all of
-    /// it: nothing is looked up outside the block.
-    pub fn source(&self, pointer: &str) -> Result<Cow<'_, Value>, String> {
-        self.blocks.get(pointer).map(Cow::Borrowed).ok_or_else(|| format!("{pointer} is not in the packed data group"))
-    }
-}
-
-/// The CID a JSON value has as a block of the linked layout.
-fn cid(value: &Value) -> String {
-    cids::of_json(value, &canonical(value)).to_string()
-}
-
 /// The linked form of a packed data-group root; a root that is not packed comes back as it is.
 pub fn unpack(packed: Value) -> Result<Unpacked, Value> {
     let Value::Object(mut root) = packed else {
@@ -122,7 +110,7 @@ pub fn unpack(packed: Value) -> Result<Unpacked, Value> {
             used.insert(entity.clone());
             block[end] = json!({ "/": entity });
         }
-        let cid = cid(&block);
+        let cid = cid(&block).to_string();
         blocks.insert(cid.clone(), block);
         json!({ "/": cid })
     };
@@ -149,11 +137,11 @@ pub fn unpack(packed: Value) -> Result<Unpacked, Value> {
 
 /// `unpack` for a root that is checked: also the finding only hashing shows,
 /// an entity filed under a key that is not its CID. `None` when the root is not packed.
-pub fn verify(packed: &Value) -> Option<Unpacked> {
+fn verify(packed: &Value) -> Option<Unpacked> {
     let held = packed.as_object()?.get("entities")?;
     let mut renamed = Vec::new();
     for (key, entity) in held.as_object().into_iter().flatten() {
-        let own = cid(entity);
+        let own = cid(entity).to_string();
         if own != *key {
             renamed.push((format!("/entities/{key}"), format!("entity key {key} is not the CID of its value, {own}")));
         }
@@ -161,6 +149,21 @@ pub fn verify(packed: &Value) -> Option<Unpacked> {
     let mut unpacked = unpack(packed.clone()).ok()?;
     unpacked.findings.extend(renamed);
     Some(unpacked)
+}
+
+/// Validate a data-group root against its schema, a packed one as the linked
+/// root it stands for, with nothing below it looked up outside the block.
+/// Returns the findings about the packing (JSON path and message) and what
+/// `Group::validate` says.
+pub fn validate<'a>(group: &Group, root: &Value, source: Source<'_, 'a>) -> (Vec<(String, String)>, Option<Vec<Finding>>) {
+    let Some(unpacked) = verify(root) else {
+        return (Vec::new(), group.validate(root, source));
+    };
+    let inline = |pointer: &str| {
+        unpacked.blocks.get(pointer).map(Cow::Borrowed).ok_or_else(|| format!("{pointer} is not in the packed data group"))
+    };
+    let found = group.validate(&unpacked.root, &inline);
+    (unpacked.findings, found)
 }
 
 #[cfg(test)]
@@ -182,7 +185,7 @@ mod tests {
             ),
         ] {
             let unpacked = verify(&serde_json::from_str(packed).unwrap()).unwrap();
-            assert_eq!(cid(&unpacked.root), linked);
+            assert_eq!(cid(&unpacked.root).to_string(), linked);
             assert!(unpacked.findings.is_empty(), "{:?}", unpacked.findings);
         }
     }
