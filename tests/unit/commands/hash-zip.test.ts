@@ -421,6 +421,7 @@ describe('Hash Command - ZIP Input', () => {
         input: testInputZip,
         outputZip: testOutputZip,
         outputCsv: testOutputCsv,
+        linked: true, // the CID calls counted below are those of the linked layout
         // No propertyCid provided - should use calculated seed CID
       };
 

@@ -25,6 +25,9 @@ describe('update-check.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...ORIGINAL_ENV };
+    // a CI runner sets CI itself, which would skip every check below
+    delete process.env.CI;
+    delete process.env.ELEPHANT_SKIP_UPDATE_CHECK;
 
     tmpHome = path.join(
       process.cwd(),
@@ -136,9 +139,33 @@ describe('update-check.service', () => {
     expect(exitSpy).not.toHaveBeenCalled();
 
     delete process.env.ELEPHANT_SKIP_UPDATE_CHECK;
-    process.env.CI = '1';
-    await checkCliUpdate('@elephant-xyz/cli', '0.0.0');
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(exitSpy).not.toHaveBeenCalled();
+    // GitHub Actions and most runners set CI=true; some set CI=1
+    for (const value of ['1', 'true']) {
+      process.env.CI = value;
+      await checkCliUpdate('@elephant-xyz/cli', '0.0.0');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(exitSpy).not.toHaveBeenCalled();
+    }
   });
+
+  it('gives up on a registry that never answers instead of blocking the CLI', async () => {
+    // the timeout signal fires at once; a fetch without it would never settle
+    const timeout = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(AbortSignal.abort());
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      init?.signal?.aborted
+        ? Promise.reject(init.signal.reason)
+        : new Promise<Response>(() => undefined)
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await checkCliUpdate('@elephant-xyz/cli', '0.0.0');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(timeout).toHaveBeenCalledWith(5000);
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(fs.existsSync(cacheFilePath())).toBe(false);
+    timeout.mockRestore();
+  }, 1000);
 });

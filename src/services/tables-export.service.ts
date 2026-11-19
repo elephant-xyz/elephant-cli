@@ -20,6 +20,7 @@ import { JSONSchema, SchemaCacheService } from './schema-cache.service.js';
 import { schemaManifestUrl } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { BigSet, cidKey, LargeCarReader } from '../utils/large-car.js';
+import { isPacked, unpackStrict } from '../utils/packed-data-group.js';
 
 export interface ExportTablesOptions {
   /** County CAR written by `hash --output-car`. */
@@ -355,7 +356,8 @@ class TableWriter {
 
 /**
  * Walk a county CAR (root -> shards -> data-group roots -> relationships ->
- * entities) and write one Parquet table per lexicon class, one per
+ * entities; a packed root carries the last two inside itself) and write one
+ * Parquet table per lexicon class, one per
  * relationship type, and `properties` from the index. The table of an entity
  * is the class its relationship schema names for that end (`from`/`to`
  * `cid` -> class schema `title`), never the file name. `tables.car` holds one
@@ -391,15 +393,20 @@ export async function exportTables(
       { key: 'elephant.part_size_bytes', value: String(cap) },
     ];
 
-    const block = async (cid: CID): Promise<Record<string, unknown>> => {
-      const got = await reader.get(cid);
+    const decode = (cid: CID, bytes?: Uint8Array): Record<string, unknown> => {
       const value =
-        got && cid.code === dagJSON.code ? decodeDagJson(got.bytes) : undefined;
+        bytes && cid.code === dagJSON.code ? decodeDagJson(bytes) : undefined;
       if (!value || typeof value !== 'object') {
         return fail(`block ${cid} is not a dag-json object in the car`);
       }
       return value as Record<string, unknown>;
     };
+    // `unpacked`: the blocks of a packed data-group root, which are in no other place.
+    const block = async (cid: CID, unpacked?: Map<string, Uint8Array>) =>
+      decode(
+        cid,
+        unpacked ? unpacked.get(cid.toString()) : (await reader.get(cid))?.bytes
+      );
 
     // Schemas are resolved once per CID; the class chain comes from the schema, never from a name.
     const classes = new Map<string, Table>();
@@ -547,14 +554,15 @@ export async function exportTables(
       table: Table,
       cid: CID,
       property: string,
-      group: string
+      group: string,
+      unpacked?: Map<string, Uint8Array>
     ) => {
       const key = cid.toString();
       if (seen.has(cidKey(cid))) {
         return;
       }
       seen.add(cidKey(cid));
-      const value = await block(cid);
+      const value = await block(cid, unpacked);
       const extras: Record<string, unknown> = {
         cid: key,
         property_cid: property,
@@ -587,7 +595,21 @@ export async function exportTables(
         ),
       ]);
       for (const group of entry.groups) {
-        const root = await block(group.data);
+        // A packed root is read as its linked form, so both layouts give the same rows.
+        const bytes = (await reader.get(group.data))?.bytes;
+        const found = decode(group.data, bytes);
+        const packed = isPacked(found)
+          ? await unpackStrict(
+              JSON.parse(new TextDecoder().decode(bytes))
+            ).catch((error: unknown) =>
+              fail(
+                `packed data group ${group.data} cannot be read: ${error instanceof Error ? error.message : String(error)}`
+              )
+            )
+          : undefined;
+        const root = packed
+          ? await block(CID.parse(packed.cid), packed.blocks)
+          : found;
         const ends = await chain(group.schema);
         const relationships =
           root.relationships && typeof root.relationships === 'object'
@@ -606,7 +628,7 @@ export async function exportTables(
               continue;
             }
             seen.add(link.toString());
-            const relationship = await block(link);
+            const relationship = await block(link, packed?.blocks);
             const from = CID.asCID(relationship.from);
             const to = CID.asCID(relationship.to);
             if (!from || !to) {
@@ -623,8 +645,14 @@ export async function exportTables(
               property,
               group.schema,
             ]);
-            await entity(pair.from, from, property, group.schema);
-            await entity(pair.to, to, property, group.schema);
+            await entity(
+              pair.from,
+              from,
+              property,
+              group.schema,
+              packed?.blocks
+            );
+            await entity(pair.to, to, property, group.schema, packed?.blocks);
           }
         }
       }

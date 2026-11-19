@@ -18,6 +18,7 @@ This guide walks Elephant Network oracles through the complete workflow of trans
 - [Generate Transformation Scripts](#generate-transformation-scripts)
 - [Produce the County Dataset](#produce-the-county-dataset)
 - [Hash the County Dataset](#hash-the-county-dataset)
+  - [Packed Data Groups](#packed-data-groups)
 - [Export County Tables](#export-county-tables)
 - [Upload Datagroups to IPFS](#upload-datagroups-to-ipfs)
 - [Submit Hashes to the Contract](#submit-hashes-to-the-contract)
@@ -273,6 +274,7 @@ This ensures all files conform to the Property Improvement schema and relationsh
   - Graph closure: every link in every dag-json block reachable from the root resolves inside the file.
   - Lexicon: every data-group root listed in a shard validates against the schema it is keyed by, resolving links from the CAR instead of IPFS.
   - Orphans: every block is reachable from the root.
+- A data-group root may be [packed](#packed-data-groups) in any of these inputs. It is validated as its linked form, with its relationships and entities read from the root itself, so it gets the same lexicon errors and error paths as the same data in linked form. Four more errors exist only for packed roots: `entities` is not an object, an entity key is not the CID of its value, a `from` or `to` that is not a key of `entities`, and an entity that no relationship references. Their `error_path` is the JSON path in the linked form, like the lexicon errors. In a CAR they are counted under the lexicon check.
 
 **Outputs**
 
@@ -818,8 +820,57 @@ elephant-cli hash ./county-transformed \
 | `-o, --output-zip <path>`         | Destination ZIP containing canonicalized JSON (folder named by property CID). | `hashed-data.zip`          |
 | `-c, --output-csv <path>`         | CSV file with hash results.                                                   | `hash-results.csv`         |
 | `--output-car <path>`             | Also write all hashed JSON blocks of the run into one CAR rooted at an index. | Not written                |
+| `--linked`                        | Write one block per file instead of one [packed](#packed-data-groups) block.  | Off (packed layout)        |
 | `--max-concurrent-tasks <number>` | Target concurrency for hashing (fallback determined automatically).           | Auto                       |
 | `--property-cid <cid>`            | Override the property CID used for the output folder and CSV.                 | Seed CID or inferred value |
+
+### Packed Data Groups
+
+By default `hash` writes the whole data group of a property as one packed block. Versions before packing wrote the linked layout: one block for the data-group root, one for every relationship file and one for every class file, each linking to the next by CID, so a large county held tens of millions of blocks. `--linked` still writes that layout, byte for byte:
+
+```bash
+elephant-cli hash ./county-transformed \
+  --output-zip ./county-hashed \
+  --output-csv county-hash-results.csv \
+  --output-car county.car \
+  --linked
+```
+
+A packed data group has another data CID than the same data linked. Hash a county that is already published with `--linked` to keep its CIDs.
+
+**What it does**
+
+- Builds one packed block per data group from its linked form:
+
+  ```
+  {
+    "entities":      { "<entity cid>": <class file content>, ... },
+    "label":         "<label of the data group>",
+    "relationships": { "<relationship key>": null | REL | [REL, ...] }
+  }
+  REL = the relationship file content, with "from" and "to" holding the CID string of an entity
+  ```
+
+- `entities` holds exactly the class files that some relationship's `from` or `to` points at, keyed by the CID each has in the linked layout. An array of relationships keeps the order of the linked root (sorted by the CID of the relationship block).
+- `from` and `to` are plain CID strings that name a key of `entities`. They are not `{"/": "<cid>"}` links, because the entity is not a separate block.
+- The block is canonical JSON with a dag-json CIDv1, like every other block `hash` writes.
+
+**A data group stays linked, exactly as without the option, when**
+
+- its label is `Seed`, or it is the data group `hash` takes the property CID from. The Seed data CID is the property CID, so it never changes.
+- a relationship value in its root is something other than `null`, a link or an array of links.
+- a relationship file is not an object whose `from` and `to` link to JSON files of the same run, or it holds another link.
+- a class file holds a link.
+- the packed block would be larger than 1,048,576 bytes.
+- the packed block would not be valid dag-json (for example a class file with an object that has a `/` member next to other members).
+
+**Outputs**
+
+- `--output-csv`: `dataCid` of a packed data group is the CID of its packed block.
+- `--output-zip`: `<property_cid>/<packed data cid>.json` replaces the root, relationship and class files of that data group. Files that a linked data group (such as Seed) still links to remain.
+- `--output-car`: the packed block replaces the same blocks. The county index and shards have the same form in both layouts.
+
+With `--linked` the output is byte-for-byte what earlier versions wrote. `validate`, `export-tables` and `fetch-data` read both layouts without any option, and one input may mix them. `validate-and-upload` reads and writes the linked layout only, so its data CIDs differ from those of `hash` unless `hash` runs with `--linked`.
 
 ## Export County Tables
 
@@ -842,7 +893,7 @@ elephant-cli export-tables county.car \
 
 **Inputs**
 
-- A county CAR written by `hash --output-car`, ideally after `validate county.car` passed.
+- A county CAR written by `hash --output-car`, ideally after `validate county.car` passed. Data groups may be linked or [packed](#packed-data-groups); both give the same table rows, with the relationship and entity CIDs of the linked layout. Only the data-group root CID in `properties` and the county root differ. A packed root that is not well formed stops the export.
 - Class, relationship and data-group schemas, resolved through the schema cache and the lexicon manifest.
 
 **Outputs**
@@ -1239,6 +1290,7 @@ You can also supply a Polygon transaction hash (32-byte hex). When a transaction
 - Traverses an IPFS datagroup tree starting from a CID, following relationship links, and saves the resolved JSON to a ZIP archive.
 - For transaction hashes, reads on-chain submissions, converts each hex hash back into CID form, and downloads the associated data graph.
 - Rewrites CID links inside the fetched JSON to point at the relative paths inside the ZIP for easier offline inspection.
+- Writes a [packed](#packed-data-groups) data group as the same files as its linked form: the root, one file per relationship and one per entity, taken from the packed block without further downloads. A packed root is a block with exactly `entities`, a string `label` and `relationships`; one whose entity keys or `from`/`to` values are wrong is not written. Any other block is saved as it is.
 
 **Inputs**
 

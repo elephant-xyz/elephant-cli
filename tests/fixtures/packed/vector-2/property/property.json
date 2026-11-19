@@ -1,0 +1,10 @@
+{
+  "parcel_identifier": "10-20-30-40",
+  "property_type": "SingleFamily",
+  "property_structure_built_year": 1987,
+  "livable_floor_area": "1,234 sqft",
+  "number_of_units": 1.0,
+  "historic_designation": false,
+  "subdivision": null,
+  "request_identifier": "10203040"
+}

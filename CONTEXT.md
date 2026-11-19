@@ -36,6 +36,14 @@ _Avoid_: Relationship schema name when referring to `*_has_*` keys
 The CID-named JSON file with `label` and `relationships` that indexes relationship outputs for one data group.
 _Avoid_: Manifest, bundle root
 
+**Linked Data Group**:
+A data group written as one block per **Data-Group Root**, one per **Relationship Output** and one per **Entity Output**, each referring to the next by a `{"/": "<cid>"}` link.
+_Avoid_: Unpacked data group, legacy layout
+
+**Packed Data Group**:
+A data group written as one block: a **Data-Group Root** that also has `entities`, holding its relationships and entity values inside itself, with `from` and `to` as plain CID strings.
+_Avoid_: Inlined data group, bundle
+
 ## Relationships
 
 - A **Seed Record** can produce one **Capture Manifest** through Browser Flow v2.
@@ -43,6 +51,7 @@ _Avoid_: Manifest, bundle root
 - A **Transform v2 Handler Package** reads **Captures** and writes **Entity Outputs** and **Relationship Outputs**.
 - A **Relationship Output** links exactly two **Entity Outputs**.
 - A **Data-Group Root** indexes **Relationship Outputs** by **Relationship Key**.
+- A **Packed Data Group** unpacks to exactly one **Linked Data Group** with the same relationship and entity CIDs.
 
 ## Example dialogue
 

@@ -21,6 +21,7 @@ import { scanSinglePropertyDirectoryV2 } from '../utils/single-property-file-sca
 import { SchemaManifestService } from '../services/schema-manifest.service.js';
 import { isImageFile } from '../utils/file-type-helpers.js';
 import { CarOutputService } from '../services/car-output.service.js';
+import { pack } from '../utils/packed-data-group.js';
 import {
   bail,
   isBatchInput,
@@ -35,6 +36,8 @@ interface HashedFile {
   calculatedCid: string;
   transformedData: any;
   canonicalJson: string;
+  /** On a data-group root: the CIDs of every JSON block it links to, directly or not. */
+  linked?: string[];
 }
 
 export interface HashCommandOptions {
@@ -44,6 +47,8 @@ export interface HashCommandOptions {
   outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
+  /** Write each eligible data group as one packed block. */
+  linked?: boolean;
   silent?: boolean;
   cwd?: string;
 }
@@ -67,6 +72,10 @@ export function registerHashCommand(program: Command) {
     .option(
       '--output-car <path>',
       'Also write every hashed JSON block of the run into one CAR file rooted at a county index block'
+    )
+    .option(
+      '--linked',
+      'Write one block per root, relationship and class file, as versions before packing did, instead of one packed block per data group (entities and relationships inside the root). Seed, and any group that cannot be packed, are linked either way.'
     )
     .option(
       '--max-concurrent-tasks <number>',
@@ -519,6 +528,37 @@ async function hashProperty(
       await Promise.all(allOperationPromises);
     }
 
+    // Unless --linked: an eligible data group becomes one block, and the blocks only
+    // it linked to are dropped. A group that stays linked keeps all of its own.
+    // The root that gave the property CID is never packed, whatever its label.
+    const kept = new Set<string>();
+    for (const root of options.linked
+      ? []
+      : hashedFiles.filter((hashedFile) => hashedFile.dataGroupCid)) {
+      const json =
+        root.originalPath === seedDatagroupFile?.filePath
+          ? undefined
+          : pack(
+              root.transformedData,
+              (cid) => cidToFileMap.get(cid)?.transformedData
+            );
+      if (json === undefined) {
+        [root.calculatedCid, ...(root.linked ?? [])].forEach((cid) =>
+          kept.add(cid)
+        );
+        logger.info(`Left ${root.originalPath} linked: it cannot be packed`);
+        continue;
+      }
+      root.canonicalJson = json;
+      root.calculatedCid =
+        await cidCalculatorService.calculateCidFromCanonicalJson(json);
+      kept.add(root.calculatedCid);
+      logger.info(`Packed ${root.originalPath} (CID: ${root.calculatedCid})`);
+    }
+    const output = options.linked
+      ? hashedFiles
+      : hashedFiles.filter((hashedFile) => kept.has(hashedFile.calculatedCid));
+
     // Phase 3: Generate CSV output and create output ZIP
     progressTracker.setPhase('Creating Output Files', 2);
 
@@ -530,7 +570,7 @@ async function hashProperty(
 
     // Process hashed files to generate CSV entries
     // We only include main datagroup files in CSV, not linked files
-    for (const hashedFile of hashedFiles) {
+    for (const hashedFile of output) {
       if (hashedFile.dataGroupCid) {
         // Only include files with dataGroupCid (main files, not linked)
         // Calculate the path relative to the extracted ZIP content root
@@ -584,7 +624,7 @@ async function hashProperty(
 
     // Add each hashed file to the ZIP
     // For single property: use property CID as the single folder name (no 'data' wrapper)
-    for (const hashedFile of hashedFiles) {
+    for (const hashedFile of output) {
       // Single folder structure: propertyCid/calculatedCid.json
       const zipPath = path.join(
         propertyFolderName,
@@ -596,13 +636,14 @@ async function hashProperty(
     }
 
     // The same bytes go into the CAR when --output-car is set, once per CID
-    // within this property (cidToFileMap already keys every hashed file by CID).
-    // Block order is property order (sorted names in batch mode) then CID
-    // order, so the same input yields the same CAR bytes.
+    // within this property. Block order is property order (sorted names in
+    // batch mode) then CID order, so the same input yields the same CAR bytes.
     // ponytail: json blocks only; add media blocks if a consumer needs them in the CAR
-    for (const [cid, hashedFile] of [...cidToFileMap].sort(([a], [b]) =>
-      a.localeCompare(b)
-    )) {
+    for (const [cid, hashedFile] of [
+      ...new Map(
+        output.map((hashedFile) => [hashedFile.calculatedCid, hashedFile])
+      ),
+    ].sort(([a], [b]) => a.localeCompare(b))) {
       await car?.put(
         CID.parse(cid),
         Buffer.from(hashedFile.canonicalJson, 'utf-8')
@@ -612,7 +653,7 @@ async function hashProperty(
     await car?.property(
       CID.parse(propertyFolderName),
       Object.fromEntries(
-        hashedFiles
+        output
           .filter((hashedFile) => hashedFile.dataGroupCid)
           .map((hashedFile) => [
             hashedFile.dataGroupCid,
@@ -870,6 +911,7 @@ async function processFileForHashing(
       calculatedCid,
       transformedData: dataToProcess,
       canonicalJson: finalCanonicalJson,
+      linked: linkedFilesFromConversion.map((linkedFile) => linkedFile.cid),
     };
 
     hashedFiles.push(hashedFile);

@@ -33,6 +33,11 @@ import {
   formatCurrentValue,
 } from '../utils/validation-errors.js';
 import { isCarInput } from '../utils/car-input.js';
+import {
+  isPacked,
+  unpack,
+  unpackedSource,
+} from '../utils/packed-data-group.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -867,18 +872,28 @@ async function validateFile(
       return;
     }
 
+    // A packed root is validated as its linked form, resolved from its own entities
+    const unpacked = isPacked(jsonData) ? await unpack(jsonData) : undefined;
+    const findings = unpacked?.findings ?? [];
+
     // Validate the data
     const validationResult = await services.jsonValidatorService.validate(
-      jsonData,
+      unpacked?.root ?? jsonData,
       schema,
       fileEntry.filePath,
-      false // allow resolution of file references
+      false, // allow resolution of file references
+      unpacked && unpackedSource(unpacked)
     );
 
-    if (!validationResult.valid) {
-      const errorMessages = services.jsonValidatorService.getErrorMessages(
-        validationResult.errors || []
-      );
+    if (!validationResult.valid || findings.length > 0) {
+      const errorMessages = [
+        ...findings.map((finding) => ({ ...finding, data: undefined })),
+        ...(validationResult.valid
+          ? []
+          : services.jsonValidatorService.getErrorMessages(
+              validationResult.errors || []
+            )),
+      ];
 
       for (const errorInfo of errorMessages) {
         await services.csvReporterService.logError({

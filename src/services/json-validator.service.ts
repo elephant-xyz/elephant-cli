@@ -49,7 +49,6 @@ export class JsonValidatorService {
   private linked = new Map<string, Promise<Resolved>>();
   private schemaCacheService: SchemaCacheService;
   private baseDirectory: string;
-  private blockSource?: (cid: string) => Promise<Uint8Array | undefined>;
 
   constructor(baseDirectory: string, schemaCacheService: SchemaCacheService) {
     this.baseDirectory = baseDirectory;
@@ -183,17 +182,6 @@ export class JsonValidatorService {
     });
   }
 
-  /**
-   * Resolve `{"/": cid}` data pointers from this source instead of IPFS; a
-   * pointer the source cannot supply fails validation. Pass `undefined` to
-   * restore IPFS resolution.
-   */
-  setBlockSource(
-    source: ((cid: string) => Promise<Uint8Array | undefined>) | undefined
-  ): void {
-    this.blockSource = source;
-  }
-
   private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
     try {
       CID.parse(cidStr);
@@ -212,12 +200,14 @@ export class JsonValidatorService {
    * @param schema The schema to validate against
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    * @param skipCIDResolution Skip resolving CID pointers (useful when data is already processed)
+   * @param blockSource Resolve `{"/": cid}` data pointers from this source instead of IPFS; it throws, with its own reason, for a block it does not have
    */
   async validate(
     data: any,
     schema: JSONSchema,
     currentFilePath?: string,
-    skipCIDResolution?: boolean
+    skipCIDResolution?: boolean,
+    blockSource?: (cid: string) => Promise<Uint8Array>
   ): Promise<ValidationResult> {
     let resolvedData;
     try {
@@ -254,7 +244,9 @@ export class JsonValidatorService {
           data,
           currentFilePath,
           prepared.schema,
-          prepared.allowed
+          prepared.allowed,
+          '',
+          blockSource
         );
       }
 
@@ -480,7 +472,8 @@ export class JsonValidatorService {
     currentFilePath?: string,
     schema?: any,
     cidAllowedMap?: Map<string, boolean>,
-    currentPath: string = ''
+    currentPath: string = '',
+    blockSource?: (cid: string) => Promise<Uint8Array>
   ): Promise<any> {
     if (!data || typeof data !== 'object' || data === null) {
       return data;
@@ -529,10 +522,7 @@ export class JsonValidatorService {
 
       if (isCID) {
         try {
-          const local = await this.blockSource?.(pointerValue);
-          if (this.blockSource && !local) {
-            throw new Error(`block ${pointerValue} is not in the car`);
-          }
+          const local = await blockSource?.(pointerValue);
           const text = local
             ? new TextDecoder().decode(local)
             : await fetchFromIpfs(pointerValue);
@@ -547,7 +537,8 @@ export class JsonValidatorService {
             currentFilePath,
             schema,
             cidAllowedMap,
-            currentPath
+            currentPath,
+            blockSource
           );
         } catch (error) {
           throw new Error(
@@ -603,7 +594,8 @@ export class JsonValidatorService {
           currentFilePath,
           schema,
           cidAllowedMap,
-          currentPath
+          currentPath,
+          blockSource
         );
       }
     }
@@ -620,7 +612,8 @@ export class JsonValidatorService {
               currentFilePath,
               itemSchema,
               cidAllowedMap,
-              itemPath
+              itemPath,
+              blockSource
             );
           } catch (error) {
             throw new Error(`Failed to resolve CID pointer in array: ${error}`);
@@ -660,7 +653,8 @@ export class JsonValidatorService {
           currentFilePath,
           propertySchema,
           cidAllowedMap,
-          propertyPath
+          propertyPath,
+          blockSource
         );
       } else {
         resolved[key] = data[key];
