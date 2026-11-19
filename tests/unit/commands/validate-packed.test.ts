@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import os from 'os';
 import path from 'path';
 import AdmZip from 'adm-zip';
 import { CID } from 'multiformats/cid';
@@ -14,6 +13,7 @@ import {
   COUNTY,
   EXPECTED,
   hash,
+  scratch,
   services,
   VECTORS,
 } from '../../helpers/packed.js';
@@ -70,23 +70,16 @@ const CORRUPTIONS: [string, (packed: Packed) => Promise<unknown>, string][] = [
   ],
 ];
 
+const fresh = await scratch('validate-packed-');
+
 describe('validate with packed data groups', () => {
-  let tmp: string;
-
-  beforeEach(async () => {
-    tmp = await fsPromises.mkdtemp(
-      path.join(path.resolve(os.tmpdir()), 'validate-packed-')
-    );
-  });
-
-  afterEach(async () => {
+  afterEach(() => {
     expect(fetchFromIpfs).not.toHaveBeenCalled();
-    await fsPromises.rm(tmp, { recursive: true, force: true });
   });
 
   /** Validate `input`; resolves to whether it passed, the CAR summary and the error rows without timestamps. */
   const validate = async (input: string, strict = false) => {
-    const cwd = await fsPromises.mkdtemp(path.join(tmp, 'run-'));
+    const cwd = await fresh();
     const csv = path.join(cwd, 'errors.csv');
     const outcome = await handleValidate(
       { input, outputCsv: csv, silent: true, cwd },
@@ -112,10 +105,7 @@ describe('validate with packed data groups', () => {
 
   /** Vector 2 as a property directory whose County group is one packed root. */
   const packedDirectory = async (root?: unknown) => {
-    const dir = path.join(
-      await fsPromises.mkdtemp(path.join(tmp, 'packed-')),
-      'property'
-    );
+    const dir = path.join(await fresh(), 'property');
     await fsPromises.mkdir(dir);
     for (const name of [
       'seed.json',
@@ -138,10 +128,7 @@ describe('validate with packed data groups', () => {
   };
 
   const linkedDirectory = async () => {
-    const dir = path.join(
-      await fsPromises.mkdtemp(path.join(tmp, 'linked-')),
-      'property'
-    );
+    const dir = path.join(await fresh(), 'property');
     await fsPromises.cp(path.join(SOURCE, 'property'), dir, {
       recursive: true,
     });
@@ -164,10 +151,7 @@ describe('validate with packed data groups', () => {
 
   /** A county CAR holding one property whose County group is `root`. */
   const packedCar = async (root: unknown, text = JSON.stringify(root)) => {
-    const file = path.join(
-      await fsPromises.mkdtemp(path.join(tmp, 'car-')),
-      'county.car'
-    );
+    const file = path.join(await fresh(), 'county.car');
     const cid = CID.parse(
       await new CidCalculatorService().calculateCidFromCanonicalJson(text)
     );
@@ -221,7 +205,7 @@ describe('validate with packed data groups', () => {
   });
 
   it('passes a county CAR with packed roots', async () => {
-    const out = await hash(path.join(SOURCE, 'property'), tmp, true);
+    const out = await hash(path.join(SOURCE, 'property'), await fresh(), true);
     const result = await validate(out.outputCar);
     expect(result.rows).toEqual([]);
     expect(result).toMatchObject({
@@ -237,8 +221,8 @@ describe('validate with packed data groups', () => {
 
   it('reports the same rows for a packed county CAR as for the linked one', async () => {
     const source = path.join(SOURCE, 'property');
-    const linked = await hash(source, path.join(tmp, 'linked'), false);
-    const packed = await hash(source, path.join(tmp, 'packed'), true);
+    const linked = await hash(source, await fresh(), false);
+    const packed = await hash(source, await fresh(), true);
     const expected = await validate(linked.outputCar, true);
     expect(expected.summary?.errors.lexicon).toBeGreaterThan(0);
     expect(expected.rows.join('\n')).toContain(

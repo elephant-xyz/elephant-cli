@@ -136,6 +136,20 @@ describe('unpack', () => {
     ]);
   });
 
+  it('keeps a relationship value that is not an object as it is, links first', async () => {
+    const packed = vector('vector-1');
+    const relationship = packed.relationships.property_has_address;
+    packed.relationships = { one: 5, many: ['x', relationship, 5] };
+    const unpacked = await unpack(packed);
+    expect(unpacked.findings).toEqual([]);
+    expect(unpacked.root.relationships).toEqual({
+      one: 5,
+      many: [{ '/': expect.stringMatching(/^bagu/) }, 'x', 5],
+    });
+    // the linked root, one relationship block and the two entities
+    expect(unpacked.blocks.size).toBe(4);
+  });
+
   it('keeps what it cannot unpack in the linked root, for the schema to reject', async () => {
     const unpacked = await unpack({
       entities: {},

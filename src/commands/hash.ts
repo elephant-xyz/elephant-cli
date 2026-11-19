@@ -534,10 +534,10 @@ async function hashProperty(
     for (const root of options.packed
       ? hashedFiles.filter((hashedFile) => hashedFile.dataGroupCid)
       : []) {
-      const json = pack(root.transformedData, (cid) => {
-        const found = cidToFileMap.get(cid);
-        return found ? JSON.parse(found.canonicalJson) : undefined;
-      });
+      const json = pack(
+        root.transformedData,
+        (cid) => cidToFileMap.get(cid)?.transformedData
+      );
       if (json === undefined) {
         [root.calculatedCid, ...(root.linked ?? [])].forEach((cid) =>
           kept.add(cid)

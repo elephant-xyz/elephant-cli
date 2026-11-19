@@ -1,36 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import os from 'os';
 import path from 'path';
 import { zstdDecompressSync } from 'zlib';
 import { parquetReadObjects } from 'hyparquet';
 import { handleExportTables } from '../../../src/commands/export-tables.js';
+import { CID } from 'multiformats/cid';
 import { CarOutputService } from '../../../src/services/car-output.service.js';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { json } from '../../helpers/county-car.js';
 import {
   COUNTY,
   EXPECTED,
   hash,
+  scratch,
   services,
   VECTORS,
 } from '../../helpers/packed.js';
 
+const fresh = await scratch('export-packed-');
+
 describe('export-tables with packed data groups', () => {
-  let tmp: string;
-
-  beforeEach(async () => {
-    tmp = await fsPromises.mkdtemp(
-      path.join(path.resolve(os.tmpdir()), 'export-packed-')
-    );
-  });
-
-  afterEach(async () => {
-    await fsPromises.rm(tmp, { recursive: true, force: true });
-  });
-
   /** Hash vector 2 linked or packed, export it, and read every table back. */
   const tables = async (packed: boolean) => {
-    const out = path.join(tmp, packed ? 'packed' : 'linked');
+    const out = await fresh();
     const hashed = await hash(
       path.join(VECTORS, 'vector-2', 'property'),
       out,
@@ -89,7 +81,33 @@ describe('export-tables with packed data groups', () => {
     expect(packed.result.countyRoot).not.toBe(linked.result.countyRoot);
   });
 
+  it('names the data group whose packed root cannot be unpacked', async () => {
+    const tmp = await fresh();
+    const text = (
+      await fsPromises.readFile(
+        path.join(VECTORS, 'vector-2', 'packed.json'),
+        'utf-8'
+      )
+    ).replace('"tax_year":2023', '"tax_year":1e999');
+    const cid = CID.parse(
+      await new CidCalculatorService().calculateCidFromCanonicalJson(text)
+    );
+    const car = new CarOutputService(path.join(tmp, 'broken.car'));
+    await car.open();
+    await car.put(cid, Buffer.from(text));
+    await car.property(cid, { [COUNTY]: cid });
+    await car.close();
+
+    await expect(
+      handleExportTables(
+        { input: car.target, output: path.join(tmp, 'tables'), silent: true },
+        services()
+      )
+    ).rejects.toThrow(`packed data group ${cid} cannot be unpacked`);
+  });
+
   it('refuses a packed root that is not well formed instead of writing its rows', async () => {
+    const tmp = await fresh();
     const source = path.join(VECTORS, 'vector-2', 'packed.json');
     const packed = JSON.parse(await fsPromises.readFile(source, 'utf-8'));
     packed.relationships.property_has_tax[0].to = EXPECTED.property;

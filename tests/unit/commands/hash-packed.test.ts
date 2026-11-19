@@ -1,26 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import os from 'os';
 import path from 'path';
 import {
   EXPECTED,
   hash,
+  scratch,
   Vector,
   VECTORS,
   zipped,
 } from '../../helpers/packed.js';
 
+const fresh = await scratch('hash-packed-');
+
 describe('hash --packed', () => {
-  let tmp: string;
-
-  beforeEach(async () => {
-    tmp = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'hash-packed-'));
-  });
-
-  afterEach(async () => {
-    await fsPromises.rm(tmp, { recursive: true, force: true });
-  });
-
   it.each<Vector>(['vector-1', 'vector-2'])(
     'writes the County group of %s as the one reference block',
     async (vector) => {
@@ -30,7 +22,11 @@ describe('hash --packed', () => {
       );
       expect(golden.length).toBe(expected.bytes);
 
-      const out = await hash(path.join(VECTORS, vector, 'property'), tmp, true);
+      const out = await hash(
+        path.join(VECTORS, vector, 'property'),
+        await fresh(),
+        true
+      );
 
       expect(out.data).toEqual({
         'seed.json': EXPECTED.property,
@@ -52,7 +48,7 @@ describe('hash --packed', () => {
       const expected = EXPECTED[vector];
       const out = await hash(
         path.join(VECTORS, vector, 'property'),
-        tmp,
+        await fresh(),
         false
       );
       expect(out.data).toEqual({
@@ -66,6 +62,7 @@ describe('hash --packed', () => {
 
   /** Vector 2 with some files replaced, hashed linked and packed. */
   const both = async (files: Record<string, unknown>) => {
+    const tmp = await fresh();
     const input = path.join(tmp, 'property');
     await fsPromises.cp(path.join(VECTORS, 'vector-2', 'property'), input, {
       recursive: true,
@@ -121,6 +118,7 @@ describe('hash --packed', () => {
   });
 
   it('packs every property of a directory input', async () => {
+    const tmp = await fresh();
     const input = path.join(tmp, 'county');
     for (const vector of ['vector-1', 'vector-2']) {
       await fsPromises.cp(

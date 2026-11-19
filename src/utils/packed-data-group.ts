@@ -139,7 +139,12 @@ export function unpackedSource(unpacked: Unpacked) {
   };
 }
 
-/** The linked form of a packed root: what the linked-only code already reads. */
+/**
+ * The linked form of a packed root: what the linked-only code already reads.
+ * Throws when a value cannot be canonical JSON (a number out of range).
+ * ponytail: every block is serialised and hashed here and parsed again by its
+ * reader; keep the parsed values beside the bytes if a county run is measured slow
+ */
 export async function unpack(packed: Json): Promise<Unpacked> {
   const blocks = new Map<string, Uint8Array>();
   const findings: Finding[] = [];
@@ -167,10 +172,14 @@ export async function unpack(packed: Json): Promise<Unpacked> {
   }
   const used = new Set<string>();
   const link = async (relationship: unknown) => {
-    const body = isObject(relationship) ? { ...relationship } : relationship;
     const missing: Finding[] = [];
-    for (const end of isObject(body) ? ['from', 'to'] : []) {
-      const target = (body as Json)[end];
+    // Not a relationship: kept as it is, for the schema to judge as in a linked root.
+    if (!isObject(relationship)) {
+      return { value: relationship, missing };
+    }
+    const body = { ...relationship };
+    for (const end of ['from', 'to']) {
+      const target = body[end];
       if (typeof target !== 'string') {
         continue;
       }
@@ -181,9 +190,10 @@ export async function unpack(packed: Json): Promise<Unpacked> {
           message: `packed data group: ${end} ${JSON.stringify(target)} is not a key of "entities"`,
         });
       }
-      (body as Json)[end] = { '/': target };
+      body[end] = { '/': target };
     }
-    return { cid: await block(body), missing };
+    const cid = await block(body);
+    return { cid, value: { '/': cid }, missing };
   };
   const relationships: Json = {};
   // Canonical JSON cannot carry a `__proto__` member, so the linked root has
@@ -191,11 +201,15 @@ export async function unpack(packed: Json): Promise<Unpacked> {
   for (const [key, value] of Object.entries(
     isObject(packed.relationships) ? packed.relationships : {}
   ).filter(([key]) => key !== '__proto__')) {
-    const items = await Promise.all(
-      value === null ? [] : [value].flat().map(link)
+    const items: { cid?: string; value: unknown; missing: Finding[] }[] =
+      await Promise.all(value === null ? [] : [value].flat().map(link));
+    // The linked root sorts an array as the canonical form does: links by
+    // CID, then the rest. Finding paths are the paths of the linked root.
+    const sorted = [...items].sort((a, b) =>
+      a.cid && b.cid
+        ? a.cid.localeCompare(b.cid)
+        : Number(!a.cid) - Number(!b.cid)
     );
-    // The linked root sorts an array by CID; finding paths are its paths.
-    const sorted = [...items].sort((a, b) => a.cid.localeCompare(b.cid));
     for (const [index, item] of sorted.entries()) {
       const path = `/relationships/${key}${Array.isArray(value) ? `/${index}` : ''}`;
       findings.push(
@@ -205,9 +219,9 @@ export async function unpack(packed: Json): Promise<Unpacked> {
         }))
       );
     }
-    const links = sorted.map((item) => ({ '/': item.cid }));
+    const values = sorted.map((item) => item.value);
     relationships[key] =
-      value === null ? null : Array.isArray(value) ? links : links[0];
+      value === null ? null : Array.isArray(value) ? values : values[0];
   }
   for (const key of Object.keys(entities).filter((key) => !used.has(key))) {
     findings.push({

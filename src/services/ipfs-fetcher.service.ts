@@ -24,8 +24,9 @@ export class IPFSFetcherService {
   private readonly baseUrl: string;
   private processedCids: Set<string> = new Set();
   private cidToFilename: Map<string, string> = new Map();
-  // Blocks a fetched packed data group carried inside itself, and the CID of its linked root.
-  // ponytail: kept for the life of the service, one fetch run; clear per property if a run ever holds too many
+  // The packed data group fetched last: the blocks it carried inside itself, and
+  // its own CID with the CID of its linked root. Its files are written before
+  // the next root is fetched, so one group is all that is held.
   private unpacked: Map<string, Uint8Array> = new Map();
   private linkedCids: Map<string, string> = new Map();
   private readonly maxRetries: number = 3;
@@ -124,8 +125,8 @@ export class IPFSFetcherService {
       if (finding) {
         throw new Error(`${finding.message} (at ${finding.path})`);
       }
-      linked.blocks.forEach((bytes, key) => this.unpacked.set(key, bytes));
-      this.linkedCids.set(cid, linked.cid);
+      this.unpacked = linked.blocks;
+      this.linkedCids = new Map([[cid, linked.cid]]);
       return linked.root;
     } catch (error) {
       logger.error(`Error fetching CID ${cid}: ${error}`);

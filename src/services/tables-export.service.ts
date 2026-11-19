@@ -599,7 +599,12 @@ export async function exportTables(
         const bytes = (await reader.get(group.data))?.bytes;
         const found = decode(group.data, bytes);
         const packed = isPacked(found)
-          ? await unpack(JSON.parse(new TextDecoder().decode(bytes)))
+          ? await unpack(JSON.parse(new TextDecoder().decode(bytes))).catch(
+              (error: unknown) =>
+                fail(
+                  `packed data group ${group.data} cannot be unpacked: ${error instanceof Error ? error.message : String(error)}`
+                )
+            )
           : undefined;
         const finding = packed?.findings[0];
         if (finding) {

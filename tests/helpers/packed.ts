@@ -1,5 +1,7 @@
 import { promises as fsPromises } from 'fs';
+import os from 'os';
 import path from 'path';
+import { afterAll } from 'vitest';
 import AdmZip from 'adm-zip';
 import { CarReader } from '@ipld/car';
 import { handleHash } from '../../src/commands/hash.js';
@@ -31,6 +33,18 @@ export const EXPECTED = {
 } as const;
 
 export type Vector = 'vector-1' | 'vector-2';
+
+/**
+ * A scratch directory for one test file, removed when the file ends. The
+ * result makes a new empty directory inside it on every call.
+ */
+export async function scratch(prefix: string) {
+  const root = await fsPromises.mkdtemp(
+    path.join(path.resolve(os.tmpdir()), prefix)
+  );
+  afterAll(() => fsPromises.rm(root, { recursive: true, force: true }));
+  return () => fsPromises.mkdtemp(path.join(root, 'case-'));
+}
 
 const cid = async (name: string) =>
   (await text(`packed fixtures: ${name}`)).cid.toString();

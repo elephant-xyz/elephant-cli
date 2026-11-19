@@ -1,25 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { promises as fsPromises } from 'fs';
-import os from 'os';
 import path from 'path';
 import { IPFSFetcherService } from '../../../src/services/ipfs-fetcher.service.js';
 import { schemaManifestUrl } from '../../../src/config/constants.js';
-import { COUNTY, EXPECTED, hash, VECTORS } from '../../helpers/packed.js';
+import {
+  COUNTY,
+  EXPECTED,
+  hash,
+  scratch,
+  VECTORS,
+} from '../../helpers/packed.js';
 
 const GATEWAY = 'https://gateway.test/ipfs';
 
+const fresh = await scratch('fetch-packed-');
+
 describe('fetch-data with a packed data group', () => {
-  let tmp: string;
-
-  beforeEach(async () => {
-    tmp = await fsPromises.mkdtemp(
-      path.join(path.resolve(os.tmpdir()), 'fetch-packed-')
-    );
-  });
-
-  afterEach(async () => {
+  afterEach(() => {
     vi.unstubAllGlobals();
-    await fsPromises.rm(tmp, { recursive: true, force: true });
   });
 
   /** Serve the linked and the packed blocks of vector 2 (optionally changed) and a manifest. */
@@ -28,8 +26,8 @@ describe('fetch-data with a packed data group', () => {
     change: (packed: string) => string = (packed) => packed
   ) => {
     const source = path.join(VECTORS, 'vector-2', 'property');
-    const linked = await hash(source, path.join(tmp, 'linked'), false);
-    const packed = await hash(source, path.join(tmp, 'packed'), true);
+    const linked = await hash(source, await fresh(), false);
+    const packed = await hash(source, await fresh(), true);
     const blocks = new Map([...linked.blocks, ...packed.blocks]);
     const requested: string[] = [];
     vi.stubGlobal('fetch', async (url: string) => {
@@ -51,7 +49,7 @@ describe('fetch-data with a packed data group', () => {
   const fetched = async (cid: string) => {
     const dir = await new IPFSFetcherService(GATEWAY).fetchData(
       cid,
-      path.join(tmp, 'data')
+      await fresh()
     );
     expect(path.basename(dir)).toBe(cid);
     const files: Record<string, string> = {};
