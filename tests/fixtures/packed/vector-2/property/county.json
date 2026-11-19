@@ -1,0 +1,10 @@
+{
+  "label": "County",
+  "relationships": {
+    "property_has_address": { "/": "./relationship_property_has_address.json" },
+    "property_has_tax": [
+      { "/": "./relationship_property_has_tax_2024.json" },
+      { "/": "./relationship_property_has_tax_2023.json" }
+    ]
+  }
+}

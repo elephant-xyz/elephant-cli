@@ -1,0 +1,1 @@
+{"source_http_request": {"url": "http://127.0.0.1:18765/html/detail", "method": "GET", "multiValueQueryString": {"parcel": ["12 345", "b"], "x": ["1"]}}, "request_identifier": "12345", "full_address": "1 Main St", "county_jurisdiction": "Lee"}

@@ -1,0 +1,2 @@
+property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+,,/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/validate/unused-file/orphan.json,root,Unused data JSON file detected: orphan.json is not referenced by any relationship included in the datagroup.,,2026-11-12T21:02:48.136Z

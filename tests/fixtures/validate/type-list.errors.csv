@@ -1,0 +1,2 @@
+property_cid,data_group_cid,file_path,error_path,error_message,currentValue,timestamp
+type-list,bafkreibhurphpjdq33ysit57jtzmdldgngepsdbsw4vm7esawth2ezgaxu,/tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/validate/type-list/seed.json,/relationships/property_seed/from/request_identifier,"must be string,null","[""12345""]",2026-11-12T23:08:51.657Z

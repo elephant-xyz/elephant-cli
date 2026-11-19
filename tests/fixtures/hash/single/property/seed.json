@@ -1,0 +1,6 @@
+{
+  "label": "Seed",
+  "relationships": {
+    "address_has_parcel": { "/": "./relationship_address_has_parcel.json" }
+  }
+}

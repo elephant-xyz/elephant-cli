@@ -1,0 +1,2 @@
+parcel_id,address,method,url,multiValueQueryString,source_identifier,county,json
+12345,"1 Main St, Fort Myers, FL 33901",GET,https://county.example.com/detail,"{""parcel"":[""12345""]}",12345,Lee,

@@ -1,9 +1,0 @@
-src/
-tests/
-.gitignore
-tsconfig.json
-*.ts
-!*.d.ts
-node_modules/
-downloads/
-test-downloads/

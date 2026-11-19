@@ -1,0 +1,8 @@
+{
+  "label": "Seed",
+  "relationships": {
+    "property_seed": {
+      "/": "./relationship_property_seed_has_unnormalized_address.json"
+    }
+  }
+}

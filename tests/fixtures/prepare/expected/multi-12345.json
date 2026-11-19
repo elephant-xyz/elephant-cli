@@ -1,0 +1,46 @@
+{
+  "Owner": {
+    "source_http_request": {
+      "method": "POST",
+      "url": "http://127.0.0.1:18765/api/owner",
+      "headers": {
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "parid=12345"
+    },
+    "response": {
+      "method": "POST",
+      "url": "/api/owner",
+      "contentType": "application/x-www-form-urlencoded",
+      "body": "parid=12345"
+    }
+  },
+  "Sales": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "http://127.0.0.1:18765/api/sales",
+      "multiValueQueryString": {
+        "parid": [
+          "12345"
+        ],
+        "year": [
+          "2024",
+          "2025"
+        ]
+      }
+    },
+    "response": {
+      "method": "GET",
+      "url": "/api/sales?year=2024&year=2025",
+      "contentType": null,
+      "body": ""
+    }
+  },
+  "Page": {
+    "source_http_request": {
+      "method": "GET",
+      "url": "http://127.0.0.1:18765/html/12345"
+    },
+    "response": "<html><body><p id=\"url\">/html/12345</p><script>1</script></body></html>"
+  }
+}

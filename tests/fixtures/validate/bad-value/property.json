@@ -1,0 +1,10 @@
+{
+  "parcel_identifier": "12345",
+  "property_legal_description_text": null,
+  "property_type": "Castle",
+  "request_identifier": "12345",
+  "source_http_request": {
+    "method": "GET",
+    "url": "https://example.com/parcel/12345"
+  }
+}

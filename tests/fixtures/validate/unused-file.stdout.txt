@@ -1,0 +1,14 @@
+🐘 Elephant Network CLI - Validate (Single Property)
+
+
+✅ Validation process finished
+
+📊 Validation Report:
+  Total files scanned:    2
+  Files skipped:          0
+  Validation errors:      1
+  Successfully validated: 1
+  Total files handled:    3
+  Duration:               0s
+
+⚠️  Validation errors found. Check /tmp/claude-1000/-home-exedev-elephant-cli/d7611aa6-5ed3-4bf1-b8e3-c6e85ea57cd6/scratchpad/golden/validate/unused-file.errors.csv for details.

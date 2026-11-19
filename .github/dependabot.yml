@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -11,18 +11,12 @@ updates:
       - "@elephant-xyz/developers"
     commit-message:
       prefix: "fix"
-      prefix-development: "chore"
       include: "scope"
     labels:
       - "dependencies"
-      - "npm"
+      - "rust"
     groups:
-      development-dependencies:
-        dependency-type: "development"
-        patterns:
-          - "*"
-      production-dependencies:
-        dependency-type: "production"
+      cargo:
         patterns:
           - "*"
 

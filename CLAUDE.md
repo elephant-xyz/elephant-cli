@@ -1,19 +1,17 @@
 ## IMPORTANT
 
+Read `AGENTS.md` first: layout, commands, and the contracts that must not break.
+
 - Use context7 MCP to get latest documentation, code snippets and best practices.
 - Try to keep things in one function unless composable or reusable
-- DO NOT do unnecessary destructuring of variables
-- DO NOT use `else` statements unless necessary
-- DO NOT use `try`/`catch` if it can be avoided
-- AVOID `try`/`catch` where possible
-- AVOID `else` statements
-- AVOID using `any` type
-- NEVER use `as any`
-- AVOID `let` statements
+- DO NOT use `else` unless necessary; return early
+- AVOID `let mut` where a binding can be immutable
+- DO NOT `unwrap` or `expect` on anything that depends on input
+- AVOID `unsafe`; when it is needed, say in a comment why it is sound
 - PREFER single word variable names where possible
-- When working with a CLI commands, create separate module in `src/commands` directory
-- When shared code is needed, create it outside of `src/commands` directory
-- Use `npm run format` for code styling; do not hand-edit formatting. Lint and format checks run independently.
+- One module per command in `src/`; shared code lives in its own module
+- Use `cargo fmt` for code styling; do not hand-edit formatting. `cargo clippy --all-targets -- -D warnings` runs independently.
+- Write the failing test first; tests run the built binary on real files (`tests/*.rs`)
 
 ### Documentation
 
