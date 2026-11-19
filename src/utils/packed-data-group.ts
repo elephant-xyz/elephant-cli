@@ -1,4 +1,7 @@
-import { CidCalculatorService } from '../services/cid-calculator.service.js';
+import {
+  CidCalculatorService,
+  decodeDagJson,
+} from '../services/cid-calculator.service.js';
 import { IPLDCanonicalizerService } from '../services/ipld-canonicalizer.service.js';
 
 /**
@@ -54,15 +57,6 @@ function isLink(value: unknown): value is { '/': string } {
   );
 }
 
-function hasLink(value: unknown): boolean {
-  return (
-    isLink(value) ||
-    (value !== null &&
-      typeof value === 'object' &&
-      Object.values(value).some(hasLink))
-  );
-}
-
 /** Largest packed block, in bytes of canonical JSON. */
 export const PACKED_LIMIT = 1_048_576;
 
@@ -72,8 +66,9 @@ export const PACKED_LIMIT = 1_048_576;
  * property CID), a relationship value that is not null, a link or an array of
  * links, a relationship block that is not an object whose `from` and `to`
  * link to blocks `block` knows with no other link in it, an entity holding a
- * link, or a packed block over `PACKED_LIMIT`. `block` returns the JSON value
- * of a block of this run by CID.
+ * link, or a packed block that is over `PACKED_LIMIT` or not dag-json (its
+ * CID would be raw, which no reader takes for a data-group root). `block`
+ * returns the JSON value of a block of this run by CID.
  */
 export function pack(
   root: unknown,
@@ -95,13 +90,14 @@ export function pack(
       !isObject(body) ||
       !isLink(body.from) ||
       !isLink(body.to) ||
-      hasLink({ ...body, from: null, to: null })
+      calculator.hasIPLDLinks({ ...body, from: null, to: null })
     ) {
       return undefined;
     }
     for (const end of [body.from['/'], body.to['/']]) {
-      const entity = block(end);
-      if (entity === undefined || hasLink(entity)) {
+      // An entity most relationships share (the property) is read once.
+      const entity = Object.hasOwn(entities, end) ? entities[end] : block(end);
+      if (entity === undefined || calculator.hasIPLDLinks(entity)) {
         return undefined;
       }
       entities[end] = entity;
@@ -122,7 +118,25 @@ export function pack(
     label: linked.label,
     relationships,
   });
-  return Buffer.byteLength(json) <= PACKED_LIMIT ? json : undefined;
+  const bytes = Buffer.from(json, 'utf-8');
+  return bytes.length <= PACKED_LIMIT && decodeDagJson(bytes) !== undefined
+    ? json
+    : undefined;
+}
+
+/**
+ * The blocks of an unpacked root as a block source for
+ * `JsonValidatorService.validate`. A CID it lacks is an error that names the
+ * packed data group, whatever container the root came in.
+ */
+export function unpackedSource(unpacked: Unpacked) {
+  return async (cid: string): Promise<Uint8Array> => {
+    const bytes = unpacked.blocks.get(cid);
+    if (!bytes) {
+      throw new Error(`block ${cid} is not in the packed data group`);
+    }
+    return bytes;
+  };
 }
 
 /** The linked form of a packed root: what the linked-only code already reads. */
@@ -152,8 +166,9 @@ export async function unpack(packed: Json): Promise<Unpacked> {
     }
   }
   const used = new Set<string>();
-  const link = async (relationship: unknown, path: string) => {
+  const link = async (relationship: unknown) => {
     const body = isObject(relationship) ? { ...relationship } : relationship;
+    const missing: Finding[] = [];
     for (const end of isObject(body) ? ['from', 'to'] : []) {
       const target = (body as Json)[end];
       if (typeof target !== 'string') {
@@ -161,14 +176,14 @@ export async function unpack(packed: Json): Promise<Unpacked> {
       }
       used.add(target);
       if (isObject(packed.entities) && !Object.hasOwn(entities, target)) {
-        findings.push({
-          path: `${path}/${end}`,
+        missing.push({
+          path: end,
           message: `packed data group: ${end} ${JSON.stringify(target)} is not a key of "entities"`,
         });
       }
       (body as Json)[end] = { '/': target };
     }
-    return { '/': await block(body) };
+    return { cid: await block(body), missing };
   };
   const relationships: Json = {};
   // Canonical JSON cannot carry a `__proto__` member, so the linked root has
@@ -176,15 +191,23 @@ export async function unpack(packed: Json): Promise<Unpacked> {
   for (const [key, value] of Object.entries(
     isObject(packed.relationships) ? packed.relationships : {}
   ).filter(([key]) => key !== '__proto__')) {
-    const path = `/relationships/${key}`;
+    const items = await Promise.all(
+      value === null ? [] : [value].flat().map(link)
+    );
+    // The linked root sorts an array by CID; finding paths are its paths.
+    const sorted = [...items].sort((a, b) => a.cid.localeCompare(b.cid));
+    for (const [index, item] of sorted.entries()) {
+      const path = `/relationships/${key}${Array.isArray(value) ? `/${index}` : ''}`;
+      findings.push(
+        ...item.missing.map((finding) => ({
+          ...finding,
+          path: `${path}/${finding.path}`,
+        }))
+      );
+    }
+    const links = sorted.map((item) => ({ '/': item.cid }));
     relationships[key] =
-      value === null
-        ? null
-        : Array.isArray(value)
-          ? await Promise.all(
-              value.map((item, index) => link(item, `${path}/${index}`))
-            )
-          : await link(value, path);
+      value === null ? null : Array.isArray(value) ? links : links[0];
   }
   for (const key of Object.keys(entities).filter((key) => !used.has(key))) {
     findings.push({

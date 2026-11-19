@@ -7,6 +7,7 @@ import { CID } from 'multiformats/cid';
 import { handleValidate } from '../../../src/commands/validate.js';
 import { CarSummary } from '../../../src/services/car-validator.service.js';
 import { CarOutputService } from '../../../src/services/car-output.service.js';
+import { CidCalculatorService } from '../../../src/services/cid-calculator.service.js';
 import { fetchFromIpfs } from '../../../src/utils/schema-fetcher.js';
 import { json } from '../../helpers/county-car.js';
 import {
@@ -162,18 +163,17 @@ describe('validate with packed data groups', () => {
   };
 
   /** A county CAR holding one property whose County group is `root`. */
-  const packedCar = async (root: unknown) => {
+  const packedCar = async (root: unknown, text = JSON.stringify(root)) => {
     const file = path.join(
       await fsPromises.mkdtemp(path.join(tmp, 'car-')),
       'county.car'
     );
-    const bytes = Buffer.from(JSON.stringify(root));
     const cid = CID.parse(
-      (await json(JSON.parse(bytes.toString()))).cid.toString()
+      await new CidCalculatorService().calculateCidFromCanonicalJson(text)
     );
     const car = new CarOutputService(file);
     await car.open();
-    await car.put(cid, (await json(root)).bytes);
+    await car.put(cid, Buffer.from(text));
     await car.property(cid, { [COUNTY]: cid });
     await car.close();
     return file;
@@ -253,6 +253,27 @@ describe('validate with packed data groups', () => {
       portable(expected.rows, EXPECTED['vector-2'].linked)
     );
     expect(actual.rows.join('\n')).toContain(EXPECTED['vector-2'].packed);
+  });
+
+  it('names the packed data group, not a CAR, when a pointer is not among its entities', async () => {
+    const [, change] = CORRUPTIONS[2];
+    const result = await validate(await packedDirectory(await corrupt(change)));
+    expect(result.rows.join('\n')).toContain(
+      `block ${ABSENT} is not in the packed data group`
+    );
+    expect(result.rows.join('\n')).not.toContain('is not in the car');
+  });
+
+  it('reports a packed root that cannot be unpacked and goes on with the CAR', async () => {
+    const text = (
+      await fsPromises.readFile(path.join(SOURCE, 'packed.json'), 'utf-8')
+    ).replace('"tax_year":2023', '"tax_year":1e999');
+    const result = await validate(await packedCar(undefined, text));
+    expect(result.summary).toMatchObject({
+      properties: 1,
+      errors: { lexicon: 1, orphans: 0 },
+    });
+    expect(result.rows.join('\n')).toContain('cannot be unpacked');
   });
 
   describe.each(CORRUPTIONS)('%s', (_name, change, message) => {

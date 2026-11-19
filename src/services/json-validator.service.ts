@@ -49,7 +49,6 @@ export class JsonValidatorService {
   private linked = new Map<string, Promise<Resolved>>();
   private schemaCacheService: SchemaCacheService;
   private baseDirectory: string;
-  private blockSource?: (cid: string) => Promise<Uint8Array | undefined>;
 
   constructor(baseDirectory: string, schemaCacheService: SchemaCacheService) {
     this.baseDirectory = baseDirectory;
@@ -183,17 +182,6 @@ export class JsonValidatorService {
     });
   }
 
-  /**
-   * Resolve `{"/": cid}` data pointers from this source instead of IPFS; a
-   * pointer the source cannot supply fails validation. Pass `undefined` to
-   * restore IPFS resolution.
-   */
-  setBlockSource(
-    source: ((cid: string) => Promise<Uint8Array | undefined>) | undefined
-  ): void {
-    this.blockSource = source;
-  }
-
   private async loadSchemaFromCID(cidStr: string): Promise<JSONSchema> {
     try {
       CID.parse(cidStr);
@@ -212,14 +200,14 @@ export class JsonValidatorService {
    * @param schema The schema to validate against
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    * @param skipCIDResolution Skip resolving CID pointers (useful when data is already processed)
-   * @param blockSource Resolve `{"/": cid}` pointers of this call from here; see `setBlockSource`
+   * @param blockSource Resolve `{"/": cid}` data pointers from this source instead of IPFS; a pointer it cannot supply fails validation
    */
   async validate(
     data: any,
     schema: JSONSchema,
     currentFilePath?: string,
     skipCIDResolution?: boolean,
-    blockSource = this.blockSource
+    blockSource?: (cid: string) => Promise<Uint8Array | undefined>
   ): Promise<ValidationResult> {
     let resolvedData;
     try {

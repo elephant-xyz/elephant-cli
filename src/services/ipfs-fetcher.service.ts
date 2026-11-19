@@ -108,7 +108,13 @@ export class IPFSFetcherService {
       }
 
       const content = await response.json();
-      if (!isPacked(content)) {
+      // Any block can be fetched; only one shaped like a data-group root is a packed one.
+      if (
+        !isPacked(content) ||
+        typeof content.label !== 'string' ||
+        !content.relationships ||
+        typeof content.relationships !== 'object'
+      ) {
         return content;
       }
       // A packed data group is handed on as its linked root; the blocks it

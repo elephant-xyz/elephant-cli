@@ -63,22 +63,39 @@ describe('unpack', () => {
   });
 
   it('reports a from or to that is not a key of entities', async () => {
-    const packed = vector('vector-2');
-    packed.relationships.property_has_address.to = 'nowhere';
-    packed.relationships.property_has_tax[1].from = ADDRESS;
+    const packed = vector('vector-1');
     delete packed.entities[ADDRESS];
     const unpacked = await unpack(packed);
     expect(unpacked.findings).toEqual([
       {
         path: '/relationships/property_has_address/to',
-        message: expect.stringContaining('"nowhere" is not a key of'),
-      },
-      {
-        path: '/relationships/property_has_tax/1/from',
         message: expect.stringContaining(`"${ADDRESS}" is not a key of`),
       },
     ]);
   });
+
+  it.each([[[0, 1]], [[1, 0]]])(
+    'reports a from or to at its index in the linked root, whatever the packed order (%j)',
+    async (order) => {
+      const packed = vector('vector-2');
+      const [first, second] = packed.relationships.property_has_tax;
+      second.to = 'nowhere';
+      packed.relationships.property_has_tax = order.map(
+        (index) => [first, second][index]
+      );
+      const unpacked = await unpack(packed);
+      const links = (unpacked.root.relationships as Record<string, unknown>)
+        .property_has_tax as { '/': string }[];
+      const index = links.findIndex((link) =>
+        Buffer.from(unpacked.blocks.get(link['/'])!).includes('nowhere')
+      );
+      expect(
+        unpacked.findings
+          .filter((finding) => finding.message.includes('"nowhere"'))
+          .map((finding) => finding.path)
+      ).toEqual([`/relationships/property_has_tax/${index}/to`]);
+    }
+  );
 
   it('reports an entity no relationship references', async () => {
     const packed = vector('vector-1');
@@ -146,6 +163,9 @@ describe('pack', () => {
     'rel-flat': { from: 'owner', to: link('home') },
     nested: { deed: [link('home')] },
     'rel-nested': { from: link('owner'), to: link('nested') },
+    // `{"/": ...}` with a second member is not a link, and not dag-json either.
+    odd: { deed: { '/': 'home', page: 1 } },
+    'rel-odd': { from: link('owner'), to: link('odd') },
   };
   const run = (relationships: unknown, label = 'County') =>
     pack({ label, relationships }, (cid) => blocks[cid]);
@@ -194,6 +214,10 @@ describe('pack', () => {
     ],
     ['an entity that is not in this run', { one: link('rel-lost') }],
     ['an entity containing a link', { one: link('rel-nested') }],
+    [
+      'a group whose packed block would not be dag-json',
+      { one: link('rel-odd') },
+    ],
   ])('leaves %s linked', (_name, relationships, label = 'County') => {
     expect(run(relationships, label)).toBeUndefined();
   });

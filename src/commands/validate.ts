@@ -33,7 +33,11 @@ import {
   formatCurrentValue,
 } from '../utils/validation-errors.js';
 import { isCarInput } from '../utils/car-input.js';
-import { isPacked, unpack } from '../utils/packed-data-group.js';
+import {
+  isPacked,
+  unpack,
+  unpackedSource,
+} from '../utils/packed-data-group.js';
 
 export interface ValidateCommandOptions {
   input: string;
@@ -878,7 +882,7 @@ async function validateFile(
       schema,
       fileEntry.filePath,
       false, // allow resolution of file references
-      unpacked && (async (cid) => unpacked.blocks.get(cid))
+      unpacked && unpackedSource(unpacked)
     );
 
     if (!validationResult.valid || findings.length > 0) {

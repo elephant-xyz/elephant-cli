@@ -393,14 +393,7 @@ export async function exportTables(
       { key: 'elephant.part_size_bytes', value: String(cap) },
     ];
 
-    // `unpacked`: the blocks of a packed data-group root, which are in no other place.
-    const block = async (
-      cid: CID,
-      unpacked?: Map<string, Uint8Array>
-    ): Promise<Record<string, unknown>> => {
-      const bytes = unpacked
-        ? unpacked.get(cid.toString())
-        : (await reader.get(cid))?.bytes;
+    const decode = (cid: CID, bytes?: Uint8Array): Record<string, unknown> => {
       const value =
         bytes && cid.code === dagJSON.code ? decodeDagJson(bytes) : undefined;
       if (!value || typeof value !== 'object') {
@@ -408,6 +401,12 @@ export async function exportTables(
       }
       return value as Record<string, unknown>;
     };
+    // `unpacked`: the blocks of a packed data-group root, which are in no other place.
+    const block = async (cid: CID, unpacked?: Map<string, Uint8Array>) =>
+      decode(
+        cid,
+        unpacked ? unpacked.get(cid.toString()) : (await reader.get(cid))?.bytes
+      );
 
     // Schemas are resolved once per CID; the class chain comes from the schema, never from a name.
     const classes = new Map<string, Table>();
@@ -597,13 +596,10 @@ export async function exportTables(
       ]);
       for (const group of entry.groups) {
         // A packed root is read as its linked form, so both layouts give the same rows.
-        const found = await block(group.data);
+        const bytes = (await reader.get(group.data))?.bytes;
+        const found = decode(group.data, bytes);
         const packed = isPacked(found)
-          ? await unpack(
-              JSON.parse(
-                new TextDecoder().decode((await reader.get(group.data))?.bytes)
-              )
-            )
+          ? await unpack(JSON.parse(new TextDecoder().decode(bytes)))
           : undefined;
         const finding = packed?.findings[0];
         if (finding) {

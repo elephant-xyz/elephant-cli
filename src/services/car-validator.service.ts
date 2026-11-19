@@ -17,7 +17,11 @@ import {
   formatCurrentValue,
 } from '../utils/validation-errors.js';
 import { logger } from '../utils/logger.js';
-import { isPacked, unpack } from '../utils/packed-data-group.js';
+import {
+  isPacked,
+  unpack,
+  unpackedSource,
+} from '../utils/packed-data-group.js';
 import {
   BigSet,
   BlockMarks,
@@ -351,86 +355,94 @@ export async function validateCar(
       `Validating data-group roots of ${entries.length} properties against lexicon`
     );
     await services.schemaCacheService.warm();
-    services.jsonValidatorService.setBlockSource(
-      async (cid) => (await reader.get(CID.parse(cid)))?.bytes
-    );
-    try {
-      for (const item of entries) {
-        const rows: ErrorEntry[] = [];
-        for (const group of item.groups) {
-          const context = {
-            block: group.data.toString(),
-            property: item.property.toString(),
-            group: group.schema,
-          };
-          const block = await reader.get(group.data);
-          const value =
-            block && group.data.code === dagJSON.code
-              ? decodeDagJson(block.bytes)
-              : undefined;
-          if (!block || value === undefined) {
-            await report('lexicon', {
-              ...context,
-              message: block
-                ? 'data-group root is not a dag-json block'
-                : 'data-group root is not in the car',
-            });
-            continue;
-          }
-          const schema = await services.schemaCacheService
-            .get(group.schema)
-            .catch(() => undefined);
-          if (!schema) {
-            await report('lexicon', {
-              ...context,
-              message: `could not load schema ${group.schema}`,
-            });
-            continue;
-          }
-          if (!validateDataGroupSchema(schema).valid) {
-            await report('lexicon', {
-              ...context,
-              message: `schema ${group.schema} is not a valid data group schema`,
-            });
-            continue;
-          }
-          // A packed root is validated as its linked form, resolved from its own entities
-          const data = JSON.parse(new TextDecoder().decode(block.bytes));
-          const unpacked = isPacked(data) ? await unpack(data) : undefined;
-          for (const finding of unpacked?.findings ?? []) {
-            rows.push(entry('lexicon', { ...context, ...finding }));
-          }
-          const result = await services.jsonValidatorService.validate(
-            unpacked?.root ?? data,
-            schema,
-            undefined,
-            false,
-            unpacked && (async (cid) => unpacked.blocks.get(cid))
-          );
-          summary.groups += 1;
-          if (result.valid) {
-            continue;
-          }
-          for (const info of services.jsonValidatorService.getErrorMessages(
-            result.errors ?? []
-          )) {
-            rows.push(
-              entry('lexicon', {
-                ...context,
-                path: info.path,
-                message: info.message,
-                value: formatCurrentValue(info.data),
-              })
-            );
-          }
+    const fromCar = async (cid: string) =>
+      (await reader.get(CID.parse(cid)))?.bytes;
+    for (const item of entries) {
+      const rows: ErrorEntry[] = [];
+      for (const group of item.groups) {
+        const context = {
+          block: group.data.toString(),
+          property: item.property.toString(),
+          group: group.schema,
+        };
+        const block = await reader.get(group.data);
+        const value =
+          block && group.data.code === dagJSON.code
+            ? decodeDagJson(block.bytes)
+            : undefined;
+        if (!block || value === undefined) {
+          await report('lexicon', {
+            ...context,
+            message: block
+              ? 'data-group root is not a dag-json block'
+              : 'data-group root is not in the car',
+          });
+          continue;
         }
-        for (const row of filterErrorRows(rows)) {
-          summary.errors.lexicon += 1;
-          await services.csvReporterService.logError(row);
+        const schema = await services.schemaCacheService
+          .get(group.schema)
+          .catch(() => undefined);
+        if (!schema) {
+          await report('lexicon', {
+            ...context,
+            message: `could not load schema ${group.schema}`,
+          });
+          continue;
+        }
+        if (!validateDataGroupSchema(schema).valid) {
+          await report('lexicon', {
+            ...context,
+            message: `schema ${group.schema} is not a valid data group schema`,
+          });
+          continue;
+        }
+        // A packed root is validated as its linked form, resolved from its own entities
+        const data = JSON.parse(new TextDecoder().decode(block.bytes));
+        const unpacked = isPacked(data)
+          ? await unpack(data).catch((error: unknown) =>
+              error instanceof Error ? error.message : String(error)
+            )
+          : undefined;
+        if (typeof unpacked === 'string') {
+          rows.push(
+            entry('lexicon', {
+              ...context,
+              message: `packed data group cannot be unpacked: ${unpacked}`,
+            })
+          );
+          continue;
+        }
+        for (const finding of unpacked?.findings ?? []) {
+          rows.push(entry('lexicon', { ...context, ...finding }));
+        }
+        const result = await services.jsonValidatorService.validate(
+          unpacked?.root ?? data,
+          schema,
+          undefined,
+          false,
+          unpacked ? unpackedSource(unpacked) : fromCar
+        );
+        summary.groups += 1;
+        if (result.valid) {
+          continue;
+        }
+        for (const info of services.jsonValidatorService.getErrorMessages(
+          result.errors ?? []
+        )) {
+          rows.push(
+            entry('lexicon', {
+              ...context,
+              path: info.path,
+              message: info.message,
+              value: formatCurrentValue(info.data),
+            })
+          );
         }
       }
-    } finally {
-      services.jsonValidatorService.setBlockSource(undefined);
+      for (const row of filterErrorRows(rows)) {
+        summary.errors.lexicon += 1;
+        await services.csvReporterService.logError(row);
+      }
     }
 
     logger.info('Checking for blocks unreachable from the root');

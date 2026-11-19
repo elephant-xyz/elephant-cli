@@ -274,7 +274,7 @@ This ensures all files conform to the Property Improvement schema and relationsh
   - Graph closure: every link in every dag-json block reachable from the root resolves inside the file.
   - Lexicon: every data-group root listed in a shard validates against the schema it is keyed by, resolving links from the CAR instead of IPFS.
   - Orphans: every block is reachable from the root.
-- A data-group root may be [packed](#packed-data-groups) in any of these inputs. It is validated as its linked form, with its relationships and entities read from the root itself, so it gets the same lexicon errors and error paths as the same data in linked form. Four more errors exist only for packed roots: `entities` is not an object, an entity key is not the CID of its value, a `from` or `to` that is not a key of `entities`, and an entity that no relationship references. In a CAR they are counted under the lexicon check.
+- A data-group root may be [packed](#packed-data-groups) in any of these inputs. It is validated as its linked form, with its relationships and entities read from the root itself, so it gets the same lexicon errors and error paths as the same data in linked form. Four more errors exist only for packed roots: `entities` is not an object, an entity key is not the CID of its value, a `from` or `to` that is not a key of `entities`, and an entity that no relationship references. Their `error_path` is the JSON path in the linked form, like the lexicon errors. In a CAR they are counted under the lexicon check.
 
 **Outputs**
 
@@ -860,6 +860,7 @@ elephant-cli hash ./county-transformed \
 - a relationship file is not an object whose `from` and `to` link to JSON files of the same run, or it holds another link.
 - a class file holds a link.
 - the packed block would be larger than 1,048,576 bytes.
+- the packed block would not be valid dag-json (for example a class file with an object that has a `/` member next to other members).
 
 **Outputs**
 
