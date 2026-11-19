@@ -16,6 +16,7 @@
   - [transform](#transform)
   - [validate](#validate)
   - [hash](#hash)
+    - [Packed data groups](#packed-data-groups)
   - [export-tables](#export-tables)
   - [upload](#upload)
 - [Publish a County](#publish-a-county)
@@ -362,6 +363,7 @@ When a script fails, the reason on stderr names the script, its exit code, and t
 
 - Every data-group root (a JSON file holding exactly `label` and `relationships`) validates against the schema the lexicon manifest gives its label, following `{"/": "./file.json"}` links to relationship and entity files.
 - Every JSON file is reached by a data group. A file that is not is reported as unused.
+- A [packed](#packed-data-groups) data-group root (it also holds `entities`) is checked as the linked root it stands for, with the same findings and paths. Four more findings are about the packing itself: `entities` is not an object, an entity key is not the CID of its value, a `from` or `to` names no key of `entities`, and an entity no relationship names.
 
 **What is checked for a county CAR**
 
@@ -369,7 +371,7 @@ When a script fails, the reason on stderr names the script, its exit code, and t
 - **root:** exactly one root, a `CountyIndex` version 1 with a numeric `properties` count and a `shards` array of links.
 - **index:** every shard decodes, the entries add up to `properties`, and every `property_cid` and `data_groups` link is in the file.
 - **graph:** every link below the root is in the file.
-- **lexicon:** every data-group root listed in a shard validates against the schema it is keyed by, with links resolved from the CAR.
+- **lexicon:** every data-group root listed in a shard validates against the schema it is keyed by, with links resolved from the CAR. A [packed](#packed-data-groups) root is checked as for a property, its four packing findings included.
 - **orphans:** every block is reachable from the root.
 
 The CAR is read start to end twice and never indexed as a whole. Both the layout `hash --output-car` writes (a shard's blocks right before the shard block) and a gateway export (`?format=car`: a shard's blocks right after it) are checked this way. A CAR laid out some other way gets the same findings, but the whole file is indexed in memory and the report says how many blocks were looked up by CID.
@@ -409,6 +411,7 @@ elephant-cli --json validate county.car | jq .errors
 - Links `{"/": "./file.json"}` are replaced by `{"/": "<cid>"}`, deepest first. A link to an image becomes the raw CID of its bytes; an `ipfs_url` naming an image becomes `ipfs://<cid>`. A link to anything else fails the data group.
 - JSON is canonicalised (RFC 8785, with arrays of links sorted) and given a CIDv1: dag-json, sha2-256.
 - Bytes and CIDs are identical to those of elephant-cli 1.x.
+- With `--packed`, a data group is written as one block instead of one per file: see [Packed data groups](#packed-data-groups).
 
 **Outputs**
 
@@ -426,13 +429,52 @@ elephant-cli --json validate county.car | jq .errors
 | `-o, --output-zip <PATH>` | Hashed ZIP, or directory of hashed ZIPs. | `hashed-data.zip` |
 | `-c, --output-csv <PATH>` | CSV of data-group CIDs. | `hash-results.csv` |
 | `--output-car <PATH>` | County CAR to write. | Not written |
+| `--packed` | Write each data group but the Seed as one block. | Off |
 
-**Example**
+**Examples**
 
 ```bash
 elephant-cli hash ./county-outputs \
   --output-zip ./county-hashed --output-csv county-hash.csv --output-car county.car
+
+# One block per data group
+elephant-cli hash ./county-outputs --packed \
+  --output-zip ./county-hashed --output-csv county-hash.csv --output-car county.car
 ```
+
+#### Packed data groups
+
+Without `--packed` a data group is written linked: a block for its root, one for every relationship file and one for every entity file. A county CAR of a large county then holds tens of millions of blocks. With `--packed` a data group is one block:
+
+```json
+{
+  "entities": {
+    "<property CID>": { "parcel_identifier": "10-20-30-40" },
+    "<address CID>": { "county_name": "Lee" }
+  },
+  "label": "County",
+  "relationships": {
+    "property_has_address": { "from": "<property CID>", "to": "<address CID>" },
+    "property_has_tax": [{ "from": "<property CID>", "to": "<tax CID>" }]
+  }
+}
+```
+
+- `entities` holds every entity a relationship names, under the CID the entity has in the linked layout, with its JSON unchanged.
+- A relationship is its linked block with `from` and `to` as plain CID strings, not `{"/": ...}` links: the entity is not a block of its own. A list of relationships keeps the order of the linked root, which is by the CID of the linked relationship block.
+- The bytes are the same canonical JSON, the CID the same dag-json CID. Unpacking the block gives back the linked root, with the CID it has in the linked layout.
+- The CSV's `dataCid`, the hashed ZIP (`<property CID>/<packed CID>.json`) and the county CAR carry that one block in place of the data group's root, relationship and entity blocks. A block a linked data group still links to stays.
+- [`validate`](#validate) and [`export-tables`](#export-tables) read both layouts, also mixed in one CAR, with the same findings and the same tables. [`upload`](#upload) does not look inside a CAR.
+
+A data group stays linked, exactly as without the option, when any of these holds:
+
+- Its label is `Seed`: the CID of the Seed root is the property CID.
+- A value under `relationships` is not `null`, a link or a list of links.
+- A relationship is not an object whose `from` and `to` link JSON files of the property, or it holds another link.
+- An entity holds a link.
+- The packed block would be larger than 1,048,576 bytes.
+
+`--packed` is off by default, and without it the output is byte for byte what it was. A packed data group has another CID than the linked one: choose a layout per county data group and keep it.
 
 ### export-tables
 
@@ -440,7 +482,7 @@ elephant-cli hash ./county-outputs \
 
 **Required inputs**
 
-- A county CAR written by `hash --output-car`.
+- A county CAR written by `hash --output-car`, with linked or [packed](#packed-data-groups) data groups: the tables are the same, but for the data-group CIDs in `properties`.
 - `--output`.
 - For a new Atlas page: `--atlas-page` with `--county`, `--state` and `--fips`.
 
@@ -538,6 +580,8 @@ elephant-cli upload ./$county-$group-tables --output-json $county-$group-tables-
 ```
 
 Each command stops the sequence with a non-zero exit code when its step fails, so the block can run under `set -e`.
+
+To publish the data group as one block per property, add `--packed` to `hash`; the other commands and the lines they print stay the same. See [Packed data groups](#packed-data-groups).
 
 ## Environment Variables
 

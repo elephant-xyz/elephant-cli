@@ -5,7 +5,8 @@
 //! Bytes and CIDs are those elephant-cli 1.x produced: links
 //! `{"/": "./file.json"}` become `{"/": "<cid>"}` depth first, JSON is
 //! canonicalised (see `canonical`), and the CAR holds each property's blocks
-//! right before the shard block that lists it.
+//! right before the shard block that lists it. With `--packed` a data group
+//! becomes one block (see `packed`); that layout is not one 1.x wrote.
 
 use crate::canonical::canonical;
 use crate::car;
@@ -112,8 +113,9 @@ impl Work<'_> {
     }
 }
 
-/// Hash one property. `Err` means nothing could be hashed.
-pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Hashed, String> {
+/// Hash one property. `Err` means nothing could be hashed. With `packed`,
+/// every data group but the Seed becomes one block where `packed::pack` allows it.
+pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Result<Hashed, String> {
     let found = scan(property, shared)?;
     let seed = shared.lock().expect("shared state").schemas.group("Seed")?;
     let seeded = |cid: &String| cid == SEED || Some(cid) == seed.as_ref();
@@ -141,6 +143,12 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Hashed, S
         let cid = work.block(&resolved);
         if at == first {
             hashed.cid = cid.clone();
+        }
+        // The Seed root's CID is the property CID: it stays as it is.
+        if let Some((cid, bytes)) = (packed && at != first).then(|| crate::packed::pack(&cid, &work.blocks)).flatten() {
+            hashed.blocks.insert(cid.clone(), bytes);
+            hashed.groups.push((group.clone(), cid, name.clone()));
+            continue;
         }
         hashed.blocks.append(&mut work.blocks);
         hashed.groups.push((group.clone(), cid, name.clone()));
@@ -277,6 +285,7 @@ pub fn run(
     output_car: Option<&Path>,
     shared: &Mutex<Shared>,
     threads: usize,
+    packed: bool,
 ) -> Result<Outcome, Fail> {
     let children = crate::property::children(input);
     let single = children.is_empty();
@@ -299,7 +308,7 @@ pub fn run(
     };
     let work = |(from, to): &(PathBuf, PathBuf)| -> Result<Hashed, String> {
         let opened = Property::open(from)?;
-        let hashed = property(&opened, shared)?;
+        let hashed = property(&opened, shared, packed)?;
         zip(to, &opened, &hashed)?;
         Ok(hashed)
     };

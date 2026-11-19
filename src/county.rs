@@ -16,6 +16,7 @@
 use crate::car::{Car, Place};
 use crate::cids::{DAG_JSON, RAW};
 use crate::lexicon::{self, Group, Lexicon};
+use crate::packed;
 use crate::report::{Report, Row};
 use crate::schemas::Schemas;
 use crate::Fail;
@@ -263,8 +264,16 @@ fn property(
                 found.rows.push(row("lexicon", message.to_string()));
                 continue;
             };
+            // A packed root is validated as the linked root it stands for, its blocks first.
+            let unpacked = packed::unpack(value);
+            let inline = |pointer: &str| match unpacked.as_ref().and_then(|unpacked| unpacked.blocks.get(pointer)) {
+                Some(value) => Ok(Cow::Borrowed(value)),
+                None => source(pointer),
+            };
+            let findings = unpacked.iter().flat_map(|unpacked| &unpacked.findings);
+            found.rows.extend(findings.map(|(path, message)| row(path, message.clone())));
             let group = &groups[schema];
-            match group.validate(value, &source) {
+            match group.validate(unpacked.as_ref().map_or(value, |unpacked| &unpacked.root), &inline) {
                 None if matches!(**group, Group::Invalid) => {
                     found.rows.push(row("lexicon", format!("schema {schema} is not a valid data group schema")));
                 }

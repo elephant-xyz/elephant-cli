@@ -19,7 +19,7 @@
 
 - `src/main.rs`: the clap definitions, the exit codes and what each command prints. Every command module returns a `Done { json, text, passed }`.
 - One module per command: `prepare.rs` (with `flow.rs`, `browser.rs`), `transform.rs`, `validate.rs` (with `county.rs` for CARs), `hash.rs`, `tables.rs`, `upload.rs`.
-- Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
+- Shared code: `lexicon.rs` and `schemas.rs` (manifest, schema cache, validation), `property.rs` (a property directory or ZIP), `packed.rs` (pack and unpack a packed data group), `car.rs`, `cids.rs`, `canonical.rs`, `unixfs.rs`, `report.rs`, `js/` (the QuickJS runtime and its Node shim `js/node.js`).
 - `assets/`: JavaScript embedded in the binary (`cheerio.js`). `scripts/bundle-cheerio.sh` rebuilds the cheerio bundle.
 - `.github/workflows`: `ci.yml` (pull requests), `build.yml` (binaries of every commit on `v2`, as pre-release `build-<commit>`), `release.yml` (a `v2.*` tag: GitHub release, never marked "Latest"), `binaries.yml` (the build matrix both use).
 

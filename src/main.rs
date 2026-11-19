@@ -18,6 +18,7 @@ mod flow;
 mod hash;
 mod js;
 mod lexicon;
+mod packed;
 mod prepare;
 mod property;
 mod report;
@@ -208,7 +209,7 @@ struct ExportTables {
 
 #[derive(Args)]
 #[command(
-    after_help = "Examples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid"
+    after_help = "With --packed a data group is one block {entities, label, relationships}: each relationship holds the CIDs of its\ntwo entities as strings, and entities holds them by CID. The Seed data group, a data group whose relationships or\nentities hold other links, and one over 1,048,576 bytes stay linked. validate and export-tables read both layouts.\n\nExamples:\n  elephant-cli hash ./county-outputs --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli hash ./county-outputs --packed --output-zip ./hashed --output-csv hash.csv --output-car county.car\n  elephant-cli --json hash ./property-dir | jq -r .property_cid"
 )]
 struct Hash {
     /// A property directory or ZIP, or a directory of properties
@@ -222,6 +223,9 @@ struct Hash {
     /// County CAR to write: every JSON block, shard blocks and the county index as root
     #[arg(long, value_name = "PATH")]
     output_car: Option<PathBuf>,
+    /// Write each data group but the Seed as one block (root, relationships and entities) instead of one per file
+    #[arg(long)]
+    packed: bool,
 }
 
 #[derive(Args)]
@@ -410,7 +414,8 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         return Err(format!("{} is not a readable file", args.input.display()).into());
     }
     let shared = validate::Shared::new(schemas::Schemas::new(cli.schema_cache.clone(), cli.offline));
-    let outcome = hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads())?;
+    let outcome =
+        hash::run(&args.input, &args.output_zip, &args.output_csv, args.output_car.as_deref(), &shared, threads(), args.packed)?;
     for error in &outcome.errors {
         eprintln!("error: {error}");
     }

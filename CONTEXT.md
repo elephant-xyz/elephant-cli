@@ -36,6 +36,10 @@ _Avoid_: Relationship schema name when referring to `*_has_*` keys
 The CID-named JSON file with `label` and `relationships` that indexes relationship outputs for one data group.
 _Avoid_: Manifest, bundle root
 
+**Packed Data Group**:
+A **Data-Group Root** that also holds `entities`: its relationships and the entities they name are inside the one block, referenced by plain CID strings, as `hash --packed` writes it. The layout with a block per file is the linked one.
+_Avoid_: Bundled group, inlined group, compact root
+
 **County CAR**:
 The single archive `hash --output-car` writes for one data group of one county: every property's blocks, the **Shards** and the **County Index** as its root.
 _Avoid_: Bundle, archive file when the county archive is meant
@@ -67,6 +71,7 @@ _Avoid_: Schema folder, lexicon directory
 - A **Transform v2 Handler Package** reads **Captures** and writes **Entity Outputs** and **Relationship Outputs**.
 - A **Relationship Output** links exactly two **Entity Outputs**.
 - A **Data-Group Root** indexes **Relationship Outputs** by **Relationship Key**.
+- A **Packed Data Group** unpacks to the linked **Data-Group Root** of the same data, with the same CID.
 - A **County CAR** has one **County Index**, which links one or more **Shards**; a **Shard** lists properties and their **Data-Group Roots**.
 - A **Tables Directory** is exported from exactly one **County CAR**.
 
