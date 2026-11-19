@@ -26,10 +26,10 @@
 ## Contracts that must not break
 
 - **Installing `v2` needs no Rust.** `build.yml` publishes `elephant-cli-<target>.tar.gz` for every commit on `v2` as the pre-release `build-<commit>`; keep the archive names and the single `elephant-cli` file inside them.
-- **1.x stays untouched.** `main`, its npm releases and the release GitHub marks "Latest" belong to 1.x until the migration is decided; Atlas and the kit install from `main`.
-- **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway.
+- **1.x stays untouched.** `main`, its npm releases and the release GitHub marks "Latest" belong to 1.x until the migration is decided; the kit installs from `main`. Atlas CI installs a pinned `v2.*` release (`.github/workflows/validate.yml` in the atlas repository).
+- **Atlas CI** runs `elephant-cli validate <file.car> --output-csv <csv>` and treats exit `0` as a valid archive. It feeds CARs written by `hash --output-car` and CARs exported by a gateway, with linked and with packed data groups, and passes no option for either: an archive that was valid stays valid.
 - **The kit's oracle agent** runs the sequence under "Publish a County" in the README and reads these stdout lines: `CAR written: <file> (<n> blocks, root <cid>)`, `Tables written: <dir> (<n> tables, <n> parts, root <cid>)`, `Atlas page written: <path> group <key>`, `Properties processed: <n>, succeeded: <n>, failed: <n>`.
-- **`hash` output is byte-identical to elephant-cli 1.x.** CIDs are published; a change to canonical JSON, link sorting, codec choice or CAR layout changes them.
+- **`hash` output is byte-identical to elephant-cli 1.x**: packed (the default) to the 1.x releases that pack, and with `--linked` to every 1.x release; the fixtures under `tests/fixtures/*/expected` are linked. CIDs are published; a change to canonical JSON, link sorting, codec choice or CAR layout changes them.
 
 ## CLI rules
 

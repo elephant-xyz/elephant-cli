@@ -37,7 +37,7 @@ The CID-named JSON file with `label` and `relationships` that indexes relationsh
 _Avoid_: Manifest, bundle root
 
 **Packed Data Group**:
-A **Data-Group Root** that also holds `entities`: its relationships and the entities they name are inside the one block, referenced by plain CID strings, as `hash --packed` writes it. The layout with a block per file is the linked one.
+A **Data-Group Root** that also holds `entities`: its relationships and the entities they name are inside the one block, referenced by plain CID strings, as `hash` writes it unless `--linked`. The layout with a block per file is the linked one.
 _Avoid_: Bundled group, inlined group, compact root
 
 **County CAR**:

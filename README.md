@@ -410,8 +410,8 @@ elephant-cli --json validate county.car | jq .errors
 
 - Links `{"/": "./file.json"}` are replaced by `{"/": "<cid>"}`, deepest first. A link to an image becomes the raw CID of its bytes; an `ipfs_url` naming an image becomes `ipfs://<cid>`. A link to anything else fails the data group.
 - JSON is canonicalised (RFC 8785, with arrays of links sorted) and given a CIDv1: dag-json, sha2-256.
-- Bytes and CIDs are identical to those of elephant-cli 1.x.
-- With `--packed`, a data group is written as one block instead of one per file: see [Packed data groups](#packed-data-groups).
+- A data group is written packed, as one block instead of one per file: see [Packed data groups](#packed-data-groups). `--linked` writes one block per file.
+- Bytes and CIDs are identical to those of elephant-cli 1.x: with `--linked` to every 1.x release, packed to the 1.x releases that pack.
 
 **Outputs**
 
@@ -419,7 +419,7 @@ elephant-cli --json validate county.car | jq .errors
 - `--output-csv`: `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt`, one row per data group.
 - `--output-car`: the county CAR. Each property's blocks, a shard block after every 5000 properties, and the `CountyIndex` last, as the root.
 - stdout: `CAR written: <path> (<n> blocks, root <cid>)`, and for a directory `Properties processed: <n>, succeeded: <n>, failed: <n>`.
-- With `--packed`: the `--json` document counts the data groups written packed under `packed` and those that had to stay linked under `not_packed`, Seed data groups left out, and names the first 20 of them under `not_packed_first` (`<property>: <file>`); stderr warns about them.
+- Unless `--linked`: the `--json` document counts the data groups written packed under `packed` and those that had to stay linked under `not_packed`, Seed data groups left out, and names the first 20 of them under `not_packed_first` (`<property>: <file>`); stderr warns about them.
 - Exit code `1` when a data group or a property could not be hashed; each one is named on stderr and under `errors` in the `--json` document.
 
 **Options**
@@ -430,7 +430,7 @@ elephant-cli --json validate county.car | jq .errors
 | `-o, --output-zip <PATH>` | Hashed ZIP, or directory of hashed ZIPs. | `hashed-data.zip` |
 | `-c, --output-csv <PATH>` | CSV of data-group CIDs. | `hash-results.csv` |
 | `--output-car <PATH>` | County CAR to write. | Not written |
-| `--packed` | Write each data group but the Seed as one block. | Off |
+| `--linked` | Write one block per file instead of one packed block per data group. | Off |
 
 **Examples**
 
@@ -438,14 +438,14 @@ elephant-cli --json validate county.car | jq .errors
 elephant-cli hash ./county-outputs \
   --output-zip ./county-hashed --output-csv county-hash.csv --output-car county.car
 
-# One block per data group
-elephant-cli hash ./county-outputs --packed \
+# One block per file, with the CIDs of elephant-cli before packing
+elephant-cli hash ./county-outputs --linked \
   --output-zip ./county-hashed --output-csv county-hash.csv --output-car county.car
 ```
 
 #### Packed data groups
 
-Without `--packed` a data group is written linked: a block for its root, one for every relationship file and one for every entity file. A county CAR of a large county then holds tens of millions of blocks. With `--packed` a data group is one block:
+With `--linked` a data group is written linked: a block for its root, one for every relationship file and one for every entity file. A county CAR of a large county then holds tens of millions of blocks. By default a data group is packed into one block:
 
 ```json
 {
@@ -467,7 +467,7 @@ Without `--packed` a data group is written linked: a block for its root, one for
 - The CSV's `dataCid`, the hashed ZIP (`<property CID>/<packed CID>.json`) and the county CAR carry that one block in place of the data group's root, relationship and entity blocks. A block a linked data group still links to stays.
 - [`validate`](#validate) and [`export-tables`](#export-tables) read both layouts, also mixed in one CAR, with the same findings and the same tables. [`upload`](#upload) does not look inside a CAR.
 
-A data group stays linked, exactly as without the option, when any of these holds:
+A data group stays linked, exactly as with `--linked`, when any of these holds:
 
 - Its label is `Seed`: the CID of the Seed root is the property CID.
 - A value under `relationships` is not `null`, a link or a list of links.
@@ -477,7 +477,7 @@ A data group stays linked, exactly as without the option, when any of these hold
 
 A data group also stays linked when its packed block would not be dag-json (a key such as `constructor` in an entity), or when one of its blocks does not have the CID of its canonical JSON, which a `__proto__` key can cause. A root that is already packed in the input is written as it is, with or without the option; it has to be final (no file pointer or `ipfs_url` left to resolve), and it cannot be the Seed.
 
-`--packed` is off by default, and without it the output is byte for byte what it was. A packed data group has another CID than the linked one: choose a layout per county data group and keep it.
+With `--linked` the output is byte for byte what elephant-cli wrote before packing. A packed data group has another CID than the linked one: hash a county data group that is already published with `--linked` to keep its CIDs.
 
 ### export-tables
 
@@ -584,7 +584,7 @@ elephant-cli upload ./$county-$group-tables --output-json $county-$group-tables-
 
 Each command stops the sequence with a non-zero exit code when its step fails, so the block can run under `set -e`.
 
-To publish the data group as one block per property, add `--packed` to `hash`; the other commands and the lines they print stay the same. See [Packed data groups](#packed-data-groups). Everything that reads the archive has to know the packed layout: this version of elephant-cli 2 does, elephant-cli 1.x only from the release that adds it. Check what Atlas CI runs before publishing a packed county.
+`hash` publishes each data group as one block per property; see [Packed data groups](#packed-data-groups). Everything that reads the archive has to know the packed layout. Atlas CI validates with a pinned release of elephant-cli 2: point it at a release that has this change before publishing a packed county. `validate` needs no option for either layout.
 
 ## Environment Variables
 

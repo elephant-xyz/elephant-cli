@@ -5,8 +5,8 @@
 //! Bytes and CIDs are those elephant-cli 1.x produced: links
 //! `{"/": "./file.json"}` become `{"/": "<cid>"}` depth first, JSON is
 //! canonicalised (see `canonical`), and the CAR holds each property's blocks
-//! right before the shard block that lists it. With `--packed` a data group
-//! becomes one block (see `packed`); that layout is not one 1.x wrote.
+//! right before the shard block that lists it. Unless `--linked`, a data group
+//! becomes one block (see `packed`); 1.58.1 and older wrote the linked layout only.
 
 use crate::canonical::canonical;
 use crate::car;
@@ -45,7 +45,7 @@ pub struct Hashed {
     pub errors: Vec<(String, String)>,
     /// Data groups written packed.
     pub packed: usize,
-    /// Roots `--packed` had to leave linked, by file name; a Seed is not one of them.
+    /// Roots that could not be packed and stay linked, by file name; a Seed is not one of them.
     pub left: Vec<String>,
 }
 
@@ -307,7 +307,7 @@ pub struct Outcome {
     pub car: Option<(u64, String)>,
     /// Data groups written packed.
     pub packed: usize,
-    /// Data groups `--packed` had to leave linked, and `<property>: <file>` for the first `NAMED` of them.
+    /// Data groups that could not be packed and stay linked, and `<property>: <file>` for the first `NAMED` of them.
     pub left: usize,
     pub first: Vec<String>,
 }
