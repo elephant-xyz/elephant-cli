@@ -12,6 +12,7 @@ import {
 import AdmZip from 'adm-zip';
 import { tmpdir } from 'os';
 import { promises as fsPromises } from 'fs';
+import { isPacked, unpack } from '../utils/packed-data-group.js';
 
 interface BatchDataItem {
   propertyHash: string;
@@ -23,6 +24,10 @@ export class IPFSFetcherService {
   private readonly baseUrl: string;
   private processedCids: Set<string> = new Set();
   private cidToFilename: Map<string, string> = new Map();
+  // Blocks a fetched packed data group carried inside itself, and the CID of its linked root.
+  // ponytail: kept for the life of the service, one fetch run; clear per property if a run ever holds too many
+  private unpacked: Map<string, Uint8Array> = new Map();
+  private linkedCids: Map<string, string> = new Map();
   private readonly maxRetries: number = 3;
   private readonly rateLimitDelay: number = 5000; // Base delay for rate limiting
   private provider: JsonRpcProvider | null = null;
@@ -65,6 +70,10 @@ export class IPFSFetcherService {
   }
 
   private async fetchContent(cid: string, attempt: number = 0): Promise<any> {
+    const local = this.unpacked.get(cid);
+    if (local) {
+      return JSON.parse(new TextDecoder().decode(local));
+    }
     const url = `${this.baseUrl}/${cid}`;
 
     try {
@@ -99,7 +108,19 @@ export class IPFSFetcherService {
       }
 
       const content = await response.json();
-      return content;
+      if (!isPacked(content)) {
+        return content;
+      }
+      // A packed data group is handed on as its linked root; the blocks it
+      // links to are served from memory, so the files come out as for linked data.
+      const linked = await unpack(content);
+      const finding = linked.findings[0];
+      if (finding) {
+        throw new Error(`${finding.message} (at ${finding.path})`);
+      }
+      linked.blocks.forEach((bytes, key) => this.unpacked.set(key, bytes));
+      this.linkedCids.set(cid, linked.cid);
+      return linked.root;
     } catch (error) {
       logger.error(`Error fetching CID ${cid}: ${error}`);
       throw error;
@@ -213,7 +234,7 @@ export class IPFSFetcherService {
       if (datagroupCid) {
         filename = `${datagroupCid}.json`;
       } else {
-        filename = `${cid}.json`;
+        filename = `${this.linkedCids.get(cid) ?? cid}.json`;
       }
     }
 
