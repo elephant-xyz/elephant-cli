@@ -80,7 +80,8 @@ export class SchemaManifestService {
   }
 
   /**
-   * Check if a data object is a datagroup root file by its structure
+   * Check if a data object is a datagroup root file by its structure:
+   * `label` and `relationships`, plus `entities` when the root is packed
    * @param data The data object to check
    * @returns True if it matches the datagroup structure
    */
@@ -91,9 +92,9 @@ export class SchemaManifestService {
 
     const keys = Object.keys(data);
 
-    // Check if it has exactly 2 keys: "label" and "relationships"
+    // Exactly "label" and "relationships"; a packed root also carries "entities"
     return (
-      keys.length === 2 &&
+      keys.length === (keys.includes('entities') ? 3 : 2) &&
       keys.includes('label') &&
       keys.includes('relationships') &&
       typeof data.label === 'string' &&

@@ -212,12 +212,14 @@ export class JsonValidatorService {
    * @param schema The schema to validate against
    * @param currentFilePath Optional path of the file containing this data (for relative path resolution)
    * @param skipCIDResolution Skip resolving CID pointers (useful when data is already processed)
+   * @param blockSource Resolve `{"/": cid}` pointers of this call from here; see `setBlockSource`
    */
   async validate(
     data: any,
     schema: JSONSchema,
     currentFilePath?: string,
-    skipCIDResolution?: boolean
+    skipCIDResolution?: boolean,
+    blockSource = this.blockSource
   ): Promise<ValidationResult> {
     let resolvedData;
     try {
@@ -254,7 +256,9 @@ export class JsonValidatorService {
           data,
           currentFilePath,
           prepared.schema,
-          prepared.allowed
+          prepared.allowed,
+          '',
+          blockSource
         );
       }
 
@@ -480,7 +484,8 @@ export class JsonValidatorService {
     currentFilePath?: string,
     schema?: any,
     cidAllowedMap?: Map<string, boolean>,
-    currentPath: string = ''
+    currentPath: string = '',
+    blockSource?: (cid: string) => Promise<Uint8Array | undefined>
   ): Promise<any> {
     if (!data || typeof data !== 'object' || data === null) {
       return data;
@@ -529,8 +534,8 @@ export class JsonValidatorService {
 
       if (isCID) {
         try {
-          const local = await this.blockSource?.(pointerValue);
-          if (this.blockSource && !local) {
+          const local = await blockSource?.(pointerValue);
+          if (blockSource && !local) {
             throw new Error(`block ${pointerValue} is not in the car`);
           }
           const text = local
@@ -547,7 +552,8 @@ export class JsonValidatorService {
             currentFilePath,
             schema,
             cidAllowedMap,
-            currentPath
+            currentPath,
+            blockSource
           );
         } catch (error) {
           throw new Error(
@@ -603,7 +609,8 @@ export class JsonValidatorService {
           currentFilePath,
           schema,
           cidAllowedMap,
-          currentPath
+          currentPath,
+          blockSource
         );
       }
     }
@@ -620,7 +627,8 @@ export class JsonValidatorService {
               currentFilePath,
               itemSchema,
               cidAllowedMap,
-              itemPath
+              itemPath,
+              blockSource
             );
           } catch (error) {
             throw new Error(`Failed to resolve CID pointer in array: ${error}`);
@@ -660,7 +668,8 @@ export class JsonValidatorService {
           currentFilePath,
           propertySchema,
           cidAllowedMap,
-          propertyPath
+          propertyPath,
+          blockSource
         );
       } else {
         resolved[key] = data[key];

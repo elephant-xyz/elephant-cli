@@ -17,6 +17,7 @@ import {
   formatCurrentValue,
 } from '../utils/validation-errors.js';
 import { logger } from '../utils/logger.js';
+import { isPacked, unpack } from '../utils/packed-data-group.js';
 import {
   BigSet,
   BlockMarks,
@@ -221,9 +222,10 @@ function entry(check: CarCheck, row: Row): ErrorEntry {
 /**
  * Check a county CAR written by `hash --output-car`: block bytes re-hash to
  * their CIDs, the single root is a `CountyIndex`, every shard entry and every
- * link below it resolves inside the file, every data-group root is valid
- * against its schema, and no block is unreachable from the root. One CSV row
- * per finding; `errors` counts rows per check. Lexicon rows pass through the
+ * link below it resolves inside the file, every data-group root (linked or
+ * packed) is valid against its schema, and no block is unreachable from the
+ * root. One CSV row per finding; `errors` counts rows per check; what is wrong
+ * with a packed root itself counts as lexicon. Lexicon rows pass through the
  * same filter as `validate <zip>`, so a property passes or fails identically
  * in either container.
  */
@@ -392,11 +394,18 @@ export async function validateCar(
             });
             continue;
           }
+          // A packed root is validated as its linked form, resolved from its own entities
+          const data = JSON.parse(new TextDecoder().decode(block.bytes));
+          const unpacked = isPacked(data) ? await unpack(data) : undefined;
+          for (const finding of unpacked?.findings ?? []) {
+            rows.push(entry('lexicon', { ...context, ...finding }));
+          }
           const result = await services.jsonValidatorService.validate(
-            JSON.parse(new TextDecoder().decode(block.bytes)),
+            unpacked?.root ?? data,
             schema,
             undefined,
-            false
+            false,
+            unpacked && (async (cid) => unpacked.blocks.get(cid))
           );
           summary.groups += 1;
           if (result.valid) {
