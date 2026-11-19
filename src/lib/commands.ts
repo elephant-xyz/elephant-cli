@@ -105,6 +105,8 @@ export interface HashOptions {
   outputCar?: string;
   maxConcurrentTasks?: number;
   propertyCid?: string;
+  /** Write each eligible data group as one packed block; off by default. */
+  packed?: boolean;
   cwd?: string;
 }
 
@@ -339,6 +341,7 @@ export async function hash(options: HashOptions): Promise<HashResult> {
       outputCar,
       maxConcurrentTasks: options.maxConcurrentTasks,
       propertyCid: options.propertyCid,
+      packed: options.packed,
       silent: true, // Enable silent mode for library usage
       cwd: options.cwd,
     };
