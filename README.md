@@ -419,6 +419,7 @@ elephant-cli --json validate county.car | jq .errors
 - `--output-csv`: `propertyCid,dataGroupCid,dataCid,filePath,uploadedAt`, one row per data group.
 - `--output-car`: the county CAR. Each property's blocks, a shard block after every 5000 properties, and the `CountyIndex` last, as the root.
 - stdout: `CAR written: <path> (<n> blocks, root <cid>)`, and for a directory `Properties processed: <n>, succeeded: <n>, failed: <n>`.
+- With `--packed`: the `--json` document counts the data groups written packed under `packed` and names those that had to stay linked under `not_packed` (`<property>: <file>`, the Seed left out); stderr warns about them.
 - Exit code `1` when a data group or a property could not be hashed; each one is named on stderr and under `errors` in the `--json` document.
 
 **Options**
@@ -462,7 +463,7 @@ Without `--packed` a data group is written linked: a block for its root, one for
 
 - `entities` holds every entity a relationship names, under the CID the entity has in the linked layout, with its JSON unchanged.
 - A relationship is its linked block with `from` and `to` as plain CID strings, not `{"/": ...}` links: the entity is not a block of its own. A list of relationships keeps the order of the linked root, which is by the CID of the linked relationship block.
-- The bytes are the same canonical JSON, the CID the same dag-json CID. Unpacking the block gives back the linked root, with the CID it has in the linked layout.
+- The bytes are the same canonical JSON and the CID is computed as for every other block (dag-json, sha2-256). Unpacking the block gives back the linked root, with the CID it has in the linked layout.
 - The CSV's `dataCid`, the hashed ZIP (`<property CID>/<packed CID>.json`) and the county CAR carry that one block in place of the data group's root, relationship and entity blocks. A block a linked data group still links to stays.
 - [`validate`](#validate) and [`export-tables`](#export-tables) read both layouts, also mixed in one CAR, with the same findings and the same tables. [`upload`](#upload) does not look inside a CAR.
 

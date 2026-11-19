@@ -4,8 +4,9 @@
 use crate::cids::order;
 use serde_json::Value;
 
-/// A link as the sort sees it: an object holding only `"/"` with a string.
-fn link(value: &Value) -> Option<&str> {
+/// The target of a link as the sort sees it, and as a packed data group may
+/// not hold one: an object holding only `"/"` with a string.
+pub fn link(value: &Value) -> Option<&str> {
     value.as_object().filter(|fields| fields.len() == 1)?.get("/")?.as_str()
 }
 

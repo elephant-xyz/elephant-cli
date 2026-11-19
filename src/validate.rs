@@ -143,14 +143,11 @@ pub fn property(property: &Property, shared: &Mutex<Shared>) -> Result<Checked, 
             message,
             ..Row::default()
         };
-        // A packed root is validated as the linked root it stands for; its links name nothing outside it.
-        let unpacked = packed::unpack(value);
+        // A packed root is validated as the linked root it stands for.
+        let unpacked = packed::verify(value);
         let inline = |pointer: &str| match &unpacked {
+            Some(unpacked) => unpacked.source(pointer),
             None => source(pointer),
-            Some(unpacked) => match unpacked.blocks.get(pointer) {
-                Some(value) => Ok(Cow::Borrowed(value)),
-                None => Err(format!("{pointer} is not in the packed data group")),
-            },
         };
         let findings = unpacked.iter().flat_map(|unpacked| &unpacked.findings);
         packing.extend(findings.map(|(path, message)| row(path, message.clone())));

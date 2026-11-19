@@ -368,3 +368,50 @@ fn hashes_a_property_that_holds_a_packed_root_to_the_same_cid() {
         assert_eq!(cids, [PROPERTY, VECTORS[0].3]);
     }
 }
+
+#[test]
+fn validates_a_packed_root_whose_json_dag_json_refuses_like_the_linked_one() {
+    // 1.x gives a block with a key every JavaScript object inherits a raw CID; so does the block that packs it
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy(VECTORS[0].0, "property");
+    let address = scratch.text("property/address.json").replace("\"folio\"", "\"constructor\": [\"x\"], \"folio\"");
+    std::fs::write(scratch.path("property/address.json"), address).unwrap();
+    let mut found = Vec::new();
+    for extra in [&[][..], &["--packed"]] {
+        assert_eq!(hash(&scratch, extra).code, 0);
+        let summary = scratch.run(&["--json", "validate", "out/county.car", "--output-csv", "errors.csv"]).json();
+        found.push((findings(&scratch, "out/county.car"), summary["data_groups"].clone()));
+    }
+    let county = scratch.rows("out/hash.csv")[1][2].clone();
+    assert!(county.starts_with("bafkrei"), "{county}");
+    assert_eq!(found[1], found[0]);
+    assert_eq!(found[1].1, 2);
+}
+
+#[test]
+fn says_which_data_groups_it_packed_and_which_it_could_not() {
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy(VECTORS[0].0, "property");
+    let run = |extra: &[&str]| {
+        let mut args = vec!["--json", "hash", "property", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"];
+        args.extend(extra);
+        scratch.run(&args)
+    };
+    let ran = run(&["--packed"]);
+    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(1), &json!([])), "{}", ran.stdout);
+    assert!(ran.stderr.is_empty(), "{}", ran.stderr);
+    let ran = run(&[]);
+    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(0), &json!([])), "{}", ran.stdout);
+
+    // an entity that links a file: the data group stays linked, and the run says so
+    let property = scratch.text("property/property.json").replacen('{', "{\"parcel\": {\"/\": \"./parcel.json\"},", 1);
+    std::fs::write(scratch.path("property/property.json"), property).unwrap();
+    let ran = run(&["--packed"]);
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+    assert_eq!((&ran.json()["packed"], &ran.json()["not_packed"]), (&json!(0), &json!(["property: county.json"])));
+    assert_eq!(ran.stderr, "warning: 1 data groups could not be packed and stay linked: property: county.json\n");
+    let ran = scratch.run(&["hash", "property", "--packed", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"]);
+    assert!(ran.stdout.contains("  Data groups packed:  0\n"), "{}", ran.stdout);
+}

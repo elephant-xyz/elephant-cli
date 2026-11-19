@@ -256,7 +256,12 @@ fn property(
                 message,
                 ..Row::default()
             };
-            let Some(value) = values.get(data) else {
+            // A packed root holding JSON that dag-json refuses has a raw CID, as such an entity has in the linked layout.
+            let raw = match (data.codec() == RAW).then(|| view.find(data)) {
+                Some(Found::Near(bytes) | Found::Far(bytes)) => serde_json::from_slice::<Value>(bytes).ok(),
+                _ => None,
+            };
+            let Some(value) = values.get(data).or(raw.as_ref().filter(|raw| raw.get("entities").is_some())) else {
                 let message = match view.find(data) {
                     Found::Absent => "data-group root is not in the car",
                     _ => "data-group root is not a dag-json block",
@@ -264,10 +269,10 @@ fn property(
                 found.rows.push(row("lexicon", message.to_string()));
                 continue;
             };
-            // A packed root is validated as the linked root it stands for, its blocks first.
-            let unpacked = packed::unpack(value);
-            let inline = |pointer: &str| match unpacked.as_ref().and_then(|unpacked| unpacked.blocks.get(pointer)) {
-                Some(value) => Ok(Cow::Borrowed(value)),
+            // A packed root is validated as the linked root it stands for.
+            let unpacked = packed::verify(value);
+            let inline = |pointer: &str| match &unpacked {
+                Some(unpacked) => unpacked.source(pointer),
                 None => source(pointer),
             };
             let findings = unpacked.iter().flat_map(|unpacked| &unpacked.findings);

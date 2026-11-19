@@ -425,6 +425,9 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
         text += "Hash report\n";
         text += &format!("  Property CID:        {cid}\n");
         text += &format!("  Data groups hashed:  {}\n", outcome.groups);
+        if args.packed {
+            text += &format!("  Data groups packed:  {}\n", outcome.packed);
+        }
         text += &format!("  Output ZIP:          {}\n", args.output_zip.display());
         text += &format!("  Output CSV:          {}\n", args.output_csv.display());
     }
@@ -442,6 +445,10 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
     if !outcome.failed.is_empty() {
         eprintln!("{} of {} properties failed: {}", outcome.failed.len(), outcome.properties, listed(&outcome.failed));
     }
+    if !outcome.linked.is_empty() {
+        let count = outcome.linked.len();
+        eprintln!("warning: {count} data groups could not be packed and stay linked: {}", listed(&outcome.linked));
+    }
     Ok(Done {
         json: json!({
             "command": "hash",
@@ -453,6 +460,8 @@ fn hash(args: &Hash, cli: &Cli) -> Result<Done, Fail> {
             "failed": outcome.failed,
             "errors": outcome.errors,
             "data_groups": outcome.groups,
+            "packed": outcome.packed,
+            "not_packed": outcome.linked,
             "property_cid": outcome.cid,
             "output_zip": args.output_zip,
             "output_csv": args.output_csv,

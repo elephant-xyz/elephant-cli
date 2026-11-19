@@ -41,6 +41,10 @@ pub struct Hashed {
     pub blocks: BTreeMap<String, Vec<u8>>,
     /// Roots that could not be hashed: file name and reason.
     pub errors: Vec<(String, String)>,
+    /// Data groups written packed.
+    pub packed: usize,
+    /// Roots `--packed` had to leave linked, by file name; the Seed is not one of them.
+    pub linked: Vec<String>,
 }
 
 struct Work<'a> {
@@ -128,6 +132,8 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
         groups: Vec::new(),
         blocks: BTreeMap::new(),
         errors: Vec::new(),
+        packed: 0,
+        linked: Vec::new(),
     };
     let order = std::iter::once(first).chain((0..found.roots.len()).filter(|at| *at != first));
     for at in order {
@@ -145,12 +151,20 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
             hashed.cid = cid.clone();
         }
         // The Seed root's CID is the property CID: it stays as it is.
-        if let Some((cid, bytes)) = (packed && at != first).then(|| crate::packed::pack(&cid, &work.blocks)).flatten() {
-            hashed.blocks.insert(cid.clone(), bytes);
-            hashed.groups.push((group.clone(), cid, name.clone()));
-            continue;
-        }
-        hashed.blocks.append(&mut work.blocks);
+        let cid = match (packed && at != first).then(|| crate::packed::pack(&cid, &work.blocks)) {
+            Some(Some((cid, bytes))) => {
+                hashed.blocks.insert(cid.clone(), bytes);
+                hashed.packed += 1;
+                cid
+            }
+            tried => {
+                if tried.is_some() {
+                    hashed.linked.push(name.clone());
+                }
+                hashed.blocks.append(&mut work.blocks);
+                cid
+            }
+        };
         hashed.groups.push((group.clone(), cid, name.clone()));
     }
     Ok(hashed)
@@ -275,6 +289,10 @@ pub struct Outcome {
     pub cid: Option<String>,
     /// Blocks in the CAR and its root, when one was asked for.
     pub car: Option<(u64, String)>,
+    /// Data groups written packed.
+    pub packed: usize,
+    /// `<property>: <file>` for every data group `--packed` had to leave linked.
+    pub linked: Vec<String>,
 }
 
 /// Hash a single property or every property of a batch directory.
@@ -327,6 +345,8 @@ pub fn run(
         batch: !single,
         cid: None,
         car: None,
+        packed: 0,
+        linked: Vec::new(),
     };
     let mut done = 0;
     // A slice of the batch at a time: hashed on every core, written in order.
@@ -358,6 +378,8 @@ pub fn run(
                 archive.add(&hashed)?;
             }
             outcome.groups += hashed.groups.len();
+            outcome.packed += hashed.packed;
+            outcome.linked.extend(hashed.linked.iter().map(|file| format!("{name}: {file}")));
             outcome.errors.extend(hashed.errors.iter().map(|(file, reason)| format!("{name}: {file}: {reason}")));
             if !hashed.errors.is_empty() {
                 outcome.failed.push(name.clone());

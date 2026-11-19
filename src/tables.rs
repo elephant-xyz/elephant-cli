@@ -293,9 +293,10 @@ struct Export<'a> {
 impl Export<'_> {
     /// A block as a JSON object; anything else cannot be exported. A packed
     /// data group holds its blocks itself.
-    fn block(&self, cid: &Cid) -> Result<Map<String, Value>, Fail> {
-        if let Some(Value::Object(fields)) = self.inline.get(cid) {
-            return Ok(fields.clone());
+    fn block(&mut self, cid: &Cid) -> Result<Map<String, Value>, Fail> {
+        // each is asked for once: `seen` keeps a relationship or an entity from being exported twice
+        if let Some(Value::Object(fields)) = self.inline.remove(cid) {
+            return Ok(fields);
         }
         let bytes = self.index.get(cid).filter(|_| cid.codec() == DAG_JSON).map(|place| self.car.bytes(*place));
         match bytes.and_then(|bytes| serde_json::from_slice::<Value>(bytes).ok()) {
@@ -578,11 +579,10 @@ pub fn export(file: &Path, output: &Path, cap: u64, atlas: Option<&Atlas>, schem
         export.writer(&properties)?.push(row)?;
         for (group, data) in &entry.groups {
             export.inline.clear();
-            let root = Value::Object(export.block(data)?);
             // A packed root is exported as the linked root it stands for.
-            let root = match packed::unpack(&root) {
-                None => root,
-                Some(unpacked) => {
+            let root = match packed::unpack(Value::Object(export.block(data)?)) {
+                Err(root) => root,
+                Ok(unpacked) => {
                     let held = unpacked.blocks.into_iter();
                     export.inline.extend(held.filter_map(|(cid, block)| Some((Cid::try_from(cid).ok()?, block))));
                     unpacked.root

@@ -11,20 +11,17 @@
 //! entity as a plain string: `{"/": ...}` would be a real link in dag-json,
 //! and the entity is not a block of its own. A root is packed when it is an
 //! object with an `entities` member; `unpack` gives back the linked form,
-//! with the CIDs the linked layout has, for the code that reads that.
+//! with the CIDs the linked layout has, for the code that reads that, and
+//! `verify` does the same for the code that checks it.
 
-use crate::canonical::canonical;
+use crate::canonical::{canonical, link};
 use crate::cids;
 use serde_json::{json, Map, Value};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// The largest packed block, in canonical bytes; a bigger data group stays linked.
 const LIMIT: usize = 1 << 20;
-
-/// The target of a link: an object holding only `"/"` with a string.
-fn link(value: &Value) -> Option<&str> {
-    value.as_object().filter(|fields| fields.len() == 1)?.get("/")?.as_str()
-}
 
 /// Whether a value holds a link anywhere.
 fn linked(value: &Value) -> bool {
@@ -51,8 +48,9 @@ pub fn pack(root: &str, blocks: &BTreeMap<String, Vec<u8>>) -> Option<(String, V
         for end in ["from", "to"] {
             let side = relation.as_object_mut()?.get_mut(end)?;
             let cid = link(side)?.to_string();
-            let entity = read(&cid).filter(|entity| !linked(entity))?;
-            entities.insert(cid.clone(), entity);
+            if !entities.contains_key(&cid) {
+                entities.insert(cid.clone(), read(&cid).filter(|entity| !linked(entity))?);
+            }
             *side = Value::String(cid);
         }
         (!linked(&relation)).then_some(relation)
@@ -81,62 +79,88 @@ pub struct Unpacked {
     pub findings: Vec<(String, String)>,
 }
 
+impl Unpacked {
+    /// What a pointer below the root names. A packed data group holds all of
+    /// it: nothing is looked up outside the block.
+    pub fn source(&self, pointer: &str) -> Result<Cow<'_, Value>, String> {
+        self.blocks.get(pointer).map(Cow::Borrowed).ok_or_else(|| format!("{pointer} is not in the packed data group"))
+    }
+}
+
 /// The CID a JSON value has as a block of the linked layout.
 fn cid(value: &Value) -> String {
     cids::of_json(value, &canonical(value)).to_string()
 }
 
-/// The linked form of a packed data-group root; `None` when the root is not packed.
-pub fn unpack(packed: &Value) -> Option<Unpacked> {
-    let fields = packed.as_object()?;
-    let held = fields.get("entities")?;
-    let entities = held.as_object();
+/// The linked form of a packed data-group root; a root that is not packed comes back as it is.
+pub fn unpack(packed: Value) -> Result<Unpacked, Value> {
+    let Value::Object(mut root) = packed else {
+        return Err(packed);
+    };
+    let Some(held) = root.shift_remove("entities") else {
+        return Err(Value::Object(root));
+    };
     let mut findings = Vec::new();
-    if entities.is_none() {
-        findings.push(("/entities".to_string(), "entities must be an object".to_string()));
-    }
+    let entities = match held {
+        Value::Object(entities) => Some(entities),
+        _ => {
+            findings.push(("/entities".to_string(), "entities must be an object".to_string()));
+            None
+        }
+    };
     let mut blocks = HashMap::new();
     let mut used = HashSet::new();
     // A REL back as a relationship block, and the link to it.
-    let mut link = |relation: &Value, path: String| -> Value {
-        let mut block = relation.clone();
+    let mut link = |mut block: Value, path: String| -> Value {
         for end in ["from", "to"] {
-            let Some(Value::String(entity)) = block.get(end).cloned() else {
+            let Some(Value::String(entity)) = block.get(end) else {
                 continue;
             };
-            if entities.is_some_and(|entities| !entities.contains_key(&entity)) {
+            if entities.as_ref().is_some_and(|entities| !entities.contains_key(entity)) {
                 findings.push((format!("{path}/{end}"), format!("{end} {entity} is not a key of entities")));
             }
+            used.insert(entity.clone());
             block[end] = json!({ "/": entity });
-            used.insert(entity);
         }
         let cid = cid(&block);
         blocks.insert(cid.clone(), block);
         json!({ "/": cid })
     };
-    let mut root: Map<String, Value> =
-        fields.iter().filter(|(key, _)| *key != "entities").map(|(key, value)| (key.clone(), value.clone())).collect();
     if let Some(Value::Object(listed)) = root.get_mut("relationships") {
         for (key, value) in listed {
             let path = format!("/relationships/{key}");
-            *value = match &*value {
+            *value = match value.take() {
                 Value::Null => continue,
-                Value::Array(items) => items.iter().enumerate().map(|(at, item)| link(item, format!("{path}/{at}"))).collect(),
+                Value::Array(items) => {
+                    items.into_iter().enumerate().map(|(at, item)| link(item, format!("{path}/{at}"))).collect()
+                }
                 item => link(item, path),
             };
         }
     }
     for (key, entity) in entities.into_iter().flatten() {
-        let own = cid(entity);
-        if own != *key {
-            findings.push((format!("/entities/{key}"), format!("entity key {key} is not the CID of its value, {own}")));
-        }
-        if !used.contains(key) {
+        if !used.contains(&key) {
             findings.push((format!("/entities/{key}"), format!("entity {key} is not referenced by any relationship")));
         }
-        blocks.entry(key.clone()).or_insert_with(|| entity.clone());
+        blocks.entry(key).or_insert(entity);
     }
-    Some(Unpacked { root: Value::Object(root), blocks, findings })
+    Ok(Unpacked { root: Value::Object(root), blocks, findings })
+}
+
+/// `unpack` for a root that is checked: also the finding only hashing shows,
+/// an entity filed under a key that is not its CID. `None` when the root is not packed.
+pub fn verify(packed: &Value) -> Option<Unpacked> {
+    let held = packed.as_object()?.get("entities")?;
+    let mut renamed = Vec::new();
+    for (key, entity) in held.as_object().into_iter().flatten() {
+        let own = cid(entity);
+        if own != *key {
+            renamed.push((format!("/entities/{key}"), format!("entity key {key} is not the CID of its value, {own}")));
+        }
+    }
+    let mut unpacked = unpack(packed.clone()).ok()?;
+    unpacked.findings.extend(renamed);
+    Some(unpacked)
 }
 
 #[cfg(test)]
@@ -157,7 +181,7 @@ mod tests {
                 "baguqeerap73zkcd4lmiy2blzhbmh6hwdivicucv7nfi5kqvrh5y2kvg4z5mq",
             ),
         ] {
-            let unpacked = unpack(&serde_json::from_str(packed).unwrap()).unwrap();
+            let unpacked = verify(&serde_json::from_str(packed).unwrap()).unwrap();
             assert_eq!(cid(&unpacked.root), linked);
             assert!(unpacked.findings.is_empty(), "{:?}", unpacked.findings);
         }
