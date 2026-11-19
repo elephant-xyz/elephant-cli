@@ -14,7 +14,7 @@
 //! index of the whole file, built on first use; that is the slow path.
 
 use crate::car::{Car, Place};
-use crate::cids::{DAG_JSON, RAW};
+use crate::cids::{self, DAG_JSON, RAW};
 use crate::lexicon::{self, Group, Lexicon};
 use crate::packed;
 use crate::report::{Report, Row};
@@ -256,12 +256,14 @@ fn property(
                 message,
                 ..Row::default()
             };
-            // A packed root holding JSON that dag-json refuses has a raw CID, as such an entity has in the linked layout.
+            // A packed root holding JSON that dag-json refuses has a raw CID, as such an entity has in the
+            // linked layout. It is read where the linked root it stands for would be a dag-json block.
             let raw = match (data.codec() == RAW).then(|| view.find(data)) {
                 Some(Found::Near(bytes) | Found::Far(bytes)) => serde_json::from_slice::<Value>(bytes).ok(),
                 _ => None,
             };
-            let Some(value) = values.get(data).or(raw.as_ref().filter(|raw| raw.get("entities").is_some())) else {
+            let raw = raw.filter(|raw| packed::unpack(raw.clone()).is_ok_and(|unpacked| cids::dag_json(&unpacked.root)));
+            let Some(value) = values.get(data).or(raw.as_ref()) else {
                 let message = match view.find(data) {
                     Found::Absent => "data-group root is not in the car",
                     _ => "data-group root is not a dag-json block",

@@ -128,6 +128,10 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
     let Some(first) = found.roots.iter().position(|(_, cid)| seeded(cid)) else {
         return Err("Property CID could not be determined: the property has no Seed data group".to_string());
     };
+    // The CID of the linked Seed root is the property CID: a packed one would give the property another.
+    if let Some((name, _)) = found.roots.iter().find(|(name, cid)| seeded(cid) && found.parsed[name].get("entities").is_some()) {
+        return Err(format!("Property CID could not be determined: the Seed data group in {name} is packed"));
+    }
     let mut hashed = Hashed {
         // Until the seed resolves, the property goes by the CID of the seed file as written.
         cid: crate::canonical::cid(&found.parsed[&found.roots[first].0]).to_string(),
@@ -141,14 +145,14 @@ pub fn property(property: &Property, shared: &Mutex<Shared>, packed: bool) -> Re
     for at in order {
         let (name, group) = &found.roots[at];
         let value = &found.parsed[name];
-        // A root that came packed is written as it is: resolving a pointer inside
-        // an entity would change the entity under the CID it is filed by.
+        // A root that came packed is written as it is. It has to be final:
+        // resolving a pointer inside an entity would change the entity under the CID it is filed by.
         let ready = value.get("entities").is_some();
         let mut work = Work { property, blocks: BTreeMap::new(), open: vec![name.clone()] };
-        let resolved = match ready {
-            true => Ok(value.clone()),
-            false => work.resolve(value, None, ""),
-        };
+        let resolved = work.resolve(value, None, "").and_then(|resolved| match ready && resolved != *value {
+            true => Err("a packed root has to be final, and this one holds a file pointer or an ipfs_url to resolve".to_string()),
+            false => Ok(resolved),
+        });
         let resolved = match resolved {
             Ok(resolved) => resolved,
             Err(reason) => {

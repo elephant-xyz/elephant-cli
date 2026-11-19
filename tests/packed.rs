@@ -448,8 +448,8 @@ fn names_the_first_twenty_data_groups_it_could_not_pack() {
 }
 
 #[test]
-fn writes_a_root_that_came_packed_as_it_is() {
-    // nothing inside it is resolved: an entity changed in place would no longer be the one its key names
+fn fails_a_root_that_came_packed_but_still_holds_something_to_resolve() {
+    // resolving it would change an entity under the key that names it
     let scratch = Scratch::new();
     scratch.lexicon();
     let mut packed: Value = serde_json::from_slice(&std::fs::read(fixtures().join(VECTORS[0].1)).unwrap()).unwrap();
@@ -457,13 +457,53 @@ fn writes_a_root_that_came_packed_as_it_is() {
     property(&scratch, &serde_json::to_vec(&packed).unwrap());
     std::fs::write(scratch.path("property/photo.png"), "not really a picture").unwrap();
     for extra in [&[][..], &["--packed"]] {
-        let ran = hash(&scratch, extra);
-        assert_eq!(ran.code, 0, "{}", ran.stderr);
-        let county = scratch.rows("out/hash.csv")[1][2].clone();
-        let zipped = entries(&scratch.path("out/hashed.zip"));
-        let written: Value = serde_json::from_slice(&zipped[&format!("{PROPERTY}/{county}.json")]).unwrap();
-        assert_eq!(written, packed);
+        let mut args = vec!["--json", "hash", "property", "--output-zip", "out/hashed.zip", "--output-csv", "out/hash.csv"];
+        args.extend(extra);
+        let ran = scratch.run(&args);
+        let summary = ran.json();
+        assert_eq!((ran.code, &summary["data_groups"], &summary["packed"]), (1, &json!(1), &json!(0)), "{}", ran.stdout);
+        assert_eq!(
+            summary["errors"],
+            json!(["property: county.json: Processing error: a packed root has to be final, and this one holds a file pointer or an ipfs_url to resolve"])
+        );
     }
+}
+
+#[test]
+fn refuses_a_seed_root_that_came_packed() {
+    // the CID of the linked Seed root is the property CID
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy(VECTORS[0].0, "property");
+    let seed = json!({ "entities": {}, "label": "Seed", "relationships": { "address_has_parcel": null } });
+    std::fs::write(scratch.path("property/seed.json"), serde_json::to_vec(&seed).unwrap()).unwrap();
+    for extra in [&[][..], &["--packed"]] {
+        let ran = hash(&scratch, extra);
+        assert_eq!(ran.code, 2, "{}", ran.stdout);
+        assert!(ran.stderr.contains("the Seed data group in seed.json is packed"), "{}", ran.stderr);
+        assert!(!scratch.path("out/hash.csv").exists());
+    }
+}
+
+#[test]
+fn refuses_a_packed_root_with_a_raw_cid_where_the_linked_root_has_one_too() {
+    // a relationship key every JavaScript object inherits: the linked root itself is no dag-json block
+    let scratch = Scratch::new();
+    scratch.lexicon();
+    scratch.copy(VECTORS[0].0, "property");
+    let county = scratch.text("property/county.json").replace("\"relationships\": {", "\"relationships\": {\"toString\": null,");
+    std::fs::write(scratch.path("property/county.json"), county).unwrap();
+    let mut found = Vec::new();
+    for extra in [&[][..], &["--packed"]] {
+        assert_eq!(hash(&scratch, extra).code, 0);
+        assert!(scratch.rows("out/hash.csv")[1][2].starts_with("bafkrei"));
+        // the linked archive also has the blocks nothing reaches any more
+        let (code, rows) = findings(&scratch, "out/county.car");
+        found.push((code, rows.into_iter().filter(|row| row[2] != "orphans").collect::<Vec<_>>()));
+    }
+    assert_eq!(found[1], found[0]);
+    assert_eq!(found[1].1.len(), 1, "{:?}", found[1].1);
+    assert_eq!(found[1].1[0][2..4], ["lexicon", "data-group root is not a dag-json block"]);
 }
 
 #[test]
